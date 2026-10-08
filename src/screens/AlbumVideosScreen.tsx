@@ -17,7 +17,7 @@ import {
     EmptyState, ListHeader, VideoCard, VideoItemCell, VideoRow,
     confirmDelete, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
 } from '@/components/VideoRow';
-import { useVideoHistoryStore, generateVideoId } from '@/store/videoHistoryStore';
+import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { metrics } from '@/theme/theme';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -31,14 +31,6 @@ export default function AlbumVideosScreen() {
     const insets = useSafeAreaInsets();
     const clearHistoryForPath = useVideoHistoryStore(state => state.clearVideoHistory);
     const history = useVideoHistoryStore(state => state.history);
-    const historyByVideoId = useMemo(() => {
-        const map = new Map<string, VideoHistoryEntry>();
-        for (const entry of history.values()) {
-            if (entry.videoId) {map.set(entry.videoId, entry);}
-        }
-        return map;
-    }, [history]);
-
     const { albumTitle, bucketId } = route.params;
     const { videos, loading, loadingMore, hasMore, loadMore, refetch } = useAlbumVideos(albumTitle, bucketId);
     const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -50,8 +42,9 @@ export default function AlbumVideosScreen() {
             videoName: video.name,
             contentUri: video.uri, // Original content:// URI for history storage
             albumName: albumTitle,
+            bucketId: video.bucketId || bucketId,
         });
-    }, [navigation, albumTitle]);
+    }, [navigation, albumTitle, bucketId]);
 
     const handleOpenOptions = useCallback((video: VideoFile) => {
         setSelectedVideo(video);
@@ -87,9 +80,8 @@ export default function AlbumVideosScreen() {
         if (!entry && file.path.startsWith('file://')) {
             entry = history.get(file.path.replace('file://', ''));
         }
-        // Fall back to the name + size id.
-        return entry ?? historyByVideoId.get(generateVideoId(file.name, file.size));
-    }, [history, historyByVideoId]);
+        return entry ?? null;
+    }, [history]);
 
     const grid = viewMode === 'grid';
 

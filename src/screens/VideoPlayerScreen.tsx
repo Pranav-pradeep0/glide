@@ -78,6 +78,7 @@ type RouteParams = {
     contentUri?: string; // Original content:// URI for CameraRoll operations
     playMode?: string;
     albumName?: string;
+    bucketId?: string;
     hapticCues?: SubtitleCue[];
     apiSubtitles?: any[];
     isExternalOpen?: boolean;
@@ -103,6 +104,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         isExternalOpen,
         playMode,
         albumName: routeAlbumName,
+        bucketId: routeBucketId,
         imdbId,
         cleanTitle,
     } = route.params;
@@ -631,8 +633,10 @@ export default function VideoPlayerScreen({ route }: Props) {
         navigation.replace('VideoPlayer', {
             videoPath: video.path,
             videoName: video.name,
+            albumName: albumName || undefined,
+            bucketId: routeBucketId || video.bucketId,
         });
-    }, [navigation, ui]);
+    }, [navigation, ui, albumName, routeBucketId]);
 
     // ========================================================================
     // CONTROL HANDLERS
@@ -797,7 +801,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     // Get album videos for playlist navigation
-    const { videos: albumVideos } = useAlbumVideos(albumName || null);
+    const { videos: albumVideos } = useAlbumVideos(albumName || null, routeBucketId);
 
     // Find current video index in playlist
     const currentVideoIndex = useMemo(() => {
@@ -817,10 +821,11 @@ export default function VideoPlayerScreen({ route }: Props) {
                 videoPath: prevVideo.path,
                 videoName: prevVideo.name,
                 albumName: albumName || undefined,
+                bucketId: routeBucketId || prevVideo.bucketId,
                 playMode: playMode,
             });
         }
-    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, playMode]);
+    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode]);
 
     const handleNext = useCallback(() => {
         if (!hasNext) {return;}
@@ -831,10 +836,11 @@ export default function VideoPlayerScreen({ route }: Props) {
                 videoPath: nextVideo.path,
                 videoName: nextVideo.name,
                 albumName: albumName || undefined,
+                bucketId: routeBucketId || nextVideo.bucketId,
                 playMode: playMode,
             });
         }
-    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, playMode]);
+    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode]);
 
     const handleShakeAction = useCallback(() => {
         if (shakeAction === 'play_pause') {
@@ -1262,6 +1268,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onPlayVideo={handlePlayVideo}
                     isLandscape={isLandscape}
                     albumName={albumName ?? undefined}
+                    bucketId={routeBucketId}
                 />
             )}
 

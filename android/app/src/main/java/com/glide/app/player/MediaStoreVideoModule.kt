@@ -1,6 +1,7 @@
 package com.glide.app.player
 
 import android.app.Activity
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
@@ -51,9 +52,17 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                                 try {
                                     for (uri in urisToRetry) {
                                         if (uri.scheme == "content") {
-                                            reactContext.contentResolver.delete(uri, null, null)
+                                            val rows = reactContext.contentResolver.delete(uri, null, null)
+                                            if (rows <= 0) {
+                                                p.reject("E_DELETE_FAILED", "Could not delete media store item")
+                                                return
+                                            }
                                         } else if (uri.scheme == "file") {
-                                            File(uri.path ?: "").delete()
+                                            val file = File(uri.path ?: "")
+                                            if (file.exists() && !file.delete()) {
+                                                p.reject("E_DELETE_FAILED", "Could not delete file: ${file.name}")
+                                                return
+                                            }
                                         }
                                     }
                                     p.resolve(true)
@@ -100,6 +109,35 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
             MediaStore.Video.Media.BUCKET_ID,
             MediaStore.Video.Media.BUCKET_DISPLAY_NAME
         )
+
+        fun resolveContentUri(resolver: ContentResolver, pathOrUri: String): Uri? {
+            val path = if (pathOrUri.startsWith("file://")) {
+                Uri.parse(pathOrUri).path ?: pathOrUri.removePrefix("file://")
+            } else {
+                pathOrUri
+            }
+            return try {
+                val proj = arrayOf(MediaStore.Video.Media._ID)
+                val sel = "${MediaStore.Video.Media.DATA} = ?"
+                val args = arrayOf(path)
+                resolver.query(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    proj,
+                    sel,
+                    args,
+                    null
+                )?.use { c ->
+                    if (c.moveToFirst()) {
+                        val id = c.getLong(0)
+                        ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+                    } else {
+                        null
+                    }
+                }
+            } catch (_: Throwable) {
+                null
+            }
+        }
 
         fun loadThumbnailSync(context: Context, videoUriOrPath: String, width: Int, height: Int): String? {
             return try {
@@ -516,32 +554,37 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
             return
         }
 
-        val urisToDelete = ArrayList<Uri>()
+        val contentResolver = reactContext.contentResolver
+        val contentUris = ArrayList<Uri>()
+        val fileUris = ArrayList<Uri>()
+
         for (i in 0 until uriStrings.size()) {
             val s = uriStrings.getString(i) ?: continue
-            val uri = if (s.startsWith("content://") || s.startsWith("file://")) {
-                Uri.parse(s)
+            if (s.startsWith("content://")) {
+                contentUris.add(Uri.parse(s))
             } else {
-                Uri.fromFile(File(s))
+                val resolvedUri = resolveContentUri(contentResolver, s)
+                if (resolvedUri != null) {
+                    contentUris.add(resolvedUri)
+                } else {
+                    val fileUri = if (s.startsWith("file://")) Uri.parse(s) else Uri.fromFile(File(s))
+                    fileUris.add(fileUri)
+                }
             }
-            urisToDelete.add(uri)
         }
 
-        if (urisToDelete.isEmpty()) {
+        if (contentUris.isEmpty() && fileUris.isEmpty()) {
             promise.resolve(true)
             return
         }
 
-        val contentResolver = reactContext.contentResolver
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val contentUris = urisToDelete.filter { it.scheme == "content" }
-            val fileUris = urisToDelete.filter { it.scheme != "content" }
-
             for (fileUri in fileUris) {
-                try {
-                    File(fileUri.path ?: "").delete()
-                } catch (_: Throwable) {}
+                val file = File(fileUri.path ?: "")
+                if (file.exists() && !file.delete()) {
+                    promise.reject("E_DELETE_FAILED", "Could not delete file: ${file.name}")
+                    return
+                }
             }
 
             if (contentUris.isNotEmpty()) {
@@ -571,13 +614,25 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 promise.resolve(true)
             }
         } else {
-            for (i in 0 until urisToDelete.size) {
-                val uri = urisToDelete[i]
+            val allUris = ArrayList<Uri>().apply {
+                addAll(contentUris)
+                addAll(fileUris)
+            }
+            for (i in 0 until allUris.size) {
+                val uri = allUris[i]
                 try {
                     if (uri.scheme == "content") {
-                        contentResolver.delete(uri, null, null)
+                        val rows = contentResolver.delete(uri, null, null)
+                        if (rows <= 0) {
+                            promise.reject("E_DELETE_FAILED", "Could not delete media store item")
+                            return
+                        }
                     } else if (uri.scheme == "file") {
-                        File(uri.path ?: "").delete()
+                        val file = File(uri.path ?: "")
+                        if (file.exists() && !file.delete()) {
+                            promise.reject("E_DELETE_FAILED", "Could not delete file: ${file.name}")
+                            return
+                        }
                     }
                 } catch (e: Exception) {
                     // ponytail: Android 10 RecoverableSecurityException only prompts for one URI at a time; bulk deletes would need chained prompts.
@@ -585,7 +640,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                         val activity = reactContext.currentActivity
                         if (activity != null) {
                             try {
-                                pendingDeleteUris = urisToDelete.subList(i, urisToDelete.size)
+                                pendingDeleteUris = allUris.subList(i, allUris.size)
                                 deletePromise = promise
                                 activity.startIntentSenderForResult(
                                     e.userAction.actionIntent.intentSender,

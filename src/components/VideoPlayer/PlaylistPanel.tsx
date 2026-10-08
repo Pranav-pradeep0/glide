@@ -17,6 +17,7 @@ interface PlaylistPanelProps {
     onPlayVideo: (video: VideoFile) => void;
     isLandscape: boolean;
     albumName?: string;
+    bucketId?: string;
     onBack?: () => void;
 }
 
@@ -94,9 +95,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
     currentVideoPath,
     onPlayVideo,
     albumName,
+    bucketId,
     onBack,
 }) => {
-    const { videos, loading } = useAlbumVideos(albumName || null);
+    const { videos, loading } = useAlbumVideos(albumName || null, bucketId);
 
     const handlePlayAndClose = useCallback((video: VideoFile) => {
         onPlayVideo(video);
@@ -138,6 +140,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
     if (prevProps.currentVideoPath !== nextProps.currentVideoPath) {return false;}
     if (prevProps.onPlayVideo !== nextProps.onPlayVideo) {return false;}
     if (prevProps.albumName !== nextProps.albumName) {return false;}
+    if (prevProps.bucketId !== nextProps.bucketId) {return false;}
     if (prevProps.onBack !== nextProps.onBack) {return false;}
     return true;
 });

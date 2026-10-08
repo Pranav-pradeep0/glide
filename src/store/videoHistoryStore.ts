@@ -74,24 +74,47 @@ try {
     console.error('[VideoHistoryStore] Sync init error:', error);
 }
 
+/**
+ * Find an entry matching by exact path first, then by contentUri.
+ * Only falls back to videoId when the path is not a local file path.
+ */
+function findHistoryEntry(
+    history: Map<string, VideoHistoryEntry>,
+    videoPath: string,
+    videoId?: string
+): { key: string; entry: VideoHistoryEntry } | null {
+    // 1. Direct key match by videoPath
+    if (history.has(videoPath)) {
+        return { key: videoPath, entry: history.get(videoPath)! };
+    }
+
+    // 2. Scan by videoPath or contentUri
+    for (const [key, entry] of history.entries()) {
+        if (entry.videoPath === videoPath || (entry.contentUri && entry.contentUri === videoPath)) {
+            return { key, entry };
+        }
+    }
+
+    // 3. Fallback: match by videoId only for non-local paths (content://, http(s)://)
+    const isLocalFile = videoPath.startsWith('file://') || videoPath.startsWith('/');
+    if (!isLocalFile && videoId) {
+        for (const [key, entry] of history.entries()) {
+            if (entry.videoId === videoId) {
+                return { key, entry };
+            }
+        }
+    }
+
+    return null;
+}
+
 export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
     history: initialHistory,
     isHydrated: true, // Always hydrated now
 
     getVideoHistory: (videoPath: string) => {
-        // First try direct path lookup
-        const byPath = get().history.get(videoPath);
-        if (byPath) {return byPath;}
-
-        // For content:// URIs, try to find by videoId derived from path
-        // The videoId may have been stored with a different path
         const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
-        for (const entry of get().history.values()) {
-            if (entry.videoId === videoId) {
-                return entry;
-            }
-        }
-        return null;
+        return findHistoryEntry(get().history, videoPath, videoId)?.entry ?? null;
     },
 
     getVideoHistoryByName: (videoName: string) => {
@@ -118,16 +141,9 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         set((state) => {
             const newHistory = new Map(state.history);
 
-            // Try to find existing entry by videoId first
-            let existingKey: string | null = null;
-            let existing: VideoHistoryEntry | undefined;
-            for (const [key, e] of newHistory.entries()) {
-                if (e.videoId === videoId) {
-                    existingKey = key;
-                    existing = e;
-                    break;
-                }
-            }
+            const match = findHistoryEntry(newHistory, videoPath, videoId);
+            const existingKey = match?.key;
+            const existing = match?.entry;
 
             if (existing && existingKey) {
                 // Update existing entry, but keep the original key
@@ -174,16 +190,9 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         set((state) => {
             const newHistory = new Map(state.history);
 
-            // Find existing entry by videoId (handles same file opened from different paths)
-            let existingKey: string | null = null;
-            let existing: VideoHistoryEntry | undefined;
-            for (const [key, entry] of newHistory.entries()) {
-                if (entry.videoId === videoId) {
-                    existingKey = key;
-                    existing = entry;
-                    break;
-                }
-            }
+            const match = findHistoryEntry(newHistory, videoPath, videoId);
+            const existingKey = match?.key;
+            const existing = match?.entry;
 
             if (existing && existingKey) {
                 newHistory.set(existingKey, {
@@ -224,16 +233,9 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         set((state) => {
             const newHistory = new Map(state.history);
 
-            // Find existing entry by videoId
-            let existingKey: string | null = null;
-            let existing: VideoHistoryEntry | undefined;
-            for (const [key, entry] of newHistory.entries()) {
-                if (entry.videoId === videoId) {
-                    existingKey = key;
-                    existing = entry;
-                    break;
-                }
-            }
+            const match = findHistoryEntry(newHistory, videoPath, videoId);
+            const existingKey = match?.key;
+            const existing = match?.entry;
 
             if (existing && existingKey) {
                 newHistory.set(existingKey, {
@@ -287,16 +289,9 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         set((state) => {
             const newHistory = new Map(state.history);
 
-            // Find existing entry by videoId
-            let existingKey: string | null = null;
-            let existing: VideoHistoryEntry | undefined;
-            for (const [key, entry] of newHistory.entries()) {
-                if (entry.videoId === videoId) {
-                    existingKey = key;
-                    existing = entry;
-                    break;
-                }
-            }
+            const match = findHistoryEntry(newHistory, videoPath, videoId);
+            const existingKey = match?.key;
+            const existing = match?.entry;
 
             const newBookmark: VideoBookmark = {
                 id: `${videoId}-${timestamp}-${Date.now()}`,
@@ -349,25 +344,10 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         set((state) => {
             const newHistory = new Map(state.history);
 
-            // Find entry by videoId (extracted from bookmarkId or path)
-            let existingKey: string | null = null;
-            let existing: VideoHistoryEntry | undefined;
-
-            // First try direct path lookup
-            existing = newHistory.get(videoPath);
-            if (existing) {
-                existingKey = videoPath;
-            } else {
-                // Fallback to videoId lookup
-                const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
-                for (const [key, entry] of newHistory.entries()) {
-                    if (entry.videoId === videoId) {
-                        existingKey = key;
-                        existing = entry;
-                        break;
-                    }
-                }
-            }
+            const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
+            const match = findHistoryEntry(newHistory, videoPath, videoId);
+            const existingKey = match?.key;
+            const existing = match?.entry;
 
             if (existing && existingKey) {
                 newHistory.set(existingKey, {
@@ -387,25 +367,10 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         set((state) => {
             const newHistory = new Map(state.history);
 
-            // Find entry by videoId
-            let existingKey: string | null = null;
-            let existing: VideoHistoryEntry | undefined;
-
-            // First try direct path lookup
-            existing = newHistory.get(videoPath);
-            if (existing) {
-                existingKey = videoPath;
-            } else {
-                // Fallback to videoId lookup
-                const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
-                for (const [key, entry] of newHistory.entries()) {
-                    if (entry.videoId === videoId) {
-                        existingKey = key;
-                        existing = entry;
-                        break;
-                    }
-                }
-            }
+            const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
+            const match = findHistoryEntry(newHistory, videoPath, videoId);
+            const existingKey = match?.key;
+            const existing = match?.entry;
 
             if (existing && existingKey) {
                 newHistory.set(existingKey, {
@@ -425,18 +390,10 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         set((state) => {
             const newHistory = new Map(state.history);
 
-            // First try direct path deletion
-            if (newHistory.has(videoPath)) {
-                newHistory.delete(videoPath);
-            } else {
-                // Fallback to videoId lookup
-                const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
-                for (const [key, entry] of newHistory.entries()) {
-                    if (entry.videoId === videoId) {
-                        newHistory.delete(key);
-                        break;
-                    }
-                }
+            const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
+            const match = findHistoryEntry(newHistory, videoPath, videoId);
+            if (match) {
+                newHistory.delete(match.key);
             }
 
             return { history: newHistory };

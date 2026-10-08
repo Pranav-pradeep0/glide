@@ -127,6 +127,7 @@ export type RootStackParamList = {
         videoName: string;
         contentUri?: string; // Original content:// URI for CameraRoll operations
         albumName?: string;
+        bucketId?: string;
         imdbId?: string;
     };
     VideoPlayer: {
@@ -135,6 +136,7 @@ export type RootStackParamList = {
         contentUri?: string; // Original content:// URI for CameraRoll operations
         cleanTitle?: string;
         albumName?: string;
+        bucketId?: string;
         imdbId?: string;
         playMode?: PlayMode;
         subtitlePath?: string;

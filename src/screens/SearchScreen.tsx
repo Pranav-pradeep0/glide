@@ -76,6 +76,7 @@ export default function SearchScreen() {
             videoName: video.name,
             contentUri: video.uri,
             albumName: video.album,
+            bucketId: video.bucketId,
         });
     }, [navigation]);
 

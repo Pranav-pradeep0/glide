@@ -70,6 +70,17 @@ export function useVideos() {
     return { videos, loading, error, refetch: () => fetchVideos(true) };
 }
 
+/**
+ * Episode 2 before Episode 10, which plain string order gets wrong. MediaStore hands
+ * folders back newest first, so without this "next" plays the file downloaded before
+ * this one.
+ */
+const videoNameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+
+export function sortVideosByName(list: VideoFile[]): VideoFile[] {
+    return [...list].sort((a, b) => videoNameCollator.compare(a.name, b.name));
+}
+
 export function useAlbumVideos(albumTitle: string | null, bucketId?: string) {
     const [videos, setVideos] = useState<VideoFile[]>([]);
     const [loading, setLoading] = useState(false);
@@ -87,7 +98,9 @@ export function useAlbumVideos(albumTitle: string | null, bucketId?: string) {
         }
 
         try {
-            const result = await MediaService.getVideosByAlbum(albumTitle || '', refresh, bucketId);
+            const result = sortVideosByName(
+                await MediaService.getVideosByAlbum(albumTitle || '', refresh, bucketId)
+            );
             setVideos(result);
             if (cacheKey) {
                 albumVideosCache.set(cacheKey, result);

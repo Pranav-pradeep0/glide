@@ -60,7 +60,7 @@ export default function PlayerDetailScreen() {
 
     const portraitHeroHeight = Math.min(width * 1.2, 500);
 
-    const { videoPath, videoName, albumName } = route.params;
+    const { videoPath, videoName, albumName, bucketId } = route.params;
 
     // Flow state
     const [loading, setLoading] = useState(false);
@@ -189,6 +189,7 @@ export default function PlayerDetailScreen() {
             videoName,
             cleanTitle: movieDetails?.Title,
             albumName,
+            bucketId,
             imdbId: movieDetails?.imdbID,
             playMode: cues && cues.length > 0 ? 'with-haptics' : 'normal',
             hapticCues: cues || undefined,
