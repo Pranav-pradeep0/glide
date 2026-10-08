@@ -8,7 +8,6 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import VideoPlayerScreen from '@/screens/VideoPlayerScreen';
 import PlayerDetailScreen from '@/screens/PlayerDetailScreen';
 import { useTheme } from '@/hooks/useTheme';
-import { useSettings } from '@/hooks/useSettings';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { ContentDetector } from '@/services/ContentDetector';
 import { NavigationService } from '@/services/NavigationService';
@@ -22,7 +21,6 @@ type Props = {
 
 export default function VideoPlayerRoot({ videoUri }: Props) {
     const theme = useTheme();
-    useSettings(); // Initialize settings
 
     const [ready, setReady] = useState(false);
     const [initialState, setInitialState] = useState<{

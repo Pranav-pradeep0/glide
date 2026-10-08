@@ -1,7 +1,9 @@
 import { create } from 'zustand';
+import { Appearance } from 'react-native';
 import { AppSettings, HapticSettings, ShakeAction } from '../types';
 import type { UpdateError } from '../hooks/useUpdateInstaller';
 import type { UpdateApkCache } from '../storage/updateStorage';
+import { storage } from '../storage/storage';
 
 /**
  * The update UI appears in two places at once: the app-level UpdateModal and the
@@ -58,6 +60,48 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     shakeAction: 'play_pause',
     onlineLyricsEnabled: true,
 };
+
+export function migrateSettings(settings: AppSettings): AppSettings {
+    const merged = {
+        ...DEFAULT_APP_SETTINGS,
+        ...settings,
+        hapticSettings: {
+            ...DEFAULT_HAPTIC_SETTINGS,
+            ...(settings?.hapticSettings ?? {}),
+        },
+    };
+
+    return {
+        ...merged,
+        subtitlePositionPortrait: typeof merged.subtitlePositionPortrait === 'number'
+            ? merged.subtitlePositionPortrait
+            : 0.42,
+        subtitlePositionLandscape: typeof merged.subtitlePositionLandscape === 'number'
+            ? merged.subtitlePositionLandscape
+            : 0.42,
+        // Netflix Sans was removed (not licensed for redistribution).
+        subtitleFontFamily: merged.subtitleFontFamily?.startsWith('NetflixSans')
+            ? SUBTITLE_FONT_FAMILY
+            : merged.subtitleFontFamily,
+    };
+}
+
+export function loadInitialSettings(): AppSettings {
+    const systemDark = Appearance.getColorScheme() === 'dark';
+    try {
+        const saved = storage.loadSettings();
+        if (saved) {
+            const migrated = migrateSettings(saved);
+            if (migrated.darkMode === undefined || migrated.darkMode === null) {
+                return { ...migrated, darkMode: systemDark };
+            }
+            return migrated;
+        }
+    } catch {
+        // Fallback to defaults
+    }
+    return { ...DEFAULT_APP_SETTINGS, darkMode: systemDark };
+}
 
 interface AppStore {
     settings: AppSettings;
@@ -122,7 +166,7 @@ interface AppStore {
 }
 
 export const useAppStore = create<AppStore>((set) => ({
-    settings: DEFAULT_APP_SETTINGS,
+    settings: loadInitialSettings(),
     updateStatus: {
         available: false,
         latestVersion: null,
@@ -321,3 +365,11 @@ export const useAppStore = create<AppStore>((set) => ({
             },
         })),
 }));
+
+// Automatically persist settings to MMKV whenever they change
+useAppStore.subscribe((state, prevState) => {
+    if (state.settings !== prevState.settings) {
+        storage.saveSettings(state.settings);
+    }
+});
+

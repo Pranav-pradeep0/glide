@@ -1,4 +1,3 @@
-import { useSettings } from '@/hooks/useSettings';
 import RootNavigator from '@/navigation/RootNavigator';
 import { FileService } from '@/services/FileService';
 import { useAppStore } from '@/store/appStore';
@@ -23,8 +22,6 @@ function App() {
 
   const { initialize } = useVideoIndexStore();
   const hasStartedMediaInitRef = useRef(false);
-
-  useSettings();
 
   useEffect(() => {
     SystemBars.setStyle(theme.dark ? 'light' : 'dark');

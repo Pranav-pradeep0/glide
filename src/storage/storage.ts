@@ -10,7 +10,7 @@ const mmkvStorage = createMMKV({
 });
 
 export const storage = {
-    async saveSettings(settings: AppSettings): Promise<void> {
+    saveSettings(settings: AppSettings): void {
         try {
             mmkvStorage.set(SETTINGS_KEY, JSON.stringify(settings));
         } catch (error) {
@@ -18,7 +18,7 @@ export const storage = {
         }
     },
 
-    async loadSettings(): Promise<AppSettings | null> {
+    loadSettings(): AppSettings | null {
         try {
             const data = mmkvStorage.getString(SETTINGS_KEY);
             return data ? JSON.parse(data) : null;
@@ -28,7 +28,7 @@ export const storage = {
         }
     },
 
-    async clearSettings(): Promise<void> {
+    clearSettings(): void {
         try {
             mmkvStorage.remove(SETTINGS_KEY);
         } catch (error) {
@@ -36,7 +36,7 @@ export const storage = {
         }
     },
 
-    async clearCache(): Promise<void> {
+    clearCache(): void {
         try {
             mmkvStorage.clearAll();
         } catch (error) {
