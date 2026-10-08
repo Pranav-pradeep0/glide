@@ -179,7 +179,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         // A mode change invalidates the best-fit hysteresis: it is state about a decision
         // for a mode we may no longer be in.
         bestFitUsingCover = null
-        Log.w(TAG, "resizeMode=$mode")
+        Log.d(TAG, "resizeMode=$mode")
         relayoutSurface()
     }
 
@@ -239,7 +239,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         val signature = "$resizeMode/${w}x$h/${childW}x$childH"
         if (signature != lastLayoutSignature) {
             lastLayoutSignature = signature
-            Log.w(
+            Log.d(
                 TAG,
                 "layout mode=$resizeMode view=${w}x$h video=${videoWidth}x$videoHeight " +
                     "sar=$videoSar scale=${geometry.scale} child=${childW}x$childH"
@@ -336,7 +336,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             Log.w(TAG, "text track ordinal=$ordinal out of range (${textTracks.size} tracks)")
             return
         }
-        Log.w(TAG, "text track select ordinal=$ordinal")
+        Log.d(TAG, "text track select ordinal=$ordinal")
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             .setOverrideForType(TrackSelectionOverride(entry.first, entry.second))
@@ -365,7 +365,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     /** Called by [GlidePipController] once the Activity has changed PiP state. */
     fun onPipModeChangedInternal(inPipMode: Boolean) {
-        Log.w(TAG, if (inPipMode) "entered PiP window" else "left PiP window")
+        Log.d(TAG, if (inPipMode) "entered PiP window" else "left PiP window")
         if (!inPipMode && hostStopped && !playInBackground) {
             player?.playWhenReady = false
         }
@@ -497,7 +497,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 eq.setBandLevel(b, millibels.coerceIn(minLevel.toInt(), maxLevel.toInt()).toShort())
             }
             eq.enabled = true
-            Log.w(TAG, "equalizer applied bands=${eq.numberOfBands} session=$sessionId")
+            Log.d(TAG, "equalizer applied bands=${eq.numberOfBands} session=$sessionId")
         } catch (e: RuntimeException) {
             // Devices legitimately refuse: no equalizer effect, or another app holds it at a
             // higher priority. Losing the equalizer must not take playback down with it.
@@ -523,7 +523,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     fun setVideoEnhancement(enabled: Boolean) {
         if (enabled == enhancementEnabled) return
         enhancementEnabled = enabled
-        Log.w(TAG, "enhancement=$enabled")
+        Log.d(TAG, "enhancement=$enabled")
         // Re-open rather than swap the effect list. Arming or disarming the frame processor
         // is a prepare-time decision (see openMedia), so the player has to be rebuilt --
         // from where it currently is, not from the top.
@@ -574,7 +574,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             Log.w(TAG, "audio track id=$id out of range (${audioTracks.size} tracks)")
             return
         }
-        Log.w(TAG, "audio track select id=$id")
+        Log.d(TAG, "audio track select id=$id")
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setOverrideForType(TrackSelectionOverride(entry.first, entry.second))
             .build()
@@ -608,7 +608,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
         p.setSeekParameters(if (exact) SeekParameters.EXACT else SeekParameters.CLOSEST_SYNC)
         val target = positionMs.coerceIn(0L, duration)
-        Log.w(TAG, "seek to ${target}ms of ${duration}ms exact=$exact")
+        Log.d(TAG, "seek to ${target}ms of ${duration}ms exact=$exact")
         p.seekTo(target)
     }
 
@@ -621,7 +621,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     fun stopPlayer() {
         val p = player ?: return
         p.stop()
-        Log.w(TAG, "stopPlayer")
+        Log.d(TAG, "stopPlayer")
         emit(EVENT_STOPPED, eventMap().apply { putString("type", "Stopped") })
     }
 
@@ -711,7 +711,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             p.setVideoEffects(buildEffects())
         }
 
-        Log.w(TAG, "open uri=$uri startPositionMs=$startPositionMs paused=$pausedProp " +
+        Log.d(TAG, "open uri=$uri startPositionMs=$startPositionMs paused=$pausedProp " +
             "enhancement=$enhancementEnabled")
         // Resume is an argument, not a seek: no start-time resolver, no correction pass.
         p.setMediaItem(buildMediaItem(uri), startPositionMs)
@@ -776,7 +776,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
             val p = player ?: return
-            Log.w(TAG, "state=${stateName(state)} duration=${p.duration}")
+            Log.d(TAG, "state=${stateName(state)} duration=${p.duration}")
             when (state) {
                 Player.STATE_BUFFERING -> emitBuffering(true)
                 Player.STATE_READY -> {
@@ -804,7 +804,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             keepScreenOn = isPlaying
             pipController.setPlaying(isPlaying)
-            Log.w(TAG, "isPlaying=$isPlaying")
+            Log.d(TAG, "isPlaying=$isPlaying")
             if (isPlaying) {
                 emit(EVENT_PLAYING, eventMap().apply { putString("type", "Playing") })
             } else if (player?.playbackState == Player.STATE_READY) {
@@ -819,7 +819,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             // The session id is not known until the audio renderer initialises, and it
             // changes across media. The effect has to follow it, so it is rebuilt here
             // rather than assumed to exist at open time.
-            Log.w(TAG, "audioSessionId=$audioSessionId eq=${equalizerBands != null}")
+            Log.d(TAG, "audioSessionId=$audioSessionId eq=${equalizerBands != null}")
             equalizer?.release()
             equalizer = null
             applyEqualizer()
@@ -836,7 +836,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                     if (!group.isTrackSelected(i)) continue
                     val info = group.getTrackFormat(i).colorInfo?.hdrStaticInfo
                     enhancement.hdrMetadata = ColorEnhancement.eglHdrMetadata(info)
-                    Log.w(TAG, "video hdrStaticInfo=${info?.size ?: "none"} usable=${enhancement.hdrMetadata != null}")
+                    Log.d(TAG, "video hdrStaticInfo=${info?.size ?: "none"} usable=${enhancement.hdrMetadata != null}")
                 }
             }
             audioTracks.clear()
@@ -848,7 +848,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                     // exactly the case that used to play silently with no error; the user
                     // must be able to see it and pick it, and find out it is the FFmpeg
                     // extension that is missing rather than the track.
-                    Log.w(
+                    Log.d(
                         TAG,
                         "audio track ${audioTracks.size} codec=${format.sampleMimeType} " +
                             "lang=${format.language} channels=${format.channelCount} " +
@@ -866,7 +866,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                     // Logged with language so a mismatch against ffmpeg's list is visible:
                     // JS maps by ordinal, which assumes both enumerate the container's
                     // subtitle streams in the same order.
-                    Log.w(
+                    Log.d(
                         TAG,
                         "text track ${textTracks.size} codec=${format.sampleMimeType} " +
                             "lang=${format.language} SUPPORTED=${group.isTrackSupported(i)}"
@@ -914,7 +914,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             // Anamorphic sources report a non-1 ratio here. Rotation needs no handling:
             // media3 applies it internally and width/height already account for it.
             videoSar = videoSize.pixelWidthHeightRatio.takeIf { it > 0f } ?: 1f
-            Log.w(TAG, "video ${videoWidth}x$videoHeight sar=$videoSar")
+            Log.d(TAG, "video ${videoWidth}x$videoHeight sar=$videoSar")
 
             // Pin the surface buffer to the video's own dimensions.
             //
@@ -946,7 +946,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             reason: Int
         ) {
             if (reason != Player.DISCONTINUITY_REASON_SEEK) return
-            Log.w(TAG, "seek landed at ${newPosition.positionMs}ms")
+            Log.d(TAG, "seek landed at ${newPosition.positionMs}ms")
             emit(EVENT_SEEK, eventMap().apply { putString("type", "TimeChanged") })
         }
 
@@ -1036,7 +1036,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 putInt("height", videoHeight)
             })
         }
-        Log.w(TAG, "load duration=${duration}ms audioTracks=${audioTracks.size}")
+        Log.d(TAG, "load duration=${duration}ms audioTracks=${audioTracks.size}")
         emit(EVENT_LOAD, info)
     }
 

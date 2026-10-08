@@ -91,8 +91,9 @@ interface QuickSettingsPanelProps {
 }
 
 export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props) => {
-    const { settings, setHapticIntensity, toggleHaptics } = useAppStore();
-    const { hapticSettings } = settings;
+    const hapticSettings = useAppStore((state) => state.settings.hapticSettings);
+    const setHapticIntensity = useAppStore((state) => state.setHapticIntensity);
+    const toggleHaptics = useAppStore((state) => state.toggleHaptics);
     // Older builds stored any value from a 1-255 slider; show the nearest preset.
     const hapticPreset = HAPTIC_PRESETS.reduce((best, p) =>
         Math.abs(p.value - hapticSettings.intensity) < Math.abs(best.value - hapticSettings.intensity) ? p : best,

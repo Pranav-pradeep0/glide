@@ -456,7 +456,7 @@ MergingCTA.displayName = 'MergingCTA';
 // ─── OnboardingScreen ─────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
     const theme = useTheme();
-    const { completeOnboarding } = useAppStore();
+    const completeOnboarding = useAppStore((state) => state.completeOnboarding);
     const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
     const [currentIndex, setCurrentIndex] = useState(0);

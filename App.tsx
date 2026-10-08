@@ -17,10 +17,13 @@ function App() {
   const [appReady, setAppReady] = useState(false);
   const [navReady, setNavReady] = useState(false);
   const theme = useTheme();
-  const { settings, updateStatus, setUpdateStatus, markUpdateNotified } = useAppStore();
+  const hasCompletedOnboarding = useAppStore((state) => state.settings.hasCompletedOnboarding);
+  const updateStatus = useAppStore((state) => state.updateStatus);
+  const setUpdateStatus = useAppStore((state) => state.setUpdateStatus);
+  const markUpdateNotified = useAppStore((state) => state.markUpdateNotified);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
-  const { initialize } = useVideoIndexStore();
+  const initialize = useVideoIndexStore((state) => state.initialize);
   const hasStartedMediaInitRef = useRef(false);
 
   useEffect(() => {
@@ -84,7 +87,7 @@ function App() {
   ]);
 
   useEffect(() => {
-    if (!appReady || !navReady || !settings.hasCompletedOnboarding) {
+    if (!appReady || !navReady || !hasCompletedOnboarding) {
       return;
     }
 
@@ -96,21 +99,12 @@ function App() {
     initialize().catch((error) => {
       console.error('Media index initialization error:', error);
     });
-  }, [appReady, navReady, settings.hasCompletedOnboarding, initialize]);
-
-  const startTime = useRef(Date.now());
+  }, [appReady, navReady, hasCompletedOnboarding, initialize]);
 
   useEffect(() => {
     if (appReady && navReady) {
-      const elapsed = Date.now() - startTime.current;
-      const minDuration = 1000;
-      const remaining = Math.max(0, minDuration - elapsed);
-
-      const timer = setTimeout(() => {
-        NativeModules.SplashModule?.hide();
-        setSplashHidden(true);
-      }, remaining);
-      return () => clearTimeout(timer);
+      NativeModules.SplashModule?.hide();
+      setSplashHidden(true);
     }
   }, [appReady, navReady]);
 

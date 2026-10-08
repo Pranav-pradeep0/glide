@@ -168,33 +168,31 @@ export default function SettingsScreen() {
     const insets = useSafeAreaInsets();
     const { height: windowHeight } = useWindowDimensions();
 
-    const {
-        settings,
-        updateStatus,
-        toggleDarkMode,
-        toggleHaptics,
-        setSubtitleFontSize,
-        setSubtitleColor,
-        setHapticIntensity,
-        resetHapticSettings,
-        setBrightnessMode,
-        setPipBrightnessMode,
-        setSubtitleFontWeight,
-        setSubtitleFontFamily,
-        setSubtitleOutlineWidth,
-        setSubtitleBackgroundColor,
-        setSubtitleBackgroundOpacity,
-        setSubtitleEdgeStyle,
-        resetSubtitleSettings,
-        setShowSeekButtons,
-        setSeekDuration,
-        setAutoPlayNext,
-        setDefaultAudioLanguage,
-        setShakeThreshold,
-        setShakeEnabled,
-        setShakeAction,
-        setOnlineLyricsEnabled,
-    } = useAppStore();
+    const settings = useAppStore((state) => state.settings);
+    const updateStatus = useAppStore((state) => state.updateStatus);
+    const toggleDarkMode = useAppStore((state) => state.toggleDarkMode);
+    const toggleHaptics = useAppStore((state) => state.toggleHaptics);
+    const setSubtitleFontSize = useAppStore((state) => state.setSubtitleFontSize);
+    const setSubtitleColor = useAppStore((state) => state.setSubtitleColor);
+    const setHapticIntensity = useAppStore((state) => state.setHapticIntensity);
+    const resetHapticSettings = useAppStore((state) => state.resetHapticSettings);
+    const setBrightnessMode = useAppStore((state) => state.setBrightnessMode);
+    const setPipBrightnessMode = useAppStore((state) => state.setPipBrightnessMode);
+    const setSubtitleFontWeight = useAppStore((state) => state.setSubtitleFontWeight);
+    const setSubtitleFontFamily = useAppStore((state) => state.setSubtitleFontFamily);
+    const setSubtitleOutlineWidth = useAppStore((state) => state.setSubtitleOutlineWidth);
+    const setSubtitleBackgroundColor = useAppStore((state) => state.setSubtitleBackgroundColor);
+    const setSubtitleBackgroundOpacity = useAppStore((state) => state.setSubtitleBackgroundOpacity);
+    const setSubtitleEdgeStyle = useAppStore((state) => state.setSubtitleEdgeStyle);
+    const resetSubtitleSettings = useAppStore((state) => state.resetSubtitleSettings);
+    const setShowSeekButtons = useAppStore((state) => state.setShowSeekButtons);
+    const setSeekDuration = useAppStore((state) => state.setSeekDuration);
+    const setAutoPlayNext = useAppStore((state) => state.setAutoPlayNext);
+    const setDefaultAudioLanguage = useAppStore((state) => state.setDefaultAudioLanguage);
+    const setShakeThreshold = useAppStore((state) => state.setShakeThreshold);
+    const setShakeEnabled = useAppStore((state) => state.setShakeEnabled);
+    const setShakeAction = useAppStore((state) => state.setShakeAction);
+    const setOnlineLyricsEnabled = useAppStore((state) => state.setOnlineLyricsEnabled);
     const clearAllHistory = useVideoHistoryStore((state) => state.clearAllHistory);
     const [languageModalVisible, setLanguageModalVisible] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');

@@ -9,11 +9,13 @@
 
 # Add any project specific keep options here:
 
-# React Native
--keep class com.facebook.react.** { *; }
--keep class com.facebook.jni.** { *; }
--keep class com.facebook.proguard.annotations.** { *; }
--keep class com.facebook.soloader.** { *; }
+# Strip debug, info, and verbose logging in release builds
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
 
 # Hermes
 -keep class com.facebook.hermes.unicode.** { *; }
@@ -37,15 +39,10 @@
 # React Native Zip Archive
 -keep class com.rnziparchive.** { *; }
 
-# OkHttp3
+# OkHttp3 / Okio
 -keepattributes Signature
 -keepattributes *Annotation*
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
 -dontwarn okhttp3.**
-
-# Okio
--keep class okio.** { *; }
 -dontwarn okio.**
 
 # General

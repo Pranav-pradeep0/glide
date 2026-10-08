@@ -54,8 +54,7 @@ export default function PlayerDetailScreen() {
     const insets = useSafeAreaInsets();
     const route = useRoute<DetailRouteProp>();
     const navigation = useNavigation<NavigationProp>();
-    const { settings } = useAppStore();
-    const hapticsEnabled = settings.hapticSettings.enabled;
+    const hapticsEnabled = useAppStore((state) => state.settings.hapticSettings.enabled);
     const { width, height } = useWindowDimensions();
     const isLandscape = width > height;
 

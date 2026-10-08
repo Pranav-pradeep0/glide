@@ -99,7 +99,7 @@ function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
 
 function MainTabs() {
     const { colors } = useTheme();
-    const { updateStatus } = useAppStore();
+    const updateAvailable = useAppStore((state) => state.updateStatus.available);
 
     return (
         <Tab.Navigator
@@ -139,7 +139,7 @@ function MainTabs() {
                     tabBarIcon: ({ color }) => (
                         <View>
                             <Feather name="settings" size={22} color={color} />
-                            {updateStatus.available && <View style={[styles.badge, { backgroundColor: colors.primary }]} />}
+                            {updateAvailable && <View style={[styles.badge, { backgroundColor: colors.primary }]} />}
                         </View>
                     ),
                 }}
@@ -153,7 +153,7 @@ interface RootNavigatorProps {
 }
 
 export default function RootNavigator({ onReady }: RootNavigatorProps) {
-    const { settings } = useAppStore();
+    const hasCompletedOnboarding = useAppStore((state) => state.settings.hasCompletedOnboarding);
     const theme = useTheme();
     const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
 
@@ -242,7 +242,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                     contentStyle: { backgroundColor: theme.colors.background },
                 }}
             >
-                {!settings.hasCompletedOnboarding ? (
+                {!hasCompletedOnboarding ? (
                     <Stack.Screen
                         name="Onboarding"
                         component={OnboardingScreen}
