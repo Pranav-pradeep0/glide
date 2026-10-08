@@ -3,6 +3,7 @@ package com.glide.app.audio
 import android.content.ContentResolver
 import android.content.Context
 import android.database.ContentObserver
+import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -68,9 +69,14 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
 
         @RequiresApi(Build.VERSION_CODES.M)
         private fun detectCurrentRouteModern(am: AudioManager): String {
+            // The real route for music, rather than every port the device owns. Only
+            // Android 13 and newer can answer that; below it, fall back to the scan.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activeMediaRoute(am)?.let { return it }
+            }
+
             val devices = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
             var detectedRoute = ROUTE_SPEAKER
-            var foundExternal = false
 
             for (device in devices) {
                 val classified = classifyDevice(device)
@@ -78,21 +84,38 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
                     return ROUTE_BLUETOOTH
                 } else if (classified == ROUTE_USB) {
                     detectedRoute = ROUTE_USB
-                    foundExternal = true
-                } else if (classified == ROUTE_WIRED) {
-                    if (detectedRoute != ROUTE_USB) {
-                        detectedRoute = ROUTE_WIRED
-                    }
-                    foundExternal = true
-                } else if (classified == ROUTE_UNKNOWN && !device.isSource) {
-                    if (!foundExternal) {
-                        detectedRoute = ROUTE_WIRED
-                        foundExternal = true
-                    }
+                } else if (classified == ROUTE_WIRED && detectedRoute != ROUTE_USB) {
+                    detectedRoute = ROUTE_WIRED
                 }
             }
 
             return detectedRoute
+        }
+
+        /**
+         * The device music is actually routed to. Null when the platform cannot say, so
+         * the caller falls back to scanning every output port.
+         */
+        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+        private fun activeMediaRoute(am: AudioManager): String? {
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                .build()
+            val devices = try {
+                am.getAudioDevicesForAttributes(attributes)
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "could not read the active media route: ${e.message}")
+                return null
+            }
+            for (device in devices) {
+                if (device.isSource) continue
+                val route = classifyDevice(device)
+                // An unrecognised output is the speaker's problem to own, not a reason to
+                // hand back a route that would unlock boost. Only a known one answers here.
+                if (route != ROUTE_UNKNOWN) return route
+            }
+            return null
         }
 
         @Suppress("DEPRECATION")
@@ -109,10 +132,15 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
             return when (device.type) {
                 AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
                 AudioDeviceInfo.TYPE_BUILTIN_EARPIECE,
-                AudioDeviceInfo.TYPE_TELEPHONY -> ROUTE_SPEAKER
+                AudioDeviceInfo.TYPE_TELEPHONY,
+                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER_SAFE -> ROUTE_SPEAKER
 
                 AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-                AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> ROUTE_BLUETOOTH
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_HEARING_AID,
+                AudioDeviceInfo.TYPE_BLE_HEADSET,
+                AudioDeviceInfo.TYPE_BLE_SPEAKER,
+                AudioDeviceInfo.TYPE_BLE_BROADCAST -> ROUTE_BLUETOOTH
 
                 AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
                 AudioDeviceInfo.TYPE_WIRED_HEADSET,
@@ -120,6 +148,8 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
                 AudioDeviceInfo.TYPE_LINE_DIGITAL,
                 AudioDeviceInfo.TYPE_AUX_LINE,
                 AudioDeviceInfo.TYPE_HDMI,
+                AudioDeviceInfo.TYPE_HDMI_ARC,
+                AudioDeviceInfo.TYPE_HDMI_EARC,
                 AudioDeviceInfo.TYPE_DOCK,
                 AudioDeviceInfo.TYPE_FM,
                 AudioDeviceInfo.TYPE_FM_TUNER,
@@ -129,15 +159,7 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
                 AudioDeviceInfo.TYPE_USB_ACCESSORY,
                 AudioDeviceInfo.TYPE_USB_DEVICE -> ROUTE_USB
 
-                else -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val type = device.type
-                        if (type == 26 || type == 27) { // BLE_HEADSET, BLE_SPEAKER
-                            return ROUTE_BLUETOOTH
-                        }
-                    }
-                    ROUTE_UNKNOWN
-                }
+                else -> ROUTE_UNKNOWN
             }
         }
 

@@ -249,6 +249,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         pendingCommittedSeekRef.current = clamped;
         seekSettledUntilRef.current = Date.now() + SEEK_SETTLE_WINDOW_MS;
 
+        playerStoppedRef.current = false;
+
         setState(prev => ({
             ...prev,
             isSeeking: false,
@@ -372,6 +374,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         if (__DEV__) {console.log('[LOAD] duration=' + durationSec.toFixed(2) + 's'
             + ' audioTracks=' + (data.audioTracks?.length ?? 0));}
 
+        playerStoppedRef.current = false;
         setState(prev => ({
             ...prev,
             duration: durationSec,
@@ -554,6 +557,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             return;
         }
 
+        playerStoppedRef.current = false;
         isPlayingShared.value = true;
         lastSyncTimestamp.value = now;
         lastSyncPosition.value = currentTimeRef.current;

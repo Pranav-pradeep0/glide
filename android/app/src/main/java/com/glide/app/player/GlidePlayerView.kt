@@ -1,8 +1,12 @@
 package com.glide.app.player
 
+import android.app.Activity
+import android.app.Application
+import android.content.ContextWrapper
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.Bundle
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
@@ -33,7 +37,6 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.ui.SubtitleView
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
@@ -65,7 +68,7 @@ import kotlin.math.roundToLong
  */
 @UnstableApi
 class GlidePlayerView(private val reactContext: ThemedReactContext) :
-    FrameLayout(reactContext), LifecycleEventListener {
+    FrameLayout(reactContext) {
 
     private val surfaceView = SurfaceView(reactContext)
     private val subtitleView = SubtitleView(reactContext).apply {
@@ -150,7 +153,38 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var bestFitUsingCover: Boolean? = null
     private var lastLayoutSignature: String? = null
     private val pipController = GlidePipController(this)
-    private var hostStopped = false
+    private var hostActivity: Activity? = null
+
+    /**
+     * Backgrounding is read from the Activity this view actually lives in. The two player
+     * Activities share one ReactHost, so the ReactContext-wide host callbacks fire for
+     * whichever Activity moved last, which is not always this one.
+     */
+    private val activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivityPaused(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+
+        /**
+         * Stopped is the only state that means off screen for certain. A PiP window and a
+         * split-screen pane both stay started, so both play on, and dismissing a PiP window
+         * stops the Activity and lands here -- no dependence on whether the PiP mode change
+         * or the stop arrives first.
+         */
+        override fun onActivityStopped(activity: Activity) {
+            if (activity !== getHostActivity()) return
+            if (!playInBackground) {
+                player?.playWhenReady = false
+            }
+        }
+
+        override fun onActivityDestroyed(activity: Activity) {
+            if (activity !== getHostActivity()) return
+            cleanUpResources()
+        }
+    }
 
     private val progressTick = object : Runnable {
         override fun run() {
@@ -167,7 +201,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     init {
         addView(surfaceView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(subtitleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        reactContext.addLifecycleEventListener(this)
+        getHostActivity()
+        (context.applicationContext as? Application)?.registerActivityLifecycleCallbacks(activityLifecycleCallbacks)
         pipController.attach()
     }
 
@@ -366,19 +401,34 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     /** Called by [GlidePipController] once the Activity has changed PiP state. */
     fun onPipModeChangedInternal(inPipMode: Boolean) {
         Log.d(TAG, if (inPipMode) "entered PiP window" else "left PiP window")
-        if (!inPipMode && hostStopped && !playInBackground) {
-            player?.playWhenReady = false
-        }
-        // The window changed size; recompute geometry once against the new bounds.
+        // Whether leaving PiP means expanded or dismissed is the Activity's stop to say,
+        // handled in activityLifecycleCallbacks. Here only the window size changed.
         relayoutSurface()
     }
 
-    fun getReactActivity(): android.app.Activity? =
-        try {
+    /**
+     * The Activity whose window this view's surface is in, found by unwrapping the view's
+     * own context. [ReactContext.getCurrentActivity] names whichever Activity resumed last
+     * in the process, which is a different one whenever the library is open behind a video.
+     */
+    fun getHostActivity(): Activity? {
+        hostActivity?.let { return it }
+        var ctx: android.content.Context? = context
+        while (ctx is ContextWrapper) {
+            if (ctx is Activity) {
+                hostActivity = ctx
+                return ctx
+            }
+            ctx = ctx.baseContext
+        }
+        return try {
             reactContext.currentActivity
         } catch (e: RuntimeException) {
             null
         }
+    }
+
+    fun getReactActivity(): Activity? = getHostActivity()
 
     /**
      * Notification and lock-screen metadata. Applied to the live item rather than only at
@@ -718,7 +768,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         p.prepare()
 
         // The session describes this player directly -- no adapter mirroring its state.
-        GlidePlayerHolder.start(context, p)
+        GlidePlayerHolder.start(context, p, getHostActivity()?.javaClass)
 
         if (progressIntervalMs > 0) {
             progressHandler.postDelayed(progressTick, progressIntervalMs)
@@ -745,29 +795,12 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     }
 
     fun cleanUpResources() {
-        reactContext.removeLifecycleEventListener(this)
+        (context.applicationContext as? Application)?.unregisterActivityLifecycleCallbacks(activityLifecycleCallbacks)
         if (outputWatcherRegistered) {
             audioManager?.unregisterAudioDeviceCallback(outputWatcher)
             outputWatcherRegistered = false
         }
         pipController.detach()
-        releasePlayer()
-    }
-
-    override fun onHostPause() {
-        hostStopped = true
-        // PiP is a foreground presentation even though the Activity reports paused, so it
-        // must not be treated as backgrounding.
-        if (!playInBackground && !pipController.isInPipMode) {
-            player?.playWhenReady = false
-        }
-    }
-
-    override fun onHostResume() {
-        hostStopped = false
-    }
-
-    override fun onHostDestroy() {
         releasePlayer()
     }
 

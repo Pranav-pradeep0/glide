@@ -1,9 +1,12 @@
 package com.glide.app.player
 
+import android.app.Activity
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -46,6 +49,14 @@ object GlidePlayerHolder {
     var audioPlayer: ExoPlayer? = null
         private set
 
+    /**
+     * The Activity the open video is playing in, so its notification reopens that screen
+     * rather than a guess. Null while only music is playing.
+     */
+    @JvmStatic
+    var videoHostActivity: Class<out Activity>? = null
+        private set
+
     private var service: GlidePlayerService? = null
 
     fun attachService(value: GlidePlayerService?) {
@@ -75,12 +86,13 @@ object GlidePlayerHolder {
      * library session that controllers and Android Auto browse, video a plain one -- so
      * neither ever ends up driving the other. Only one plays at a time.
      */
-    fun start(context: Context, value: ExoPlayer) {
+    fun start(context: Context, value: ExoPlayer, hostActivity: Class<out Activity>? = null) {
         if (value === audioPlayer) {
             videoPlayer?.pause()
         } else {
             audioPlayer?.pause()
             videoPlayer = value
+            videoHostActivity = hostActivity
             service?.attachVideo(value)
         }
         if (service == null) {
@@ -100,6 +112,8 @@ object GlidePlayerHolder {
         }
     }
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     /** Must be called *before* the video player is released, so no session holds it. */
     fun clear(context: Context, value: ExoPlayer) {
         if (videoPlayer !== value) {
@@ -107,8 +121,9 @@ object GlidePlayerHolder {
             return
         }
         videoPlayer = null
+        videoHostActivity = null
         service?.detachVideo()
-        stopServiceIfIdle(context)
+        mainHandler.post { stopServiceIfIdle(context) }
     }
 
     /** The music queue was cleared. The player itself stays; the music session is built on it. */
@@ -117,7 +132,7 @@ object GlidePlayerHolder {
             it.stop()
             it.clearMediaItems()
         }
-        stopServiceIfIdle(context)
+        mainHandler.post { stopServiceIfIdle(context) }
     }
 
     private fun stopServiceIfIdle(context: Context) {
@@ -168,6 +183,20 @@ class GlidePlayerService : MediaLibraryService() {
         )
     }
 
+    /**
+     * Where the video notification leads: the Activity the video is actually playing in.
+     * Both are `singleTask`, so SINGLE_TOP alone brings the running instance forward with
+     * the player still on screen. CLEAR_TOP would finish it instead.
+     */
+    private fun videoSessionActivity(): PendingIntent = PendingIntent.getActivity(
+        this,
+        1,
+        Intent(this, GlidePlayerHolder.videoHostActivity ?: MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        },
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    )
+
     override fun onCreate() {
         super.onCreate()
         GlidePlayerHolder.attachService(this)
@@ -194,7 +223,7 @@ class GlidePlayerService : MediaLibraryService() {
         detachVideo()
         videoSession = MediaSession.Builder(this, player)
             .setId(VIDEO_SESSION_ID)
-            .setSessionActivity(sessionActivity)
+            .setSessionActivity(videoSessionActivity())
             .build()
             .also { addSession(it) }
     }
