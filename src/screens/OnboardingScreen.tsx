@@ -93,8 +93,8 @@ const SLIDES: SlideData[] = [
         tagline: 'Experimental features for a better viewing experience.',
         bullets: [
             'Color enhancement',
-            'Haptic enabled movie playback.',
-            'Assisted Subtitle Sync',
+            'Haptic movie playback',
+            'Assisted subtitle sync',
         ],
     },
     {
@@ -102,7 +102,7 @@ const SLIDES: SlideData[] = [
         title: 'Safe and Open Source',
         tagline: 'You\'re the only one watching.',
         bullets: [
-            'Zero data collection',
+            'No accounts, no analytics',
             'Free forever, no ads',
             'Found a bug? Open an issue or send a PR',
         ],
