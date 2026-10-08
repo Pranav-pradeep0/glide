@@ -34,7 +34,6 @@
 
 
 # React Native FS
--keep class com.rnfs.** { *; }
 
 # React Native Zip Archive
 -keep class com.rnziparchive.** { *; }
@@ -49,7 +48,7 @@
 -dontwarn com.facebook.react.**
 
 # React Native Config
--keep class com.lugg.ReactNativeConfig.** { *; }
+-keep class com.lugg.RNCConfig.** { *; }
 
 # Keep BuildConfig
 -keep class com.glide.app.BuildConfig { *; }
