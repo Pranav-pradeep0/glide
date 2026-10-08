@@ -5,6 +5,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -626,6 +627,14 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     // -- Player lifecycle ----------------------------------------------------------------
 
+    private fun isLocalUri(uriString: String): Boolean {
+        val scheme = Uri.parse(uriString).scheme
+        return scheme.isNullOrEmpty() ||
+            scheme.equals("file", ignoreCase = true) ||
+            scheme.equals("content", ignoreCase = true) ||
+            scheme.equals("android.resource", ignoreCase = true)
+    }
+
     private fun openMedia() {
         val uri = sourceUri ?: return
         releasePlayer()
@@ -648,6 +657,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 .setAudioProcessors(arrayOf(delayProcessor))
                 .build()
         }.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+
+        val wakeMode = if (isLocalUri(uri)) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK
 
         val p = ExoPlayer.Builder(context, renderers)
             // The entire audio-focus subsystem of the VLC view is this one argument. With
@@ -662,7 +674,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 /* handleAudioFocus = */ true
             )
             .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .setWakeMode(wakeMode)
             .build()
 
         player = p
@@ -714,7 +726,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     }
 
     private fun releasePlayer() {
-        progressHandler.removeCallbacks(progressTick)
+        progressHandler.removeCallbacksAndMessages(null)
         subtitleView.setCues(emptyList())
         equalizer?.release()
         equalizer = null
