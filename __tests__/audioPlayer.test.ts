@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, afterEach, afterAll, describe, expect, it, jest } from '@jest/globals';
 
 const mockMMKVStore = new Map<string, string>();
 
@@ -69,7 +69,7 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
 }));
 
 import { formatDuration } from '../src/utils/formatUtils';
-import { useAudioStore } from '../src/store/audioStore';
+import { useAudioStore, flushPendingWrites } from '../src/store/audioStore';
 import { useFavoritesStore } from '../src/store/favoritesStore';
 import { AudioMediaService } from '../src/services/AudioMediaService';
 import { parseLrc } from '../src/services/LyricsService';
@@ -138,6 +138,16 @@ describe('Audio Player Utilities and Store', () => {
             useAudioStore.getState().clearQueue();
             useAudioStore.setState({ shuffle: false, repeatMode: 'off', equalizerPreset: 'flat', position: 0 });
             jest.clearAllMocks();
+        });
+
+        afterEach(() => {
+            useAudioStore.getState().setSleepTimer('off');
+            flushPendingWrites();
+        });
+
+        afterAll(() => {
+            useAudioStore.getState().setSleepTimer('off');
+            flushPendingWrites();
         });
 
         it('sets current track and queue on playTrack', async () => {
