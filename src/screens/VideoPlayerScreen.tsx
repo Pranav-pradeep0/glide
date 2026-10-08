@@ -413,6 +413,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         delayMs: settingsHook.settings.subtitleDelay,
         setDelay: settingsHook.setSubtitleDelay,
         showToast: bookmarksHook.showToastWithMessage,
+        selectedAudioTrackIndex: tracksHook.selectedAudioTrackId,
+        audioTracksLoaded: tracksHook.audioTracks.length > 0 || player.state.duration > 0,
     });
 
     // AI Recap & Resume Setup

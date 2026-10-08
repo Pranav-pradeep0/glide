@@ -138,6 +138,14 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
                 }
             }
 
+            // Prefer the track selected by the native player (e.g. matching device language)
+            const activeTrack = tracks.find(t => t.isSelected);
+            if (activeTrack !== undefined) {
+                if (__DEV__) {console.log('[usePlayerTracks] Using player-selected audio track:', activeTrack.id, activeTrack.name);}
+                setSelectedAudioTrackId(activeTrack.id);
+                return;
+            }
+
             // Fallback to first track
             setSelectedAudioTrackId(tracks[0].id);
         }

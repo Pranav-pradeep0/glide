@@ -39,7 +39,7 @@ export const PLAYER_CONSTANTS = {
 export interface PlayerLoadData {
     duration: number;
     videoSize?: { height: number; width: number };
-    audioTracks?: Array<{ id: number; name: string }>;
+    audioTracks?: Array<{ id: number; name: string; isSelected?: boolean }>;
     textTracks?: Array<{ id: number; name: string }>;
     subtitleTracks?: Array<{ id: number; name: string; language?: string; isDefault?: boolean }>;
 }
@@ -75,6 +75,7 @@ export interface PlayerSeekEvent {
 export interface NativeAudioTrack {
     id: number;
     name: string;
+    isSelected?: boolean;
 }
 
 export interface SubtitleTrack {

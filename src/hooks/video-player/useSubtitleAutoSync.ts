@@ -23,26 +23,29 @@ interface Options {
     delayMs: number;
     setDelay: (ms: number) => void;
     showToast: (message: string) => void;
+    selectedAudioTrackIndex?: number;
+    audioTracksLoaded?: boolean;
 }
 
 /** One line for a result, shared by the toast and the sync panel. */
 export function describeAutoSync(result: AutoSyncResult): string {
     switch (result.kind) {
         case 'synced': {
-            if (Math.abs(result.delayMs) < 100) {return 'Subtitles are in sync';}
+            if (Math.abs(result.delayMs) < 100) {return 'Subtitles already in sync';}
             const s = (Math.abs(result.delayMs) / 1000).toFixed(2);
-            return `Synced: subtitles now show ${s} s ${result.delayMs > 0 ? 'later' : 'earlier'}`;
+            return `Subtitles moved ${s} s ${result.delayMs > 0 ? 'later' : 'earlier'}`;
         }
-        case 'drift': return 'This subtitle was made for a different frame rate. Try another one.';
-        case 'unsure': return 'Couldn’t sync confidently here. Try Pick a line.';
-        case 'too-few-cues': return 'Not enough dialogue nearby to sync';
-        case 'no-audio': return 'Couldn’t read this video’s audio to sync';
-        case 'failed': return 'Auto sync failed';
+        case 'drift': return 'Couldn’t auto sync: this subtitle is for a different frame rate. Try another one.';
+        case 'unsure': return 'Couldn’t auto sync: the dialogue isn’t clear enough here. Try Pick a line.';
+        case 'too-few-cues': return 'Couldn’t auto sync: not enough dialogue nearby. Try again during a conversation.';
+        case 'no-audio': return 'Couldn’t auto sync: this video’s audio can’t be read.';
+        case 'failed': return 'Auto sync failed. Try again, or use Pick a line.';
     }
 }
 
 export function useSubtitleAutoSync({
     videoPath, cues, isExternal, enabled, currentTimeRef, delayMs, setDelay, showToast,
+    selectedAudioTrackIndex, audioTracksLoaded,
 }: Options) {
     const [running, setRunning] = useState(false);
     const runningRef = useRef(false);
@@ -50,6 +53,8 @@ export function useSubtitleAutoSync({
     cuesRef.current = cues;
     const delayRef = useRef(delayMs);
     delayRef.current = delayMs;
+    const audioTrackRef = useRef(selectedAudioTrackIndex);
+    audioTrackRef.current = selectedAudioTrackIndex;
 
     const run = useCallback(async (manual: boolean): Promise<AutoSyncResult | null> => {
         if (runningRef.current || !enabled || cues.length === 0) {return null;}
@@ -57,14 +62,17 @@ export function useSubtitleAutoSync({
         setRunning(true);
         const analysed = cues;
         try {
-            const result = await SubtitleAutoSync.compute(videoPath, analysed, currentTimeRef.current);
+            const trackIndex = audioTrackRef.current ?? -1;
+            const result = await SubtitleAutoSync.compute(videoPath, analysed, currentTimeRef.current, trackIndex);
             if (cuesRef.current !== analysed) {return null;}   // subtitle changed meanwhile
             // An automatic answer yields to anything the user set while it ran.
             if (!manual && delayRef.current !== 0) {return null;}
             if (result.kind === 'synced') {setDelay(result.delayMs);}
-            // A manual run reports in the sync panel; an automatic one has only the toast.
-            if (!manual && (result.kind === 'synced' || result.kind === 'drift')) {
-                showToast(describeAutoSync(result));
+            // A manual run reports in the sync panel; an automatic one has only the toast, and
+            // says it was automatic, since nobody asked for it.
+            if (!manual) {
+                const message = describeAutoSync(result);
+                showToast(result.kind === 'synced' ? `Auto sync: ${message}` : message);
             }
             return result;
         } finally {
@@ -76,10 +84,11 @@ export function useSubtitleAutoSync({
     const attempted = useRef<SubtitleCue[] | null>(null);
     useEffect(() => {
         if (!enabled || !isExternal || cues.length === 0 || delayMs !== 0) {return;}
+        if (audioTracksLoaded === false) {return;}
         if (attempted.current === cues) {return;}
         attempted.current = cues;
         run(false);
-    }, [enabled, isExternal, cues, delayMs, run]);
+    }, [enabled, isExternal, cues, delayMs, audioTracksLoaded, run]);
 
     return { runAutoSync: () => run(true), autoSyncRunning: running };
 }

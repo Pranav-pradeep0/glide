@@ -59,7 +59,7 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
     // moving while the user reviews the matches.
     const matchReferenceTimeRef = useRef(0);
 
-    // A successful Auto sync shows as the new value, with Undo. Only a failure needs words.
+    // What the last Auto sync did, until the value is changed by hand. A change also gets Undo.
     const [autoNote, setAutoNote] = useState<string | null>(null);
     const [undoTo, setUndoTo] = useState<number | null>(null);
 
@@ -78,12 +78,14 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
         setUndoTo(null);
         const result = await onAutoSync();
         if (!result) {return;}
+        // Every outcome gets words: "already in sync" changes nothing on screen, and would
+        // otherwise look like the button did nothing.
+        setAutoNote(describeAutoSync(result));
         if (result.kind === 'synced') {
             haptic('confirm');
             if (result.delayMs !== before) {setUndoTo(before);}
         } else {
             haptic('reject');
-            setAutoNote(describeAutoSync(result));
         }
     }, [onAutoSync, value]);
 

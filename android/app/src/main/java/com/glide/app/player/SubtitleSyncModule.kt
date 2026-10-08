@@ -31,6 +31,18 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
 
     companion object {
         const val NAME = "SubtitleSyncModule"
+
+        /**
+         * No AAC dynamic range control: it narrows the gap between dialogue and the quiet around
+         * it, which is what alignment measures. Zero boost and cut remove its gain in any mode.
+         */
+        fun disableDrc(format: MediaFormat) {
+            format.setInteger(MediaFormat.KEY_AAC_DRC_EFFECT_TYPE, 0)
+            format.setInteger(MediaFormat.KEY_AAC_DRC_HEAVY_COMPRESSION, 0)
+            format.setInteger(MediaFormat.KEY_AAC_DRC_BOOST_FACTOR, 0)
+            format.setInteger(MediaFormat.KEY_AAC_DRC_ATTENUATION_FACTOR, 0)
+            format.setInteger(MediaFormat.KEY_AAC_DRC_TARGET_REFERENCE_LEVEL, -1)
+        }
     }
 
     override fun getName() = NAME
@@ -114,10 +126,15 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
      * most phones cannot decode and that are often a film's only audio.
      */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private fun decodeAudioWindow(videoPath: String, windowStartS: Double, durationS: Double = 300.0): DecodedLevels? {
+    private fun decodeAudioWindow(
+        videoPath: String,
+        windowStartS: Double,
+        durationS: Double = 300.0,
+        targetTrackIndex: Int = -1,
+    ): DecodedLevels? {
         val startUs = (windowStartS * 1_000_000).toLong().coerceAtLeast(0L)
         val window = WindowMeter(startUs, startUs + (durationS * 1_000_000).toLong())
-        val audio = AudioCollector(window, startUs)
+        val audio = AudioCollector(window, startUs, targetTrackIndex)
         try {
             EmbeddedSubtitles.read(
                 reactApplicationContext,
@@ -131,7 +148,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
         }
         val result = window.result(windowStartS)
         android.util.Log.i(
-            NAME, "auto-sync: tracks=${audio.trackMimes} using=${audio.description} decoded " +
+            NAME, "auto-sync: tracks=${audio.trackMimes} targetTrack=$targetTrackIndex chosen=${audio.chosen} using=${audio.description} decoded " +
                 "${"%.1f".format(Locale.US, (result?.levels?.size ?: 0) * SubtitleAligner.FRAME_S)} s"
         )
         return result
@@ -146,11 +163,15 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
 
     /** Picks the first decodable audio track once the header is read, and feeds its samples to a decoder. */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private class AudioCollector(private val window: WindowMeter, private val startUs: Long) :
-        androidx.media3.extractor.ExtractorOutput {
+    private class AudioCollector(
+        private val window: WindowMeter,
+        private val startUs: Long,
+        private val targetTrackIndex: Int = -1,
+    ) : androidx.media3.extractor.ExtractorOutput {
         private val formats = ArrayList<androidx.media3.common.Format?>()
         private var seekMap: androidx.media3.extractor.SeekMap? = null
-        private var chosen = -1
+        var chosen = -1
+            private set
         private var seeked = false
         var decoder: PcmDecoder? = null
             private set
@@ -175,24 +196,24 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
             if (decoder != null || noDecoder) return
             val codecs = MediaCodecList(MediaCodecList.REGULAR_CODECS)
             val ffmpeg = try { androidx.media3.decoder.ffmpeg.FfmpegLibrary.isAvailable() } catch (_: Throwable) { false }
-            for ((i, format) in formats.withIndex()) {
-                format ?: continue
+            // The track being heard first: on a dubbed release the first track is often another
+            // language, whose lines start and stop at other times than the subtitle's.
+            val order = listOf(targetTrackIndex).filter { it in formats.indices } +
+                formats.indices.filter { it != targetTrackIndex }
+            for (i in order) {
+                val format = formats[i] ?: continue
                 val mediaFormat = androidx.media3.common.util.MediaFormatUtil.createMediaFormatFromFormat(format)
                 val name = try { codecs.findDecoderForFormat(mediaFormat) } catch (_: Exception) { null }
                 if (name != null) {
                     chosen = i
                     decoder = MediaCodecPcm(mediaFormat, name, window)
-                    description = "${format.sampleMimeType} via $name"
+                    description = "${format.sampleMimeType} [track $i] via $name"
                     return
                 }
-            }
-            if (ffmpeg) {
-                for ((i, format) in formats.withIndex()) {
-                    format ?: continue
-                    if (!androidx.media3.decoder.ffmpeg.FfmpegLibrary.supportsFormat(format.sampleMimeType ?: continue)) continue
+                if (ffmpeg && androidx.media3.decoder.ffmpeg.FfmpegLibrary.supportsFormat(format.sampleMimeType ?: continue)) {
                     chosen = i
                     decoder = FfmpegPcm(format, window)
-                    description = "${format.sampleMimeType} via ffmpeg"
+                    description = "${format.sampleMimeType} [track $i] via ffmpeg"
                     return
                 }
             }
@@ -248,6 +269,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
 
     private class MediaCodecPcm(format: MediaFormat, name: String, private val window: WindowMeter) : PcmDecoder {
         private val codec = MediaCodec.createByCodecName(name).apply {
+            disableDrc(format)
             configure(format, null, null, 0)
             start()
         }
@@ -372,17 +394,21 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
      * cue times against the extracted speech band.
      */
     @ReactMethod
-    fun alignVideo(videoPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray, promise: Promise) {
+    fun alignVideo(videoPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray, audioTrackIndex: Int, promise: Promise) {
         thread(name = "subtitle-align-video") {
             try {
-                val decoded = decodeAudioWindow(videoPath, windowStartS, 300.0)
+                val decoded = decodeAudioWindow(videoPath, windowStartS, 300.0, audioTrackIndex)
                     ?: return@thread promise.reject("E_NO_AUDIO", "No decodable audio in this video")
 
                 val s = DoubleArray(starts.size()) { starts.getDouble(it) }
                 val e = DoubleArray(ends.size()) { ends.getDouble(it) }
 
                 val result = SubtitleAligner.align(decoded.levels, decoded.actualStartS, s, e)
-                    ?: return@thread promise.resolve(null)
+                android.util.Log.i(
+                    NAME, "auto-sync: window=${decoded.actualStartS}s cues=${s.size} $result " +
+                        "confident=${result?.confident} drift=${result?.drift}"
+                )
+                if (result == null) return@thread promise.resolve(null)
 
                 promise.resolve(Arguments.createMap().apply {
                     putDouble("delayMs", result.delayS * 1000)
@@ -394,35 +420,6 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                 })
             } catch (t: Throwable) {
                 promise.reject("E_ALIGN", t.message ?: "Alignment error", t)
-            }
-        }
-    }
-
-    /**
-     * Align cue times (seconds) against the speech in [wavPath], a 16-bit PCM WAV (any channel count) whose first
-     * sample is at [windowStartS]. Resolves null when there is too little to go on.
-     */
-    @ReactMethod
-    fun align(wavPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray, promise: Promise) {
-        thread(name = "subtitle-align") {
-            try {
-                val wav = SubtitleAligner.pcmFromWav(File(wavPath).readBytes())
-                    ?: return@thread promise.reject("E_WAV", "Not a 16-bit PCM WAV")
-                val s = DoubleArray(starts.size()) { starts.getDouble(it) }
-                val e = DoubleArray(ends.size()) { ends.getDouble(it) }
-                val result = SubtitleAligner.align(
-                    SubtitleAligner.speechLevels(wav.dialogue(), wav.sampleRate), windowStartS, s, e,
-                ) ?: return@thread promise.resolve(null)
-                promise.resolve(Arguments.createMap().apply {
-                    putDouble("delayMs", result.delayS * 1000)
-                    putDouble("ratio", result.ratio)
-                    putDouble("peakZ", result.peakZ)
-                    putDouble("runnerUp", result.runnerUp)
-                    putBoolean("confident", result.confident)
-                    putBoolean("drift", result.drift)
-                })
-            } catch (e: Exception) {
-                promise.reject("E_ALIGN", e)
             }
         }
     }

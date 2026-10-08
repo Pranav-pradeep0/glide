@@ -85,7 +85,12 @@ export class SubtitleAutoSync {
      * Work out the subtitle delay for [cues] against [videoPath]'s audio. Never applies
      * anything itself: the caller decides, so a stale or unsure answer can be dropped whole.
      */
-    static async compute(videoPath: string, cues: SubtitleCue[], positionS: number): Promise<AutoSyncResult> {
+    static async compute(
+        videoPath: string,
+        cues: SubtitleCue[],
+        positionS: number,
+        audioTrackIndex: number = -1,
+    ): Promise<AutoSyncResult> {
         const speech = cues.filter(isSpeechCue);
         const windowStart = chooseWindow(speech, positionS);
         if (windowStart === null) {return { kind: 'too-few-cues' };}
@@ -95,16 +100,14 @@ export class SubtitleAutoSync {
 
         if (NativeModules.SubtitleSyncModule?.alignVideo) {
             try {
+                // The numbers behind the answer are logged natively (SubtitleSyncModule, "auto-sync").
                 const alignment: NativeAlignment | null = await NativeModules.SubtitleSyncModule.alignVideo(
                     videoPath,
                     windowStart,
                     starts,
                     ends,
+                    Number.isInteger(audioTrackIndex) ? audioTrackIndex : -1,
                 );
-                // Logged in release too: this is the evidence for tuning the confidence thresholds.
-                console.log(`[SubtitleAutoSync] window=${windowStart.toFixed(0)}s cues=${speech.length} ` +
-                    (alignment ? `delay=${alignment.delayMs.toFixed(0)}ms ratio=${alignment.ratio.toFixed(4)} ` +
-                        `z=${alignment.peakZ.toFixed(1)} runnerUp=${alignment.runnerUp.toFixed(2)}` : 'no alignment'));
                 return interpret(alignment);
             } catch (error: any) {
                 console.warn('[SubtitleAutoSync] Alignment failed:', error);

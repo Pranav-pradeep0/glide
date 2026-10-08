@@ -122,7 +122,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
      * the name and hands the id to `audioTrack`. Holding the group here is what makes
      * selection a one-liner; there is no other way back from an id to a `TrackGroup`.
      */
-    private val audioTracks = mutableListOf<Pair<TrackGroup, Int>>()
+    private val audioTracks = mutableListOf<Triple<TrackGroup, Int, Boolean>>()
     private var tracksKnown = false
     private var pendingAudioTrack: Int? = null
 
@@ -855,7 +855,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                             "SUPPORTED=${group.isTrackSupported(i)} " +
                             "SELECTED=${group.isTrackSelected(i)}"
                     )
-                    audioTracks.add(group.mediaTrackGroup to i)
+                    audioTracks.add(Triple(group.mediaTrackGroup, i, group.isTrackSelected(i)))
                 }
             }
             textTracks.clear()
@@ -991,10 +991,11 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         val info = Arguments.createMap()
         info.putDouble("duration", duration.toDouble())
         val trackArray = Arguments.createArray()
-        audioTracks.forEachIndexed { id, (group, index) ->
+        audioTracks.forEachIndexed { id, (mediaTrackGroup, index, isSelected) ->
             trackArray.pushMap(Arguments.createMap().apply {
                 putInt("id", id)
-                putString("name", audioTrackName(group.getFormat(index), id))
+                putString("name", audioTrackName(mediaTrackGroup.getFormat(index), id))
+                putBoolean("isSelected", isSelected)
             })
         }
         info.putArray("audioTracks", trackArray)

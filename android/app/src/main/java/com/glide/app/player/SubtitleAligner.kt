@@ -1,11 +1,11 @@
 package com.glide.app.player
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.log10
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -15,7 +15,8 @@ import kotlin.math.sqrt
  * ffsubsync / alass idea, with no speech recognition, no network and no language dependence.
  *
  * 1. [speechLevels]: the audio, band-passed to the speech band (300-3000 Hz), as loudness in
- *    dB every 10 ms.
+ *    dB every 10 ms, minus the loudness of the surrounding [DETREND_S] so a music bed or a
+ *    loud scene does not count as speech.
  * 2. [align]: slide the cue intervals across that loudness, +/-[MAX_SHIFT_S]. At each lag the
  *    score is mean loudness inside cues minus mean loudness outside them, which prefix sums
  *    make O(cues) per lag instead of O(frames). The best lag is the delay.
@@ -42,6 +43,18 @@ internal object SubtitleAligner {
     const val MAX_RUNNER_UP = 0.75
     const val RUNNER_UP_GUARD_S = 1.0
 
+    /**
+     * The other way to be sure: each half of the window, searched on its own over the full
+     * range, lands on the same delay. A chance peak lands anywhere in +/-[MAX_SHIFT_S], so two
+     * independent ones agreeing within [AGREE_TOLERANCE_S] is ~0.5% likely; real dialogue in a
+     * busy mix often scores a low z yet agrees every time.
+     */
+    const val AGREE_MIN_Z = 2.0
+    const val AGREE_TOLERANCE_S = 0.25
+
+    /** Long enough to keep a line of dialogue, short enough to drop a scene's music bed. */
+    const val DETREND_S = 8.0
+
     /** Minimum speech-cue time that must overlap the audio, or the score means nothing. */
     const val MIN_CUE_SECONDS = 20.0
 
@@ -51,8 +64,13 @@ internal object SubtitleAligner {
         val ratio: Double,
         val peakZ: Double,
         val runnerUp: Double,
+        val plainDelayS: Double = delayS,
+        val plainPeakZ: Double = peakZ,
+        val plainRunnerUp: Double = runnerUp,
+        /** Both halves of the window found this delay on their own. */
+        val agreed: Boolean = false,
     ) {
-        val confident get() = peakZ >= MIN_PEAK_Z && runnerUp <= MAX_RUNNER_UP
+        val confident get() = agreed || (peakZ >= MIN_PEAK_Z && runnerUp <= MAX_RUNNER_UP)
         /** The best fit needs a frame-rate change, which a delay alone cannot apply. */
         val drift get() = confident && ratio != 1.0
     }
@@ -99,29 +117,71 @@ internal object SubtitleAligner {
      * first frame is at [windowStartS]. Null if too little cue time overlaps the audio.
      */
     fun align(levels: FloatArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray): Result? {
-        val n = levels.size
-        if (n < 2 * (MAX_SHIFT_S / FRAME_S)) return null
-        // Loudness, floored so digital silence does not dominate, then standardised.
-        val a = DoubleArray(n) { levels[it].coerceIn(-80f, 0f).toDouble() }
-        val mean = a.average()
-        val sd = sqrt(a.sumOf { (it - mean) * (it - mean) } / n)
-        if (sd < 1e-6) return null
-        val prefix = DoubleArray(n + 1)
-        for (i in 0 until n) prefix[i + 1] = prefix[i] + (a[i] - mean) / sd
+        if (levels.size < 2 * (MAX_SHIFT_S / FRAME_S)) return null
+        val a = standardised(levels) ?: return null
+        val prefix = prefixSums(a, 0, a.size)
 
         // A plain delay wins whenever it fits. 24/23.976 is only 0.1% from 1, so inside one window
         // it scores about the same as a delay, and letting the higher z win would randomly call
         // an in-sync subtitle "drifting". Other ratios are only for when no delay fits at all.
-        val plain = alignAt(prefix, n, windowStartS, starts, ends, 1.0)
+        val plain = alignAt(prefix, windowStartS, starts, ends, 1.0)
         if (plain?.confident == true) return plain
-        return (listOfNotNull(plain) + RATIOS.drop(1).mapNotNull { alignAt(prefix, n, windowStartS, starts, ends, it) })
-            .maxByOrNull { it.peakZ }
+        if (plain != null && halvesAgree(a, windowStartS, starts, ends, plain)) return plain.copy(agreed = true)
+
+        val best = (listOfNotNull(plain) + RATIOS.drop(1).mapNotNull { alignAt(prefix, windowStartS, starts, ends, it) })
+            .maxByOrNull { it.peakZ } ?: return null
+        return if (plain == null) best
+        else best.copy(plainDelayS = plain.delayS, plainPeakZ = plain.peakZ, plainRunnerUp = plain.runnerUp)
+    }
+
+    /**
+     * Loudness floored so digital silence does not dominate, minus its moving average over
+     * [DETREND_S] -- a music bed or a loud scene lifts cues and gaps alike, and only the change
+     * where speech starts and stops should score -- then standardised.
+     */
+    private fun standardised(levels: FloatArray): DoubleArray? {
+        val n = levels.size
+        val a = DoubleArray(n) { levels[it].coerceIn(-80f, 0f).toDouble() }
+        val p = prefixSums(a, 0, n)
+        val half = (DETREND_S / 2 / FRAME_S).roundToInt()
+        val d = DoubleArray(n) {
+            val lo = max(0, it - half)
+            val hi = min(n, it + half + 1)
+            a[it] - (p[hi] - p[lo]) / (hi - lo)
+        }
+        val mean = d.average()
+        val sd = sqrt(d.sumOf { (it - mean) * (it - mean) } / n)
+        if (sd < 1e-6) return null
+        return DoubleArray(n) { (d[it] - mean) / sd }
+    }
+
+    private fun prefixSums(a: DoubleArray, from: Int, to: Int): DoubleArray {
+        val p = DoubleArray(to - from + 1)
+        for (i in from until to) p[i - from + 1] = p[i - from] + a[i]
+        return p
+    }
+
+    private fun halvesAgree(
+        a: DoubleArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, plain: Result,
+    ): Boolean {
+        if (plain.peakZ < AGREE_MIN_Z) return false
+        val half = a.size / 2
+        return (0..1).all { k ->
+            val from = k * half
+            val r = alignAt(
+                prefixSums(a, from, from + half), windowStartS + from * FRAME_S, starts, ends, 1.0,
+                minCueS = MIN_CUE_SECONDS / 2,
+            )
+            r != null && abs(r.delayS - plain.delayS) <= AGREE_TOLERANCE_S
+        }
     }
 
     private fun alignAt(
-        prefix: DoubleArray, n: Int, windowStartS: Double,
+        prefix: DoubleArray, windowStartS: Double,
         starts: DoubleArray, ends: DoubleArray, ratio: Double,
+        minCueS: Double = MIN_CUE_SECONDS,
     ): Result? {
+        val n = prefix.size - 1
         val maxLag = (MAX_SHIFT_S / FRAME_S).roundToInt()
         // Cue intervals in audio frames at lag 0, merged, keeping only those that can reach the
         // window at some lag.
@@ -136,7 +196,7 @@ internal object SubtitleAligner {
                 merged
             }
         if (intervals.isEmpty()) return null
-        val minIn = (MIN_CUE_SECONDS / FRAME_S).roundToInt()
+        val minIn = (minCueS / FRAME_S).roundToInt()
         val total = prefix[n]
 
         val scores = DoubleArray(2 * maxLag + 1) { idx ->
@@ -157,8 +217,11 @@ internal object SubtitleAligner {
         val median = finite[finite.size / 2]
         val mad = finite.map { abs(it - median) }.sorted()[finite.size / 2]
         val sigma = 1.4826 * mad
-        val peak = scores.indices.filter { !scores[it].isNaN() }.maxByOrNull { scores[it] } ?: return null
         val guard = (RUNNER_UP_GUARD_S / FRAME_S).roundToInt()
+        // A maximum on the edge of the search is not a peak, only a slope the range cut off.
+        val peak = (guard until scores.size - guard)
+            .filter { !scores[it].isNaN() }
+            .maxByOrNull { scores[it] } ?: return null
         val runner = scores.indices
             .filter { abs(it - peak) > guard && !scores[it].isNaN() }
             .maxOfOrNull { scores[it] } ?: median
@@ -166,8 +229,8 @@ internal object SubtitleAligner {
         if (sigma <= 0 || height <= 0) return null
 
         // Sub-frame peak by parabola through the three samples around it.
-        val left = scores.getOrNull(peak - 1)?.takeUnless { it.isNaN() } ?: scores[peak]
-        val right = scores.getOrNull(peak + 1)?.takeUnless { it.isNaN() } ?: scores[peak]
+        val left = scores[peak - 1].takeUnless { it.isNaN() } ?: scores[peak]
+        val right = scores[peak + 1].takeUnless { it.isNaN() } ?: scores[peak]
         val curvature = left - 2 * scores[peak] + right
         val fraction = if (curvature < 0) (0.5 * (left - right) / curvature).coerceIn(-0.5, 0.5) else 0.0
 
@@ -177,48 +240,6 @@ internal object SubtitleAligner {
             peakZ = height / sigma,
             runnerUp = (runner - median) / height,
         )
-    }
-
-    /** Interleaved 16-bit PCM. */
-    class Wav(val samples: ShortArray, val channels: Int, val sampleRate: Int) {
-        fun channel(c: Int) = ShortArray(samples.size / channels) { samples[it * channels + c] }
-
-        /**
-         * Where the dialogue is: the centre channel of 5.1/7.1 (FFmpeg orders FL FR FC ...), the
-         * mid of stereo, or the only channel.
-         */
-        fun dialogue(): ShortArray = when {
-            channels >= 3 -> channel(2)
-            channels == 2 -> ShortArray(samples.size / 2) { ((samples[2 * it] + samples[2 * it + 1]) / 2).toShort() }
-            else -> samples
-        }
-    }
-
-    /** 16-bit PCM from a WAV file's bytes, any channel count, or null if it is not one. */
-    fun pcmFromWav(bytes: ByteArray): Wav? {
-        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        if (bytes.size < 12 || String(bytes, 0, 4) != "RIFF" || String(bytes, 8, 4) != "WAVE") return null
-        var pos = 12
-        var rate = 0
-        var channels = 0
-        var ok = false
-        while (pos + 8 <= bytes.size) {
-            val id = String(bytes, pos, 4)
-            val size = buf.getInt(pos + 4)
-            val body = pos + 8
-            if (id == "fmt ") {
-                channels = buf.getShort(body + 2).toInt()
-                rate = buf.getInt(body + 4)
-                val bits = buf.getShort(body + 14).toInt()
-                ok = channels in 1..8 && bits == 16
-            } else if (id == "data") {
-                if (!ok || rate <= 0) return null
-                val count = minOf(size, bytes.size - body) / 2 / channels * channels
-                return Wav(ShortArray(count) { buf.getShort(body + 2 * it) }, channels, rate)
-            }
-            pos = body + size + (size and 1)
-        }
-        return null
     }
 
     /** RBJ cookbook second-order filter, Q = 1/sqrt(2). */
