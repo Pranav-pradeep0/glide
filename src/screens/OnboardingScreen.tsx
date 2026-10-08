@@ -94,7 +94,7 @@ const SLIDES: SlideData[] = [
         bullets: [
             'Color enhancement',
             'Haptic movie playback',
-            'Assisted subtitle sync',
+            'Automatic subtitle sync',
         ],
     },
     {
