@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Platform, useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 import { SubtitleOverlay, SubtitleSettings } from '@/components/SubtitleOverlay';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 import { useAppStore } from '@/store/appStore';
@@ -33,7 +33,7 @@ export const PlayerSubtitleOverlay: React.FC<PlayerSubtitleOverlayProps> = React
     const subtitlePositionPortrait = useAppStore((s) => s.settings.subtitlePositionPortrait);
 
     const subtitleSettings = useMemo<SubtitleSettings>(() => {
-        const fontFamily = subtitleFontFamily || Platform.select({ android: 'Roboto', ios: 'System', default: 'System' });
+        const fontFamily = subtitleFontFamily || 'Roboto';
         const fontWeight = String(subtitleFontWeight) as SubtitleSettings['fontWeight'];
 
         return {

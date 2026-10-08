@@ -1,6 +1,5 @@
 module.exports = {
     project: {
-        ios: {},
         android: {},
     },
     // No `assets` entry: the fonts are committed directly to

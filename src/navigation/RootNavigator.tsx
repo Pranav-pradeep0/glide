@@ -6,7 +6,7 @@ import { useAppStore } from '../store/appStore';
 import { useTheme } from '../hooks/useTheme';
 import { Feather } from '@react-native-vector-icons/feather';
 import { DeepLinkService } from '../services/DeepLinkService';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Touchable, SnackbarHost } from '@/components/ui';
 import { metrics, type } from '@/theme/theme';
@@ -235,11 +235,10 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
             <Stack.Navigator
                 screenOptions={{
                     headerShown: false,
-                    animation: Platform.OS === 'ios' ? 'ios_from_right' : 'slide_from_right',
-                    animationDuration: Platform.OS === 'ios' ? 260 : 220,
+                    animation: 'slide_from_right',
+                    animationDuration: 220,
                     animationMatchesGesture: true,
                     gestureEnabled: true,
-                    fullScreenGestureEnabled: Platform.OS === 'ios',
                     contentStyle: { backgroundColor: theme.colors.background },
                 }}
             >
@@ -258,7 +257,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                             name="PlayerDetail"
                             component={PlayerDetailScreen}
                             options={{
-                                animation: Platform.OS === 'ios' ? 'ios_from_right' : 'slide_from_right',
+                                animation: 'slide_from_right',
                             }}
                         />
                         <Stack.Screen
@@ -274,8 +273,8 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                             component={VideoPlayerScreen}
                             options={{
                                 headerShown: false,
-                                animation: Platform.OS === 'ios' ? 'ios_from_right' : 'slide_from_right',
-                                animationDuration: Platform.OS === 'ios' ? 220 : 200,
+                                animation: 'slide_from_right',
+                                animationDuration: 200,
                                 gestureEnabled: false,
                             }}
                         />
