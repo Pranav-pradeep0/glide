@@ -280,7 +280,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         setSettings(prev => ({ ...prev, subtitleDelay: delay }));
     }, []);
 
-    // Compute effective bands for VLC
+    // Compute effective bands for player
     const audioEqualizer = useMemo(() => {
         if (!settings.equalizerEnabled) { return undefined; }
 

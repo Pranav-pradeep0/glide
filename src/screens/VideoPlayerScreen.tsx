@@ -328,7 +328,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         },
         onProgressSave: () => savePlaybackRef.current(),
         onAudioTracksLoaded: (tracks) => {
-            (tracksHook as any).setAudioTracksFromVLC?.(tracks);
+            (tracksHook as any).setAudioTracksFromNative?.(tracks);
         },
         onSubtitleTracksLoaded: (tracks) => {
             (tracksHook as any).setSubtitleTracksFromPlayer?.(tracks);

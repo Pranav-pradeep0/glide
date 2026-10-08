@@ -41,7 +41,7 @@ interface UsePlayerTracksOptions {
  * Hook for managing audio and subtitle tracks.
  *
  * Features:
- * - Audio track loading from VLC
+ * - Audio track loading from player onLoad
  * - Embedded subtitle track extraction via FFmpeg
  * - External subtitle file loading
  * - API subtitle support
@@ -120,10 +120,10 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
     // ========================================================================
 
     /**
-     * Set audio tracks from VLC onLoad event.
-     * Called by parent component when VLC reports available tracks.
+     * Set audio tracks from player onLoad event.
+     * Called by parent component when native player reports available tracks.
      */
-    const setAudioTracksFromVLC = useCallback((tracks: NativeAudioTrack[]) => {
+    const setAudioTracksFromNative = useCallback((tracks: NativeAudioTrack[]) => {
         setAudioTracks(tracks);
         // Select first track by default if not already selected AND no initial selection was provided
         // (If initialAudioTrackId was provided, selectedAudioTrackId is already set to it)
@@ -367,8 +367,8 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         audioTracksForSelector,
         subtitleTracksForSelector,
 
-        // For parent to set audio tracks from VLC
-        setAudioTracksFromVLC,
+        // For parent to set audio tracks from native player
+        setAudioTracksFromNative,
         setSubtitleTracksFromPlayer,
         // For drift correction updates
         setSubtitleCues,
@@ -378,10 +378,10 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         externalSubtitles, currentExternalName, loadExternalCues, loadSDHForHaptics,
         hapticCues,
         audioTracksForSelector, subtitleTracksForSelector,
-        setAudioTracksFromVLC,
+        setAudioTracksFromNative,
         setSubtitleTracksFromPlayer,
     ]) as UsePlayerTracksReturn & {
-        setAudioTracksFromVLC: typeof setAudioTracksFromVLC,
+        setAudioTracksFromNative: typeof setAudioTracksFromNative,
         setSubtitleTracksFromPlayer: typeof setSubtitleTracksFromPlayer,
         setSubtitleCues: typeof setSubtitleCues
     };

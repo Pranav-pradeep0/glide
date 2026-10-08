@@ -147,7 +147,7 @@ export class SubtitleSyncService {
      */
     static calculateOffset(cue: SubtitleCue, currentTime: number): number {
         // If cue is at 10s and we are at 12s, we need a 2s delay.
-        // VLC/System delay usually works such that positive = delay subtitles (show later).
+        // ExoPlayer/System delay usually works such that positive = delay subtitles (show later).
         // offset = currentTime - cueStartTime
         return Math.round((currentTime - cue.startTime) * 1000);
     }

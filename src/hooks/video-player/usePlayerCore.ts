@@ -9,10 +9,10 @@ import { useSharedValue, useFrameCallback } from 'react-native-reanimated';
 import { getResumablePosition } from '@/utils/playbackResume';
 import {
     PlayerState,
-    VLCLoadData,
-    VLCProgressData,
-    VLCSeekEvent,
-    VLCBufferingEvent,
+    PlayerLoadData,
+    PlayerProgressData,
+    PlayerSeekEvent,
+    PlayerBufferingEvent,
     UsePlayerCoreReturn,
     PLAYER_CONSTANTS,
 } from './types';
@@ -149,12 +149,12 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     // ═════════════════════════════════════════════════════════════════════════
 
     /**
-     * applySeekToVLC — the single exit point for all seeks to native.
+     * applySeekToNative — the single exit point for all seeks to native.
      * Every call reaches native as a seek command; nothing is deduplicated.
      */
-    const applySeekToVLC = useCallback((timeInSeconds: number, isPreview: boolean = false) => {
+    const applySeekToNative = useCallback((timeInSeconds: number, isPreview: boolean = false) => {
         if (!state.isVideoLoaded || !state.duration || state.duration === 0) {
-            if (__DEV__) {console.warn('[SEEK] applySeekToVLC dropped — no duration yet');}
+            if (__DEV__) {console.warn('[SEEK] applySeekToNative dropped — no duration yet');}
             return;
         }
 
@@ -168,7 +168,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
                 player.seek(clamped);
             }
         } else if (__DEV__) {
-            console.warn('[SEEK] applySeekToVLC — no player instance');
+            console.warn('[SEEK] applySeekToNative — no player instance');
         }
     }, [state.isVideoLoaded, state.duration]);
 
@@ -188,7 +188,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         const sinceLast = now - lastLivePreviewAtRef.current;
 
         if (sinceLast >= LIVE_PREVIEW_THROTTLE_MS) {
-            applySeekToVLC(clamped, true);
+            applySeekToNative(clamped, true);
             lastLivePreviewAtRef.current = now;
             if (livePreviewTimerRef.current) {
                 clearTimeout(livePreviewTimerRef.current);
@@ -200,17 +200,17 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             livePreviewTimerRef.current = setTimeout(() => {
                 livePreviewTimerRef.current = null;
                 lastLivePreviewAtRef.current = Date.now();
-                applySeekToVLC(clamped, true);
+                applySeekToNative(clamped, true);
             }, wait);
         }
-    }, [state.duration, currentTimeShared, lastSyncPosition, lastSyncTimestamp, applySeekToVLC]);
+    }, [state.duration, currentTimeShared, lastSyncPosition, lastSyncTimestamp, applySeekToNative]);
 
 
     /**
      * commitSeek — the single entry point for a finished seek.
      *
      * Returns whether the seek was accepted. Callers that display the requested time must
-     * honour a `false`: until the duration is known, `applySeekToVLC` drops the seek, so
+     * honour a `false`: until the duration is known, `applySeekToNative` drops the seek, so
      * anything already shown is a position the player will never move to. That is the
      * whole of the "HUD shows 00:00 when you skip right after opening a video" report —
      * the jump handlers clamp against `duration`, which is 0 for roughly 430 ms after the
@@ -244,7 +244,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         lastSyncTimestamp.value = Date.now();
         lastLivePreviewAtRef.current = Date.now();
 
-        applySeekToVLC(clamped);
+        applySeekToNative(clamped);
 
         pendingCommittedSeekRef.current = clamped;
         seekSettledUntilRef.current = Date.now() + SEEK_SETTLE_WINDOW_MS;
@@ -267,7 +267,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
         isScrubbingShared.value = false;
         return true;
-    }, [state.duration, state.isVideoLoaded, state.playerStopped, applySeekToVLC,
+    }, [state.duration, state.isVideoLoaded, state.playerStopped, applySeekToNative,
         currentTimeShared, lastSyncPosition, lastSyncTimestamp, isScrubbingShared,
         isPlayingShared]);
 
@@ -358,10 +358,10 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     }, [state.paused, play, pause]);
 
     // ═════════════════════════════════════════════════════════════════════════
-    // VLC EVENT HANDLERS
+    // PLAYER EVENT HANDLERS
     // ═════════════════════════════════════════════════════════════════════════
 
-    const handleLoad = useCallback((data: VLCLoadData) => {
+    const handleLoad = useCallback((data: PlayerLoadData) => {
         const durationSec = (data.duration ?? 0) / 1000;
 
         if (durationSec <= 1) {
@@ -401,14 +401,12 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         }
         const validResumeTime = getResumablePosition(resumeTime, durationSec);
         if (validResumeTime !== null) {
-            // No seek. VLC was told to open the demuxer at this offset via the source's
+            // No seek. The player was told to open the demuxer at this offset via the source's
             // startTime, so by the time onLoad fires playback is already there. All that
             // is left is to align the UI's position refs with it.
             //
-            // This used to seek 100 ms after onLoad, which put the request inside VLC's
-            // startup ramp where LibVLC silently drops setTime — isSeekable() and
-            // getLength() both report ready well before a seek is actually honoured, so
-            // resume regularly restarted the video from zero.
+            // Previously seeking 100 ms after onLoad caused the request to drop during
+            // player startup ramp, restarting playback from zero.
             if (__DEV__) {console.log('[LOAD] resume position=' + validResumeTime.toFixed(2) + 's (opened at offset)');}
 
             currentTimeRef.current = validResumeTime;
@@ -420,9 +418,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         lastSyncTimestamp]);
 
     /**
-     * handleProgress — VLC position update during playback.
+     * handleProgress — Player position update during playback.
      */
-    const handleProgress = useCallback((data: VLCProgressData) => {
+    const handleProgress = useCallback((data: PlayerProgressData) => {
         if (isScrubbingShared.value) {return;}
         if (playerStoppedRef.current) {return;}
 
@@ -515,11 +513,11 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         currentTimeShared, lastSyncPosition, lastSyncTimestamp, isPlayingShared]);
 
     /**
-     * handleError — VLC error.
+     * handleError — Player error.
      */
     const handleError = useCallback((e: any) => {
         const msg = e?.error || e?.message || 'Playback error';
-        if (__DEV__) {console.error('[ERROR] VLC error:', e);}
+        if (__DEV__) {console.error('[ERROR] Player error:', e);}
         isPlayingShared.value = false;
         setState(prev => ({ ...prev, errorText: String(msg), isBuffering: false }));
     }, [isPlayingShared]);
@@ -527,7 +525,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     /**
      * handleBuffering — debounced buffering state.
      */
-    const handleBuffering = useCallback((event: VLCBufferingEvent | any) => {
+    const handleBuffering = useCallback((event: PlayerBufferingEvent | any) => {
         const isBuffering = typeof event === 'boolean'
             ? event
             : (typeof event?.isBuffering === 'boolean'
@@ -594,7 +592,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     }, [onProgressSave, isPlayingShared, isScrubbingShared]);
 
     /**
-     * handleStopped — VLC native Stopped event.
+     * handleStopped — Player native Stopped event.
      */
     const handleStopped = useCallback(() => {
         if (__DEV__) {console.log('[PLAYING] handleStopped');}
@@ -614,9 +612,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     }, [isPlayingShared]);
 
     /**
-     * handleSeek — VLC native seek position change (e.g. from notification controls).
+     * handleSeek — Player native seek position change (e.g. from notification controls).
      */
-    const handleSeek = useCallback((data: VLCSeekEvent) => {
+    const handleSeek = useCallback((data: PlayerSeekEvent) => {
         if (isScrubbingShared.value) {return;}
 
         const timeSec = (data.currentTime ?? 0) / 1000;

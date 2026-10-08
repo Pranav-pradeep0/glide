@@ -1,7 +1,7 @@
 /**
  * The native video player.
  *
- * Replaces the `@glide/vlc-player` bridge. Everything VLC needed and ExoPlayer does not is
+ * Replaces the legacy player bridge. Everything the old engine needed and ExoPlayer does not is
  * gone: init options, decoder mode, media options, `initType`, network/asset classification,
  * forced aspect ratios and the subtitle-slave path. What is left is the props the native
  * view actually implements.

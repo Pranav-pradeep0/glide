@@ -14,10 +14,10 @@ import GlidePlayer, {
     PlayerSource,
 } from '@/components/VideoPlayer/GlidePlayer';
 import {
-    VLCLoadData,
-    VLCProgressData,
-    VLCSeekEvent,
-    VLCBufferingEvent,
+    PlayerLoadData,
+    PlayerProgressData,
+    PlayerSeekEvent,
+    PlayerBufferingEvent,
 } from '@/hooks/video-player/types';
 
 // ============================================================================
@@ -64,15 +64,15 @@ interface AnimatedVideoViewProps {
     animatedStyle: AnimatedStyle<any>;
 
     // Player callbacks
-    onLoad: (data: VLCLoadData) => void;
-    onProgress: (data: VLCProgressData) => void;
+    onLoad: (data: PlayerLoadData) => void;
+    onProgress: (data: PlayerProgressData) => void;
     onEnd: () => void;
     onError: (e: any) => void;
-    onBuffering: (event: VLCBufferingEvent | any) => void;
+    onBuffering: (event: PlayerBufferingEvent | any) => void;
     onPlaying: () => void;
     onPaused: () => void;
     onStopped: () => void;
-    onSeek: (data: VLCSeekEvent) => void;
+    onSeek: (data: PlayerSeekEvent) => void;
     onCues?: (event: any) => void;
 }
 

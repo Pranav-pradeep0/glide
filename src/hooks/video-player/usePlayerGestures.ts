@@ -133,7 +133,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         hud.showVolumeHUD(volume / 100, false);
     }, [hud]);
 
-    // Initialize Audio Controller (Hybrid System+VLC logic)
+    // Initialize Audio Controller
     const audioController = useAudioController(player.videoRef, 100, handleHardwareVolumeChange);
 
     // ========================================================================
@@ -173,7 +173,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
     // SCREEN ZONES
     // ========================================================================
 
-    // Vertical swipes: left half brightness, right half volume (VLC/MX convention).
+    // Vertical swipes: left half brightness, right half volume (standard convention).
     const halfWidth = width / 2;
     const allowVideoTransform = resizeMode === 'contain' && !isInPipMode;
 

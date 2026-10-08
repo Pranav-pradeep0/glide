@@ -33,10 +33,10 @@ export const PLAYER_CONSTANTS = {
 } as const;
 
 // ============================================================================
-// VLC EVENT DATA TYPES
+// PLAYER EVENT DATA TYPES
 // ============================================================================
 
-export interface VLCLoadData {
+export interface PlayerLoadData {
     duration: number;
     videoSize?: { height: number; width: number };
     audioTracks?: Array<{ id: number; name: string }>;
@@ -44,25 +44,25 @@ export interface VLCLoadData {
     subtitleTracks?: Array<{ id: number; name: string; language?: string; isDefault?: boolean }>;
 }
 
-export interface VLCProgressData {
+export interface PlayerProgressData {
     currentTime: number;
     duration: number;
     position: number;
     remainingTime?: number;
 }
 
-export interface VLCPlayingData {
+export interface PlayerPlayingData {
     target: number;
     duration: number;
     seekable: boolean;
 }
 
-export interface VLCBufferingEvent {
+export interface PlayerBufferingEvent {
     isBuffering?: boolean;
     bufferRate?: number;
 }
 
-export interface VLCSeekEvent {
+export interface PlayerSeekEvent {
     currentTime: number;
     duration: number;
     position: number;
@@ -273,16 +273,16 @@ export interface UsePlayerCoreReturn {
     setIsSeeking: (seeking: boolean) => void;
     clearResumePosition: () => void;
 
-    // VLC event handlers
-    handleLoad: (data: VLCLoadData) => void;
-    handleProgress: (data: VLCProgressData) => void;
+    // Player event handlers
+    handleLoad: (data: PlayerLoadData) => void;
+    handleProgress: (data: PlayerProgressData) => void;
     handleEnd: () => void;
     handleError: (e: any) => void;
-    handleBuffering: (event: VLCBufferingEvent | any) => void;
+    handleBuffering: (event: PlayerBufferingEvent | any) => void;
     handlePlaying: () => void;
     handlePaused: () => void;
     handleStopped: () => void;
-    handleSeek: (data: VLCSeekEvent) => void;
+    handleSeek: (data: PlayerSeekEvent) => void;
 
 
 
@@ -367,7 +367,7 @@ export interface UsePlayerTracksReturn {
     audioTracksForSelector: any[];
     subtitleTracksForSelector: any[];
 
-    // Native VLC Text Track ID
+    // Native Text Track ID
 
     // Actions
     setSubtitleCues: React.Dispatch<React.SetStateAction<SubtitleCue[]>>;
