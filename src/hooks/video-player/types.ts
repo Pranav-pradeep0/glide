@@ -372,6 +372,9 @@ export interface UsePlayerTracksReturn {
 
     // Actions
     setSubtitleCues: React.Dispatch<React.SetStateAction<SubtitleCue[]>>;
+    /** Tracks the native player found at load, handed back by the screen. */
+    setAudioTracksFromNative: (tracks: NativeAudioTrack[]) => void;
+    setSubtitleTracksFromPlayer: (tracks: SubtitleTrack[]) => void;
 }
 
 export interface UsePlayerBookmarksReturn {

@@ -43,7 +43,7 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.uimanager.events.Event
-import kotlin.math.abs
+import com.glide.app.audio.GlideEqualizer
 import kotlin.math.log10
 import kotlin.math.roundToLong
 
@@ -473,9 +473,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
      * engine-specific one.
      */
     fun setAudioEqualizer(bands: ReadableArray?) {
-        equalizerBands = bands?.takeIf { it.size() > 0 }?.let { array ->
-            FloatArray(array.size()) { array.getDouble(it).toFloat() }
-        }
+        equalizerBands = GlideEqualizer.toBandLevels(bands)
         applyEqualizer()
     }
 
@@ -528,39 +526,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     }
 
     private fun applyEqualizer() {
-        val bands = equalizerBands
-        if (bands == null) {
-            equalizer?.release()
-            equalizer = null
-            return
-        }
         val sessionId = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
-        if (sessionId == C.AUDIO_SESSION_ID_UNSET) return
-
-        try {
-            val eq = equalizer ?: Equalizer(EQUALIZER_PRIORITY, sessionId).also { equalizer = it }
-            val (minLevel, maxLevel) = eq.bandLevelRange.let { it[0] to it[1] }
-            for (band in 0 until eq.numberOfBands) {
-                val b = band.toShort()
-                val centreHz = eq.getCenterFreq(b) / 1000
-                val millibels = (nearestGainDb(bands, centreHz) * 100).toInt()
-                eq.setBandLevel(b, millibels.coerceIn(minLevel.toInt(), maxLevel.toInt()).toShort())
-            }
-            eq.enabled = true
-            Log.d(TAG, "equalizer applied bands=${eq.numberOfBands} session=$sessionId")
-        } catch (e: RuntimeException) {
-            // Devices legitimately refuse: no equalizer effect, or another app holds it at a
-            // higher priority. Losing the equalizer must not take playback down with it.
-            Log.w(TAG, "equalizer unavailable: ${e.message}")
-            equalizer = null
-        }
-    }
-
-    /** Gain of whichever UI band sits closest to this device band's centre frequency. */
-    private fun nearestGainDb(bands: FloatArray, centreHz: Int): Float {
-        val index = (0 until minOf(bands.size, EQUALIZER_BAND_HZ.size))
-            .minByOrNull { abs(EQUALIZER_BAND_HZ[it] - centreHz) } ?: 0
-        return bands[index]
+        if (sessionId == C.AUDIO_SESSION_ID_UNSET && equalizerBands != null) return
+        equalizer = GlideEqualizer.apply(equalizer, equalizerBands, sessionId)
     }
 
     /**
@@ -998,10 +966,20 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             // ExoPlayer's own DefaultLoadErrorHandlingPolicy has already retried the load
             // before this fires, so retry a bounded number of times and slowly, then give
             // up and tell JS. Position is preserved: prepare() resumes where it stopped.
-            if (error.errorCode in IO_ERROR_CODES && ioRetries < MAX_IO_RETRIES) {
+            if (PlayerErrorPolicy.shouldRetry(error.errorCode, ioRetries)) {
                 ioRetries++
-                Log.w(TAG, "recoverable IO error, retry $ioRetries/$MAX_IO_RETRIES")
-                progressHandler.postDelayed({ player?.prepare() }, IO_RETRY_DELAY_MS)
+                Log.w(TAG, "recoverable IO error, retry $ioRetries/${PlayerErrorPolicy.MAX_IO_RETRIES}")
+                progressHandler.postDelayed(
+                    { player?.prepare() },
+                    PlayerErrorPolicy.IO_RETRY_DELAY_MS
+                )
+                return
+            }
+
+            if (PlayerErrorPolicy.shouldRejoinLiveEdge(error.errorCode)) {
+                Log.w(TAG, "behind live window, rejoining at the live edge")
+                player?.seekToDefaultPosition()
+                player?.prepare()
                 return
             }
 
@@ -1150,17 +1128,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         const val TAG = "GlidePlayer"
 
         /** Media3's IO/source failures. Everything in the 2000 block is worth retrying. */
-        private val IO_ERROR_CODES = 2000..2999
-        private const val MAX_IO_RETRIES = 3
-        private const val IO_RETRY_DELAY_MS = 1500L
 
         /** Denominator used to express media3's float pixel ratio as a rational for PiP. */
         private const val SAR_DENOMINATOR = 10000
-
-        /** Matches src/config/equalizerPresets.ts. Ten gains arrive in this order. */
-        private val EQUALIZER_BAND_HZ =
-            intArrayOf(60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000)
-        private const val EQUALIZER_PRIORITY = 0
 
         const val EVENT_LOAD_START = "onVideoLoadStart"
         const val EVENT_LOAD = "onVideoLoad"

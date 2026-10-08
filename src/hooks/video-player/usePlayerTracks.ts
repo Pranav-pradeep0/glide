@@ -388,11 +388,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         audioTracksForSelector, subtitleTracksForSelector,
         setAudioTracksFromNative,
         setSubtitleTracksFromPlayer,
-    ]) as UsePlayerTracksReturn & {
-        setAudioTracksFromNative: typeof setAudioTracksFromNative,
-        setSubtitleTracksFromPlayer: typeof setSubtitleTracksFromPlayer,
-        setSubtitleCues: typeof setSubtitleCues
-    };
+    ]);
 }
 
 export default usePlayerTracks;

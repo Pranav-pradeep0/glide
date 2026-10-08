@@ -53,7 +53,6 @@ export default function SearchScreen() {
         setQuery,
         results: rawResults,
         isIndexReady,
-        indexProgress,
         clearSearch,
         forceRefresh,
     } = useVideoSearch();
@@ -132,12 +131,9 @@ export default function SearchScreen() {
     }, [grid, query, handleVideoPress, handleOpenOptions]);
 
     if (!isIndexReady) {
-        const progress = indexProgress && indexProgress.total > 0
-            ? `${indexProgress.scanned.toLocaleString()} of ${indexProgress.total.toLocaleString()} videos`
-            : undefined;
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-                <Loader text={progress ? `Preparing search · ${progress}` : 'Preparing search'} />
+                <Loader text="Preparing search" />
             </View>
         );
     }

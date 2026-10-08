@@ -161,7 +161,6 @@ export default function VideoPlayerScreen({ route }: Props) {
     const hasIncrementedView = useRef(false);
     const controlsInsetsRef = useRef(insets);
     const savePlaybackRef = useRef<() => void>(() => { });
-    const persistNowRef = useRef(persistNow);
     const isMounted = useRef(true);
 
     useEffect(() => {
@@ -329,12 +328,8 @@ export default function VideoPlayerScreen({ route }: Props) {
             navigation.goBack();
         },
         onProgressSave: () => savePlaybackRef.current(),
-        onAudioTracksLoaded: (tracks) => {
-            (tracksHook as any).setAudioTracksFromNative?.(tracks);
-        },
-        onSubtitleTracksLoaded: (tracks) => {
-            (tracksHook as any).setSubtitleTracksFromPlayer?.(tracks);
-        },
+        onAudioTracksLoaded: (tracks) => tracksHook.setAudioTracksFromNative(tracks),
+        onSubtitleTracksLoaded: (tracks) => tracksHook.setSubtitleTracksFromPlayer(tracks),
         initialPaused: false,
         playbackRate: effectivePlaybackRate,
     });
@@ -553,16 +548,31 @@ export default function VideoPlayerScreen({ route }: Props) {
         savePlaybackRef.current = savePlaybackProgress;
     }, [savePlaybackProgress]);
 
-    // Keep persist action stable for unmount cleanup
-    useEffect(() => {
-        persistNowRef.current = persistNow;
-    }, [persistNow]);
-
     // Force synchronous save (atomic write)
     const forceSave = useCallback(() => {
         savePlaybackProgress();
         persistNow();
     }, [savePlaybackProgress, persistNow]);
+
+    /**
+     * Leaving the player, from wherever. The back button, a navigation pop and the screen
+     * unmounting can all fire for a single exit -- and under an external open the Activity
+     * finishes without either of the last two -- so every trigger calls this and it runs
+     * once. Kept in a ref so the unmount path never holds a stale copy.
+     */
+    const exitedRef = useRef(false);
+    const exitPlayer = useCallback(() => {
+        if (exitedRef.current) {return;}
+        exitedRef.current = true;
+
+        BrightnessModule?.resetBrightnessSync?.();
+        forceSave();
+        player.stop();
+        VideoOrientationService.release();
+    }, [forceSave, player]);
+
+    const exitPlayerRef = useRef(exitPlayer);
+    exitPlayerRef.current = exitPlayer;
 
     // ========================================================================
     // HAPTIC FEEDBACK & SUBTITLE SYNC (UNIFIED TIMER)
@@ -607,10 +617,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     const handleGoBack = useCallback(() => {
-        BrightnessModule?.resetBrightnessSync?.();
-        forceSave();
-        player.stop();
-        VideoOrientationService.release();
+        exitPlayer();
 
         if (isExternalOpen) {
             finishCurrentActivity().then((finished) => {
@@ -625,7 +632,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         }
         ui.showControls();
         ui.scheduleAutoHide();
-    }, [navigation, forceSave, player, isExternalOpen, ui]);
+    }, [navigation, exitPlayer, isExternalOpen, ui]);
 
     const handlePlayVideo = useCallback((video: VideoFile) => {
         ui.closeAllPanels();
@@ -971,17 +978,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // Cleanup on unmount
     useEffect(() => {
-        return () => {
-            BrightnessModule?.resetBrightnessSync?.();
-            player.videoRef.current?.stopPlayer();
-            const isNetwork = NavigationService.isNetworkStream(videoPath);
-            if (!isNetwork) {
-                savePlaybackRef.current();
-                persistNowRef.current();
-            }
-        };
-        // videoPath is route-static for this screen instance; refs hold latest save actions.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        return () => exitPlayerRef.current();
     }, []);
 
     // Set orientation immediately on mount (avoid waiting for nav transition).
@@ -1003,13 +1000,9 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // Navigation beforeRemove
     useEffect(() => {
-        const unsubscribe = navigation.addListener('beforeRemove', () => {
-            forceSave();
-            player.stop();
-            VideoOrientationService.release();
-        });
+        const unsubscribe = navigation.addListener('beforeRemove', () => exitPlayer());
         return unsubscribe;
-    }, [navigation, forceSave, player]);
+    }, [navigation, exitPlayer]);
 
     // Controls only auto-hide while playing and not scrubbing.
     const displayPaused = player.state.paused || resumeModalVisible || recapVisible;

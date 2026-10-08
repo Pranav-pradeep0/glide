@@ -128,8 +128,16 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
         }
 
         @RequiresApi(Build.VERSION_CODES.M)
-        private fun classifyDevice(device: AudioDeviceInfo): String {
-            return when (device.type) {
+        private fun classifyDevice(device: AudioDeviceInfo): String = routeForDeviceType(device.type)
+
+        /**
+         * An output port's type mapped to the route the boost rules care about. Anything
+         * unrecognised stays [ROUTE_UNKNOWN], and every caller treats that as the speaker:
+         * boost reaching the built-in speaker is the one outcome worth failing safe on.
+         */
+        @JvmStatic
+        fun routeForDeviceType(type: Int): String {
+            return when (type) {
                 AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
                 AudioDeviceInfo.TYPE_BUILTIN_EARPIECE,
                 AudioDeviceInfo.TYPE_TELEPHONY,

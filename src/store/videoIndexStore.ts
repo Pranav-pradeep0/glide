@@ -12,7 +12,6 @@ interface VideoIndexState {
     videos: VideoFile[];
     isIndexing: boolean;
     isIndexReady: boolean;
-    indexProgress: { scanned: number; total: number } | null;
     lastFullSyncAt: number | null;
 
     initialize: () => Promise<void>;
@@ -25,7 +24,7 @@ let inFlight: Promise<void> | null = null;
 export const useVideoIndexStore = create<VideoIndexState>((set, get) => {
     const load = (forceRefresh: boolean) => {
         if (inFlight) { return inFlight; }
-        set({ isIndexing: true, indexProgress: null });
+        set({ isIndexing: true });
         inFlight = MediaService.getAllVideos(forceRefresh)
             .then(videos => {
                 set({ videos, isIndexReady: true, lastFullSyncAt: Date.now() });
@@ -44,7 +43,6 @@ export const useVideoIndexStore = create<VideoIndexState>((set, get) => {
         videos: [],
         isIndexing: false,
         isIndexReady: false,
-        indexProgress: null,
         lastFullSyncAt: null,
 
         initialize: () => load(false),

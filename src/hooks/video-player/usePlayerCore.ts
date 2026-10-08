@@ -57,16 +57,16 @@ interface UsePlayerCoreOptions {
 // ─── HOOK ─────────────────────────────────────────────────────────────────────
 
 export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreReturn {
-    const {
-        onAudioTracksLoaded,
-        onSubtitleTracksLoaded,
-        getResumePosition,
-        repeat = false,
-        sleepTimer = null,
-        onSleepTimerEnd,
-        onProgressSave,
-        initialPaused = false,
-    } = options;
+    const { getResumePosition, initialPaused = false } = options;
+
+    /**
+     * The screen passes these inline, so they are new objects on every render. Read through
+     * a ref rather than closed over, and the handlers below keep one identity for the life
+     * of the screen -- which is what lets PlayerControls and the gesture tree memoise at
+     * all, since every one of them hangs off this hook's return.
+     */
+    const optsRef = useRef(options);
+    optsRef.current = options;
 
     // ── REFS ─────────────────────────────────────────────────────────────────
 
@@ -93,6 +93,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
     // Player stopped flag
     const playerStoppedRef = useRef<boolean>(false);
+
+    /** Duration, for the callbacks that must not re-create themselves when it lands. */
+    const durationRef = useRef<number>(0);
 
     // ── STATE ─────────────────────────────────────────────────────────────────
 
@@ -141,6 +144,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     const syncDuration = useCallback((durSec: number) => {
         if (Math.abs(durSec - durationShared.value) <= 1.0) {return;}
         durationShared.value = durSec;
+        durationRef.current = durSec;
         setState(prev => ({ ...prev, duration: durSec }));
     }, [durationShared]);
 
@@ -291,20 +295,17 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     // ═════════════════════════════════════════════════════════════════════════
 
     const play = useCallback(() => {
+        const wasStopped = playerStoppedRef.current;
+        const duration = durationRef.current;
+
         lastPauseIntentValueRef.current = false;
         lastPauseIntentAtRef.current = Date.now();
         playerStoppedRef.current = false;
         isPlayingShared.value = true;
 
         // Native restarts an ended video on play (GlidePlayerView.setPaused); match it here.
-        if (state.playerStopped) {
-            currentTimeRef.current = 0;
-            currentTimeShared.value = 0;
-            lastSyncPosition.value = 0;
-            lastSyncTimestamp.value = Date.now();
-        }
-        // Keep the existing "near end" check as secondary guard
-        else if (state.duration > 0 && Math.abs(currentTimeRef.current - state.duration) < 1.0) {
+        // The near-end check is the secondary guard, for an end event that never arrived.
+        if (wasStopped || (duration > 0 && Math.abs(currentTimeRef.current - duration) < 1.0)) {
             currentTimeRef.current = 0;
             currentTimeShared.value = 0;
             lastSyncPosition.value = 0;
@@ -317,8 +318,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             isPlaying: true,
             playerStopped: false,
         }));
-    }, [state.playerStopped, state.duration, currentTimeShared, isPlayingShared,
-        lastSyncPosition, lastSyncTimestamp]);
+    }, [currentTimeShared, isPlayingShared, lastSyncPosition, lastSyncTimestamp]);
 
     const pause = useCallback(() => {
         if (__DEV__) {console.log('[CONTROL] pause() | currentTime=' + currentTimeRef.current.toFixed(2));}
@@ -334,8 +334,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             isBuffering: false,
         }));
 
-        onProgressSave?.();
-    }, [onProgressSave, isPlayingShared]);
+        optsRef.current.onProgressSave?.();
+    }, [isPlayingShared]);
 
     const stop = useCallback(() => {
         if (__DEV__) {console.log('[CONTROL] stop()');}
@@ -384,7 +384,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         }));
 
         durationShared.value = durationSec;
+        durationRef.current = durationSec;
 
+        const { onAudioTracksLoaded, onSubtitleTracksLoaded } = optsRef.current;
 
         if (data.audioTracks && data.audioTracks.length > 0 && onAudioTracksLoaded) {
             const tracks = data.audioTracks
@@ -417,8 +419,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             lastSyncPosition.value = validResumeTime;
             lastSyncTimestamp.value = Date.now();
         }
-    }, [onAudioTracksLoaded, onSubtitleTracksLoaded, durationShared, currentTimeShared, lastSyncPosition,
-        lastSyncTimestamp]);
+    }, [durationShared, currentTimeShared, lastSyncPosition, lastSyncTimestamp]);
 
     /**
      * handleProgress — Player position update during playback.
@@ -478,6 +479,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
      */
 
     const handleEnd = useCallback(() => {
+        const { repeat = false, sleepTimer = null } = optsRef.current;
         if (__DEV__) {console.log('[END] video ended | repeat=' + repeat + ' sleepTimer=' + sleepTimer);}
 
         if (repeat) {
@@ -493,10 +495,10 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
         if (sleepTimer === -1) {
             if (__DEV__) {console.log('[END] sleep timer triggered');}
-            onSleepTimerEnd?.();
+            optsRef.current.onSleepTimerEnd?.();
         }
 
-        const endTime = state.duration;
+        const endTime = durationRef.current;
         playerStoppedRef.current = true;
         isPlayingShared.value = false;
         currentTimeShared.value = endTime;
@@ -510,10 +512,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             playerStopped: true,
         }));
 
-        onProgressSave?.();
+        optsRef.current.onProgressSave?.();
         if (__DEV__) {console.log('[END] playerStopped=true');}
-    }, [repeat, sleepTimer, onSleepTimerEnd, onProgressSave, state.duration,
-        currentTimeShared, lastSyncPosition, lastSyncTimestamp, isPlayingShared]);
+    }, [currentTimeShared, lastSyncPosition, lastSyncTimestamp, isPlayingShared]);
 
     /**
      * handleError — Player error.
@@ -592,8 +593,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             return { ...prev, isPlaying: false, paused: true };
         });
 
-        onProgressSave?.();
-    }, [onProgressSave, isPlayingShared, isScrubbingShared]);
+        optsRef.current.onProgressSave?.();
+    }, [isPlayingShared, isScrubbingShared]);
 
     /**
      * handleStopped — Player native Stopped event.

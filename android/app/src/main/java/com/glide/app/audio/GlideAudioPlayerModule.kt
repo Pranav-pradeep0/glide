@@ -40,11 +40,6 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         private const val TAG = "GlideAudioPlayerModule"
         private const val PROGRESS_INTERVAL_MS = 500L
 
-        /** Matches src/config/equalizerPresets.ts. Ten gains arrive in this order. */
-        private val EQUALIZER_BAND_HZ =
-            intArrayOf(60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000)
-        private const val EQUALIZER_PRIORITY = 0
-
         /**
          * One worker for every queue build, so builds finish in the order they were asked
          * for. Paired with [queueGeneration], which drops a build that a newer request has
@@ -174,36 +169,9 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     }
 
     private fun applyEqualizer() {
-        val bands = currentBandLevels
-        if (bands == null) {
-            equalizer?.release()
-            equalizer = null
-            return
-        }
         val sessionId = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
-        if (sessionId == C.AUDIO_SESSION_ID_UNSET) return
-
-        try {
-            val eq = equalizer ?: Equalizer(EQUALIZER_PRIORITY, sessionId).also { equalizer = it }
-            val (minLevel, maxLevel) = eq.bandLevelRange.let { it[0] to it[1] }
-            for (band in 0 until eq.numberOfBands) {
-                val b = band.toShort()
-                val centreHz = eq.getCenterFreq(b) / 1000
-                val millibels = (nearestGainDb(bands, centreHz) * 100).toInt()
-                eq.setBandLevel(b, millibels.coerceIn(minLevel.toInt(), maxLevel.toInt()).toShort())
-            }
-            eq.enabled = true
-            Log.w(TAG, "equalizer applied bands=${eq.numberOfBands} session=$sessionId")
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "equalizer unavailable: ${e.message}")
-            equalizer = null
-        }
-    }
-
-    private fun nearestGainDb(bands: FloatArray, centreHz: Int): Float {
-        val index = (0 until minOf(bands.size, EQUALIZER_BAND_HZ.size))
-            .minByOrNull { abs(EQUALIZER_BAND_HZ[it] - centreHz) } ?: 0
-        return bands[index]
+        if (sessionId == C.AUDIO_SESSION_ID_UNSET && currentBandLevels != null) return
+        equalizer = GlideEqualizer.apply(equalizer, currentBandLevels, sessionId)
     }
 
     private fun getQueueIndices(): WritableArray {
@@ -385,9 +353,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         promise: Promise,
         build: () -> List<MediaItem>
     ) {
-        val bandLevels = equalizerBands?.takeIf { it.size() > 0 }?.let { array ->
-            FloatArray(array.size()) { array.getDouble(it).toFloat() }
-        }
+        val bandLevels = GlideEqualizer.toBandLevels(equalizerBands)
         val generation = queueGeneration.incrementAndGet()
         queueExecutor.execute {
             val mediaItems = try {
@@ -679,9 +645,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     fun setAudioEqualizer(levels: ReadableArray?, promise: Promise) {
         mainHandler.post {
             try {
-                currentBandLevels = levels?.takeIf { it.size() > 0 }?.let { array ->
-                    FloatArray(array.size()) { array.getDouble(it).toFloat() }
-                }
+                currentBandLevels = GlideEqualizer.toBandLevels(levels)
                 applyEqualizer()
                 promise.resolve(true)
             } catch (e: Exception) {
