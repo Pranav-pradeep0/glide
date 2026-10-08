@@ -37,10 +37,6 @@
 # React Native Zip Archive
 -keep class com.rnziparchive.** { *; }
 
-# React Native Video / VLC (If needed, general keep)
--keep class com.brentvatne.react.** { *; }
--keep class com.yuanzhou.vlc.** { *; }
-
 # OkHttp3
 -keepattributes Signature
 -keepattributes *Annotation*

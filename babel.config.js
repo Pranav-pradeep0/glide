@@ -8,9 +8,14 @@ module.exports = {
         alias: {
           '@': './src',  // Maps "@/*" to "src/*"
         },
-        extensions: ['.ios.js', '.android.js', '.js', '.ts', '.tsx', '.json'],  // Support common extensions
+        extensions: ['.android.js', '.js', '.ts', '.tsx', '.json'],  // Support common extensions
       },
     ],
     'react-native-worklets/plugin',
   ],
+  env: {
+    production: {
+      plugins: [['transform-remove-console', { exclude: ['error', 'warn'] }]],
+    },
+  },
 };
