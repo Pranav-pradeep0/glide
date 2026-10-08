@@ -48,4 +48,14 @@ describe('FilenameParser', () => {
         expect(result.title).toBe('My Movie');
         expect(result.year).toBe(2020);
     });
+
+    // Still broken upstream: see the note in FilenameParser.ts. The year is read
+    // correctly, so only the title is lost.
+    it.failing('keeps titles that are not written in Latin', () => {
+        expect(FilenameParser.parse('Амели.2001.1080p.mkv').title).toBe('Амели');
+    });
+
+    it('still reads the year of a title that is not written in Latin', () => {
+        expect(FilenameParser.parse('Амели.2001.1080p.mkv').year).toBe(2001);
+    });
 });
