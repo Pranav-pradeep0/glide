@@ -153,19 +153,30 @@ const SeekBar: React.FC<SeekBarProps> = ({
             width: size,
             height: size,
             borderRadius: size / 2,
-            transform: [{ translateX: progress.value * trackWidth.value - size / 2 }],
+            left: `${progress.value * 100}%`,
+            transform: [{ translateX: -size / 2 }],
         };
     });
-    const bubbleStyle = useAnimatedStyle(() => ({
-        opacity: grow.value,
-        transform: [{
-            translateX: Math.max(0, Math.min(trackWidth.value - BUBBLE_WIDTH,
-                progress.value * trackWidth.value - BUBBLE_WIDTH / 2)),
-        }],
-    }));
+    const bubbleStyle = useAnimatedStyle(() => {
+        const half = BUBBLE_WIDTH / 2;
+        let offset = -half;
+        if (trackWidth.value > 0) {
+            const x = progress.value * trackWidth.value;
+            if (x < half) {
+                offset = -x;
+            } else if (x > trackWidth.value - half) {
+                offset = -(half + (x - (trackWidth.value - half)));
+            }
+        }
+        return {
+            opacity: grow.value,
+            left: `${progress.value * 100}%`,
+            transform: [{ translateX: offset }],
+        };
+    });
     const loadingStyle = useAnimatedStyle(() => ({
         opacity: buffering ? 1 : 0,
-        transform: [{ translateX: (loading.value * 1.3 - 0.3) * trackWidth.value }],
+        left: `${(loading.value * 1.3 - 0.3) * 100}%`,
     }));
     const readinessStyle = useAnimatedStyle(() => ({
         // Dimmed, not hidden, until a duration exists: the bar can't seek yet.
