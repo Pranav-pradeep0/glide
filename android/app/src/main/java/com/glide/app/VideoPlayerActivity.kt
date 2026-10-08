@@ -132,6 +132,24 @@ class VideoPlayerActivity : GlideBaseActivity() {
       }
       }
 
+  override fun onNewIntent(intent: Intent?) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    val uri = resolveExternalVideoUri()
+    if (uri != null) {
+      externalVideoUri = uri
+      try {
+        val reactApplication = application as? com.facebook.react.ReactApplication
+        val reactContext = reactApplication?.reactHost?.currentReactContext
+        reactContext
+            ?.getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            ?.emit("onNewVideoUri", uri)
+      } catch (e: Exception) {
+        android.util.Log.w(TAG, "Failed to emit onNewVideoUri: ${e.message}")
+      }
+    }
+  }
+
   /**
    * PiP is owned natively by the video view; the Activity only relays the mode change
    * so the React tree can hide what does not belong in a PiP window.

@@ -1,42 +1,107 @@
-import { Linking, Platform } from 'react-native';
+import { Linking, NativeModules, Platform } from 'react-native';
 import { FileService } from './FileService';
 
 const LOG_PREFIX = '[DeepLinkService]';
 
 export class DeepLinkService {
+    static readonly VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.m4v', '.3gp', '.ts', '.mpg', '.mpeg', '.m3u8', '.wmv', '.asf'];
+    static readonly AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.aac', '.flac', '.wav', '.ogg', '.oga', '.opus', '.wma', '.alac', '.mka', '.mid', '.midi'];
+
+    /**
+     * The file extension a URI ends in, lower case and including the dot. Read from the last
+     * path segment only: an authority like `com.foo.tsprovider` is not a `.ts` file, and
+     * `Trip.movies/clip` is not a `.mov` one.
+     */
+    private static extensionOf(uri: string): string {
+        const name = this.getVideoNameFromUri(uri).toLowerCase();
+        const dot = name.lastIndexOf('.');
+        return dot > 0 ? name.slice(dot) : '';
+    }
+
     /**
      * Check if a URI looks like a video file
      */
     static isVideoUri(uri: string): boolean {
-        const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.m4v', '.3gp', '.ts', '.mpg', '.mpeg', '.m3u8'];
+        const extension = this.extensionOf(uri);
+        if (DeepLinkService.VIDEO_EXTENSIONS.includes(extension)) {
+            return true;
+        }
+        if (DeepLinkService.AUDIO_EXTENSIONS.includes(extension)) {
+            return false;
+        }
+
+        // MediaStore spells the kind into the path, which beats having no extension at all.
         const lowerUri = uri.toLowerCase();
-
-        // Check by extension (works for all URI types)
-        if (videoExtensions.some(ext => lowerUri.includes(ext))) {
+        if (lowerUri.includes('/video/')) {
             return true;
         }
-
-        // Check if content:// URI (usually videos from file managers)
-        // We trust the intent filter already validated this is a video
-        if (uri.startsWith('content://')) {
-            return true;
+        if (lowerUri.includes('/audio/')) {
+            return false;
         }
 
-        // Check if HTTP/HTTPS URL - trust that intent filter validated it
-        if (uri.startsWith('http://') || uri.startsWith('https://')) {
-            return true;
-        }
-
-        return false;
+        // Streams and extensionless provider URIs: the intent filter that let this in
+        // already declared it a video.
+        return uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('content://');
     }
 
     /**
      * An audio file handed to the main app by "Open with". MainActivity is exported, so any
      * app can send it any URI: only local content:// and file:// are played, and the length
      * is capped like VideoPlayerActivity's.
+     *
+     * Shape only. A URI that passes still has to be confirmed audio by [isAudioContent],
+     * because the Linking event this arrives on is process-wide -- a video opened into
+     * VideoPlayerActivity is announced to every listener, this one included.
      */
     static isOpenableAudioUri(uri: string): boolean {
-        return uri.length <= 8192 && /^(content|file):\/\/\S+$/i.test(uri);
+        if (!uri || uri.length > 8192) {
+            return false;
+        }
+        if (!/^(content|file):\/\/\S+$/i.test(uri)) {
+            return false;
+        }
+
+        const extension = this.extensionOf(uri);
+        if (DeepLinkService.VIDEO_EXTENSIONS.includes(extension)) {
+            return false;
+        }
+        if (DeepLinkService.AUDIO_EXTENSIONS.includes(extension)) {
+            return true;
+        }
+
+        const lowerUri = uri.toLowerCase();
+        if (lowerUri.includes('/video/')) {
+            return false;
+        }
+        if (lowerUri.includes('/audio/')) {
+            return true;
+        }
+
+        // A file:// path with no audio extension is nothing this app should open blind.
+        // A content:// URI often carries no name at all, so let the MIME check settle it.
+        return uri.startsWith('content://');
+    }
+
+    /**
+     * Whether the system itself calls this URI audio. Asked of the provider rather than
+     * guessed from the name, and only reached for URIs [isOpenableAudioUri] let through.
+     */
+    static async isAudioContent(uri: string): Promise<boolean> {
+        const extension = this.extensionOf(uri);
+        if (DeepLinkService.AUDIO_EXTENSIONS.includes(extension)) {
+            return true;
+        }
+        try {
+            const mime: string | null = await NativeModules.MediaStoreAudioModule?.getMimeType(uri);
+            if (!mime) {
+                // No answer either way. Trust the shape check that got us here.
+                return true;
+            }
+            return mime.startsWith('audio/') || mime === 'application/ogg';
+        } catch (error) {
+            if (__DEV__) {console.log(LOG_PREFIX, 'MIME lookup failed:', error);}
+            return true;
+        }
     }
 
     /**

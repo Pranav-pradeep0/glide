@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Size
+import android.webkit.MimeTypeMap
 import androidx.palette.graphics.Palette
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -422,6 +423,34 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
             } catch (e: Exception) {
                 promise.resolve(Arguments.createMap())
             }
+        }
+    }
+
+    /**
+     * The MIME type the system has for a URI, so "Open with" never has to guess a file's
+     * kind from its name. Null when the provider will not say, which leaves the caller to
+     * fall back to the extension.
+     */
+    @ReactMethod
+    fun getMimeType(uriStr: String?, promise: Promise) {
+        if (uriStr.isNullOrBlank()) {
+            promise.resolve(null)
+            return
+        }
+        artExecutor.execute {
+            val type = try {
+                val uri = Uri.parse(uriStr)
+                if (uri.scheme == "content") {
+                    reactContext.contentResolver.getType(uri)
+                } else {
+                    val extension = MimeTypeMap.getFileExtensionFromUrl(uriStr)?.lowercase()
+                    if (extension.isNullOrEmpty()) null
+                    else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                }
+            } catch (e: Exception) {
+                null
+            }
+            promise.resolve(type)
         }
     }
 

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, ActivityIndicator, DeviceEventEmitter } from 'react-native';
+import { NavigationContainer, DarkTheme, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -19,47 +19,69 @@ type Props = {
     videoUri?: string;
 };
 
+type OpenRequest = { routeName: string; params: any };
+
+/**
+ * Which screen an opened video lands on. A film or an episode gets its detail screen
+ * first; anything else, and every stream, goes straight to the player.
+ */
+async function resolveRoute(uri: string): Promise<OpenRequest> {
+    const videoName = DeepLinkService.getVideoNameFromUri(uri);
+    // Resolve content URI to file path
+    const resolvedPath = await DeepLinkService.resolveToFilePath(uri);
+
+    let routeName = 'VideoPlayer';
+    if (!NavigationService.isNetworkStream(resolvedPath)) {
+        const classification = ContentDetector.classifySync(resolvedPath);
+        if (classification.contentType === 'movie' || classification.contentType === 'series') {
+            routeName = 'PlayerDetail';
+        }
+    }
+
+    return {
+        routeName,
+        params: { videoPath: resolvedPath, videoName, isExternalOpen: true },
+    };
+}
+
 export default function VideoPlayerRoot({ videoUri }: Props) {
     const theme = useTheme();
+    const navigationRef = useRef<NavigationContainerRef<any>>(null);
+    const openedUriRef = useRef<string | undefined>(videoUri);
 
     const [ready, setReady] = useState(false);
-    const [initialState, setInitialState] = useState<{
-        routeName: string;
-        params: any;
-    } | null>(null);
+    const [initialState, setInitialState] = useState<OpenRequest | null>(null);
 
     useEffect(() => {
         const prepare = async () => {
             if (videoUri) {
-                const videoName = DeepLinkService.getVideoNameFromUri(videoUri);
-                // Resolve content URI to file path
-                const resolvedPath = await DeepLinkService.resolveToFilePath(videoUri);
-
-                const isStream = NavigationService.isNetworkStream(resolvedPath);
-
-                let targetRoute = 'VideoPlayer';
-
-                if (!isStream) {
-                    // Check if content is movie/series
-                    const classification = ContentDetector.classifySync(resolvedPath);
-                    if (classification.contentType === 'movie' || classification.contentType === 'series') {
-                        targetRoute = 'PlayerDetail';
-                    }
-                }
-
-                setInitialState({
-                    routeName: targetRoute,
-                    params: {
-                        videoPath: resolvedPath,
-                        videoName: videoName,
-                        isExternalOpen: true,
-                    },
-                });
+                openedUriRef.current = videoUri;
+                setInitialState(await resolveRoute(videoUri));
             }
             setReady(true);
         };
         prepare();
     }, [videoUri]);
+
+    // A second "Open with" while this Activity is alive, relayed from its onNewIntent.
+    useEffect(() => {
+        const sub = DeviceEventEmitter.addListener('onNewVideoUri', async (newUri: string) => {
+            // Re-opening what is already playing would restart it from the top.
+            if (!newUri || newUri === openedUriRef.current) { return; }
+            openedUriRef.current = newUri;
+
+            const next = await resolveRoute(newUri);
+            if (navigationRef.current?.isReady()) {
+                navigationRef.current.reset({
+                    index: 0,
+                    routes: [{ name: next.routeName, params: next.params }],
+                });
+            } else {
+                setInitialState(next);
+            }
+        });
+        return () => sub.remove();
+    }, []);
 
     // Set dark mode for system bars since player is usually dark
     useEffect(() => {
@@ -82,7 +104,7 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
         <SafeAreaProvider style={{ flex: 1, backgroundColor: '#000' }}>
             <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                 <ErrorBoundary onError={console.error}>
-                    <NavigationContainer theme={DarkTheme}>
+                    <NavigationContainer ref={navigationRef} theme={DarkTheme}>
                         <Stack.Navigator
                             initialRouteName={initialState.routeName}
                             screenOptions={{ headerShown: false }}

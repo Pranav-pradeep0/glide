@@ -179,6 +179,9 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
     useEffect(() => {
         const playOpenedFile = async (url: string | null) => {
             if (!url || !DeepLinkService.isOpenableAudioUri(url)) { return; }
+            // The url event is process-wide, so a video opened into VideoPlayerActivity is
+            // announced here too. Only what the system calls audio gets played as audio.
+            if (!(await DeepLinkService.isAudioContent(url))) { return; }
             // Files by Google and others hand over the MediaStore URI, which is exactly how the
             // library stores each song, so a library song keeps its title, artist and cover.
             const inLibrary = (await PermissionService.checkAudioPermission())
