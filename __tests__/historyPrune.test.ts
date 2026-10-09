@@ -51,6 +51,12 @@ describe('video history prune', () => {
         expect(Math.min(...kept.map((e) => e.lastWatchedTime))).toBe(100);
     });
 
+    it('copes with an old entry saved without a bookmarks array', () => {
+        const all = Array.from({ length: 600 }, (_, i) => entry(i));
+        delete (all[599] as Partial<VideoHistoryEntry>).bookmarks;
+        expect(prune(asMap(all))).toHaveLength(500);
+    });
+
     it('keeps a bookmarked video however old it is', () => {
         const all = Array.from({ length: 600 }, (_, i) => entry(i, i === 0 ? 1 : 0));
         const kept = prune(asMap(all));

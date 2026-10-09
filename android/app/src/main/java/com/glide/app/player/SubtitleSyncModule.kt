@@ -394,10 +394,10 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
      */
     @ReactMethod
     fun alignVideo(videoPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray, audioTrackIndex: Int, promise: Promise) {
-        BackgroundWork.submit {
+        BackgroundWork.submitLong {
             try {
                 val decoded = decodeAudioWindow(videoPath, windowStartS, 300.0, audioTrackIndex)
-                    ?: return@submit promise.reject("E_NO_AUDIO", "No decodable audio in this video")
+                    ?: return@submitLong promise.reject("E_NO_AUDIO", "No decodable audio in this video")
 
                 val s = DoubleArray(starts.size()) { starts.getDouble(it) }
                 val e = DoubleArray(ends.size()) { ends.getDouble(it) }
@@ -407,7 +407,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                     NAME, "auto-sync: window=${decoded.actualStartS}s cues=${s.size} $result " +
                         "confident=${result?.confident} drift=${result?.drift}"
                 )
-                if (result == null) return@submit promise.resolve(null)
+                if (result == null) return@submitLong promise.resolve(null)
 
                 promise.resolve(Arguments.createMap().apply {
                     putDouble("delayMs", result.delayS * 1000)
@@ -556,14 +556,14 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     @ReactMethod
     fun extractSubtitle(videoPath: String, ordinal: Int, promise: Promise) {
-        BackgroundWork.submit {
+        BackgroundWork.submitLong {
             try {
                 val uri = EmbeddedSubtitles.toUri(videoPath)
                 val srt = if (EmbeddedSubtitles.isNetwork(uri)) null
                     else EmbeddedSubtitles.extractSrt(reactApplicationContext, uri, ordinal)
                 if (srt == null) {
                     promise.resolve(null)
-                    return@submit
+                    return@submitLong
                 }
                 val file = File(reactApplicationContext.cacheDir, "subtitle_${System.nanoTime()}.srt")
                 file.writeText(srt)

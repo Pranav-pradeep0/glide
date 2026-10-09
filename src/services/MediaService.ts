@@ -40,6 +40,8 @@ class MediaServiceClass {
     invalidateCache() {
         this.libraryCache = null;
         this.libraryCacheTimestamp = 0;
+        // A scan already running may have read the library before the change.
+        this.inflightLibrary = null;
     }
 
     invalidateVideosCache(_albumName?: string | null) {
@@ -81,29 +83,40 @@ class MediaServiceClass {
 
         // Screens mount together and each asks for the library, all before the first
         // answer lands, so the TTL cache is still empty and every one of them used to run
-        // its own full MediaStore scan. They share this one instead.
-        if (this.inflightLibrary) {
+        // its own full MediaStore scan. They share this one instead. A forced refresh does
+        // not join: it exists because the scan already running may predate a change.
+        if (!forceRefresh && this.inflightLibrary) {
             return this.inflightLibrary;
         }
 
-        this.inflightLibrary = (async () => {
-            try {
-                const result = await this.module.getLibrary();
+        // Started from a resolved promise, so even a synchronous throw from the native call
+        // lands in .catch after `scan` is assigned, never before it.
+        const scan: Promise<MediaLibraryResult> = Promise.resolve()
+            .then(() => this.module.getLibrary())
+            .then((result) => {
                 const data: MediaLibraryResult = {
                     videos: (result?.videos || []) as VideoFile[],
                     folders: (result?.folders || []) as VideoFolder[],
                 };
-                this.libraryCache = data;
-                this.libraryCacheTimestamp = Date.now();
+                // Superseded by a forced refresh or an invalidation while it ran: its
+                // answer may be the stale one, so it must not become the cache.
+                if (this.inflightLibrary === scan) {
+                    this.libraryCache = data;
+                    this.libraryCacheTimestamp = Date.now();
+                }
                 return data;
-            } catch (error) {
+            })
+            .catch((error) => {
                 console.error('[MediaService] Failed to load library:', error);
                 return this.libraryCache ?? { videos: [], folders: [] };
-            } finally {
-                this.inflightLibrary = null;
-            }
-        })();
-        return this.inflightLibrary;
+            })
+            .finally(() => {
+                if (this.inflightLibrary === scan) {
+                    this.inflightLibrary = null;
+                }
+            });
+        this.inflightLibrary = scan;
+        return scan;
     }
 
     /**

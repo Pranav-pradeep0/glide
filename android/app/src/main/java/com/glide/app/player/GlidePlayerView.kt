@@ -318,6 +318,10 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         if (!paused && p.playbackState == Player.STATE_ENDED) {
             p.seekToDefaultPosition()
         }
+        // A play or pause is never part of a drag. Every drag ends in an exact seek, which
+        // turns scrubbing mode off; this is the backstop if one ever does not, since a
+        // player left in it stays silently suppressed.
+        p.setScrubbingModeEnabled(false)
         p.playWhenReady = !paused
     }
 
@@ -826,6 +830,13 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            // Scrubbing mode suppresses playback while the thumb is dragged, which reads as
+            // isPlaying=false. It is not a pause: reporting one dropped keepScreenOn, told
+            // PiP the video had stopped, and a Paused event landing after the drag ended
+            // could leave the video paused. The drag's own commit seek ends it.
+            if (!isPlaying && player?.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_SCRUBBING) {
+                return
+            }
             keepScreenOn = isPlaying
             pipController.setPlaying(isPlaying)
             Log.d(TAG, "isPlaying=$isPlaying")

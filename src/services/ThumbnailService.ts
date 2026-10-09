@@ -36,7 +36,7 @@ class ThumbnailServiceClass {
      * again, and without this every one of those is a bridge call and a ContentResolver
      * query for a file whose thumbnail is already sitting on disk.
      */
-    private resolved = new Map<string, string | null>();
+    private resolved = new Map<string, string>();
 
     constructor() {
         this.init();
@@ -55,8 +55,9 @@ class ThumbnailServiceClass {
         if (!videoPath) { return null; }
 
         const memo = `${videoPath}::${timeMs}`;
-        if (this.resolved.has(memo)) {
-            return this.resolved.get(memo) ?? null;
+        const known = this.resolved.get(memo);
+        if (known) {
+            return known;
         }
 
         // Fast-path: try MediaStore system thumbnail (timeMs === 0)
@@ -117,6 +118,10 @@ class ThumbnailServiceClass {
         }
         if (waiters.length > 0) { return; }
 
+        // Already generating: keep the (now empty) entry, so a row that scrolls back joins
+        // this run instead of starting a second one writing the same file underneath it.
+        if (this.processingKeys.has(key)) { return; }
+
         // Nobody is waiting any more, so drop the work if it has not started yet.
         this.pendingResolvers.delete(key);
         const queued = this.queue.findIndex(item => item.key === key);
@@ -126,7 +131,7 @@ class ThumbnailServiceClass {
     }
 
     /** Bounded: a long scroll through a large library would otherwise grow this forever. */
-    private remember(key: string, value: string | null) {
+    private remember(key: string, value: string) {
         if (this.resolved.size >= MAX_MEMO_ENTRIES) {
             this.resolved.clear();
         }
@@ -176,7 +181,11 @@ class ThumbnailServiceClass {
             });
 
             const finalPath = result?.path ? result.path : null;
-            this.remember(task.key, finalPath);
+            // A miss is not remembered: a file still being written fails now and works
+            // later, and the next ask is the retry.
+            if (finalPath) {
+                this.remember(task.key, finalPath);
+            }
 
             // Notify all waiters
             const waiters = this.pendingResolvers.get(task.key);

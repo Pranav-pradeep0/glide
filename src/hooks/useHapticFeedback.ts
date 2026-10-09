@@ -5,6 +5,9 @@ import { HapticPatternGenerator } from '../services/HapticPatternGenerator';
 import { SubtitleParser } from '../utils/SubtitleParser';
 import { useSubtitleCueStore } from '../store/subtitleCueStore';
 
+/** Position events arrive every 250 ms; allow a little jitter on top. */
+const MAX_EXTRAPOLATION_S = 0.3;
+
 export interface UseHapticFeedbackProps {
     enabled: boolean;
     currentTimeRef: MutableRefObject<number>;
@@ -43,6 +46,10 @@ export function useHapticFeedback({
     // it straight was up to a whole event late on top of this timer's own interval -- half
     // a second of drift on a subtitle, and far too much for a haptic meant to land on a
     // door slam. Wall-clock since the last event closes the gap.
+    //
+    // Capped at a little over one event interval. Past that, no event means the video is
+    // not advancing -- buffering, or just resumed with the last event still from before
+    // the pause -- and extrapolating further would run subtitles ahead of the picture.
     const lastEventTimeRef = useRef(0);
     const lastEventAtRef = useRef(0);
     const readTime = useCallback((playing: boolean, rate: number) => {
@@ -52,7 +59,7 @@ export function useHapticFeedback({
             lastEventAtRef.current = Date.now();
         }
         if (!playing) {return reported;}
-        const elapsed = (Date.now() - lastEventAtRef.current) / 1000;
+        const elapsed = Math.min((Date.now() - lastEventAtRef.current) / 1000, MAX_EXTRAPOLATION_S);
         return reported + elapsed * rate;
     }, [currentTimeRef]);
 
@@ -109,6 +116,11 @@ export function useHapticFeedback({
 
             return null;
         };
+
+        // Play state just changed (or the cues did): the last event's timestamp is from
+        // before it, so count from now rather than from then.
+        lastEventTimeRef.current = currentTimeRef.current;
+        lastEventAtRef.current = Date.now();
 
         // 125 ms while haptics are live, for tactile timing; 250 ms for subtitles alone.
         // Paused, nothing moves except a seek, so 500 ms is enough to pick that up and the

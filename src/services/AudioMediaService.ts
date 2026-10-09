@@ -13,6 +13,8 @@ class AudioMediaServiceClass {
 
     invalidateCache() {
         this.songsCache = null;
+        // A scan already running may have read the library before the change.
+        this.inflightSongs = null;
     }
 
     getCachedSongById(trackId: string): AudioTrack | undefined {
@@ -37,24 +39,34 @@ class AudioMediaServiceClass {
         }
 
         // The Music tab, the mini player and the queue hydration all ask at once on a cold
-        // start, before the cache exists. One scan answers all of them.
-        if (this.inflightSongs) {
+        // start, before the cache exists. One scan answers all of them. A forced refresh
+        // does not join: the scan already running may predate the change it is after.
+        if (!forceRefresh && this.inflightSongs) {
             return this.inflightSongs;
         }
 
-        this.inflightSongs = (async () => {
-            try {
-                const songs: AudioTrack[] = await this.module.getSongs();
-                this.songsCache = songs;
+        // Same shape as MediaService.getLibrary: started from a resolved promise so a
+        // synchronous native throw cannot settle it before `scan` is assigned, and only the
+        // newest scan may write the cache.
+        const scan: Promise<AudioTrack[]> = Promise.resolve()
+            .then(() => this.module.getSongs() as Promise<AudioTrack[]>)
+            .then((songs) => {
+                if (this.inflightSongs === scan) {
+                    this.songsCache = songs;
+                }
                 return songs;
-            } catch (error) {
+            })
+            .catch((error) => {
                 console.error('[AudioMediaService] Failed to load songs:', error);
                 return this.songsCache ?? [];
-            } finally {
-                this.inflightSongs = null;
-            }
-        })();
-        return this.inflightSongs;
+            })
+            .finally(() => {
+                if (this.inflightSongs === scan) {
+                    this.inflightSongs = null;
+                }
+            });
+        this.inflightSongs = scan;
+        return scan;
     }
 
     groupAlbums(songs: AudioTrack[]): AudioAlbum[] {

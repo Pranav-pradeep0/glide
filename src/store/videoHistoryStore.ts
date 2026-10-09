@@ -53,9 +53,9 @@ export function prune(history: Map<string, VideoHistoryEntry>): VideoHistoryEntr
     const all = Array.from(history.values());
     if (all.length <= MAX_HISTORY_ENTRIES) {return all;}
 
-    const kept = all.filter((e) => e.bookmarks.length > 0);
+    const kept = all.filter((e) => (e.bookmarks?.length ?? 0) > 0);
     const rest = all
-        .filter((e) => e.bookmarks.length === 0)
+        .filter((e) => !e.bookmarks?.length)
         .sort((a, b) => b.lastWatchedTime - a.lastWatchedTime)
         .slice(0, Math.max(0, MAX_HISTORY_ENTRIES - kept.length));
     return [...kept, ...rest];
