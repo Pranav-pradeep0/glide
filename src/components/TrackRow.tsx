@@ -11,9 +11,12 @@ import { AudioTrack } from '@/types';
 interface TrackRowProps {
     track: AudioTrack;
     isCurrent: boolean;
+    /** Whether *this* row is the one playing. Passing the global flag to every row made
+     *  the whole visible list re-render on every play/pause. */
     isPlaying: boolean;
-    onPress: () => void;
-    onMore: () => void;
+    /** Handed the track back, so the list can pass one stable callback to every row. */
+    onPress: (track: AudioTrack) => void;
+    onMore: (track: AudioTrack) => void;
     /** Second line; defaults to "artist · album". */
     caption?: string;
 }
@@ -26,8 +29,8 @@ export const TrackRow = React.memo(function TrackRowComponent({ track, isCurrent
 
     return (
         <Touchable
-            onPress={onPress}
-            onLongPress={onMore}
+            onPress={() => onPress(track)}
+            onLongPress={() => onMore(track)}
             scaleTo={0.98}
             stateLayer
             style={[styles.row, isCurrent && { backgroundColor: colors.primaryContainer }]}
@@ -62,7 +65,7 @@ export const TrackRow = React.memo(function TrackRowComponent({ track, isCurrent
                 {formatDuration(track.duration)}
             </Text>
 
-            <IconButton icon="more-vertical" onPress={onMore} accessibilityLabel="Options" iconSize={16} style={styles.more} />
+            <IconButton icon="more-vertical" onPress={() => onMore(track)} accessibilityLabel="Options" iconSize={16} style={styles.more} />
         </Touchable>
     );
 });

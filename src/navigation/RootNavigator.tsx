@@ -11,18 +11,17 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Touchable, SnackbarHost } from '@/components/ui';
 import { metrics, type } from '@/theme/theme';
 
-import OnboardingScreen from '@/screens/OnboardingScreen';
+// The four tabs are what the first frame needs, so they are imported.
+//
+// Everything else is reached by a navigation, and `getComponent` is how a native-stack
+// screen stays unevaluated until then. Imported, the player, Now Playing and their whole
+// dependency trees -- the player hooks, the subtitle parser, the haptic engine -- are all
+// parsed and run before the library list can paint.
 import RecentsScreen from '@/screens/RecentsScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
 import FoldersScreen from '@/screens/FoldersScreen';
-import SearchScreen from '@/screens/SearchScreen';
-import PlayerDetailScreen from '@/screens/PlayerDetailScreen';
-import VideoPlayerScreen from '@/screens/VideoPlayerScreen';
-import AlbumVideosScreen from '@/screens/AlbumVideosScreen';
 import MusicScreen from '@/screens/MusicScreen';
-import NowPlayingScreen from '@/screens/NowPlayingScreen';
-import AlbumDetailScreen from '@/screens/AlbumDetailScreen';
-import ArtistDetailScreen from '@/screens/ArtistDetailScreen';
+import AlbumVideosScreen from '@/screens/AlbumVideosScreen';
 import { MiniPlayer, playerExpansion } from '@/components/MiniPlayer';
 import { AudioTrack, MainTabParamList, RootStackParamList } from '@/types';
 import { useAudioStore } from '@/store/audioStore';
@@ -104,7 +103,7 @@ function MainTabs() {
     return (
         <Tab.Navigator
             tabBar={renderTabBar}
-            screenOptions={{ headerShown: false, lazy: true }}
+            screenOptions={{ headerShown: false, lazy: true, freezeOnBlur: true }}
         >
             <Tab.Screen
                 name="Folders"
@@ -248,19 +247,22 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                 {!hasCompletedOnboarding ? (
                     <Stack.Screen
                         name="Onboarding"
-                        component={OnboardingScreen}
+                        getComponent={() => require('@/screens/OnboardingScreen').default}
                     />
                 ) : (
                     <>
+                        {/* Deliberately not frozen on blur: Now Playing is a transparent
+                            modal and the mini player keeps animating underneath it. */}
                         <Stack.Screen
                             name="MainTabs"
                             component={MainTabs}
                         />
                         <Stack.Screen
                             name="PlayerDetail"
-                            component={PlayerDetailScreen}
+                            getComponent={() => require('@/screens/PlayerDetailScreen').default}
                             options={{
                                 animation: 'slide_from_right',
+                                freezeOnBlur: true,
                             }}
                         />
                         <Stack.Screen
@@ -269,11 +271,16 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                             options={{
                                 headerShown: false,
                                 animation: 'slide_from_right',
+                                // The screen the player is usually opened from. It
+                                // subscribes to the history store, which the player writes
+                                // to as it plays, so unfrozen it re-renders all the way
+                                // through the film.
+                                freezeOnBlur: true,
                             }}
                         />
                         <Stack.Screen
                             name="VideoPlayer"
-                            component={VideoPlayerScreen}
+                            getComponent={() => require('@/screens/VideoPlayerScreen').default}
                             options={{
                                 headerShown: false,
                                 animation: 'slide_from_right',
@@ -283,15 +290,16 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                         />
                         <Stack.Screen
                             name="Search"
-                            component={SearchScreen}
+                            getComponent={() => require('@/screens/SearchScreen').default}
                             options={{
                                 headerShown: false,
                                 animation: 'slide_from_right',
+                                freezeOnBlur: true,
                             }}
                         />
                         <Stack.Screen
                             name="NowPlaying"
-                            component={NowPlayingScreen}
+                            getComponent={() => require('@/screens/NowPlayingScreen').default}
                             options={{
                                 headerShown: false,
                                 // Transparent and unanimated: the screen animates itself out of
@@ -303,18 +311,20 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                         />
                         <Stack.Screen
                             name="AlbumDetail"
-                            component={AlbumDetailScreen}
+                            getComponent={() => require('@/screens/AlbumDetailScreen').default}
                             options={{
                                 headerShown: false,
                                 animation: 'slide_from_right',
+                                freezeOnBlur: true,
                             }}
                         />
                         <Stack.Screen
                             name="ArtistDetail"
-                            component={ArtistDetailScreen}
+                            getComponent={() => require('@/screens/ArtistDetailScreen').default}
                             options={{
                                 headerShown: false,
                                 animation: 'slide_from_right',
+                                freezeOnBlur: true,
                             }}
                         />
                     </>

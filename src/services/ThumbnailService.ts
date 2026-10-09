@@ -5,10 +5,13 @@ import { MediaService } from './MediaService';
 
 const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails`;
 const MAX_CONCURRENT_WORKERS = 4;
+const MAX_MEMO_ENTRIES = 2000;
 
 interface PendingRequest {
     resolve: (path: string | null) => void;
     reject: (error: any) => void;
+    /** Identifies the caller, so a cancel drops that caller's wait and nobody else's. */
+    token?: object;
 }
 
 interface TaskItem {
@@ -28,6 +31,13 @@ class ThumbnailServiceClass {
     // Set of currently processing keys
     private processingKeys = new Set<string>();
 
+    /**
+     * What each key resolved to last time. A FlashList row that scrolls off and back asks
+     * again, and without this every one of those is a bridge call and a ContentResolver
+     * query for a file whose thumbnail is already sitting on disk.
+     */
+    private resolved = new Map<string, string | null>();
+
     constructor() {
         this.init();
     }
@@ -41,14 +51,20 @@ class ThumbnailServiceClass {
      * @param videoPath Absolute path or content:// URI
      * @param timeMs Time in milliseconds (0 = Smart Scan)
      */
-    async getThumbnail(videoPath: string, timeMs: number = 0): Promise<string | null> {
+    async getThumbnail(videoPath: string, timeMs: number = 0, token?: object): Promise<string | null> {
         if (!videoPath) { return null; }
+
+        const memo = `${videoPath}::${timeMs}`;
+        if (this.resolved.has(memo)) {
+            return this.resolved.get(memo) ?? null;
+        }
 
         // Fast-path: try MediaStore system thumbnail (timeMs === 0)
         if (timeMs === 0) {
             try {
                 const sysThumb = await MediaService.getThumbnail(videoPath);
                 if (sysThumb) {
+                    this.remember(memo, sysThumb);
                     return sysThumb;
                 }
             } catch {
@@ -63,35 +79,58 @@ class ThumbnailServiceClass {
 
         // 1. Check Disk Cache
         if (await FileService.exists(outPath)) {
-            return `file://${outPath}`;
+            const cached = `file://${outPath}`;
+            this.remember(memo, cached);
+            return cached;
         }
 
         // 2. Queue for Generation
         return new Promise((resolve, reject) => {
             // Deduplication
             if (this.pendingResolvers.has(key)) {
-                this.pendingResolvers.get(key)?.push({ resolve, reject });
+                this.pendingResolvers.get(key)?.push({ resolve, reject, token });
                 this.promoteToTop(key);
                 return;
             }
 
             // New Request
-            this.pendingResolvers.set(key, [{ resolve, reject }]);
+            this.pendingResolvers.set(key, [{ resolve, reject, token }]);
             this.queue.push({ path: videoPath, time: timeMs, key });
             this.processNext();
         });
     }
 
     /**
-     * Cancel a request
+     * This caller has gone away -- its row scrolled off, or the screen unmounted.
+     *
+     * Only its own wait is dropped. Deleting every waiter for the key, as this used to,
+     * left any other row showing the same video with a promise that never settled.
      */
-    cancelRequest(videoPath: string, timeMs: number = 0) {
+    cancelRequest(videoPath: string, timeMs: number = 0, token?: object) {
         const key = `${videoPath}::${timeMs}`;
-        const index = this.queue.findIndex(item => item.key === key);
+        const waiters = this.pendingResolvers.get(key);
+        if (!waiters) { return; }
+
+        const index = token ? waiters.findIndex(w => w.token === token) : waiters.length - 1;
         if (index !== -1) {
-            this.queue.splice(index, 1);
-            this.pendingResolvers.delete(key);
+            waiters.splice(index, 1)[0].resolve(null);
         }
+        if (waiters.length > 0) { return; }
+
+        // Nobody is waiting any more, so drop the work if it has not started yet.
+        this.pendingResolvers.delete(key);
+        const queued = this.queue.findIndex(item => item.key === key);
+        if (queued !== -1) {
+            this.queue.splice(queued, 1);
+        }
+    }
+
+    /** Bounded: a long scroll through a large library would otherwise grow this forever. */
+    private remember(key: string, value: string | null) {
+        if (this.resolved.size >= MAX_MEMO_ENTRIES) {
+            this.resolved.clear();
+        }
+        this.resolved.set(key, value);
     }
 
     private promoteToTop(key: string) {
@@ -137,6 +176,7 @@ class ThumbnailServiceClass {
             });
 
             const finalPath = result?.path ? result.path : null;
+            this.remember(task.key, finalPath);
 
             // Notify all waiters
             const waiters = this.pendingResolvers.get(task.key);

@@ -13,8 +13,7 @@ import Share from 'react-native-share';
 import { useTheme } from '@/hooks/useTheme';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { playerColors } from '@/theme/colors';
-import Animated, { FadeInDown, ZoomInRight } from 'react-native-reanimated';
-import { metrics, motion, type } from '@/theme/theme';
+import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
 import { Button, IconButton, Touchable } from '@/components/ui';
@@ -137,7 +136,13 @@ function HighlightedTitle({ title, highlight, lines }: { title: string; highligh
 
 // ============= ROW + CARD =============
 
-interface VideoItemProps {
+interface VideoItemProps<T> {
+    /**
+     * Whatever the list is of. The row only hands it back on press, which is what lets a
+     * screen pass one stable callback to every row instead of a fresh closure per item --
+     * the thing that was defeating the memo and re-rendering every visible cell.
+     */
+    item: T;
     path: string;
     name: string;
     /** One line, e.g. "12:34 left · 1.2 GB". The parsed episode or year is put in front. */
@@ -148,9 +153,12 @@ interface VideoItemProps {
     progress?: number;
     /** Search term to mark in the title. */
     highlight?: string;
-    onPress: () => void;
-    onMore: () => void;
+    onPress: (item: T) => void;
+    onMore: (item: T) => void;
 }
+
+/** What a list renders each row with; `VideoRow` and `VideoCard` are interchangeable. */
+export type VideoItemComponent = <T>(props: VideoItemProps<T>) => React.ReactElement;
 
 function useItemText(name: string, meta: string) {
     return useMemo(() => {
@@ -159,13 +167,13 @@ function useItemText(name: string, meta: string) {
     }, [name, meta]);
 }
 
-export const VideoRow = React.memo(({ path, name, meta, duration, progress = 0, highlight, onPress, onMore }: VideoItemProps) => {
+function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, highlight, onPress, onMore }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     return (
         <Touchable
-            onPress={onPress}
-            onLongPress={onMore}
+            onPress={() => onPress(item)}
+            onLongPress={() => onMore(item)}
             scaleTo={0.98}
             stateLayer
             accessibilityRole="button"
@@ -183,21 +191,21 @@ export const VideoRow = React.memo(({ path, name, meta, duration, progress = 0, 
             <IconButton
                 icon="more-vertical"
                 color={colors.textTertiary}
-                onPress={onMore}
+                onPress={() => onMore(item)}
                 accessibilityLabel={`More options for ${text.title}`}
             />
         </Touchable>
     );
-});
-VideoRow.displayName = 'VideoRow';
+}
+export const VideoRow = React.memo(VideoRowBase) as VideoItemComponent;
 
-export const VideoCard = React.memo(({ path, name, meta, duration, progress = 0, highlight, onPress, onMore }: VideoItemProps) => {
+function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, highlight, onPress, onMore }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     return (
         <Touchable
-            onPress={onPress}
-            onLongPress={onMore}
+            onPress={() => onPress(item)}
+            onLongPress={() => onMore(item)}
             scaleTo={0.98}
             accessibilityRole="button"
             accessibilityLabel={`Play ${text.title}`}
@@ -216,27 +224,27 @@ export const VideoCard = React.memo(({ path, name, meta, duration, progress = 0,
                     icon="more-vertical"
                     iconSize={16}
                     color={colors.textTertiary}
-                    onPress={onMore}
+                    onPress={() => onMore(item)}
                     accessibilityLabel={`More options for ${text.title}`}
                     style={styles.gridMore}
                 />
             </View>
         </Touchable>
     );
-});
-VideoCard.displayName = 'VideoCard';
+}
+export const VideoCard = React.memo(VideoCardBase) as VideoItemComponent;
 
 // ============= HERO =============
 
 /** The one thing you were just watching, full width, with the picture doing the work. */
-export function ContinueCard({ path, name, meta, progress = 0, onPress, onMore }: VideoItemProps) {
+export function ContinueCard<T>({ item, path, name, meta, progress = 0, onPress, onMore }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     const { thumbnail } = useThumbnail(path);
     return (
         <Touchable
-            onPress={onPress}
-            onLongPress={onMore}
+            onPress={() => onPress(item)}
+            onLongPress={() => onMore(item)}
             scaleTo={0.985}
             accessibilityRole="button"
             accessibilityLabel={`Resume ${text.title}`}
@@ -251,7 +259,7 @@ export function ContinueCard({ path, name, meta, progress = 0, onPress, onMore }
             />
             <IconButton
                 icon="more-horizontal"
-                onPress={onMore}
+                onPress={() => onMore(item)}
                 accessibilityLabel={`More options for ${text.title}`}
                 onPlayer
                 variant="filled"
@@ -300,17 +308,18 @@ export function SectionTitle({ title, children }: { title: string; children?: Re
 
 /** Spacing wrapper so list and grid items sit on the same rhythm inside a FlashList. */
 /**
- * How a list item arrives: grid cards zoom in from the right, rows rise in. Lists are keyed by
- * view mode and sort, so switching either replays it.
+ * Spacing wrapper only.
+ *
+ * It used to run an entering spring per cell. FlashList recycles its cells, so that spring
+ * fired again every time a view was reused for a new row -- items springing in mid-scroll,
+ * and a Reanimated animation started for each one. A list that is scrolled is not a list
+ * that is arriving.
  */
-export const cellEntering = (grid: boolean) => (grid ? ZoomInRight : FadeInDown)
-    .springify().mass(motion.spatial.mass).stiffness(motion.spatial.stiffness).damping(motion.spatial.damping);
-
 export function VideoItemCell({ grid, children }: { grid: boolean; children: React.ReactNode }) {
     return (
-        <Animated.View entering={cellEntering(grid)} style={grid ? styles.gridCell : styles.listCell}>
+        <View style={grid ? styles.gridCell : styles.listCell}>
             {children}
-        </Animated.View>
+        </View>
     );
 }
 

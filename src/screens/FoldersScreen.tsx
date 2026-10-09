@@ -7,8 +7,7 @@ import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { Loader } from '@/components/Loader';
 import { IconButton, SortButton, Touchable } from '@/components/ui';
-import Animated from 'react-native-reanimated';
-import { EmptyState, ListHeader, cellEntering, getRelativeTime, joinMeta } from '@/components/VideoRow';
+import { EmptyState, ListHeader, getRelativeTime, joinMeta } from '@/components/VideoRow';
 import { RootStackParamList, VideoFolder } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { consumeDirtyAlbumCovers, useAlbums } from '@/hooks/useMediaService';
@@ -145,11 +144,11 @@ export default function FoldersScreen() {
     const grid = viewMode === 'grid';
 
     const renderAlbum = useCallback(({ item }: { item: VideoFolder }) => (
-        <Animated.View entering={cellEntering(grid)} style={grid ? styles.gridCell : styles.listCell}>
+        <View style={grid ? styles.gridCell : styles.listCell}>
             {grid
                 ? <AlbumGridCard item={item} onPress={() => handleAlbumPress(item)} />
                 : <AlbumListItem item={item} onPress={() => handleAlbumPress(item)} />}
-        </Animated.View>
+        </View>
     ), [grid, handleAlbumPress]);
 
     if (loading && albums.length === 0) {

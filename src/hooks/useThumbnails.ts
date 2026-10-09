@@ -7,6 +7,9 @@ export function useThumbnail(videoPath: string | undefined) {
 
     useEffect(() => {
         let isMounted = true;
+        // Identifies this row's request, so unmounting cancels its own wait and leaves any
+        // other row showing the same video still waiting.
+        const token = {};
 
         if (!videoPath) {
             setThumbnail(null);
@@ -18,7 +21,7 @@ export function useThumbnail(videoPath: string | undefined) {
         const fetchThumbnail = async () => {
             setLoading(true);
             try {
-                const thumb = await ThumbnailService.getThumbnail(videoPath);
+                const thumb = await ThumbnailService.getThumbnail(videoPath, 0, token);
                 if (isMounted) {
                     setThumbnail(thumb);
                 }
@@ -36,7 +39,7 @@ export function useThumbnail(videoPath: string | undefined) {
         return () => {
             isMounted = false;
             if (videoPath) {
-                ThumbnailService.cancelRequest(videoPath);
+                ThumbnailService.cancelRequest(videoPath, 0, token);
             }
         };
     }, [videoPath]);

@@ -14,7 +14,7 @@ import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
 import { Button, IconButton } from '@/components/ui';
 import {
-    EmptyState, ListHeader, VideoCard, VideoItemCell, VideoRow,
+    EmptyState, ListHeader, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
     confirmDelete, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
 } from '@/components/VideoRow';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
@@ -87,17 +87,18 @@ export default function AlbumVideosScreen() {
 
     const renderItem = useCallback(({ item }: { item: VideoFile }) => {
         const entry = getHistoryEntry(item);
-        const Item = grid ? VideoCard : VideoRow;
+        const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
         return (
             <VideoItemCell grid={grid}>
                 <Item
+                    item={item}
                     path={item.path}
                     name={item.name}
                     meta={joinMeta(timeLabel(item.duration, entry?.lastPausedPosition), item.size > 0 && formatFileSize(item.size))}
                     duration={item.duration}
                     progress={progressOf(entry?.duration, entry?.lastPausedPosition)}
-                    onPress={() => handleVideoPress(item)}
-                    onMore={() => handleOpenOptions(item)}
+                    onPress={handleVideoPress}
+                    onMore={handleOpenOptions}
                 />
             </VideoItemCell>
         );

@@ -78,14 +78,14 @@ export function RecentMusicList() {
                     <TrackRow
                         track={item.track}
                         isCurrent={currentTrack?.id === item.track.id}
-                        isPlaying={isPlaying}
+                        isPlaying={currentTrack?.id === item.track.id && isPlaying}
                         caption={`${item.track.artist} · ${getRelativeTime(item.playedAt)}`}
                         onPress={() =>
                             currentTrack?.id === item.track.id
                                 ? navigation.navigate('NowPlaying')
                                 : playTrack(item.track, queue, 'Recently played')
                         }
-                        onMore={() => setSelected(item.track)}
+                        onMore={setSelected}
                     />
                 )}
                 contentContainerStyle={{ paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl * 2 }}

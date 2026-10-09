@@ -27,7 +27,7 @@ import { metrics, type } from '@/theme/theme';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { IconButton } from '@/components/ui';
 import {
-    EmptyState, VideoCard, VideoItemCell, VideoRow,
+    EmptyState, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
     confirmDelete, joinMeta, listContentStyle, shareVideo,
 } from '@/components/VideoRow';
 
@@ -114,17 +114,18 @@ export default function SearchScreen() {
     const grid = viewMode === 'grid';
 
     const renderItem = useCallback(({ item }: { item: VideoFile }) => {
-        const Item = grid ? VideoCard : VideoRow;
+        const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
         return (
             <VideoItemCell grid={grid}>
                 <Item
+                    item={item}
                     path={item.path}
                     name={item.name}
                     meta={joinMeta(item.album, item.size > 0 && formatFileSize(item.size))}
                     duration={item.duration}
                     highlight={query}
-                    onPress={() => handleVideoPress(item)}
-                    onMore={() => handleOpenOptions(item)}
+                    onPress={handleVideoPress}
+                    onMore={handleOpenOptions}
                 />
             </VideoItemCell>
         );

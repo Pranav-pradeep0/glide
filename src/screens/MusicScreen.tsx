@@ -14,7 +14,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
-import Animated from 'react-native-reanimated';
 import { useAudioStore } from '@/store/audioStore';
 import { useFavoritesStore } from '@/store/favoritesStore';
 import { AudioMediaService } from '@/services/AudioMediaService';
@@ -22,7 +21,7 @@ import { PermissionService } from '@/services/PermissionService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumArt } from '@/hooks/useAlbumArt';
 import { Button, Chip, IconButton, SortButton, Touchable } from '@/components/ui';
-import { EmptyState, ListHeader, cellEntering } from '@/components/VideoRow';
+import { EmptyState, ListHeader } from '@/components/VideoRow';
 import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { TrackRow } from '@/components/TrackRow';
 import { metrics, type } from '@/theme/theme';
@@ -304,9 +303,9 @@ export default function MusicScreen() {
             <TrackRow
                 track={item}
                 isCurrent={currentTrack?.id === item.id}
-                isPlaying={isPlaying}
-                onPress={() => handleSongPress(item)}
-                onMore={() => setTrackWithOptions(item)}
+                isPlaying={currentTrack?.id === item.id && isPlaying}
+                onPress={handleSongPress}
+                onMore={setTrackWithOptions}
             />
         ),
         [currentTrack?.id, isPlaying, handleSongPress]
@@ -315,7 +314,7 @@ export default function MusicScreen() {
     // Album card renderer
     const renderAlbumItem = useCallback(
         ({ item }: { item: AudioAlbum }) => (
-            <Animated.View entering={cellEntering(true)} style={styles.albumGridCell}>
+            <View style={styles.albumGridCell}>
                 <Touchable
                     onPress={() =>
                         navigation.navigate('AlbumDetail', {
@@ -346,7 +345,7 @@ export default function MusicScreen() {
                         </Text>
                     </View>
                 </Touchable>
-            </Animated.View>
+            </View>
         ),
         [colors, navigation]
     );

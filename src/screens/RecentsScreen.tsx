@@ -15,7 +15,7 @@ import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Chip, IconButton, SortButton } from '@/components/ui';
 import { RecentMusicList } from '@/components/RecentMusicList';
 import {
-    AmbientBackdrop, ContinueCard, EmptyState, ListHeader, SectionTitle, VideoCard, VideoItemCell, VideoRow,
+    AmbientBackdrop, ContinueCard, EmptyState, ListHeader, SectionTitle, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
     confirmDelete, getRelativeTime, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
 } from '@/components/VideoRow';
 import { metrics } from '@/theme/theme';
@@ -134,17 +134,18 @@ export default function RecentsScreen() {
     ), [sortBy]);
 
     const renderItem = useCallback(({ item }: { item: VideoHistoryEntry }) => {
-        const Item = grid ? VideoCard : VideoRow;
+        const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
         return (
             <VideoItemCell grid={grid}>
                 <Item
+                    item={item}
                     path={item.videoPath}
                     name={item.videoName}
                     meta={metaFor(item)}
                     duration={item.duration}
                     progress={progressOf(item.duration, item.lastPausedPosition)}
-                    onPress={() => handleVideoPress(item)}
-                    onMore={() => handleOpenOptions(item)}
+                    onPress={handleVideoPress}
+                    onMore={handleOpenOptions}
                 />
             </VideoItemCell>
         );
@@ -160,12 +161,13 @@ export default function RecentsScreen() {
                 <>
                     <SectionTitle title="Continue watching" />
                     <ContinueCard
+                        item={hero}
                         path={hero.videoPath}
                         name={hero.videoName}
                         meta={timeLabel(hero.duration, hero.lastPausedPosition) ?? ''}
                         progress={progressOf(hero.duration, hero.lastPausedPosition)}
-                        onPress={() => handleVideoPress(hero)}
-                        onMore={() => handleOpenOptions(hero)}
+                        onPress={handleVideoPress}
+                        onMore={handleOpenOptions}
                     />
                 </>
             )}
