@@ -15,6 +15,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -71,7 +72,15 @@ object GlidePlayerHolder {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
-        val newPlayer = ExoPlayer.Builder(context.applicationContext)
+        // The renderers the video view already builds. EXTENSION_RENDERER_MODE_ON lets the
+        // FFmpeg extension cover AC-3, E-AC-3, DTS and ALAC on devices with no decoder for
+        // them -- without it those files select no audio track and play silently -- and
+        // decoder fallback retries in software rather than failing the track outright.
+        val renderers = DefaultRenderersFactory(context.applicationContext)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+
+        val newPlayer = ExoPlayer.Builder(context.applicationContext, renderers)
             .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)

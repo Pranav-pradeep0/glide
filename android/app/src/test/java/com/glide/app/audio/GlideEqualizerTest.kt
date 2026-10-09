@@ -1,6 +1,8 @@
 package com.glide.app.audio
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -34,6 +36,16 @@ class GlideEqualizerTest {
     fun `frequencies past either end clamp to the end band`() {
         assertEquals(1f, GlideEqualizer.nearestGainDb(bands, 0), 0f)
         assertEquals(10f, GlideEqualizer.nearestGainDb(bands, 48000), 0f)
+    }
+
+    /** Audio offload is enabled on this, so a wrong answer is silent playback with no EQ. */
+    @Test
+    fun `flat means absent or every band at zero`() {
+        assertTrue(GlideEqualizer.isFlat(null))
+        assertTrue(GlideEqualizer.isFlat(floatArrayOf()))
+        assertTrue(GlideEqualizer.isFlat(FloatArray(10)))
+        assertFalse(GlideEqualizer.isFlat(floatArrayOf(0f, 0f, 0.5f)))
+        assertFalse(GlideEqualizer.isFlat(floatArrayOf(-3f, 0f, 0f)))
     }
 
     /** A device with more bands than the UI sends must not read off the end of the array. */

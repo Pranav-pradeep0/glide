@@ -63,6 +63,16 @@ object GlideEqualizer {
         }
     }
 
+    /**
+     * Nothing to apply: no equalizer, or every band at 0 dB.
+     *
+     * Audio offload is decided on this. Offload hands the decode to the DSP, which is the
+     * big background-battery win, but it bypasses the audio session the system equalizer
+     * attaches to -- so offload is only safe while the equalizer changes nothing.
+     */
+    @JvmStatic
+    fun isFlat(bands: FloatArray?): Boolean = bands == null || bands.all { it == 0f }
+
     /** Gain of whichever UI band sits closest to this device band's centre frequency. */
     @JvmStatic
     fun nearestGainDb(bands: FloatArray, centreHz: Int): Float {

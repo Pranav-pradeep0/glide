@@ -12,9 +12,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -32,7 +34,7 @@ import kotlin.math.abs
 
 @UnstableApi
 class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) :
-    ReactContextBaseJavaModule(reactContext) {
+    ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
 
     override fun getName(): String = "GlideAudioPlayerModule"
 
@@ -58,6 +60,13 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     private var isProgressRunning = false
     private var sleepTimerRunnable: Runnable? = null
 
+    /**
+     * No JS is watching while the app is in the background, so the 500 ms position event is
+     * a wakeup for nobody -- and background music is exactly when it runs longest. The
+     * notification and lock screen come from the MediaSession, not from this.
+     */
+    private var hostPaused = false
+
     private val progressRunnable = object : Runnable {
         override fun run() {
             val p = player
@@ -71,10 +80,28 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     }
 
     init {
+        reactContext.addLifecycleEventListener(this)
         mainHandler.post {
             ensurePlayer()
         }
     }
+
+    override fun onHostPause() {
+        hostPaused = true
+        stopProgressUpdates()
+    }
+
+    override fun onHostResume() {
+        hostPaused = false
+        val p = player ?: return
+        // One position, so the UI is correct immediately rather than up to 500 ms stale.
+        emitProgress(p.currentPosition / 1000.0, (if (p.duration > 0) p.duration else 0L) / 1000.0)
+        emitPlaybackState()
+        if (p.isPlaying) startProgressUpdates()
+    }
+
+    /** Playback deliberately outlives the Activity; nothing to tear down here. */
+    override fun onHostDestroy() = Unit
 
     private var playerListener: Player.Listener? = null
 
@@ -157,6 +184,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     }
 
     private fun startProgressUpdates() {
+        if (hostPaused) return
         if (!isProgressRunning) {
             isProgressRunning = true
             mainHandler.post(progressRunnable)
@@ -169,9 +197,35 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     }
 
     private fun applyEqualizer() {
-        val sessionId = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
+        val p = player
+        val sessionId = p?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
         if (sessionId == C.AUDIO_SESSION_ID_UNSET && currentBandLevels != null) return
         equalizer = GlideEqualizer.apply(equalizer, currentBandLevels, sessionId)
+        if (p != null) applyAudioOffload(p, GlideEqualizer.isFlat(currentBandLevels))
+    }
+
+    /**
+     * Offload decodes on the DSP with the CPU asleep, which is the largest saving there is
+     * for music in the background. It bypasses the audio session effects attach to, so it
+     * is enabled exactly while the equalizer is flat and dropped the moment it is not.
+     */
+    private fun applyAudioOffload(p: ExoPlayer, enabled: Boolean) {
+        val mode = if (enabled) {
+            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+        } else {
+            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+        }
+        if (p.trackSelectionParameters.audioOffloadPreferences.audioOffloadMode == mode) return
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .setAudioOffloadPreferences(
+                TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(mode)
+                    // Gapless matters more than the battery: a queue that pauses between
+                    // tracks is worse than one that keeps the CPU awake.
+                    .setIsGaplessSupportRequired(true)
+                    .build()
+            )
+            .build()
     }
 
     private fun getQueueIndices(): WritableArray {
@@ -384,10 +438,8 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                         else -> Player.REPEAT_MODE_OFF
                     }
 
-                    if (bandLevels != null) {
-                        currentBandLevels = bandLevels
-                        applyEqualizer()
-                    }
+                    currentBandLevels = bandLevels ?: currentBandLevels
+                    applyEqualizer()
 
                     p.prepare()
                     p.playWhenReady = playWhenReady
@@ -679,6 +731,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
 
     override fun invalidate() {
         super.invalidate()
+        reactContext.removeLifecycleEventListener(this)
         mainHandler.post {
             stopProgressUpdates()
             sleepTimerRunnable?.let { mainHandler.removeCallbacks(it) }

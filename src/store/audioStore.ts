@@ -3,13 +3,16 @@ import { AppState, DeviceEventEmitter, NativeModules, Platform } from 'react-nat
 import { createMMKV } from 'react-native-mmkv';
 import { AudioRepeatMode, AudioTrack } from '@/types';
 import { AudioMediaService } from '@/services/AudioMediaService';
+import { PermissionService } from '@/services/PermissionService';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { useMusicHistoryStore } from '@/store/musicHistoryStore';
 
 const getAudioModule = () => NativeModules.GlideAudioPlayerModule;
 const mmkv = createMMKV({ id: 'glide_audio_store_v1' });
 
-const QUEUE_KEY = '@glide_audio_queue';
+/** Pre-2.3 key: the whole queue as track JSON. Read once to migrate, then removed. */
+const LEGACY_QUEUE_KEY = '@glide_audio_queue';
+const QUEUE_IDS_KEY = '@glide_audio_queue_ids';
 const PLAYBACK_KEY = '@glide_audio_playback_state';
 const CURRENT_TRACK_KEY = '@glide_audio_current_track';
 
@@ -24,7 +27,6 @@ interface StoredPlaybackState {
     currentTrack?: AudioTrack | null;
 }
 
-let initialQueue: AudioTrack[] = [];
 let initialPlayback: StoredPlaybackState = {
     currentIndex: 0,
     position: 0,
@@ -51,23 +53,61 @@ try {
     // ignore
 }
 
-// Safely hydrate the persisted queue asynchronously to avoid blocking JS module evaluation
-function hydratePersistedQueue() {
+/** The saved queue, as ids. Migrates the old full-JSON key on first run after the change. */
+function readPersistedIds(): string[] {
     try {
-        const rawQueue = mmkv.getString(QUEUE_KEY);
-        if (rawQueue) {
-            const queue: AudioTrack[] = JSON.parse(rawQueue);
-            if (Array.isArray(queue) && queue.length > 0) {
-                const current = useAudioStore.getState();
-                if (current.queue.length === 0) {
-                    const safeIndex = Math.max(0, Math.min(current.currentIndex, queue.length - 1));
-                    useAudioStore.setState({
-                        queue,
-                        currentTrack: current.currentTrack || queue[safeIndex] || null,
-                    });
-                }
-            }
+        const rawIds = mmkv.getString(QUEUE_IDS_KEY);
+        if (rawIds) {
+            const ids = JSON.parse(rawIds);
+            return Array.isArray(ids) ? ids.map(String) : [];
         }
+        const legacy = mmkv.getString(LEGACY_QUEUE_KEY);
+        if (legacy) {
+            const queue = JSON.parse(legacy) as AudioTrack[];
+            mmkv.remove(LEGACY_QUEUE_KEY);
+            return Array.isArray(queue) ? queue.map((t) => String(t.id)) : [];
+        }
+    } catch {
+        // ignore
+    }
+    return [];
+}
+
+/**
+ * Rebuild the queue from the saved ids, off the module-evaluation path.
+ *
+ * Only ids are stored: a 5,000-song queue was ~2 MB of track JSON, stringified on the JS
+ * thread every time a song was tapped. MediaStore holds the records, and the playing track
+ * is saved whole, so the mini player is right before this finishes.
+ *
+ * Without the audio permission there is no library to resolve against, and asking for it
+ * at launch is not this function's business, so it simply does nothing.
+ */
+async function hydratePersistedQueue() {
+    try {
+        const ids = readPersistedIds();
+        if (ids.length === 0 || useAudioStore.getState().queue.length > 0) { return; }
+        if (!(await PermissionService.checkAudioPermission())) { return; }
+
+        const byId = new Map((await AudioMediaService.getSongs()).map((s) => [String(s.id), s]));
+        const queue = ids.map((id) => byId.get(id)).filter((t): t is AudioTrack => !!t);
+        if (queue.length === 0) { return; }
+
+        const current = useAudioStore.getState();
+        // Something started playing while the library was being read; leave it alone.
+        if (current.queue.length > 0) { return; }
+
+        const byTrack = current.currentTrack
+            ? queue.findIndex((t) => String(t.id) === String(current.currentTrack!.id))
+            : -1;
+        const safeIndex = byTrack >= 0
+            ? byTrack
+            : Math.max(0, Math.min(current.currentIndex, queue.length - 1));
+        useAudioStore.setState({
+            queue,
+            currentIndex: safeIndex,
+            currentTrack: current.currentTrack || queue[safeIndex] || null,
+        });
     } catch {
         // ignore
     }
@@ -121,12 +161,12 @@ export function flushPendingWrites() {
 }
 
 function persistQueue(queue: AudioTrack[], immediate = false) {
-    const write = () => mmkv.set(QUEUE_KEY, JSON.stringify(queue));
+    const write = () => mmkv.set(QUEUE_IDS_KEY, JSON.stringify(queue.map((t) => String(t.id))));
     if (immediate || queue.length === 0 || process.env.NODE_ENV === 'test') {
-        const pending = pendingWrites.get(QUEUE_KEY);
+        const pending = pendingWrites.get(QUEUE_IDS_KEY);
         if (pending) {
             clearTimeout(pending.timer);
-            pendingWrites.delete(QUEUE_KEY);
+            pendingWrites.delete(QUEUE_IDS_KEY);
         }
         try {
             write();
@@ -135,7 +175,7 @@ function persistQueue(queue: AudioTrack[], immediate = false) {
         }
         return;
     }
-    debounceWrite(QUEUE_KEY, 1000, write);
+    debounceWrite(QUEUE_IDS_KEY, 1000, write);
 }
 
 function persistCurrentTrack(track: AudioTrack | null) {
@@ -207,7 +247,7 @@ export interface AudioStoreState {
     setAudioEqualizer: (bands: number[]) => Promise<void>;
     setEqualizerPreset: (presetId: string) => Promise<void>;
     clearQueue: () => Promise<void>;
-    hydrateQueue: () => void;
+    hydrateQueue: () => Promise<void>;
 
     // Internal updates from native events
     _setPlaybackState: (state: { isPlaying: boolean; isBuffering: boolean; position?: number; duration?: number }) => void;
@@ -218,7 +258,8 @@ export interface AudioStoreState {
 
 export const useAudioStore = create<AudioStoreState>((set, get) => ({
     currentTrack: initialTrack,
-    queue: initialQueue,
+    // Filled by hydratePersistedQueue once MediaStore has answered.
+    queue: [],
     currentIndex: safeInitialIndex,
     isPlaying: false,
     isBuffering: false,
@@ -702,9 +743,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         get()._persistState();
     },
 
-    hydrateQueue: () => {
-        hydratePersistedQueue();
-    },
+    hydrateQueue: () => hydratePersistedQueue(),
 
     _setPlaybackState: (state) => {
         set((prev) => ({

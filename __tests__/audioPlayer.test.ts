@@ -7,6 +7,7 @@ jest.mock('react-native-mmkv', () => ({
         set: (k: string, v: string) => mockMMKVStore.set(k, v),
         getString: (k: string) => mockMMKVStore.get(k),
         delete: (k: string) => mockMMKVStore.delete(k),
+        remove: (k: string) => mockMMKVStore.delete(k),
         clearAll: () => mockMMKVStore.clear(),
     }),
 }));
@@ -211,14 +212,32 @@ describe('Audio Player Utilities and Store', () => {
             );
         });
 
-        it('safely hydrates queue from MMKV without evaluation freeze', () => {
-            mockMMKVStore.set('@glide_audio_queue', JSON.stringify([dummyTrack1, dummyTrack2]));
+        it('rebuilds the saved queue from ids and the library', async () => {
+            NativeModules.MediaStoreAudioModule.getSongs.mockReturnValue(
+                Promise.resolve([dummyTrack1, dummyTrack2])
+            );
+            AudioMediaService.invalidateCache();
+            mockMMKVStore.set('@glide_audio_queue_ids', JSON.stringify(['101', '102']));
             useAudioStore.setState({ queue: [], currentTrack: null });
-            useAudioStore.getState().hydrateQueue();
+            await useAudioStore.getState().hydrateQueue();
 
             const state = useAudioStore.getState();
             expect(state.queue.length).toBe(2);
             expect(state.queue[0].id).toBe('101');
+        });
+
+        it('migrates a queue saved as whole tracks by the previous version', async () => {
+            NativeModules.MediaStoreAudioModule.getSongs.mockReturnValue(
+                Promise.resolve([dummyTrack1, dummyTrack2])
+            );
+            AudioMediaService.invalidateCache();
+            mockMMKVStore.delete('@glide_audio_queue_ids');
+            mockMMKVStore.set('@glide_audio_queue', JSON.stringify([dummyTrack2, dummyTrack1]));
+            useAudioStore.setState({ queue: [], currentTrack: null });
+            await useAudioStore.getState().hydrateQueue();
+
+            expect(useAudioStore.getState().queue.map((t) => t.id)).toEqual(['102', '101']);
+            expect(mockMMKVStore.get('@glide_audio_queue')).toBeUndefined();
         });
 
         it('preserves position when track index has not changed in _setTrackChanged', () => {
@@ -281,10 +300,10 @@ describe('Audio Player Utilities and Store', () => {
         it('separates queue persistence from playback state persistence', async () => {
             await useAudioStore.getState().playQueue([dummyTrack1, dummyTrack2], 1);
 
-            const persistedQueue = mockMMKVStore.get('@glide_audio_queue');
+            // Ids only: the whole queue as track JSON was megabytes on a large library.
+            const persistedQueue = mockMMKVStore.get('@glide_audio_queue_ids');
             expect(persistedQueue).toBeDefined();
-            const parsedQueue = JSON.parse(persistedQueue!);
-            expect(parsedQueue.length).toBe(2);
+            expect(JSON.parse(persistedQueue!)).toEqual(['101', '102']);
 
             await useAudioStore.getState().seekTo(30);
             await new Promise((r) => setTimeout(r, 600));
@@ -303,7 +322,7 @@ describe('Audio Player Utilities and Store', () => {
             await useAudioStore.getState().clearQueue();
             expect(useAudioStore.getState().queue.length).toBe(0);
 
-            const persistedQueue = mockMMKVStore.get('@glide_audio_queue');
+            const persistedQueue = mockMMKVStore.get('@glide_audio_queue_ids');
             expect(persistedQueue).toBe('[]');
         });
 
