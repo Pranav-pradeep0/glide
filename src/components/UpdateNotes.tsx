@@ -13,9 +13,9 @@ export function formatNotes(notes: string | null): string {
 
     let normalized = notes
         .replace(/\r\n/g, '\n')
-        .replace(/\r\n/g, '\n')
-        .replace(/\n/g, '\n')
-        .replace(/\r/g, '\n')
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\n')
         .trim();
 
     const dividerIndex = normalized.indexOf('\n---');

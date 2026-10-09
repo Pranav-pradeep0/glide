@@ -167,9 +167,16 @@ const RELEASE_CACHE_MS = 5 * 60 * 1000;
  * exactly when the cache was the only thing that could have absorbed it.
  */
 const RELEASE_STALE_MS = 60 * 60 * 1000;
+/**
+ * After GitHub fails, how long before it is asked again. Serving the stale answer is not
+ * enough on its own: without this every request still went upstream first, keeping a rate
+ * limit spent and making every client wait out the timeout before getting the cached body.
+ */
+const RELEASE_RETRY_MS = 60 * 1000;
 const RELEASE_TIMEOUT_MS = 8000;
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
 let releaseCache: { at: number; body: string } | null = null;
+let releaseFailedAt = 0;
 
 /** The last good answer, while it is recent enough to be worth more than an error. */
 function stale(cache: typeof releaseCache): Response | null {
@@ -202,11 +209,21 @@ async function handleLatestRelease(env: Env): Promise<Response> {
     if (env.GITHUB_TOKEN) {
         headers.authorization = `Bearer ${env.GITHUB_TOKEN}`;
     }
-    const upstream = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-        headers,
-        signal: AbortSignal.timeout(RELEASE_TIMEOUT_MS),
-    });
+    if (Date.now() - releaseFailedAt < RELEASE_RETRY_MS) {
+        return stale(releaseCache) ?? err(502, 'Release service unavailable.');
+    }
+    let upstream: Response;
+    try {
+        upstream = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+            headers,
+            signal: AbortSignal.timeout(RELEASE_TIMEOUT_MS),
+        });
+    } catch (error) {
+        releaseFailedAt = Date.now();
+        throw error;
+    }
     if (!upstream.ok) {
+        releaseFailedAt = Date.now();
         logUpstreamFailure('release', upstream.status);
         return stale(releaseCache) ?? err(502, 'Release service unavailable.');
     }

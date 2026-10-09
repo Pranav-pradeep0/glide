@@ -40,6 +40,15 @@ describe('update notes', () => {
         expect(parseNotes(notes)).toEqual([{ kind: 'bullet', text: 'a change' }]);
     });
 
+    it('splits a body whose newlines arrive as literal backslash sequences', () => {
+        const notes = formatNotes('### Fixes\\n- a fix\\r\\n- another\\n\\n---\\n**Build Info**');
+        expect(parseNotes(notes)).toEqual([
+            { kind: 'heading', text: 'Fixes' },
+            { kind: 'bullet', text: 'a fix' },
+            { kind: 'bullet', text: 'another' },
+        ]);
+    });
+
     it('says so when there is nothing to show', () => {
         expect(parseNotes(formatNotes(null))).toEqual([
             { kind: 'text', text: 'No changelog provided.' },
