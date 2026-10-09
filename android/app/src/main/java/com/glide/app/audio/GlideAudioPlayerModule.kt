@@ -42,6 +42,9 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         private const val TAG = "GlideAudioPlayerModule"
         private const val PROGRESS_INTERVAL_MS = 500L
 
+        /** Matches POSITION_SAVE_INTERVAL_MS in audioStore.ts, the only background reader. */
+        private const val BACKGROUND_PROGRESS_INTERVAL_MS = 5000L
+
         /**
          * One worker for every queue build, so builds finish in the order they were asked
          * for. Paired with [queueGeneration], which drops a build that a newer request has
@@ -61,9 +64,11 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     private var sleepTimerRunnable: Runnable? = null
 
     /**
-     * No JS is watching while the app is in the background, so the 500 ms position event is
-     * a wakeup for nobody -- and background music is exactly when it runs longest. The
-     * notification and lock screen come from the MediaSession, not from this.
+     * In the background nothing is drawing the position, so the 500 ms event is mostly a
+     * wakeup for nobody -- and background music is exactly when it runs longest. The one
+     * reader left is audioStore saving the position every 5 s, so a killed app resumes close
+     * to where it was; the event slows to that instead of stopping. The notification and
+     * lock screen come from the MediaSession, not from this.
      */
     private var hostPaused = false
 
@@ -72,7 +77,10 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
             val p = player
             if (p != null && p.isPlaying) {
                 emitProgress(p.currentPosition / 1000.0, (if (p.duration > 0) p.duration else 0L) / 1000.0)
-                mainHandler.postDelayed(this, PROGRESS_INTERVAL_MS)
+                mainHandler.postDelayed(
+                    this,
+                    if (hostPaused) BACKGROUND_PROGRESS_INTERVAL_MS else PROGRESS_INTERVAL_MS
+                )
             } else {
                 isProgressRunning = false
             }
@@ -88,7 +96,6 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
 
     override fun onHostPause() {
         hostPaused = true
-        stopProgressUpdates()
     }
 
     override fun onHostResume() {
@@ -97,6 +104,8 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         // One position, so the UI is correct immediately rather than up to 500 ms stale.
         emitProgress(p.currentPosition / 1000.0, (if (p.duration > 0) p.duration else 0L) / 1000.0)
         emitPlaybackState()
+        // Back to the foreground rate now, not after the slow tick already queued.
+        stopProgressUpdates()
         if (p.isPlaying) startProgressUpdates()
     }
 
@@ -184,7 +193,6 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     }
 
     private fun startProgressUpdates() {
-        if (hostPaused) return
         if (!isProgressRunning) {
             isProgressRunning = true
             mainHandler.post(progressRunnable)

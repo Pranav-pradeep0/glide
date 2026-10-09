@@ -240,6 +240,31 @@ describe('Audio Player Utilities and Store', () => {
             expect(mockMMKVStore.get('@glide_audio_queue')).toBeUndefined();
         });
 
+        it('keeps a migrated queue even when this launch cannot resolve it', async () => {
+            NativeModules.MediaStoreAudioModule.getSongs.mockReturnValue(Promise.resolve([]));
+            AudioMediaService.invalidateCache();
+            mockMMKVStore.delete('@glide_audio_queue_ids');
+            mockMMKVStore.set('@glide_audio_queue', JSON.stringify([dummyTrack1, dummyTrack2]));
+            useAudioStore.setState({ queue: [], currentTrack: null });
+            await useAudioStore.getState().hydrateQueue();
+
+            // Nothing resolved, but the ids survive for the next launch.
+            expect(JSON.parse(mockMMKVStore.get('@glide_audio_queue_ids')!)).toEqual(['101', '102']);
+        });
+
+        it('restores a saved track the library does not know, so play still has it', async () => {
+            NativeModules.MediaStoreAudioModule.getSongs.mockReturnValue(Promise.resolve([dummyTrack1]));
+            AudioMediaService.invalidateCache();
+            const opened = { ...dummyTrack2, id: 'content://files/opened.mp3' };
+            mockMMKVStore.set('@glide_audio_queue_ids', JSON.stringify([opened.id]));
+            useAudioStore.setState({ queue: [], currentTrack: opened, currentIndex: 0 });
+            await useAudioStore.getState().hydrateQueue();
+
+            const state = useAudioStore.getState();
+            expect(state.queue.map((t) => t.id)).toEqual([opened.id]);
+            expect(state.queue[state.currentIndex].id).toBe(opened.id);
+        });
+
         it('preserves position when track index has not changed in _setTrackChanged', () => {
             useAudioStore.setState({
                 queue: [dummyTrack1, dummyTrack2],

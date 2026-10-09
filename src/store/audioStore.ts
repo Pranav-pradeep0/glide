@@ -13,6 +13,7 @@ const mmkv = createMMKV({ id: 'glide_audio_store_v1' });
 /** Pre-2.3 key: the whole queue as track JSON. Read once to migrate, then removed. */
 const LEGACY_QUEUE_KEY = '@glide_audio_queue';
 const QUEUE_IDS_KEY = '@glide_audio_queue_ids';
+const HYDRATION_TIMEOUT_MS = 5000;
 const PLAYBACK_KEY = '@glide_audio_playback_state';
 const CURRENT_TRACK_KEY = '@glide_audio_current_track';
 
@@ -64,8 +65,12 @@ function readPersistedIds(): string[] {
         const legacy = mmkv.getString(LEGACY_QUEUE_KEY);
         if (legacy) {
             const queue = JSON.parse(legacy) as AudioTrack[];
+            const ids = Array.isArray(queue) ? queue.map((t) => String(t.id)) : [];
+            // Converted in place, before anything can return early: the old key is only
+            // removed once its ids are safely under the new one.
+            mmkv.set(QUEUE_IDS_KEY, JSON.stringify(ids));
             mmkv.remove(LEGACY_QUEUE_KEY);
-            return Array.isArray(queue) ? queue.map((t) => String(t.id)) : [];
+            return ids;
         }
     } catch {
         // ignore
@@ -81,38 +86,59 @@ function readPersistedIds(): string[] {
  * is saved whole, so the mini player is right before this finishes.
  *
  * Without the audio permission there is no library to resolve against, and asking for it
- * at launch is not this function's business, so it simply does nothing.
+ * at launch is not this function's business, so only the saved current track is restored.
  */
 async function hydratePersistedQueue() {
     try {
         const ids = readPersistedIds();
-        if (ids.length === 0 || useAudioStore.getState().queue.length > 0) { return; }
-        if (!(await PermissionService.checkAudioPermission())) { return; }
+        if (useAudioStore.getState().queue.length > 0) { return; }
 
-        const byId = new Map((await AudioMediaService.getSongs()).map((s) => [String(s.id), s]));
-        const queue = ids.map((id) => byId.get(id)).filter((t): t is AudioTrack => !!t);
-        if (queue.length === 0) { return; }
+        let queue: AudioTrack[] = [];
+        if (ids.length > 0 && await PermissionService.checkAudioPermission()) {
+            const byId = new Map((await AudioMediaService.getSongs()).map((s) => [String(s.id), s]));
+            queue = ids.map((id) => byId.get(id)).filter((t): t is AudioTrack => !!t);
+        }
 
         const current = useAudioStore.getState();
         // Something started playing while the library was being read; leave it alone.
         if (current.queue.length > 0) { return; }
 
-        const byTrack = current.currentTrack
-            ? queue.findIndex((t) => String(t.id) === String(current.currentTrack!.id))
-            : -1;
-        const safeIndex = byTrack >= 0
+        const track = current.currentTrack;
+        const byTrack = track ? queue.findIndex((t) => String(t.id) === String(track.id)) : -1;
+        let safeIndex = byTrack >= 0
             ? byTrack
-            : Math.max(0, Math.min(current.currentIndex, queue.length - 1));
+            : Math.max(0, Math.min(current.currentIndex, queue.length));
+        // The mini player shows the saved current track whatever happens here, so it has to
+        // be in the queue for play to play it. It is missing when the library cannot resolve
+        // it -- a file opened from Files is saved under its content:// URL, not a MediaStore
+        // id -- or when it was deleted since.
+        if (track && byTrack < 0) {
+            queue = [...queue.slice(0, safeIndex), track, ...queue.slice(safeIndex)];
+        } else if (queue.length > 0) {
+            safeIndex = Math.min(safeIndex, queue.length - 1);
+        }
+        if (queue.length === 0) { return; }
+
         useAudioStore.setState({
             queue,
             currentIndex: safeIndex,
-            currentTrack: current.currentTrack || queue[safeIndex] || null,
+            currentTrack: track || queue[safeIndex] || null,
         });
     } catch {
         // ignore
     }
 }
-setTimeout(hydratePersistedQueue, 0);
+/**
+ * Settles once the saved queue is back. Queue actions wait on it: before it settles the
+ * queue is empty while the mini player already shows the saved track, so play would start
+ * an empty player and "play next" would replace the queue it was about to get back.
+ */
+const queueHydrated = new Promise<void>((resolve) => {
+    setTimeout(() => { hydratePersistedQueue().then(resolve); }, 0);
+    // A ceiling, so a native call that never settles cannot leave play dead for good.
+    const ceiling = setTimeout(resolve, HYDRATION_TIMEOUT_MS);
+    (ceiling as any)?.unref?.();
+});
 
 const safeInitialIndex = initialPlayback.currentIndex || 0;
 
@@ -375,6 +401,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     },
 
     playNext: async (track: AudioTrack) => {
+        await queueHydrated;
         const { queue, currentIndex } = get();
         if (queue.length === 0) {
             await get().playTrack(track);
@@ -397,6 +424,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     },
 
     addToQueue: async (track: AudioTrack) => {
+        await queueHydrated;
         const { queue } = get();
         if (queue.length === 0) {
             await get().playTrack(track);
@@ -547,6 +575,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     },
 
     togglePlayPause: async () => {
+        await queueHydrated;
         const { isPlaying, currentTrack, queue, currentIndex, position, shuffle, repeatMode, equalizerPreset } = get();
         if (!currentTrack) {
             if (queue.length > 0) {
