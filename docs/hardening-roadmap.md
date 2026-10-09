@@ -84,28 +84,37 @@ All three are green at `7bd7e0f`.
 
 ### `34ea9e4` perf(music): offload audio playback and stop the background ticker
 - DSP audio offload while the equalizer is flat (`GlideEqualizer.isFlat` decides, because
-  offload bypasses the audio session `audiofx.Equalizer` attaches to).
+  offload bypasses the audio session `audiofx.Equalizer` attaches to). Unverified: whether
+  an equalizer left attached at 0 dB still blocks offload on some devices.
 - The music player now builds the same `DefaultRenderersFactory` the video view does:
   `EXTENSION_RENDERER_MODE_ON` plus decoder fallback, so AC-3/E-AC-3/DTS/ALAC stop
   selecting no track and playing silently.
-- `GlideAudioPlayerModule` is a `LifecycleEventListener`: the 500 ms progress event stops
-  on host pause and pushes one position on resume.
+- `GlideAudioPlayerModule` is a `LifecycleEventListener`: in the background the progress
+  event slows from 500 ms to 5 s (not off -- `audioStore` saves the position from it, so a
+  killed app resumes close to where it was) and snaps back with one position on resume.
 - `audioStore` persists track **ids**, not records. Hydration resolves them against
-  MediaStore (needs the audio permission; does nothing without it) and migrates the old
-  `@glide_audio_queue` key once.
+  MediaStore; the saved current track is put back into the queue when the library cannot
+  resolve it (a file opened from Files, or a deleted song). The old `@glide_audio_queue`
+  key is converted to ids in place on first read. `togglePlayPause`, `playNext` and
+  `addToQueue` wait for hydration (5 s ceiling) so they never act on the empty queue.
 
 ### `75651bc` perf(player): keep background work out of playback's way
-- `setScrubbingModeEnabled(!exact)` in `GlidePlayerView.seekTo`.
-- New `BackgroundWork`: one thread at `THREAD_PRIORITY_BACKGROUND` for subtitle extract,
-  align, metadata, track listing and both MediaStore scans. **No cancellation** -- every
-  task owns a Promise that has to settle; see the `ponytail:` note in the file.
-- `MediaService.getLibrary` / `AudioMediaService.getSongs` share one in-flight scan.
+- `setScrubbingModeEnabled(!exact)` in `GlidePlayerView.seekTo`. The suppression it causes
+  is not reported as a pause (`onIsPlayingChanged`), and `setPaused` turns it off as a
+  backstop.
+- New `BackgroundWork` at `THREAD_PRIORITY_BACKGROUND`, two lanes: `submitLong` (one
+  thread) for subtitle extraction and alignment, `submit` (two threads) for scans,
+  metadata and track listing, so a long decode never stalls a screen. **No
+  cancellation** -- every task owns a Promise that has to settle; see the `ponytail:` note.
+- `MediaService.getLibrary` / `AudioMediaService.getSongs` share one in-flight scan. A
+  forced refresh or `invalidateCache` starts a new one, and only the newest may write the
+  cache.
 - Preferred audio languages seeded from the device locale before `prepare`. Subtitles use
   `setPreferredTextLanguageAndRoleFlagsToCaptioningManagerSettings`, deliberately: seeding
   a text language would switch subtitles on for everyone.
 - `useHapticFeedback` interpolates from the last position event with wall clock and the
-  playback rate. Paused it polls at 500 ms rather than stopping, so a seek while paused
-  still updates the cue.
+  playback rate, capped at 0.3 s so a stall or a resume cannot run cues ahead. Paused it
+  polls at 500 ms rather than stopping, so a seek while paused still updates the cue.
 - History: 20 s interval, a save on pause, and `prune()` capping at 500 entries while
   keeping anything bookmarked.
 
@@ -117,8 +126,11 @@ All three are green at `7bd7e0f`.
 - `getComponent` for VideoPlayer, NowPlaying, PlayerDetail, Onboarding, Search and the
   music detail screens. `freezeOnBlur` per screen -- **not** on `MainTabs`, because Now
   Playing is a transparent modal and the mini player keeps animating underneath it.
-- `ThumbnailService` memoises resolved paths and `cancelRequest` takes a token, so one
-  row giving up no longer strands another waiting on the same video.
+- `ThumbnailService` memoises resolved paths (hits only; a miss is retried) and
+  `cancelRequest` takes a token, so one row giving up no longer strands another waiting on
+  the same video. A key being generated keeps its entry, so a returning row joins it.
+  Known gap: a memoised `file://` path goes stale if Android trims the cache directory
+  mid-session.
 
 ### `dc3bba9` perf(build): halve the update download and drop dead build config
 - `useLegacyPackaging true`. arm64 release APK measured at **15.5 MB** after, against the
@@ -127,8 +139,11 @@ All three are green at `7bd7e0f`.
   release build verified green with them removed.
 - `project.ext.vectoricons`, the JSC flavour and the `<queries>` block deleted.
 - `react-native-markdown-display` replaced by `parseNotes` in `UpdateNotes.tsx`.
-- Proxy serves its last good release for an hour when GitHub fails.
-- CI: a `proxy` job (`tsc -p proxy`) and `zipalign -c -P 16 4` on the release APKs.
+- Proxy serves its last good release for an hour when GitHub fails, and waits 60 s
+  before asking GitHub again.
+- CI: a `proxy` job (`tsc -p proxy`), and a 16 KB check that reads every arm64 library's
+  ELF LOAD-segment alignment. Not `zipalign -P 16`: the libraries are compressed now, and
+  zip alignment says nothing about them. All 25 measured at 0x4000 today.
 
 ### Phase 5 remainder
 - `usePlayerHUD`: every `HIDE_*` returns the same state when already hidden, and

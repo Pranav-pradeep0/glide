@@ -279,14 +279,25 @@ jobs:
       - name: Verify 16 KB page alignment
         run: |
           set -e
-          # Android 15 and later run on 16 KB pages on some devices; a shared library that
-          # is not aligned to them simply will not load. Add -v to this when diagnosing a
-          # failure -- it prints every entry, which is why it is not on by default.
-          ZIPALIGN="$ANDROID_HOME/build-tools/37.0.0/zipalign"
-          for apk in android/app/build/outputs/apk/release/*.apk; do
-            echo "Checking $apk"
-            "$ZIPALIGN" -c -P 16 4 "$apk"
+          # Android 15 and later run on 16 KB pages on some arm64 devices, and a shared
+          # library whose LOAD segments are aligned to less will not load there at all.
+          #
+          # This reads the ELF headers, not the zip. The libraries are stored compressed
+          # (useLegacyPackaging) and extracted at install, so zip-level alignment
+          # (zipalign -P 16) says nothing about them; segment alignment is what the loader
+          # checks. 32-bit ARM has no 16 KB devices, so only arm64 is checked.
+          LIBS=$(mktemp -d)
+          unzip -q android/app/build/outputs/apk/release/app-arm64-v8a-release.apk 'lib/arm64-v8a/*' -d "$LIBS"
+          FAILED=0
+          for so in "$LIBS"/lib/arm64-v8a/*.so; do
+            for align in $(readelf -lW "$so" | awk '$1 == "LOAD" { print $NF }'); do
+              if (( align < 16384 )); then
+                echo "::error::$(basename "$so") has a LOAD segment aligned to $align, below 16 KB"
+                FAILED=1
+              fi
+            done
           done
+          exit $FAILED
 
       - name: Collect assets and checksums
         run: |
