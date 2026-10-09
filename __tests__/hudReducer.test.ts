@@ -24,3 +24,28 @@ describe('hudReducer UPDATE_ZOOM', () => {
     expect(next.zoom.scale).toBe(2.5);
   });
 });
+
+// Hiding a HUD that is already hidden used to allocate a new state object, and
+// showBrightnessHUD dispatches HIDE_VOLUME unconditionally -- so a brightness drag
+// re-rendered the whole player once per frame for nothing.
+
+describe('hudReducer HIDE actions', () => {
+  it('returns the identical state when the HUD is already hidden', () => {
+    for (const type of ['HIDE_SEEK', 'HIDE_BRIGHTNESS', 'HIDE_VOLUME', 'HIDE_SPEED', 'HIDE_RESIZE', 'HIDE_RIPPLE'] as const) {
+      expect(hudReducer(initialHUDState, { type })).toBe(initialHUDState);
+    }
+  });
+
+  it('still hides a HUD that is showing', () => {
+    const shown = hudReducer(initialHUDState, { type: 'SHOW_VOLUME', value: 0.8 });
+    const hidden = hudReducer(shown, { type: 'HIDE_VOLUME' });
+
+    expect(shown.volume.show).toBe(true);
+    expect(hidden.volume.show).toBe(false);
+  });
+
+  it('leaves the other HUDs untouched when one is hidden', () => {
+    const shown = hudReducer(initialHUDState, { type: 'SHOW_BRIGHTNESS', value: 0.4 });
+    expect(hudReducer(shown, { type: 'HIDE_VOLUME' })).toBe(shown);
+  });
+});

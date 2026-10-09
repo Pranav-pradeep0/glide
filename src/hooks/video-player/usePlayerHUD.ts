@@ -53,7 +53,11 @@ export function hudReducer(state: HUDState, action: HUDAction): HUDState {
                     side: action.side,
                 },
             };
+        // Every HIDE used to allocate a new state object whether or not the HUD was
+        // showing, and showBrightnessHUD dispatches HIDE_VOLUME unconditionally -- so a
+        // brightness drag re-rendered the whole player on every frame for nothing.
         case 'HIDE_SEEK':
+            if (!state.seek.show) {return state;}
             return {
                 ...state,
                 seek: { ...state.seek, show: false },
@@ -66,6 +70,7 @@ export function hudReducer(state: HUDState, action: HUDAction): HUDState {
                 brightness: { show: true, value: action.value },
             };
         case 'HIDE_BRIGHTNESS':
+            if (!state.brightness.show) {return state;}
             return {
                 ...state,
                 brightness: { ...state.brightness, show: false },
@@ -78,6 +83,7 @@ export function hudReducer(state: HUDState, action: HUDAction): HUDState {
                 volume: { show: true, value: action.value },
             };
         case 'HIDE_VOLUME':
+            if (!state.volume.show) {return state;}
             return {
                 ...state,
                 volume: { ...state.volume, show: false },
@@ -89,6 +95,7 @@ export function hudReducer(state: HUDState, action: HUDAction): HUDState {
             };
         case 'HIDE_SPEED':
             // ✅ FIX: Only hide the visual HUD, keep the current rate
+            if (!state.speed.show) {return state;}
             return {
                 ...state,
                 speed: { ...state.speed, show: false },
@@ -104,6 +111,7 @@ export function hudReducer(state: HUDState, action: HUDAction): HUDState {
                 resize: { show: true, mode: action.mode },
             };
         case 'HIDE_RESIZE':
+            if (!state.resize.show) {return state;}
             return {
                 ...state,
                 resize: { ...state.resize, show: false },
@@ -128,6 +136,7 @@ export function hudReducer(state: HUDState, action: HUDAction): HUDState {
                 ripple: { show: true, side: action.side, seconds: action.seconds, x: action.x, y: action.y, at: action.at },
             };
         case 'HIDE_RIPPLE':
+            if (!state.ripple.show) {return state;}
             return {
                 ...state,
                 ripple: { ...state.ripple, show: false },
@@ -196,23 +205,17 @@ export function usePlayerHUD(): UsePlayerHUDReturn {
             effectiveDirection = time > startTime ? 'forward' : 'backward';
         }
 
-        // OPTIMIZATION: If HUD is already showing with same static props, skip dispatch!
-        // The dynamic time is handled by SharedValues in VideoHUD, so we don't need to re-render React state.
-        const shouldSkipDispatch =
-            state.seek.show &&
-            state.seek.startTime === startTime &&
-            state.seek.direction === effectiveDirection &&
-            state.seek.side === side;
-
-        if (!shouldSkipDispatch) {
-            dispatch({
-                type: 'SHOW_SEEK',
-                time,
-                startTime,
-                direction: effectiveDirection,
-                side,
-            });
-        }
+        // The skip this used to do here read `state`, which the callback never listed as a
+        // dependency, so it was always the state from the first render and the check never
+        // fired. SHOW_SEEK makes exactly the same comparison against the live state and
+        // returns it unchanged, which costs no render -- so just dispatch.
+        dispatch({
+            type: 'SHOW_SEEK',
+            time,
+            startTime,
+            direction: effectiveDirection,
+            side,
+        });
 
         clearTimer('seek');
 

@@ -2,8 +2,9 @@
 
 Written for: the next agent session picking this up, and anyone reviewing the plan.
 
-Status as of commit `7bd7e0f` (2026-10-08). Phase 0 and most of Phase 5 are done and
-committed on `main`. Nothing below has been tested on a device.
+Status as of the Phase 3/4/5 commits (2026-10-09). Phases 0, 3, 4 and 5 are done and
+committed on `main`, bar the two items named under "Left undone". Nothing below has been
+tested on a device.
 
 ## Context that changes priorities
 
@@ -81,6 +82,66 @@ All three are green at `7bd7e0f`.
 - `useVideoSearch` now uses per-field selectors instead of subscribing to the whole store.
 - New JVM tests: `AudioRouteTest`, `GlideEqualizerTest`, `PlayerErrorPolicyTest`.
 
+### `34ea9e4` perf(music): offload audio playback and stop the background ticker
+- DSP audio offload while the equalizer is flat (`GlideEqualizer.isFlat` decides, because
+  offload bypasses the audio session `audiofx.Equalizer` attaches to).
+- The music player now builds the same `DefaultRenderersFactory` the video view does:
+  `EXTENSION_RENDERER_MODE_ON` plus decoder fallback, so AC-3/E-AC-3/DTS/ALAC stop
+  selecting no track and playing silently.
+- `GlideAudioPlayerModule` is a `LifecycleEventListener`: the 500 ms progress event stops
+  on host pause and pushes one position on resume.
+- `audioStore` persists track **ids**, not records. Hydration resolves them against
+  MediaStore (needs the audio permission; does nothing without it) and migrates the old
+  `@glide_audio_queue` key once.
+
+### `75651bc` perf(player): keep background work out of playback's way
+- `setScrubbingModeEnabled(!exact)` in `GlidePlayerView.seekTo`.
+- New `BackgroundWork`: one thread at `THREAD_PRIORITY_BACKGROUND` for subtitle extract,
+  align, metadata, track listing and both MediaStore scans. **No cancellation** -- every
+  task owns a Promise that has to settle; see the `ponytail:` note in the file.
+- `MediaService.getLibrary` / `AudioMediaService.getSongs` share one in-flight scan.
+- Preferred audio languages seeded from the device locale before `prepare`. Subtitles use
+  `setPreferredTextLanguageAndRoleFlagsToCaptioningManagerSettings`, deliberately: seeding
+  a text language would switch subtitles on for everyone.
+- `useHapticFeedback` interpolates from the last position event with wall clock and the
+  playback rate. Paused it polls at 500 ms rather than stopping, so a seek while paused
+  still updates the cue.
+- History: 20 s interval, a save on pause, and `prune()` capping at 500 entries while
+  keeping anything bookmarked.
+
+### `21dce13` perf(ui): stop lists re-rendering and defer screens past first frame
+- `VideoRow`/`VideoCard`/`ContinueCard` are generic over the item and hand it back, so
+  screens pass one stable callback. `TrackRow` takes the track back and is told whether
+  **it** is playing.
+- Entering springs removed from FlashList cells (they replayed on recycle).
+- `getComponent` for VideoPlayer, NowPlaying, PlayerDetail, Onboarding, Search and the
+  music detail screens. `freezeOnBlur` per screen -- **not** on `MainTabs`, because Now
+  Playing is a transparent modal and the mini player keeps animating underneath it.
+- `ThumbnailService` memoises resolved paths and `cancelRequest` takes a token, so one
+  row giving up no longer strands another waiting on the same video.
+
+### `dc3bba9` perf(build): halve the update download and drop dead build config
+- `useLegacyPackaging true`. arm64 release APK measured at **15.5 MB** after, against the
+  ~31 MB the roadmap recorded. Install size and cold start are still unmeasured.
+- Blanket R8 keeps for reanimated, svg, screens, safeareacontext and rnziparchive gone;
+  release build verified green with them removed.
+- `project.ext.vectoricons`, the JSC flavour and the `<queries>` block deleted.
+- `react-native-markdown-display` replaced by `parseNotes` in `UpdateNotes.tsx`.
+- Proxy serves its last good release for an hour when GitHub fails.
+- CI: a `proxy` job (`tsc -p proxy`) and `zipalign -c -P 16 4` on the release APKs.
+
+### Phase 5 remainder
+- `usePlayerHUD`: every `HIDE_*` returns the same state when already hidden, and
+  `showSeekHUD`'s stale-`state` skip is gone (`SHOW_SEEK` makes the same check correctly).
+- `ErrorBoundary` has `getDerivedStateFromError`, and the player screen has its own
+  boundary via the stack's `layout` prop, so a player crash leaves the navigator alive.
+- The forward references in `VideoPlayerScreen` (`bookmarksHook`, `player`, `tracksHook`)
+  go through refs filled right after the hooks run.
+- Cue eviction decided: `SubtitleCueStore`'s LRU of five is the bound, and the
+  `evict()` on unmount is gone -- it threw away the entry the LRU exists to keep.
+
+---
+
 ### Needs a device before trusting
 1. PiP: expand, and dismiss, with background play off.
 2. Video notification tap — from the library, and from "Open with".
@@ -88,61 +149,33 @@ All three are green at `7bd7e0f`.
 4. Volume boost on speaker, wired, Bluetooth, and after unplugging mid-boost.
 5. Fold/unfold on a foldable.
 6. Android 17 background audio: `adb shell cmd audio set-enable-hardening throw`.
+7. Audio offload: music on a device that supports it, then change an equalizer band and
+   confirm the change is audible (offload has to drop out for the effect to apply).
+8. Scrubbing mode: drag the scrubber across a long 4K file and watch for a stuck frame.
+9. Install size and cold start after `useLegacyPackaging`, against the previous release.
+10. The player error boundary: force a render crash and check the navigator survives.
+11. A queue restored from ids after a cold start, including one built from "Open with".
 
 ---
 
-## Phase 5 remainder (architecture)
+## Left undone
 
-- **`VideoPlayerScreen` is still a 1400-line god component.** Callbacks reference
-  `bookmarksHook` and `player` before declaration (~line 309) and only work because they
-  run later; a synchronous call during render would crash. Position, playing state and
-  tracks each live in two or three places (refs, shared values, React state, native).
-  A per-screen controller owning position/tracks/settings is the real fix. **Large and
-  risky — do it before adding big player features, not after.**
-- `usePlayerHUD` (`:178-227`): `showSeekHUD` reads stale `state` so its skip check never
-  fires; `HIDE_*` always allocates new state, so `showBrightnessHUD` forces a full-screen
-  render via a pointless `HIDE_VOLUME`.
-- One `ErrorBoundary` for the whole app, and no `getDerivedStateFromError`. A player
-  render crash replaces the navigator and Reset remounts into the same crash.
-- Robolectric test for `GlidePlayerHolder` start/clear/attach order — it would have caught
-  the service race fixed in `8221a3a`.
-- Comment at `VideoPlayerScreen:~896` contradicts `usePlayerTracks.ts:263-267` about cue
-  eviction on unmount; decide the policy.
+1. **`VideoPlayerScreen` is still a 1400-line god component.** The forward-reference
+   hazard is fixed, but position, playing state and tracks still live in two or three
+   places each (refs, shared values, React state, native). A per-screen controller is the
+   real fix, and it is the one item here that cannot be checked without a device. Do it
+   before adding big player features, not after.
+2. **No Robolectric test for `GlidePlayerHolder`.** Covering the start/clear/attach
+   ordering needs Robolectric plus a real `GlidePlayerService` (whose `onCreate` builds a
+   `MediaLibrarySession`), which is a heavyweight new test dependency and a slower CI run
+   for one ordering case. The decision is reversible; it is recorded here rather than
+   taken silently.
+3. **No Baseline Profile or Macrobenchmark module.** Generating a profile needs a device,
+   so the module would be scaffolding that nothing runs until one is available.
+4. `runOnJS` -> `scheduleOnRN` (63 call sites) skipped, as the roadmap itself rated it:
+   mechanical, low value.
 
-## Phase 3 (performance and battery)
-
-- **Music player** (`GlidePlayerService.kt:62`): audio offload when the EQ is flat (biggest
-  background-battery win), `EXTENSION_RENDERER_MODE_ON` (AC-3/ALAC play silently today),
-  and a `DefaultRenderersFactory` with decoder fallback — video has it, music does not.
-- **Background progress events**: `GlideAudioPlayerModule` emits every 500 ms regardless of
-  app state. Stop the ticker on host pause, push one position on resume.
-- **History writes**: rewritten in full every 2 s during playback and never pruned. Cap at
-  ~500 entries (keep any with bookmarks), save on pause/background/exit plus every 15–30 s.
-  Add `freezeOnBlur: true` so `AlbumVideosScreen` and `RecentsScreen` stop re-rendering
-  underneath the player.
-- **Audio queue**: `audioStore` persists full track JSON — tapping one song in a 5k library
-  stringifies ~2 MB on the JS thread. Persist ids only; native already has `setQueueByIds`.
-- **Scrubbing**: `ExoPlayer.setScrubbingModeEnabled(true)` while dragging instead of ~25
-  flushing `CLOSEST_SYNC` seeks per second (`GlidePlayerView.kt:597-613`).
-- **Background work competing with playback**: subtitle extraction and `alignVideo` each
-  spawn a bare `thread {}` at normal priority with no cancellation, reading the same file
-  being played. Use one single-thread executor at `THREAD_PRIORITY_BACKGROUND` with a
-  cancel flag. Same for library scans (`MediaStoreVideoModule.kt:245,384`,
-  `MediaStoreAudioModule.kt:296`) — coalesce repeated scans.
-- **Thumbnails**: cache check before the ContentResolver query; drop stale requests (or
-  LIFO) so fast scrolling does not queue hundreds of decodes for off-screen rows.
-  `ThumbnailService.cancelRequest` also deletes *every* waiter for a key, so a video shown
-  twice leaves one caller's promise unresolved.
-- **Startup**: `getComponent={() => require(...)}` for VideoPlayer, NowPlaying,
-  PlayerDetail, Onboarding, Search — all are evaluated before first frame today.
-- **Lists**: inline `onPress`/`onMore` closures defeat `VideoRow`/`TrackRow` memo;
-  `renderTrackItem` depends on `isPlaying` so every visible row re-renders on play/pause;
-  `VideoRow.tsx:306-314` runs a Reanimated `entering` spring inside FlashList cells.
-- **Track selection**: seed `setPreferredAudioLanguages` / `setPreferredTextLanguages` so
-  playback does not start on the container default and switch audibly after load.
-- **Subtitle timing**: `useHapticFeedback.ts:95-117` polls every 250 ms off a ref updated
-  by 250 ms events — up to ~500 ms late. Interpolate instead, and stop while paused.
-- `runOnJS` → `scheduleOnRN` (63 call sites, 16 files). Mechanical, low value.
+---
 
 ## Phase 1 (security) — not started, highest severity first
 
@@ -181,8 +214,6 @@ All three are green at `7bd7e0f`.
 
 - Playback errors show raw codes (`ERROR_CODE_DECODING_FORMAT_UNSUPPORTED`) in a red box
   with no action. Map ~8 codes to plain language; add Retry / Next / Open with.
-- **HLS/DASH missing**: the manifest advertises `.m3u8` but `media3-exoplayer-hls` and
-  `-dash` are not dependencies, so it cannot play. Two Gradle lines.
 - Subtitle failures are silent (`TrackSelector.tsx:405-407, 470-474, 487-491`); use the
   existing `showSnackbar`. Offline search shows "No results", which is misleading.
 - Subtitle picker `type: ['text/*', ...]` greys out valid `.srt`/`.ass` labelled
@@ -198,29 +229,9 @@ All three are green at `7bd7e0f`.
 - `ApkInstallerModule.kt:149-158`: if the app is backgrounded when the download finishes,
   `startActivity` is silently blocked, `pendingPromise` never settles, and every later
   attempt gets `INSTALL_BUSY` until the process dies.
-- `FilenameParser.ts:111-118` mangles non-Latin titles (`[^a-zA-Z0-9]`); use
-  `/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu`.
 - `LyricsService.ts:196-202` caches `null` on network failure, so lyrics stay missing all
   session.
 - `picked_subtitle_*` cache files are never deleted (cleanup only matches `^subtitle_\d+`).
-
-## Phase 4 (build and size)
-
-- **Update download is 31 MB.** `.so` files are stored uncompressed (22.6 MB);
-  `packaging { jniLibs { useLegacyPackaging true } }` would take the APK to ~14 MB. Every
-  update is a full APK over mobile data. Measure install size/time before committing.
-- Remove the remaining blanket R8 keeps (reanimated, svg, screens, safeareacontext,
-  rnziparchive) — the libraries ship consumer rules. Stale rules:
-  `com.lugg.ReactNativeConfig.**` (real package is `com.lugg.RNCConfig`) and `com.rnfs.**`
-  (real package is `com.drpogodin.reactnativefs`).
-- `Feather.ttf` is packaged twice (assets + res); remove the `<queries>` block, `jscFlavor`
-  and the dead `project.ext.vectoricons`.
-- CI: add `zipalign -c -P 16 -v 4`, and a `proxy` job (`tsc -p proxy` + smoke test) —
-  `proxy/` is excluded from tsconfig and never typechecked.
-- Baseline Profile + Macrobenchmark module (cold start, library list, opening the player).
-- Replace `react-native-markdown-display` (abandoned 2021, pulls markdown-it 10 with
-  high-severity advisories). Delete `integrate-lock.json` (lists VLC, axios, RN 0.78).
-- Proxy caches nothing on GitHub failure, so a rate limit makes every client hit upstream.
 
 ## Phase 6 (UX and accessibility)
 

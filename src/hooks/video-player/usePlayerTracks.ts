@@ -259,12 +259,9 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         };
     }, [selectedSubtitleTrackIndex, videoPath, subtitleTracks]);
 
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            SubtitleCueStore.evict(videoPath);
-        };
-    }, [videoPath]);
+    // Nothing is evicted on unmount. SubtitleCueStore is an LRU of five videos, and that
+    // is the memory bound; evicting here threw away the very entry it exists to keep, so
+    // going back into a video you just left re-extracted its subtitles from scratch.
 
     const selectSubtitleTrack = useCallback((trackIndex: number | null) => {
         setSelectedSubtitleTrackIndex(trackIndex);

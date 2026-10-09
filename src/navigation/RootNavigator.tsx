@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { DefaultTheme, NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import { DefaultTheme, NavigationContainer, NavigationContainerRef, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useAppStore } from '../store/appStore';
@@ -8,7 +8,8 @@ import { Feather } from '@react-native-vector-icons/feather';
 import { DeepLinkService } from '../services/DeepLinkService';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { Touchable, SnackbarHost } from '@/components/ui';
+import { Button, Touchable, SnackbarHost } from '@/components/ui';
+import { ErrorBoundary } from '../../ErrorBoundary';
 import { metrics, type } from '@/theme/theme';
 
 // The four tabs are what the first frame needs, so they are imported.
@@ -27,6 +28,32 @@ import { AudioTrack, MainTabParamList, RootStackParamList } from '@/types';
 import { useAudioStore } from '@/store/audioStore';
 import { AudioMediaService } from '@/services/AudioMediaService';
 import { PermissionService } from '@/services/PermissionService';
+
+/**
+ * The player gets its own error boundary.
+ *
+ * There is one boundary at the root of the app, and a render crash inside the player used
+ * to hit that one: the fallback replaced the whole navigator, and its Try Again remounted
+ * straight back into the same crash. Here the navigator survives, and the way out is back
+ * to the library.
+ */
+function PlayerCrashFallback({ error }: { error: Error }) {
+    const { colors } = useTheme();
+    const navigation = useNavigation();
+    return (
+        <View style={[styles.playerCrash, { backgroundColor: colors.background }]}>
+            <Text style={[type.heading, { color: colors.text }]}>This video could not be played</Text>
+            <Text style={[type.caption, styles.playerCrashDetail, { color: colors.textSecondary }]}>
+                {error.message}
+            </Text>
+            <Button label="Back to library" variant="primary" onPress={() => navigation.goBack()} />
+        </View>
+    );
+}
+
+const playerLayout = ({ children }: { children: React.ReactNode }) => (
+    <ErrorBoundary fallback={PlayerCrashFallback}>{children}</ErrorBoundary>
+);
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -280,6 +307,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                         />
                         <Stack.Screen
                             name="VideoPlayer"
+                            layout={playerLayout}
                             getComponent={() => require('@/screens/VideoPlayerScreen').default}
                             options={{
                                 headerShown: false,
@@ -342,4 +370,6 @@ const styles = StyleSheet.create({
     pillFill: { ...StyleSheet.absoluteFill, borderRadius: 16 },
     label: { fontWeight: '500' },
     badge: { position: 'absolute', top: -2, right: -4, width: 8, height: 8, borderRadius: 4 },
+    playerCrash: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: metrics.space.xl, gap: metrics.space.md },
+    playerCrashDetail: { textAlign: 'center' },
 });

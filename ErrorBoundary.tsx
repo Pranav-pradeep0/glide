@@ -33,7 +33,18 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         this.state = { error: null, errorInfo: null };
     }
 
-    // This lifecycle method is called when an error is thrown in a child component
+    /**
+     * Switches to the fallback during the render that failed.
+     *
+     * componentDidCatch alone is a commit-phase setState: React has already thrown away
+     * the tree by then, and a boundary without this is the documented way to end up with a
+     * blank screen instead of a fallback.
+     */
+    static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+        return { error };
+    }
+
+    // Called after the fallback is already on screen; this is where the logging goes.
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
         console.error('[ErrorBoundary] Caught an error:', error, errorInfo);
         this.setState({ error, errorInfo });

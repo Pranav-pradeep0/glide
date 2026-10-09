@@ -53,6 +53,8 @@ import {
     ShakeDetector,
     formatTime,
     PLAYER_CONSTANTS,
+    UsePlayerCoreReturn,
+    UsePlayerTracksReturn,
 } from '@/hooks/video-player';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
 import { useTheme } from '@/hooks/useTheme';
@@ -306,11 +308,25 @@ export default function VideoPlayerScreen({ route }: Props) {
     // PLAYER HOOKS (ORDER MATTERS - dependencies flow down)
     // ========================================================================
 
+    /**
+     * The hooks below need each other in both directions: settings needs the toast that
+     * bookmarks owns, the core player needs the track setters, and bookmarks needs the
+     * player. Only one declaration order is possible, so the backward references go
+     * through these, filled immediately after the hooks have run.
+     *
+     * They used to be read straight off the later `const`s, which works only because every
+     * one of those callbacks happens to run after mount. Any hook that called one while
+     * initialising would have thrown a ReferenceError.
+     */
+    const playerRef = useRef<UsePlayerCoreReturn | null>(null);
+    const tracksRef = useRef<UsePlayerTracksReturn | null>(null);
+    const showToastRef = useRef<(message: string) => void>(() => { });
+
     // Settings hook (independent, needed by other hooks)
     const settingsHook = usePlayerSettings({
-        showToast: (message) => bookmarksHook.showToastWithMessage(message),
+        showToast: (message) => showToastRef.current(message),
         onSleepTimerEnd: () => {
-            player.stop();
+            playerRef.current?.stop();
             navigation.goBack();
         },
         initialAudioDelay,
@@ -324,12 +340,12 @@ export default function VideoPlayerScreen({ route }: Props) {
         repeat: settingsHook.settings.repeat,
         sleepTimer: settingsHook.settings.sleepTimer,
         onSleepTimerEnd: () => {
-            player.stop();
+            playerRef.current?.stop();
             navigation.goBack();
         },
         onProgressSave: () => savePlaybackRef.current(),
-        onAudioTracksLoaded: (tracks) => tracksHook.setAudioTracksFromNative(tracks),
-        onSubtitleTracksLoaded: (tracks) => tracksHook.setSubtitleTracksFromPlayer(tracks),
+        onAudioTracksLoaded: (tracks) => tracksRef.current?.setAudioTracksFromNative(tracks),
+        onSubtitleTracksLoaded: (tracks) => tracksRef.current?.setSubtitleTracksFromPlayer(tracks),
         initialPaused: false,
         playbackRate: effectivePlaybackRate,
     });
@@ -392,6 +408,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         defaultAudioLanguage: defaultAudioLanguage,
     });
 
+    playerRef.current = player;
+    tracksRef.current = tracksHook;
+
     // Bookmarks hook (needs player for seek)
     const bookmarksHook = usePlayerBookmarks({
         videoPath,
@@ -400,6 +419,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         currentTimeRef: player.currentTimeRef,
         onSeekToBookmark: player.commitSeek,
     });
+
+    showToastRef.current = bookmarksHook.showToastWithMessage;
 
     const { runAutoSync, autoSyncRunning } = useSubtitleAutoSync({
         videoPath,
@@ -906,14 +927,6 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
     // LIFECYCLE EFFECTS
     // ========================================================================
-
-    // Initial tracks loading
-    useEffect(() => {
-        // We no longer call evict() on unmount here.
-        // Memory is managed by SubtitleCueStore's LRU (Limit: 5 videos)
-        // and files are deleted instantly after parsing.
-        // This makes backtracking to Details screen instant without FFmpeg.
-    }, []);
 
     // Update insets ref when controls are visible
     useEffect(() => {
