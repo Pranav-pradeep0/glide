@@ -20,9 +20,9 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.glide.app.player.BackgroundWork
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.concurrent.thread
 
 class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -294,7 +294,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getSongs(promise: Promise) {
-        thread(name = "glide-audio-songs-scan") {
+        BackgroundWork.submit {
             try {
                 ensureObserver(reactContext)
                 // A full scan is the fresh truth; drop records for songs that are gone.

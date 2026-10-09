@@ -41,6 +41,26 @@ interface VideoHistoryState {
     persistNow: () => void;
 }
 
+/**
+ * Every entry is rewritten on every save, so the whole file is the cost of one position
+ * update. Nothing ever removed an entry, so a year of watching turned a 2 ms write into a
+ * visible one. Oldest first, and anything with a bookmark stays however old it is: a
+ * bookmark is something the user made, a resume position is not.
+ */
+const MAX_HISTORY_ENTRIES = 500;
+
+export function prune(history: Map<string, VideoHistoryEntry>): VideoHistoryEntry[] {
+    const all = Array.from(history.values());
+    if (all.length <= MAX_HISTORY_ENTRIES) {return all;}
+
+    const kept = all.filter((e) => e.bookmarks.length > 0);
+    const rest = all
+        .filter((e) => e.bookmarks.length === 0)
+        .sort((a, b) => b.lastWatchedTime - a.lastWatchedTime)
+        .slice(0, Math.max(0, MAX_HISTORY_ENTRIES - kept.length));
+    return [...kept, ...rest];
+}
+
 // Batch persistence to reduce writes
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let persistRaf: number | null = null;
@@ -412,8 +432,7 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
     persistToStorage: () => {
         try {
             const state = get();
-            const dataToSave = Array.from(state.history.values());
-            mmkv.set(HISTORY_KEY, JSON.stringify(dataToSave));
+            mmkv.set(HISTORY_KEY, JSON.stringify(prune(state.history)));
         } catch (error) {
             console.error('[VideoHistoryStore] Persist error:', error);
         }

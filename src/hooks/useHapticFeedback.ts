@@ -1,4 +1,4 @@
-import { MutableRefObject, useEffect, useRef } from 'react';
+import { MutableRefObject, useCallback, useEffect, useRef } from 'react';
 import { SubtitleCue } from '../types';
 import { HapticEngineService } from '../services/HapticEngineService';
 import { HapticPatternGenerator } from '../services/HapticPatternGenerator';
@@ -12,6 +12,8 @@ export interface UseHapticFeedbackProps {
     hapticCues?: SubtitleCue[];
     isPlaying: boolean;
     subtitleDelay?: number; // in milliseconds
+    /** Playback rate, so interpolation between position events tracks the real clock. */
+    playbackRate?: number;
     onSubtitleCueChange?: (cue: SubtitleCue | null) => void;
 }
 
@@ -28,6 +30,7 @@ export function useHapticFeedback({
     hapticCues,
     isPlaying,
     subtitleDelay = 0,
+    playbackRate = 1,
     onSubtitleCueChange,
 }: UseHapticFeedbackProps) {
     const lastProcessedCueIndex = useRef<number>(-1);
@@ -35,6 +38,23 @@ export function useHapticFeedback({
     const cueCursorRef = useRef<number>(0);
     const lastDisplayCueRef = useRef<SubtitleCue | null>(null);
     const engine = HapticEngineService.getInstance();
+
+    // currentTimeRef only moves when a native progress event lands, every 250 ms. Reading
+    // it straight was up to a whole event late on top of this timer's own interval -- half
+    // a second of drift on a subtitle, and far too much for a haptic meant to land on a
+    // door slam. Wall-clock since the last event closes the gap.
+    const lastEventTimeRef = useRef(0);
+    const lastEventAtRef = useRef(0);
+    const readTime = useCallback((playing: boolean, rate: number) => {
+        const reported = currentTimeRef.current;
+        if (reported !== lastEventTimeRef.current) {
+            lastEventTimeRef.current = reported;
+            lastEventAtRef.current = Date.now();
+        }
+        if (!playing) {return reported;}
+        const elapsed = (Date.now() - lastEventAtRef.current) / 1000;
+        return reported + elapsed * rate;
+    }, [currentTimeRef]);
 
     // Determine cues to use for haptics (WYSIWYG: display cues take priority, fallback to haptic cues)
     const effectiveHapticCues = subtitleCues.length > 0 ? subtitleCues : (hapticCues || []);
@@ -90,12 +110,13 @@ export function useHapticFeedback({
             return null;
         };
 
-        // When haptics are active, run at 125ms for tight tactile timing;
-        // otherwise 250ms is sufficient for subtitle display and saves battery.
-        const intervalMs = (hasHaptics && isPlaying) ? 125 : 250;
+        // 125 ms while haptics are live, for tactile timing; 250 ms for subtitles alone.
+        // Paused, nothing moves except a seek, so 500 ms is enough to pick that up and the
+        // timer stops being a wakeup four times a second for an unchanging number.
+        const intervalMs = !isPlaying ? 500 : (hasHaptics ? 125 : 250);
 
         const intervalId = setInterval(() => {
-            const effectiveTime = currentTimeRef.current - (subtitleDelay / 1000);
+            const effectiveTime = readTime(isPlaying, playbackRate) - (subtitleDelay / 1000);
 
             // 1. Subtitle display synchronization
             if (hasSubtitles) {
@@ -154,6 +175,8 @@ export function useHapticFeedback({
         hasSubtitles,
         isPlaying,
         onSubtitleCueChange,
+        playbackRate,
+        readTime,
         subtitleCues,
         subtitleDelay,
     ]);

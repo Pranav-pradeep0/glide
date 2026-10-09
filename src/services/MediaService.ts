@@ -29,6 +29,8 @@ export interface VideoPageResult {
 class MediaServiceClass {
     private libraryCache: MediaLibraryResult | null = null;
     private libraryCacheTimestamp = 0;
+    /** The scan currently running, shared by everyone who asks while it is in flight. */
+    private inflightLibrary: Promise<MediaLibraryResult> | null = null;
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000;
 
     private get module() {
@@ -77,19 +79,31 @@ class MediaServiceClass {
             return this.libraryCache;
         }
 
-        try {
-            const result = await this.module.getLibrary();
-            const data: MediaLibraryResult = {
-                videos: (result?.videos || []) as VideoFile[],
-                folders: (result?.folders || []) as VideoFolder[],
-            };
-            this.libraryCache = data;
-            this.libraryCacheTimestamp = Date.now();
-            return data;
-        } catch (error) {
-            console.error('[MediaService] Failed to load library:', error);
-            return this.libraryCache ?? { videos: [], folders: [] };
+        // Screens mount together and each asks for the library, all before the first
+        // answer lands, so the TTL cache is still empty and every one of them used to run
+        // its own full MediaStore scan. They share this one instead.
+        if (this.inflightLibrary) {
+            return this.inflightLibrary;
         }
+
+        this.inflightLibrary = (async () => {
+            try {
+                const result = await this.module.getLibrary();
+                const data: MediaLibraryResult = {
+                    videos: (result?.videos || []) as VideoFile[],
+                    folders: (result?.folders || []) as VideoFolder[],
+                };
+                this.libraryCache = data;
+                this.libraryCacheTimestamp = Date.now();
+                return data;
+            } catch (error) {
+                console.error('[MediaService] Failed to load library:', error);
+                return this.libraryCache ?? { videos: [], folders: [] };
+            } finally {
+                this.inflightLibrary = null;
+            }
+        })();
+        return this.inflightLibrary;
     }
 
     /**

@@ -4,6 +4,8 @@ import { PermissionService } from './PermissionService';
 
 class AudioMediaServiceClass {
     private songsCache: AudioTrack[] | null = null;
+    /** The scan currently running, shared by everyone who asks while it is in flight. */
+    private inflightSongs: Promise<AudioTrack[]> | null = null;
 
     private get module() {
         return NativeModules.MediaStoreAudioModule;
@@ -34,14 +36,25 @@ class AudioMediaServiceClass {
             return this.songsCache;
         }
 
-        try {
-            const songs: AudioTrack[] = await this.module.getSongs();
-            this.songsCache = songs;
-            return songs;
-        } catch (error) {
-            console.error('[AudioMediaService] Failed to load songs:', error);
-            return this.songsCache ?? [];
+        // The Music tab, the mini player and the queue hydration all ask at once on a cold
+        // start, before the cache exists. One scan answers all of them.
+        if (this.inflightSongs) {
+            return this.inflightSongs;
         }
+
+        this.inflightSongs = (async () => {
+            try {
+                const songs: AudioTrack[] = await this.module.getSongs();
+                this.songsCache = songs;
+                return songs;
+            } catch (error) {
+                console.error('[AudioMediaService] Failed to load songs:', error);
+                return this.songsCache ?? [];
+            } finally {
+                this.inflightSongs = null;
+            }
+        })();
+        return this.inflightSongs;
     }
 
     groupAlbums(songs: AudioTrack[]): AudioAlbum[] {

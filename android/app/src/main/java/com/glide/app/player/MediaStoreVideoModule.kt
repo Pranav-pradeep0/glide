@@ -21,7 +21,6 @@ import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.concurrent.thread
 
 @ReactModule(name = MediaStoreVideoModule.NAME)
 class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
@@ -280,7 +279,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getLibrary(promise: Promise) {
-        thread(name = "glide-video-library-scan") {
+        BackgroundWork.submit {
             try {
                 val resolver = reactContext.contentResolver
                 val selection = "${MediaStore.Video.Media.SIZE} > 0"
@@ -419,7 +418,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getVideos(bucketId: String?, promise: Promise) {
-        thread(name = "glide-video-bucket-scan") {
+        BackgroundWork.submit {
             try {
                 val resolver = reactContext.contentResolver
                 val selection = if (!bucketId.isNullOrEmpty()) {

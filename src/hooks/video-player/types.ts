@@ -18,7 +18,10 @@ export const PLAYER_CONSTANTS = {
     SPEED_HUD_HIDE_MS: 1500,
     CONTROLS_AUTO_HIDE_MS: 3000,
     BUFFERING_TIMEOUT_MS: 300,
-    PROGRESS_SAVE_INTERVAL_MS: 2000,
+    // The resume position, not a recording of where you are. Every tick rewrites the
+    // whole history file, and exit, pause and backgrounding all save anyway, so the only
+    // thing this interval protects against is the process being killed outright.
+    PROGRESS_SAVE_INTERVAL_MS: 20000,
     RESUME_DELAY_MS: 100,
     // Gesture thresholds
     SEEK_SENSITIVITY: 0.10,

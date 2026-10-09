@@ -585,6 +585,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         hapticCues: tracksHook.hapticCues,
         isPlaying: player.state.isPlaying,
         subtitleDelay: settingsHook.settings.subtitleDelay,
+        playbackRate: effectivePlaybackRate,
     });
 
     // ========================================================================
@@ -965,7 +966,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         }
     }, [player.state.isPlaying, videoPath, videoName, contentUri, incrementViewCount]);
 
-    // Periodic progress save
+    // Periodic progress save, plus one on pause -- which is where the interval's cleanup
+    // runs, and the moment the position is worth keeping. The interval itself only has to
+    // cover the app being killed outright mid-playback.
     useEffect(() => {
         if (!player.state.isPlaying || !videoPath || !videoName) {return;}
 
@@ -973,7 +976,10 @@ export default function VideoPlayerScreen({ route }: Props) {
             savePlaybackProgress();
         }, PLAYER_CONSTANTS.PROGRESS_SAVE_INTERVAL_MS);
 
-        return () => clearInterval(intervalId);
+        return () => {
+            clearInterval(intervalId);
+            savePlaybackProgress();
+        };
     }, [player.state.isPlaying, videoPath, videoName, savePlaybackProgress]);
 
     // Cleanup on unmount

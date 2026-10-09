@@ -598,6 +598,13 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             .build()
     }
 
+    /** The user's language order, most preferred first. Empty when the list is unreadable. */
+    private fun deviceLanguages(): Array<String> {
+        val locales = context.resources.configuration.locales
+        return (0 until locales.size()).mapNotNull { locales[it]?.language?.takeIf(String::isNotEmpty) }
+            .toTypedArray()
+    }
+
     fun setProgressUpdateInterval(intervalMs: Long) {
         progressIntervalMs = intervalMs
         progressHandler.removeCallbacks(progressTick)
@@ -611,6 +618,10 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
      * spot twice (two jumps back that both clamp to 0:00) works. `exact = false` is the
      * scrubber's live preview, issued every 40 ms; CLOSEST_SYNC keeps each one cheap and
      * the committed seek that follows is EXACT.
+     *
+     * `exact = false` also means a drag is in progress, which is what scrubbing mode is
+     * for: it keeps the codec configured between seeks instead of flushing and re-priming
+     * it ~25 times a second, and turns itself off on the committed seek.
      */
     fun seekTo(positionMs: Long, exact: Boolean) {
         val p = player ?: return
@@ -624,6 +635,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         if (p.playbackState == Player.STATE_IDLE) {
             p.prepare()
         }
+        p.setScrubbingModeEnabled(!exact)
         p.setSeekParameters(if (exact) SeekParameters.EXACT else SeekParameters.CLOSEST_SYNC)
         val target = positionMs.coerceIn(0L, duration)
         Log.d(TAG, "seek to ${target}ms of ${duration}ms exact=$exact")
@@ -693,6 +705,17 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(wakeMode)
+            .build()
+
+        // Seeded before prepare, so the first track selection is already the right one.
+        // Without this a dual-audio file starts on whichever track the container lists
+        // first and switches audibly a moment later, once JS has read the track list and
+        // sent its choice back. Subtitles follow the system captioning setting -- off
+        // unless the user turned captions on in Android's accessibility settings -- rather
+        // than a language guess that would switch them on for everyone.
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .setPreferredAudioLanguages(*deviceLanguages())
+            .setPreferredTextLanguageAndRoleFlagsToCaptioningManagerSettings(context)
             .build()
 
         player = p
