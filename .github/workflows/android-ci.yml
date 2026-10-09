@@ -18,6 +18,33 @@ env:
   AI_PROXY_URL: ${{ vars.AI_PROXY_URL }}
 
 jobs:
+  # `proxy/` is its own TypeScript project, excluded from the app's tsconfig, so the app's
+  # typecheck never looked at it. It is the Worker that stands between every install and
+  # Groq, GitHub and the subtitle APIs.
+  proxy:
+    name: Proxy (typecheck)
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: proxy-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Typecheck proxy
+        run: npx tsc -p proxy --noEmit
+
   verify:
     name: Verify (typecheck, lint, tests, release build)
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -248,6 +275,18 @@ jobs:
             -PMYAPP_UPLOAD_KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}" \
             -PMYAPP_UPLOAD_STORE_PASSWORD="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             -PMYAPP_UPLOAD_KEY_PASSWORD="${{ secrets.ANDROID_KEY_PASSWORD }}"
+
+      - name: Verify 16 KB page alignment
+        run: |
+          set -e
+          # Android 15 and later run on 16 KB pages on some devices; a shared library that
+          # is not aligned to them simply will not load. Add -v to this when diagnosing a
+          # failure -- it prints every entry, which is why it is not on by default.
+          ZIPALIGN="$ANDROID_HOME/build-tools/37.0.0/zipalign"
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            echo "Checking $apk"
+            "$ZIPALIGN" -c -P 16 4 "$apk"
+          done
 
       - name: Collect assets and checksums
         run: |

@@ -161,9 +161,24 @@ async function handleRecap(request: Request, env: Env): Promise<Response> {
 // offered updates. Here GitHub is called with a token, and answers are reused for a few
 // minutes. In-isolate memory, because the Cache API is a no-op on workers.dev.
 const RELEASE_CACHE_MS = 5 * 60 * 1000;
+/**
+ * How long a cached answer keeps being served once GitHub starts failing. A rate limit or
+ * an outage otherwise turned every client into an upstream call at the worst moment --
+ * exactly when the cache was the only thing that could have absorbed it.
+ */
+const RELEASE_STALE_MS = 60 * 60 * 1000;
 const RELEASE_TIMEOUT_MS = 8000;
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
 let releaseCache: { at: number; body: string } | null = null;
+
+/** The last good answer, while it is recent enough to be worth more than an error. */
+function stale(cache: typeof releaseCache): Response | null {
+    if (!cache || Date.now() - cache.at >= RELEASE_STALE_MS) {return null;}
+    logRoute('release', 200);
+    return new Response(cache.body, {
+        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+    });
+}
 
 async function handleLatestRelease(env: Env): Promise<Response> {
     const repo = env.RELEASE_REPO ?? '';
@@ -193,7 +208,7 @@ async function handleLatestRelease(env: Env): Promise<Response> {
     });
     if (!upstream.ok) {
         logUpstreamFailure('release', upstream.status);
-        return err(502, 'Release service unavailable.');
+        return stale(releaseCache) ?? err(502, 'Release service unavailable.');
     }
 
     const data = await upstream.json() as {
@@ -229,6 +244,8 @@ export default {
                 return await handleLatestRelease(env);
             } catch (error) {
                 const timedOut = error instanceof Error && error.name === 'TimeoutError';
+                const cached = stale(releaseCache);
+                if (cached) {return cached;}
                 logRoute('release', timedOut ? 504 : 502);
                 return timedOut ? err(504, 'Request timed out.') : err(502, 'Upstream service error.');
             }

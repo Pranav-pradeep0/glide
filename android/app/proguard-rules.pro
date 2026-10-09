@@ -20,23 +20,11 @@
 # Hermes
 -keep class com.facebook.hermes.unicode.** { *; }
 
-# Reanimated
--keep class com.swmansion.reanimated.** { *; }
-
-# React Native SVG
--keep class com.horcrux.svg.** { *; }
-
-# Safe Area Context
--keep class com.th3rdwave.safeareacontext.** { *; }
-
-# React Native Screens
--keep class com.swmansion.rnscreens.** { *; }
-
-
-# React Native FS
-
-# React Native Zip Archive
--keep class com.rnziparchive.** { *; }
+# Reanimated, SVG, Screens, Safe Area Context and Zip Archive each used to be kept whole
+# here. All of them ship consumer ProGuard rules in their own AARs, which R8 applies
+# automatically and which keep only what reflection actually reaches -- so these blanket
+# keeps did nothing but hold entire packages in the APK. Two of them named packages that
+# no longer exist (com.lugg.ReactNativeConfig, com.rnfs) and so kept nothing at all.
 
 # OkHttp3 / Okio
 -keepattributes Signature
