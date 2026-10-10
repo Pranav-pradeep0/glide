@@ -142,11 +142,14 @@ jobs:
         run: |
           set -e
           # Without it, AC-3/E-AC-3/DTS/TrueHD play silently with no error, and a release
-          # APK has already once shipped with no libffmpegJNI.so. The renderer is loaded
-          # by class name, so R8 dropping it fails the same way.
+          # APK has already once shipped with no libffmpegJNI.so. FFmpeg itself is separate
+          # .so files (LGPL: replaceable), and libffmpegJNI.so fails to load without any
+          # of them. The renderer is loaded by class name, so R8 dropping it fails the same.
           APK=android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
-          unzip -l "$APK" lib/arm64-v8a/libffmpegJNI.so >/dev/null \
-            || { echo "::error::libffmpegJNI.so missing from the release APK"; exit 1; }
+          for lib in ffmpegJNI avcodec avutil swresample; do
+            unzip -l "$APK" "lib/arm64-v8a/lib${lib}.so" >/dev/null \
+              || { echo "::error::lib${lib}.so missing from the release APK"; exit 1; }
+          done
           unzip -p "$APK" 'classes*.dex' | grep -aq 'Landroidx/media3/decoder/ffmpeg/FfmpegAudioRenderer;' \
             || { echo "::error::FfmpegAudioRenderer stripped from the release APK"; exit 1; }
 
@@ -305,8 +308,10 @@ jobs:
           # See the verify job. Both ABIs here, since both are published.
           for abi in arm64-v8a armeabi-v7a; do
             APK="android/app/build/outputs/apk/release/app-${abi}-release.apk"
-            unzip -l "$APK" "lib/${abi}/libffmpegJNI.so" >/dev/null \
-              || { echo "::error::libffmpegJNI.so missing from the ${abi} APK"; exit 1; }
+            for lib in ffmpegJNI avcodec avutil swresample; do
+              unzip -l "$APK" "lib/${abi}/lib${lib}.so" >/dev/null \
+                || { echo "::error::lib${lib}.so missing from the ${abi} APK"; exit 1; }
+            done
             unzip -p "$APK" 'classes*.dex' | grep -aq 'Landroidx/media3/decoder/ffmpeg/FfmpegAudioRenderer;' \
               || { echo "::error::FfmpegAudioRenderer stripped from the ${abi} APK"; exit 1; }
           done

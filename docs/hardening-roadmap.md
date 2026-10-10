@@ -227,7 +227,9 @@ Activities, and Android Auto and a Bluetooth head unit still browse the music li
    users on the error screen with no rollback.
 9. **Onboarding claims "zero data collection"** (`OnboardingScreen.tsx:105`) — false:
    Stallion sends `ANDROID_ID` on every sync, recap sends dialogue to Groq. Reword.
-10. **FFmpeg ships with no LGPL notice**; add an OSS licences screen.
+10. **FFmpeg ships with no LGPL notice**; add an OSS licences screen. Linking is already
+    LGPL-shaped (8b); the screen still has to credit FFmpeg with the LGPL 2.1 text and
+    point to its unmodified `release/6.0` source.
 
 ## Phase 2 (error handling and subtitles)
 
@@ -334,13 +336,19 @@ shares the IO retry budget; audio delay scaled by speed so it stays wall-clock t
 FFmpeg AAR, done: rebuilt by glide-ffmpeg-decoder's CI (`cb773e8`) against Media3 1.11.1,
 which was 1.11.0. Its `.sha256` from the same run is committed next to it, and both CI jobs
 run `sha256sum -c` before building and check that each release APK still has
-`libffmpegJNI.so` and `FfmpegAudioRenderer` after R8. Already audio-only where it counts:
+`libffmpegJNI.so`, `libavcodec.so`, `libavutil.so`, `libswresample.so` and
+`FfmpegAudioRenderer` after R8. Already audio-only where it counts:
 only `ac3 eac3 dca mlp truehd` are compiled, so `ExperimentalFfmpegVideoRenderer` supports no
 format and is never selected. No emulator renderer-construction test: the APK check catches
 the failure that has actually happened. To update: run that repo's workflow, copy both
 files from its artifact into `android/app/libs`. Device check: an E-AC-3 or DTS file has
-sound. **Open:** that repo's README flags FFmpeg as statically linked, an LGPL relinking
-question to settle with Phase 1 item 10.
+sound.
+
+LGPL linking, done: that repo is private, so nobody else could rebuild a `libffmpegJNI.so`
+with FFmpeg fused in. From its 1.1.0 (`1c0ff69`) FFmpeg ships as separate shared libraries
+that `libffmpegJNI.so` loads, so a user can swap in their own FFmpeg 6.0 build. Cost +132 KB
+on the arm64 APK; all 28 arm64 libraries at 16 KB alignment. The notice and source pointer
+are still owed: Phase 1 item 10.
 
 Left:
 - `DisplayBrightnessModule` 0-255: won't fix. The OEM's real range is not public API, and
