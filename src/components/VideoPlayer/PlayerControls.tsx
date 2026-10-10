@@ -448,8 +448,6 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
     const ResizeModeIcon = getResizeModeIcon(resizeMode);
     const bottomPad = Math.max(insets.bottom, metrics.space.sm);
-    // Landscape puts the camera cutout on a side edge; keep the edge controls clear of it.
-    const side = isLandscape ? insets.left : 0;
 
     return (
         <Animated.View
@@ -463,7 +461,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
             {/* Top bar */}
             <Animated.View
-                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingHorizontal: metrics.space.sm + side }, othersStyle]}
+                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingLeft: metrics.space.sm + insets.left, paddingRight: metrics.space.sm + insets.right }, othersStyle]}
             >
                 <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" onPlayer />
                 <View style={styles.titleBlock}>
@@ -501,8 +499,8 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
                 <IconButton icon="more-vertical" onPress={onOpenPlayback} accessibilityLabel="Playback settings" onPlayer />
             </Animated.View>
 
-            {/* Lock, alone on the left edge, vertically centred where the thumb rests */}
-            <Animated.View style={[styles.rail, { left: metrics.space.sm + side }, othersStyle]} pointerEvents="box-none">
+            {/* Lock, alone on the left edge (clear of a landscape camera cutout), vertically centred where the thumb rests */}
+            <Animated.View style={[styles.rail, { left: metrics.space.sm + insets.left }, othersStyle]} pointerEvents="box-none">
                 {/* Small and bare, as it always was: an 18 px glyph about 20 dp from the edge. */}
                 <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
             </Animated.View>
@@ -527,7 +525,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
             {/* Bottom */}
             <View
-                style={[styles.bottom, { paddingBottom: bottomPad, paddingHorizontal: 20 + side }]}
+                style={[styles.bottom, { paddingBottom: bottomPad, paddingLeft: 20 + insets.left, paddingRight: 20 + insets.right }]}
                 pointerEvents="box-none"
             >
                 <Animated.View style={[styles.timeRow, othersStyle]}>

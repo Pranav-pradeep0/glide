@@ -13,6 +13,12 @@ Glide ships as **GitHub Release APKs plus Stallion OTA**, not Google Play
 `REQUEST_INSTALL_PACKAGES` policy block **do not apply**. Supply-chain and OTA integrity
 matter much more than Play compliance.
 
+**2026-10-11: no JS-over-native preference until launch.** Glide is not live, so a change
+needing a new APK costs nothing today. The "prefer JS so it ships over the air" rule, the
+Phase 8 "native freeze" framing and "policy lives in JS where an OTA can tune it" below are on
+hold: every fix goes where its root cause is, native or JS, with no workarounds. Revisit at
+launch.
+
 Verification commands used throughout:
 
 ```

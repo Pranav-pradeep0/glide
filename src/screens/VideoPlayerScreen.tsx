@@ -621,17 +621,16 @@ export default function VideoPlayerScreen({ route }: Props) {
         // Use the actual notch height, but ensure at least 16px padding
         // This is tighter than the previous generic 50px bucket
         const safeMargin = Math.max(topInset, 16);
-        // Landscape: the cutout sits on whichever side the phone was turned to, and can swap
-        // without a relayout, so both sides take the deeper of the two. The portrait status bar
-        // height is the floor, since it is sized to clear the cutout.
-        const side = isLandscape ? Math.max(insets.left, insets.right, safeMargin) : safeMargin;
 
         return {
             top: safeMargin,
             // Portrait: the real gesture/nav bar inset. Landscape: the bar is at the side.
             bottom: isLandscape ? 20 : Math.max(insets.bottom, 8),
-            left: side,
-            right: side,
+            // The real side insets: the camera cutout in landscape (reported even with the bars
+            // hidden), and a side navigation bar. Each on its own side, so the far side is not
+            // padded for a cutout it does not have.
+            left: insets.left,
+            right: insets.right,
         };
     }, [isLandscape, insets.bottom, insets.left, insets.right]);
 
@@ -662,11 +661,10 @@ export default function VideoPlayerScreen({ route }: Props) {
         ui.scheduleAutoHide();
     }, [navigation, exitPlayer, isExternalOpen, ui]);
 
-    // Retry remounts the native view, opening the file again from where it failed.
-    const [retry, setRetry] = React.useState({ key: 0, from: 0 });
+    // Play on the idle player is the retry: native prepares it again from where it failed.
     const handleRetry = useCallback(() => {
         player.clearError();
-        setRetry(r => ({ key: r.key + 1, from: player.currentTimeRef.current }));
+        player.play();
     }, [player]);
 
     // Colour enhancement's GL pipeline can fail on some files or GPUs. Turning it off reopens
@@ -1105,7 +1103,6 @@ export default function VideoPlayerScreen({ route }: Props) {
             <GestureDetector gesture={gestures.composedGesture}>
                 <View style={styles.video}>
                     <AnimatedVideoView
-                        key={retry.key}
                         ref={player.videoRef}
                         source={source}
                         paused={player.state.paused || resumeModalVisible || recapVisible}
@@ -1125,7 +1122,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         animatedStyle={gestures.videoAnimatedStyle}
                         audioEqualizer={settingsHook.audioEqualizer}
                         audioDelay={settingsHook.settings.audioDelay}
-                        initialResumeSeconds={retry.key ? retry.from : resumePosition ?? undefined}
+                        initialResumeSeconds={resumePosition ?? undefined}
                         onLoad={player.handleLoad}
                         onProgress={player.handleProgress}
                         onEnd={handleVideoEnd}

@@ -523,7 +523,11 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         const msg = e?.error || e?.message || 'Playback error';
         if (__DEV__) {console.error('[ERROR] Player error:', e);}
         isPlayingShared.value = false;
-        setState(prev => ({ ...prev, errorText: String(msg), isBuffering: false }));
+        // A fatal error leaves the native player idle. Mirror that as paused, so the next
+        // play is a real paused -> playing change: GlidePlayerView.setPaused(false) prepares
+        // an idle player again from where it stopped. Left "playing", play changed nothing
+        // and the video stayed dead.
+        setState(prev => ({ ...prev, errorText: String(msg), isBuffering: false, paused: true, isPlaying: false }));
     }, [isPlayingShared]);
 
     const clearError = useCallback(() => {
