@@ -192,7 +192,11 @@ All three are green at `7bd7e0f`.
 
 ---
 
-## Phase 1 (security) — not started, highest severity first
+## Phase 1 (security) — highest severity first
+
+Done: 2 and 4 in `356efea` (`PrivatePath`, `onConnect`), and 9 in `17dfba6`. Device
+checks: an `adb` "Open with" of `file:///data/data/com.glide.app/...` is refused by both
+Activities, and Android Auto and a Bluetooth head unit still browse the music library.
 
 1. **Stallion OTA bundles are unsigned.** `StallionPublicSigningKey` is never set
    (`android/app/build.gradle:145-146`), and Stallion only verifies when it is present. A
