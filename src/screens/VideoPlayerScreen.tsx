@@ -26,7 +26,9 @@ import AnimatedVideoView from '@/components/VideoPlayer/AnimatedVideoView';
 import { VideoHUD } from '@/components/VideoPlayer/VideoHUD';
 import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
-import { SnackbarHost } from '@/components/ui';
+import { SnackbarHost, showSnackbar } from '@/components/ui';
+import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
+import { isEnhancementError } from '@/utils/playerErrors';
 import { BookmarkPanel } from '@/components/VideoPlayer/BookmarkPanel';
 import { QuickSettingsPanel } from '@/components/VideoPlayer/QuickSettingsPanel';
 import { PlaylistPanel } from '@/components/VideoPlayer/PlaylistPanel';
@@ -619,15 +621,19 @@ export default function VideoPlayerScreen({ route }: Props) {
         // Use the actual notch height, but ensure at least 16px padding
         // This is tighter than the previous generic 50px bucket
         const safeMargin = Math.max(topInset, 16);
+        // Landscape: the cutout sits on whichever side the phone was turned to, and can swap
+        // without a relayout, so both sides take the deeper of the two. The portrait status bar
+        // height is the floor, since it is sized to clear the cutout.
+        const side = isLandscape ? Math.max(insets.left, insets.right, safeMargin) : safeMargin;
 
         return {
             top: safeMargin,
             // Portrait: the real gesture/nav bar inset. Landscape: the bar is at the side.
             bottom: isLandscape ? 20 : Math.max(insets.bottom, 8),
-            left: safeMargin,
-            right: safeMargin,
+            left: side,
+            right: side,
         };
-    }, [isLandscape, insets.bottom]);
+    }, [isLandscape, insets.bottom, insets.left, insets.right]);
 
     const shouldShowBuffer = useMemo(() =>
         player.state.isVideoLoaded && player.state.isBuffering && !player.state.isSeeking,
@@ -655,6 +661,27 @@ export default function VideoPlayerScreen({ route }: Props) {
         ui.showControls();
         ui.scheduleAutoHide();
     }, [navigation, exitPlayer, isExternalOpen, ui]);
+
+    // Retry remounts the native view, opening the file again from where it failed.
+    const [retry, setRetry] = React.useState({ key: 0, from: 0 });
+    const handleRetry = useCallback(() => {
+        player.clearError();
+        setRetry(r => ({ key: r.key + 1, from: player.currentTimeRef.current }));
+    }, [player]);
+
+    // Colour enhancement's GL pipeline can fail on some files or GPUs. Turning it off reopens
+    // the media at the current position (native), so that is the recovery, not an error card.
+    const { videoEnhancement } = settingsHook.settings;
+    const { toggleVideoEnhancement } = settingsHook;
+    const { handleError: playerHandleError } = player;
+    const handlePlayerError = useCallback((e: any) => {
+        if (videoEnhancement && isEnhancementError(String(e?.error ?? ''))) {
+            toggleVideoEnhancement();
+            showSnackbar({ text: "Colour enhancement isn't supported for this video, so it's off", tone: 'reject' });
+            return;
+        }
+        playerHandleError(e);
+    }, [videoEnhancement, toggleVideoEnhancement, playerHandleError]);
 
     const handlePlayVideo = useCallback((video: VideoFile) => {
         ui.closeAllPanels();
@@ -1078,6 +1105,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             <GestureDetector gesture={gestures.composedGesture}>
                 <View style={styles.video}>
                     <AnimatedVideoView
+                        key={retry.key}
                         ref={player.videoRef}
                         source={source}
                         paused={player.state.paused || resumeModalVisible || recapVisible}
@@ -1097,11 +1125,11 @@ export default function VideoPlayerScreen({ route }: Props) {
                         animatedStyle={gestures.videoAnimatedStyle}
                         audioEqualizer={settingsHook.audioEqualizer}
                         audioDelay={settingsHook.settings.audioDelay}
-                        initialResumeSeconds={resumePosition ?? undefined}
+                        initialResumeSeconds={retry.key ? retry.from : resumePosition ?? undefined}
                         onLoad={player.handleLoad}
                         onProgress={player.handleProgress}
                         onEnd={handleVideoEnd}
-                        onError={player.handleError}
+                        onError={handlePlayerError}
                         onBuffering={player.handleBuffering}
                         onPlaying={player.handlePlaying}
                         onPaused={player.handlePaused}
@@ -1202,7 +1230,6 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onSeekComplete={handleSliderChangeComplete}
                     bookmarks={isNetworkStream ? undefined : bookmarkTimes}
                     buffering={shouldShowBuffer}
-                    errorText={player.state.errorText}
                     isLandscape={isLandscape}
                     insets={effectiveInsets}
                     onOpenBookmarks={isNetworkStream ? undefined : handleToggleBookmarkPanel}
@@ -1397,6 +1424,15 @@ export default function VideoPlayerScreen({ route }: Props) {
                         onClose={() => setResumeModalVisible(false)}
                     />
                 </View>
+            )}
+
+            {!pipPresentationActive && !!player.state.errorText && (
+                <PlayerErrorCard
+                    code={player.state.errorText}
+                    onRetry={handleRetry}
+                    onNext={!isNetworkStream && hasNext ? handleNext : undefined}
+                    onClose={handleGoBack}
+                />
             )}
 
             {/* Above everything, clear of the seek bar and tools row when they show */}

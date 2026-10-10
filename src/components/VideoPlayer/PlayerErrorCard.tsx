@@ -1,0 +1,52 @@
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Feather from '@react-native-vector-icons/feather';
+import { Button } from '@/components/ui';
+import { metrics, playerTheme, type } from '@/theme/theme';
+import { describePlayerError } from '@/utils/playerErrors';
+
+const { colors } = playerTheme;
+
+interface Props {
+    code: string;
+    onRetry: () => void;
+    onNext?: () => void;
+    onClose: () => void;
+}
+
+/** Sits over the video, outside the auto-hiding controls, so it stays until acted on. */
+export function PlayerErrorCard({ code, onRetry, onNext, onClose }: Props) {
+    const { title, body } = describePlayerError(code);
+    return (
+        <View style={styles.wrap} pointerEvents="box-none">
+            <View style={styles.card} accessibilityRole="alert">
+                <Feather name="alert-circle" size={28} color={colors.text} />
+                <Text style={[type.heading, styles.title]}>{title}</Text>
+                <Text style={[type.body, styles.body]}>{body}</Text>
+                <Text style={[type.caption, styles.code]} selectable>{code}</Text>
+                <View style={styles.actions}>
+                    <Button label="Close" onPress={onClose} onPlayer />
+                    {onNext && <Button label="Next video" onPress={onNext} onPlayer />}
+                    <Button label="Retry" variant="primary" icon="rotate-cw" onPress={onRetry} onPlayer />
+                </View>
+            </View>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    wrap: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', padding: metrics.gutter },
+    card: {
+        width: '100%',
+        maxWidth: 420,
+        alignItems: 'center',
+        gap: metrics.space.sm,
+        padding: metrics.space.xl,
+        borderRadius: metrics.radius.card,
+        backgroundColor: colors.cardElevated,
+    },
+    title: { color: colors.text, textAlign: 'center' },
+    body: { color: colors.textSecondary, textAlign: 'center' },
+    code: { color: colors.textTertiary, textAlign: 'center' },
+    actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: metrics.space.sm, marginTop: metrics.space.md },
+});

@@ -196,6 +196,7 @@ function areEqual(prevProps: AnimatedVideoViewProps, nextProps: AnimatedVideoVie
     if (prevProps.pipEnabled !== nextProps.pipEnabled) {return false;}
     if (prevProps.pipPresentationActive !== nextProps.pipPresentationActive) {return false;}
     if (prevProps.audioTrack !== nextProps.audioTrack) {return false;}
+    if (prevProps.audioDelay !== nextProps.audioDelay) {return false;}
     if (prevProps.textTrack !== nextProps.textTrack) {return false;}
     if (prevProps.title !== nextProps.title) {return false;}
     if (prevProps.artist !== nextProps.artist) {return false;}

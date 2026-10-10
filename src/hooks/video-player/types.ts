@@ -282,6 +282,7 @@ export interface UsePlayerCoreReturn {
     handleProgress: (data: PlayerProgressData) => void;
     handleEnd: () => void;
     handleError: (e: any) => void;
+    clearError: () => void;
     handleBuffering: (event: PlayerBufferingEvent | any) => void;
     handlePlaying: () => void;
     handlePaused: () => void;

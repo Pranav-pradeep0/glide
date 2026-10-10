@@ -335,7 +335,7 @@ const GlyphButton: FC<{
         accessibilityState={{ selected: !!active }}
         style={[styles.glyph, active && styles.glyphActive]}
     >
-        {children(active ? colors.primary : colors.text)}
+        {children(active ? colors.onPrimary : colors.text)}
     </Touchable>
 );
 
@@ -373,7 +373,6 @@ interface PlayerControlsProps {
     onSeekComplete: (val: number) => void;
     bookmarks?: number[];
     buffering?: boolean;
-    errorText: string | null;
     isLandscape: boolean;
     insets: EdgeInsets;
     onOpenBookmarks?: () => void;
@@ -406,7 +405,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
     showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, onOpenPlayback, playbackRate,
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
-    onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, buffering = false, errorText, isLandscape, insets,
+    onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, buffering = false, isLandscape, insets,
     onOpenBookmarks, onOpenPlaylist, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
     showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement,
@@ -449,6 +448,8 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
     const ResizeModeIcon = getResizeModeIcon(resizeMode);
     const bottomPad = Math.max(insets.bottom, metrics.space.sm);
+    // Landscape puts the camera cutout on a side edge; keep the edge controls clear of it.
+    const side = isLandscape ? insets.left : 0;
 
     return (
         <Animated.View
@@ -462,7 +463,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
             {/* Top bar */}
             <Animated.View
-                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingHorizontal: metrics.space.sm }, othersStyle]}
+                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingHorizontal: metrics.space.sm + side }, othersStyle]}
             >
                 <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" onPlayer />
                 <View style={styles.titleBlock}>
@@ -500,14 +501,8 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
                 <IconButton icon="more-vertical" onPress={onOpenPlayback} accessibilityLabel="Playback settings" onPlayer />
             </Animated.View>
 
-            {!!errorText && (
-                <View style={[styles.error, { top: insets.top + 64 }]}>
-                    <Text style={styles.errorText} numberOfLines={2}>{errorText}</Text>
-                </View>
-            )}
-
             {/* Lock, alone on the left edge, vertically centred where the thumb rests */}
-            <Animated.View style={[styles.rail, othersStyle]} pointerEvents="box-none">
+            <Animated.View style={[styles.rail, { left: metrics.space.sm + side }, othersStyle]} pointerEvents="box-none">
                 {/* Small and bare, as it always was: an 18 px glyph about 20 dp from the edge. */}
                 <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
             </Animated.View>
@@ -532,7 +527,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
             {/* Bottom */}
             <View
-                style={[styles.bottom, { paddingBottom: bottomPad, paddingHorizontal: 20 }]}
+                style={[styles.bottom, { paddingBottom: bottomPad, paddingHorizontal: 20 + side }]}
                 pointerEvents="box-none"
             >
                 <Animated.View style={[styles.timeRow, othersStyle]}>
@@ -630,7 +625,6 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
     prev.paused === next.paused &&
     prev.title === next.title &&
     prev.subtitle === next.subtitle &&
-    prev.errorText === next.errorText &&
     prev.isLandscape === next.isLandscape &&
     prev.insets === next.insets &&
     prev.orientationLocked === next.orientationLocked &&
@@ -683,17 +677,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    glyphActive: { backgroundColor: colors.primaryContainer },
-    error: {
-        position: 'absolute',
-        left: metrics.gutter,
-        right: metrics.gutter,
-        padding: metrics.space.md,
-        borderRadius: metrics.radius.md,
-        backgroundColor: colors.error,
-    },
-    errorText: { ...type.body, color: colors.text, fontWeight: '500' },
-    rail: { position: 'absolute', top: 0, bottom: 0, left: metrics.space.sm, justifyContent: 'center' },
+    glyphActive: { backgroundColor: colors.primary },
+    rail: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center' },
     center: {
         ...StyleSheet.absoluteFill,
         flexDirection: 'row',

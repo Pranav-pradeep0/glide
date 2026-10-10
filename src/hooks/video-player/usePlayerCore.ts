@@ -526,6 +526,10 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         setState(prev => ({ ...prev, errorText: String(msg), isBuffering: false }));
     }, [isPlayingShared]);
 
+    const clearError = useCallback(() => {
+        setState(prev => (prev.errorText ? { ...prev, errorText: null } : prev));
+    }, []);
+
     /**
      * handleBuffering — debounced buffering state.
      */
@@ -678,6 +682,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         handleProgress,
         handleEnd,
         handleError,
+        clearError,
         handleBuffering,
         handlePlaying,
         handlePaused,
@@ -688,7 +693,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         currentTimeShared, durationShared, isScrubbingShared,
         play, pause, stop, togglePlayPause,
         previewSeek, commitSeek, setIsSeeking, clearResumePosition,
-        handleLoad, handleProgress, handleEnd, handleError,
+        handleLoad, handleProgress, handleEnd, handleError, clearError,
         handleBuffering, handlePlaying, handlePaused, handleStopped, handleSeek,
     ]);
 }
