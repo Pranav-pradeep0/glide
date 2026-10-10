@@ -278,6 +278,99 @@ watched filters) → decoder control (per-file HW/SW like MX, plus a stats overl
 screenshot / A-B repeat / frame step → keyboard and mouse shortcuts and large-screen
 layouts → casting → i18n for ~340 hard-coded strings.
 
+## Phase 8 (native freeze before Play) — from the 2026-10-10 native review
+
+Goal: native changes only with an APK, and Play users sit on old APKs for months, so the
+native layer has to be finished before launch. JS keeps moving over Stallion. Five
+read-only reviews (player core, music/audio, media I/O, dependencies, platform) against
+Media3 1.11.1 bytecode, RN 0.87 source and the Android 16/17 docs.
+
+**Done in `c0762a0`:** fragment-restore crash, `BackgroundWork` `Throwable` guard,
+album-art OOM, splash timeout, play from IDLE/ENDED (music and video), `onTaskRemoved`
+without `super`, video session re-registered on resume, thumbnails off `v_native` and
+actually scaled (they were saved full-size), Auto/Assistant unresolvable ids, haptic
+crash paths, equalizer leak and flat-means-off, fixed-volume keys, `AudioVolumeModule`
+reload leak. Dead FFmpegKit methods deleted.
+
+### 8a. Contract and architecture (decide first)
+1. **Native capability contract.** Nothing tells a JS bundle which native it runs on. Export
+   one `NATIVE_API` integer (bump on any native surface change), gate new calls in JS on
+   it, and target every Stallion release at the app version. Principle from here on:
+   native exposes primitives and stays dumb; policy (retry counts, intervals, fallbacks)
+   lives in JS where an OTA can tune it.
+2. **One media session, not two.** Media3 has one notification slot: the music and video
+   sessions steal it from each other, a stale video notification's Play starts music, and
+   the app shows twice in Auto. Use one `MediaLibrarySession` and swap `session.player`.
+   Needs the device matrix.
+3. **Playback resumption.** No `MediaButtonReceiver`, no `onPlaybackResumption`: Bluetooth
+   Play with Glide killed goes to another app, and Android 13+ shows no resume card.
+   Native must persist its own last ids, index and position.
+4. **Process-wide music state.** EQ bands and the sleep-timer deadline live in the module,
+   so a JS reload or OTA restart drops both while music plays on. Move them to
+   `GlidePlayerHolder`; give posted runnables an `invalidated` check.
+
+### 8b. Native correctness, remaining
+- Sleep timer runs on uptime, and offload lets the CPU sleep: it can fire hours late.
+  Disable offload while a timer is armed.
+- `setQueue`'s main-thread post can call `play()` after the user left: focus is refused
+  (API 35+) and the FGS start fails. Respect the host being paused.
+- `PipModule.finishCurrentActivity` finishes whichever Activity is current — Back in the
+  library can close it and the PiP video. Finish the player's own host (+ JS half below).
+- Scrubbing mode left on silently suppresses playback until Media3's 10-min stuck
+  timeout; also clear it in `onActivityStopped` and on PiP change.
+- `SubtitleSyncModule`: a codec whose `configure` throws is never released, and the error
+  aborts alignment instead of falling to FFmpeg.
+- `ApkInstallerModule.install`: copy runs on `v_native`; abandon stale sessions first;
+  launch the confirm intent on the next resume (Phase 2 item).
+- `VideoOrientationModule` calls `requestedOrientation` off the UI thread.
+- Player can be built twice on mount (prop order); open media in `onAfterUpdateTransaction`.
+- PiP dismiss with background play on keeps audio running.
+- Songs with `DURATION` NULL never appear (`>= 10000` excludes NULL).
+- No video `ContentObserver`; new files wait for the 5-min TTL.
+- `configChanges` on VideoPlayerActivity lacks `fontScale|locale|layoutDirection|colorMode|
+  navigation|touchscreen`, so those tear playback down (no longer a crash).
+- `receiveCommand(Int)` and `MapBuilder` are deprecated; add the String overload and move
+  JS to command names. `onDropViewInstance` skips `super`.
+- `BEHIND_LIVE_WINDOW` re-prepares unbounded. `AudioDelayProcessor` sits before Sonic, so
+  delay scales with speed.
+- FFmpeg AAR: rebuild in CI from the same Media3 tag with a renderer-construction test;
+  consider audio-only (`ExperimentalFfmpegVideoRenderer` runs native decode in-process).
+- `DisplayBrightnessModule` assumes a 0-255 range.
+
+### 8c. JS-side (can ship over the air any time)
+- Enhancement GL errors (7000-range codes) fail every video: turn enhancement off and reopen.
+- Deleting videos on Android 8/9 needs `WRITE_EXTERNAL_STORAGE` requested first.
+- Thumbnail misses retry on every scroll; add a negative cache with a TTL. Thumbnails made
+  before `c0762a0` are full-size on disk; clear the folder once.
+- `ErrorBoundary` should call `SplashModule.hide()`.
+- The player's `BackHandler` must return false while in PiP.
+
+### 8d. Dependencies and toolchain
+- **Replace `react-native-linear-gradient`** (stable from 2023, legacy interop, no
+  namespace) with react-native-svg's `LinearGradient`.
+- Consider ~25 lines of Kotlin for `react-native-share` and `java.util.zip` (with a
+  zip-slip check) for `react-native-zip-archive`; both are single-call uses.
+- Stallion #146: Android bundle download has no timeout and can hang. Take 2.4.3 if fixed.
+- Patch upgrades: fs 2.40.3, gesture-handler 3.3.0, safe-area 5.10.1, screens 4.29.0,
+  zip-archive 9.5.3, edge-to-edge 1.8.2. Hold reanimated at 4.6.0 until RN 0.88 and
+  reanimated #10734 (Android SIGSEGV since 4.7.0) settle.
+- GitHub Actions are on node20 (`checkout@v4` etc.); GitHub removed Node 20 runners on
+  2026-09-23. Bump to the node24 majors.
+- Toolchain is pinned by RN and fine through RN 0.88; `builtInKotlin=false`/`newDsl=false`
+  die with AGP 10, which only arrives with an RN upgrade.
+- Stale comment about react-native-ffmpeg-kit in `android/build.gradle`.
+
+### 8e. Platform deadlines
+- **targetSdk 37** (Play deadline likely 2027-08-31, unannounced): `ACCESS_LOCAL_NETWORK`
+  runtime permission or LAN http/rtsp streams fail; the large-screen orientation opt-out
+  disappears.
+- **Android 17 background audio** applies to all apps now: run
+  `adb shell cmd audio set-enable-hardening throw` through music, video background play
+  and PiP.
+- **Developer verification** is enforced for sideloaded apps in Brazil, Indonesia,
+  Singapore and Thailand since 2026-09-30, worldwide in 2027. Register `com.glide.app`.
+- 16 KB pages: Play rejects non-compliant updates from 2027-02-01. CI already checks.
+
 ## Deliberately deferred
 
 - MMKV schema versions: add when the first migration actually needs one.
