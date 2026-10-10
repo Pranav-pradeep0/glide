@@ -1,6 +1,6 @@
 // ErrorBoundary.tsx
 import React, { Component, ReactNode, createContext, useContext } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, NativeModules } from 'react-native';
 
 // Define the shape of the error boundary context
 interface ErrorBoundaryContextType {
@@ -47,6 +47,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // Called after the fallback is already on screen; this is where the logging goes.
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
         console.error('[ErrorBoundary] Caught an error:', error, errorInfo);
+        // A crash before navigation is ready would otherwise sit under the splash, which
+        // only lifts on navReady. Hiding twice is harmless.
+        NativeModules.SplashModule?.hide();
         this.setState({ error, errorInfo });
 
         // Log the error using the utility function
