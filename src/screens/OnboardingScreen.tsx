@@ -99,12 +99,11 @@ const SLIDES: SlideData[] = [
     },
     {
         id: '3',
-        title: 'Safe and Open Source',
-        tagline: 'You\'re the only one watching.',
+        title: 'Safe and Private',
+        tagline: 'Your videos and music stay yours.',
         bullets: [
             'No accounts, no analytics',
             'Free forever, no ads',
-            'Found a bug? Open an issue or send a PR',
         ],
     },
 ];
