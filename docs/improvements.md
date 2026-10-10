@@ -6,21 +6,21 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 
 ## Bugs
 
-- **Now Playing › Sleep timer** (`NowPlayingScreen.tsx:70-102`) — the tick and "Xm left" match on `round(remaining/60) === 15`, so a 15-minute timer loses its tick after ~30 s, and a 30-minute timer shows "15 minutes" ticked halfway through — the sheet lies about what's set — S
+- ✅ `4fc6516` **Now Playing › Sleep timer** (`NowPlayingScreen.tsx:70-102`) — the tick and "Xm left" match on `round(remaining/60) === 15`, so a 15-minute timer loses its tick after ~30 s, and a 30-minute timer shows "15 minutes" ticked halfway through — the sheet lies about what's set — S
 - **Music › Folders** (`MusicScreen.tsx:180-186`) — opening a folder shows the previous folder's songs until the new list loads, and a failed load leaves the spinner state wrong (no try/finally) — S
 - **Music › folder view** — hardware Back leaves the Music tab instead of returning to the folder list (no BackHandler while `selectedFolder` is set) — S
 - **Music › A–Z scroller** (`MusicScreen.tsx:282-298, 589`) — shown for every sort, but always jumps by title, so with "Artist" or "Recently added" it lands somewhere random — S
-- **Lyrics** (`LyricsService.ts:193-202`) — a network failure caches "no lyrics" for the session (roadmap Phase 2, still open) — S
-- **Lyrics** (`NowPlayingScreen.tsx:185`) — `getLyricsForTrack` has no `.catch`; if it rejects the spinner never stops — S
+- ✅ `d054578` **Lyrics** (`LyricsService.ts:193-202`) — a network failure caches "no lyrics" for the session (roadmap Phase 2, still open) — S
+- ~~**Lyrics** (`NowPlayingScreen.tsx:185`) — no `.catch`~~ not a bug: `getLyricsForTrack` catches every step and never rejects
 - **Recents › Music** (`RecentMusicList.tsx:35-45`) — with audio permission denied it says "Nothing played yet" — misleading dead end — S
-- **Recents › Delete** (`RecentsScreen.tsx:99-101`) — entries without `contentUri` say "Open this video from Videos to delete it", but `MediaService.deleteVideos` already resolves paths to URIs (`e919b33`) — S
+- ✅ `ee30459` **Recents › Delete** (`RecentsScreen.tsx:99-101`) — entries without `contentUri` say "Open this video from Videos to delete it", but `MediaService.deleteVideos` already resolves paths to URIs (`e919b33`) — S
 - **Folders** (`FoldersScreen.tsx:184`) — permission denied shows "No videos found · Refresh"; video permission is only ever *requested*, never checked, and "never ask again" has no route to Settings (`PermissionService.hasAndroidPermission`) — M
 
 - ✅ `f67414e` **Snackbar** (`ui/index.tsx:614-663`) — after fading it stays mounted at opacity 0 and keeps catching taps: an invisible strip over the bottom of the screen (in the player, over the controls) for the rest of the session — S *(verified)*
 - ✅ `f67414e` **Settings › Shake action / Font** (`SettingsScreen.tsx:465, 730`) — chip rows don't wrap; "Backward 10 s" etc. run off-screen and can't be tapped — S *(verified)*
-- **Delete, all screens** (`AlbumVideosScreen.tsx:70`, `SearchScreen.tsx:103`, `RecentsScreen.tsx:110`) — cancelling Android's delete dialog rejects `E_DELETE_CANCELLED` and shows "Delete failed… check permissions" — S
+- ✅ `ee30459` **Delete, all screens** (`AlbumVideosScreen.tsx:70`, `SearchScreen.tsx:103`, `RecentsScreen.tsx:110`) — cancelling Android's delete dialog rejects `E_DELETE_CANCELLED` and shows "Delete failed… check permissions" — S
 - **Search** (`useVideoSearch.ts:42-47`, `videoIndexStore.ts:25-40`) — results memo ignores index changes, the index is built once (empty if permission was denied) and never re-synced, a failed first load spins "Preparing search" forever — M
-- **Album / Artist detail, Recents › Music** (`AlbumDetailScreen.tsx:50`, `ArtistDetailScreen.tsx:81`, `RecentMusicList.tsx:37`) — promises with no `.catch`; a rejection leaves the loader spinning — S
+- ~~**Album / Artist detail, Recents › Music** — promises with no `.catch`~~ not a bug: `AudioMediaService.getSongs` catches and never rejects
 - **Album / Artist detail** — no empty state: "0 songs" with Play All / Shuffle that do nothing — S
 - **AlbumVideos** (`AlbumVideosScreen.tsx:130-150`) — no pull-to-refresh; "Play all" only opens the first video (one file if auto-play-next is off) — S
 - **Update modal** — reappears every cold start (`updateStatus` memory-only; roadmap Phase 2) — S
@@ -92,7 +92,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 ## Open roadmap items (carried here for ordering)
 
 - Sign Stallion OTA bundles — top security item — M
-- 8c: enhancement GL-error fallback; Android 8/9 delete permission; thumbnail negative cache; ErrorBoundary hides splash — S each
+- 8c: ✅ enhancement GL-error fallback (`e5bcff4`); ✅ Android 8/9 delete permission (`ee30459`); thumbnail negative cache; ✅ ErrorBoundary hides splash (`1e6b4c9`) — S each
 - Pin CI actions by SHA, quote the secret heredocs — S
 
 ## Ops
