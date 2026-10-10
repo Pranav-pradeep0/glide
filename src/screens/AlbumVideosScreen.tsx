@@ -6,7 +6,9 @@ import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList, VideoFile, VideoHistoryEntry } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
-import { markAlbumCoverDirty, useAlbumVideos } from '@/hooks/useMediaService';
+import { useAlbumVideos } from '@/hooks/useMediaService';
+import { usePermissionStore } from '@/store/permissionStore';
+import { PermissionGate } from '@/components/PermissionGate';
 import { formatFileSize } from '@/utils/formatUtils';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
@@ -31,7 +33,8 @@ export default function AlbumVideosScreen() {
     const clearHistoryForPath = useVideoHistoryStore(state => state.clearVideoHistory);
     const history = useVideoHistoryStore(state => state.history);
     const { albumTitle, bucketId } = route.params;
-    const { videos, loading, loadingMore, hasMore, loadMore, refetch } = useAlbumVideos(albumTitle, bucketId);
+    const { videos, loading, loadingMore, hasMore, loadMore } = useAlbumVideos(albumTitle, bucketId);
+    const videoAccess = usePermissionStore((s) => s.video.access);
     const [viewMode, setViewMode] = useState<ViewMode>('list');
     const [selectedVideo, setSelectedVideo] = useState<VideoFile | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
@@ -53,11 +56,9 @@ export default function AlbumVideosScreen() {
     const handleDelete = () => {
         const video = selectedVideo;
         if (!video) {return;}
+        // The folder list and this one reload on MediaService's change signal.
         deleteVideo(video.name, video.uri || video.path).then((deleted) => {
-            if (!deleted) {return;}
-            clearHistoryForPath(video.path);
-            markAlbumCoverDirty(albumTitle);
-            refetch();
+            if (deleted) {clearHistoryForPath(video.path);}
         });
     };
 
@@ -93,7 +94,7 @@ export default function AlbumVideosScreen() {
         );
     }, [grid, handleVideoPress, handleOpenOptions, getHistoryEntry]);
 
-    if (loading && videos.length === 0) {
+    if (videoAccess === 'unknown' || (loading && videos.length === 0 && videoAccess !== 'denied')) {
         return <Loader fullScreen />;
     }
 
@@ -116,7 +117,9 @@ export default function AlbumVideosScreen() {
                 />
             </ListHeader>
 
-            {videos.length === 0 ? (
+            {videoAccess === 'denied' ? (
+                <PermissionGate kind="video" />
+            ) : videos.length === 0 ? (
                 <EmptyState text="No videos in this folder" />
             ) : (
                 <FlashList

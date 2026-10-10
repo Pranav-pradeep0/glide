@@ -1,5 +1,5 @@
 // src/screens/SearchScreen.tsx
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
     View,
     TextInput,
@@ -15,7 +15,9 @@ import Feather from '@react-native-vector-icons/feather';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useVideoSearch } from '@/hooks/useVideoSearch';
-import { markAlbumCoverDirty } from '@/hooks/useMediaService';
+import { usePermissionStore } from '@/store/permissionStore';
+import { useVideoIndexStore } from '@/store/videoIndexStore';
+import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { NavigationService } from '@/services/NavigationService';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { VideoFile, RootStackParamList } from '@/types';
@@ -43,22 +45,26 @@ export default function SearchScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [selectedVideo, setSelectedVideo] = useState<VideoFile | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
-    // ponytail: hides deletions locally; the index catches up on its next sync.
-    const [deleted, setDeleted] = useState<Set<string>>(() => new Set());
 
     const {
         query,
         setQuery,
-        results: rawResults,
+        results,
         isIndexReady,
+        isPending,
         clearSearch,
         forceRefresh,
     } = useVideoSearch();
+    const videoAccess = usePermissionStore((s) => s.video.access);
+    const initializeIndex = useVideoIndexStore((s) => s.initialize);
 
-    const results = useMemo(
-        () => (deleted.size ? rawResults.filter(v => !deleted.has(v.path)) : rawResults),
-        [rawResults, deleted],
-    );
+    // The index is normally built at launch; opened before that (or with access granted
+    // since), build it here rather than wait on "Preparing search" for ever.
+    useEffect(() => {
+        if (!isIndexReady && videoAccess !== 'denied' && videoAccess !== 'unknown') {
+            initializeIndex();
+        }
+    }, [isIndexReady, videoAccess, initializeIndex]);
 
     // Focus the field once the index is ready, after the screen transition.
     useEffect(() => {
@@ -85,11 +91,9 @@ export default function SearchScreen() {
     const handleDelete = () => {
         const video = selectedVideo;
         if (!video) {return;}
+        // The index reloads on MediaService's change signal, so the row goes by itself.
         deleteVideo(video.name, video.uri || video.path).then((deleted) => {
-            if (!deleted) {return;}
-            clearHistoryForPath(video.path);
-            if (video.album) {markAlbumCoverDirty(video.album);}
-            setDeleted(prev => new Set(prev).add(video.path));
+            if (deleted) {clearHistoryForPath(video.path);}
         });
     };
 
@@ -118,6 +122,17 @@ export default function SearchScreen() {
             </VideoItemCell>
         );
     }, [grid, query, handleVideoPress, handleOpenOptions]);
+
+    if (videoAccess === 'denied') {
+        return (
+            <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+                <View style={styles.bar}>
+                    <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
+                </View>
+                <PermissionGate kind="video" />
+            </View>
+        );
+    }
 
     if (!isIndexReady) {
         return (
@@ -164,10 +179,14 @@ export default function SearchScreen() {
                 />
             </View>
 
+            <PartialAccessBanner />
             {results.length === 0 ? (
-                <EmptyState
-                    text={query.trim() ? `No videos match "${query.trim()}"` : 'Type a name to search all your folders'}
-                />
+                // While the typing pause runs there is no answer yet, so say nothing.
+                isPending ? null : (
+                    <EmptyState
+                        text={query.trim() ? `No videos match "${query.trim()}"` : 'Type a name to search all your folders'}
+                    />
+                )
             ) : (
                 <FlashList
                     data={results}

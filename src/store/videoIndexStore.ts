@@ -55,3 +55,11 @@ export const useVideoIndexStore = create<VideoIndexState>((set, get) => {
         },
     };
 });
+
+// Files added or removed, or access granted: an index already built loads again, so search
+// is never stuck on the library as it was at launch (empty, if access came later).
+MediaService.onChange(() => {
+    if (useVideoIndexStore.getState().lastFullSyncAt !== null) {
+        useVideoIndexStore.getState().initialize();
+    }
+});

@@ -12,16 +12,16 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Music › A–Z scroller** (`MusicScreen.tsx:282-298, 589`) — shown for every sort, but always jumps by title, so with "Artist" or "Recently added" it lands somewhere random — S
 - ✅ `d054578` **Lyrics** (`LyricsService.ts:193-202`) — a network failure caches "no lyrics" for the session (roadmap Phase 2, still open) — S
 - ~~**Lyrics** (`NowPlayingScreen.tsx:185`) — no `.catch`~~ not a bug: `getLyricsForTrack` catches every step and never rejects
-- **Recents › Music** (`RecentMusicList.tsx:35-45`) — with audio permission denied it says "Nothing played yet" — misleading dead end — S
+- ✅ **Recents › Music** (`RecentMusicList.tsx:35-45`) — with audio permission denied it says "Nothing played yet" — misleading dead end — S
 - ✅ `ee30459` **Recents › Delete** (`RecentsScreen.tsx:99-101`) — entries without `contentUri` say "Open this video from Videos to delete it", but `MediaService.deleteVideos` already resolves paths to URIs (`e919b33`) — S
-- **Folders** (`FoldersScreen.tsx:184`) — permission denied shows "No videos found · Refresh"; video permission is only ever *requested*, never checked, and "never ask again" has no route to Settings (`PermissionService.hasAndroidPermission`) — M
+- ✅ **Folders** (`FoldersScreen.tsx:184`) — permission denied shows "No videos found · Refresh"; video permission is only ever *requested*, never checked, and "never ask again" has no route to Settings (`PermissionService.hasAndroidPermission`) — M
 
 - ✅ `f67414e` **Snackbar** (`ui/index.tsx:614-663`) — after fading it stays mounted at opacity 0 and keeps catching taps: an invisible strip over the bottom of the screen (in the player, over the controls) for the rest of the session — S *(verified)*
 - ✅ `f67414e` **Settings › Shake action / Font** (`SettingsScreen.tsx:465, 730`) — chip rows don't wrap; "Backward 10 s" etc. run off-screen and can't be tapped — S *(verified)*
 - ✅ `ee30459` **Delete, all screens** (`AlbumVideosScreen.tsx:70`, `SearchScreen.tsx:103`, `RecentsScreen.tsx:110`) — cancelling Android's delete dialog rejects `E_DELETE_CANCELLED` and shows "Delete failed… check permissions" — S
-- **Search** (`useVideoSearch.ts:42-47`, `videoIndexStore.ts:25-40`) — results memo ignores index changes, the index is built once (empty if permission was denied) and never re-synced, a failed first load spins "Preparing search" forever — M
+- ✅ **Search** (`useVideoSearch.ts:42-47`, `videoIndexStore.ts:25-40`) — results memo ignores index changes, the index is built once (empty if permission was denied) and never re-synced, a failed first load spins "Preparing search" forever — M
 - ~~**Album / Artist detail, Recents › Music** — promises with no `.catch`~~ not a bug: `AudioMediaService.getSongs` catches and never rejects
-- **Album / Artist detail** — no empty state: "0 songs" with Play All / Shuffle that do nothing — S
+- **Album / Artist detail** — (permission gate ✅) no empty state: "0 songs" with Play All / Shuffle that do nothing — S
 - **AlbumVideos** (`AlbumVideosScreen.tsx:130-150`) — no pull-to-refresh; "Play all" only opens the first video (one file if auto-play-next is off) — S
 - **Update modal** — reappears every cold start (`updateStatus` memory-only; roadmap Phase 2) — S
 - **Subtitles** — SubDL downloads always parsed as `'srt'` (`PlayerDetailScreen.tsx:143, 281`); `picked_subtitle_*` never cleaned (roadmap Phase 2) — S
@@ -70,14 +70,16 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **EmptyState** (`VideoRow.tsx:365-374`) — always a film icon, including on Music and Recents › Music — S
 - **Music › A–Z scroller** — 10 px letters with ~14 dp targets, tap-only (no drag along the strip) — S
 - **Folders / Recents / Music / Search / AlbumVideos** — view mode, sort and Recents' Videos/Music chip reset every launch (roadmap Phase 6) — S
-- **Permission dead ends, app-wide** — Folders, AlbumVideos, Search, Recents › Music, Album/Artist detail all show plain "nothing here" copy when access is denied; Android 14 "Select videos" partial access has no "select more / allow all"; Music's button still says "Grant Permission" when tapping it opens Settings. Extract Music's screen into a shared `PermissionGate` — M
+- ✅ **Permission dead ends, app-wide** — Folders, AlbumVideos, Search, Recents › Music, Album/Artist detail all show plain "nothing here" copy when access is denied; Android 14 "Select videos" partial access has no "select more / allow all"; Music's button still says "Grant Permission" when tapping it opens Settings. Extract Music's screen into a shared `PermissionGate` — M
 - **Headers** — Settings uses a raw title (4 dp different inset from other tabs); Album/Artist use a centred bar with `chevron-left`, AlbumVideos/Search a left bar with `arrow-left`, PlayerDetail a floating chevron — M
 - **Wording** — "Play All" vs "Play all", "Song Options", "Grant Permission", "Access your Music" in title case against sentence case elsewhere; Album/Artist have no primary action button — S
 - **Settings** — "Reset to default" for subtitle appearance has no confirm; "Clear subtitle cache" always says Done — S
-- **Search** — `No videos match "a"` flashes during the 300 ms debounce — S
+- ✅ **Search** — `No videos match "a"` flashes during the 300 ms debounce — S
 - **MiniPlayer** (`MiniPlayer.tsx:181`) — Next has no haptic (swipe does); while buffering the spinner replaces play/pause so you can't pause — S
 - **Touch targets** — TrackRow "more" 28 dp, Album/Artist "more" 32 dp, queue buttons 32 dp — S
 - **Small features** — theme "Auto" (follow system); re-tapping a tab scrolls to top; AlbumVideos sort + folder-scoped search; consider "Third-party licences" as the Settings label so nobody reads it as Glide being open source — S each
+
+- **Music queue after a late grant** (`audioStore.ts:97`) — the saved queue is resolved against MediaStore once at launch; granting audio access later leaves it unresolved until the next launch — S
 
 ## Slow paths
 

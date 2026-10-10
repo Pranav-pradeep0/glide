@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
@@ -10,8 +10,10 @@ import { IconButton, SortButton, Touchable } from '@/components/ui';
 import { EmptyState, ListHeader, getRelativeTime, joinMeta } from '@/components/VideoRow';
 import { RootStackParamList, VideoFolder } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
-import { consumeDirtyAlbumCovers, useAlbums } from '@/hooks/useMediaService';
+import { useAlbums } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
+import { usePermissionStore } from '@/store/permissionStore';
+import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { metrics, type } from '@/theme/theme';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -104,16 +106,7 @@ export default function FoldersScreen() {
     const navigation = useNavigation<NavigationProp>();
 
     const { albums, loading, refetch } = useAlbums();
-
-    useFocusEffect(
-        useCallback(() => {
-            const dirtyAlbums = consumeDirtyAlbumCovers();
-            if (dirtyAlbums.length > 0) {
-                refetch();
-            }
-            return undefined;
-        }, [refetch])
-    );
+    const videoAccess = usePermissionStore((s) => s.video.access);
 
     const [viewMode, setViewMode] = useState<ViewMode>('list');
     const [sortBy, setSortBy] = useState<SortByOption>('name');
@@ -151,7 +144,7 @@ export default function FoldersScreen() {
         </View>
     ), [grid, handleAlbumPress]);
 
-    if (loading && albums.length === 0) {
+    if (videoAccess === 'unknown' || (loading && albums.length === 0 && videoAccess !== 'denied')) {
         return <Loader />;
     }
 
@@ -169,52 +162,54 @@ export default function FoldersScreen() {
                 </ListHeader>
             </View>
 
-            <Touchable
-                onPress={() => navigation.navigate('Search')}
-                accessibilityRole="search"
-                accessibilityLabel="Search all videos"
-                style={[styles.pill, { backgroundColor: theme.colors.cardElevated }]}
-            >
-                <Feather name="search" size={18} color={theme.colors.textSecondary} />
-                <Text style={[type.body, { color: theme.colors.textTertiary }]}>Search all videos</Text>
-            </Touchable>
+            {videoAccess === 'denied' ? <PermissionGate kind="video" /> : <>
+                <Touchable
+                    onPress={() => navigation.navigate('Search')}
+                    accessibilityRole="search"
+                    accessibilityLabel="Search all videos"
+                    style={[styles.pill, { backgroundColor: theme.colors.cardElevated }]}
+                >
+                    <Feather name="search" size={18} color={theme.colors.textSecondary} />
+                    <Text style={[type.body, { color: theme.colors.textTertiary }]}>Search all videos</Text>
+                </Touchable>
+                <PartialAccessBanner />
 
-            {isEmpty ? (
-                // Refetching asks for media access again if it was denied.
-                <EmptyState text="No videos found" action="Refresh" onAction={refetch} />
-            ) : (
-                <>
-                    <View style={styles.sortBar}>
-                        <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
-                            {sortedAlbums.length} folder{sortedAlbums.length !== 1 ? 's' : ''}
-                        </Text>
-                        <SortButton options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
-                    </View>
-                    <FlashList
-                        ref={flashListRef}
-                        data={sortedAlbums}
-                        renderItem={renderAlbum}
-                        keyExtractor={(item: VideoFolder) => item.id || item.title}
-                        numColumns={grid ? 2 : 1}
-                        key={`${viewMode}-${sortBy}`}
-                        contentContainerStyle={{
-                            paddingHorizontal: grid ? metrics.gutter - GRID_HALF_GAP : metrics.gutter - metrics.space.sm,
-                            paddingBottom: metrics.space.xxl,
-                        }}
-                        refreshControl={
-                            <RefreshControl
-                                refreshing={loading}
-                                onRefresh={refetch}
-                                tintColor={theme.colors.primary}
-                                colors={[theme.colors.primary]}
-                                progressBackgroundColor={theme.colors.cardElevated}
-                            />
-                        }
-                        extraData={viewMode}
-                        showsVerticalScrollIndicator={false}
-                    />
-                </>
-            )}
+                {isEmpty ? (
+                    <EmptyState text="No videos found" action="Refresh" onAction={refetch} />
+                ) : (
+                    <>
+                        <View style={styles.sortBar}>
+                            <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
+                                {sortedAlbums.length} folder{sortedAlbums.length !== 1 ? 's' : ''}
+                            </Text>
+                            <SortButton options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
+                        </View>
+                        <FlashList
+                            ref={flashListRef}
+                            data={sortedAlbums}
+                            renderItem={renderAlbum}
+                            keyExtractor={(item: VideoFolder) => item.id || item.title}
+                            numColumns={grid ? 2 : 1}
+                            key={`${viewMode}-${sortBy}`}
+                            contentContainerStyle={{
+                                paddingHorizontal: grid ? metrics.gutter - GRID_HALF_GAP : metrics.gutter - metrics.space.sm,
+                                paddingBottom: metrics.space.xxl,
+                            }}
+                            refreshControl={
+                                <RefreshControl
+                                    refreshing={loading}
+                                    onRefresh={refetch}
+                                    tintColor={theme.colors.primary}
+                                    colors={[theme.colors.primary]}
+                                    progressBackgroundColor={theme.colors.cardElevated}
+                                />
+                            }
+                            extraData={viewMode}
+                            showsVerticalScrollIndicator={false}
+                        />
+                    </>
+                )}
+            </>}
         </View>
     );
 }

@@ -8,6 +8,8 @@ interface UseVideoSearchResult {
     results: VideoFile[];
     isIndexReady: boolean;
     isIndexing: boolean;
+    /** The typed query has not been searched yet (debounce still running). */
+    isPending: boolean;
     clearSearch: () => void;
     forceRefresh: () => Promise<void>;
 }
@@ -25,6 +27,8 @@ export function useVideoSearch(debounceMs = 300): UseVideoSearchResult {
     // One field per subscription: the whole store includes the video list, so subscribing
     // to all of it re-ran the search on every index change.
     const searchVideos = useVideoIndexStore(s => s.searchVideos);
+    // Only so results follow a re-index; the search itself reads the store.
+    const indexedVideos = useVideoIndexStore(s => s.videos);
     const isIndexReady = useVideoIndexStore(s => s.isIndexReady);
     const isIndexing = useVideoIndexStore(s => s.isIndexing);
     const forceFullSync = useVideoIndexStore(s => s.forceFullSync);
@@ -44,7 +48,8 @@ export function useVideoSearch(debounceMs = 300): UseVideoSearchResult {
             return [];
         }
         return searchVideos(debouncedQuery);
-    }, [debouncedQuery, isIndexReady, searchVideos]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- indexedVideos is what searchVideos reads
+    }, [debouncedQuery, isIndexReady, searchVideos, indexedVideos]);
 
     const clearSearch = useCallback(() => {
         setQuery('');
@@ -61,6 +66,7 @@ export function useVideoSearch(debounceMs = 300): UseVideoSearchResult {
         results,
         isIndexReady,
         isIndexing,
+        isPending: query.trim() !== debouncedQuery.trim(),
         clearSearch,
         forceRefresh,
     };

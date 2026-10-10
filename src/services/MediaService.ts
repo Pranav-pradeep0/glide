@@ -49,6 +49,23 @@ class MediaServiceClass {
         this.invalidateCache();
     }
 
+    private changeListeners = new Set<() => void>();
+
+    /**
+     * The library changed under us: files added or removed outside Glide, or access granted.
+     * Drops the cache and tells every list showing the library to load it again.
+     */
+    notifyChanged() {
+        this.invalidateCache();
+        this.changeListeners.forEach((listener) => listener());
+    }
+
+    /** Called after each `notifyChanged`. Returns the unsubscribe. */
+    onChange(listener: () => void): () => void {
+        this.changeListeners.add(listener);
+        return () => { this.changeListeners.delete(listener); };
+    }
+
     /**
      * Delete videos by content:// URI, file:// URI or path (native resolves paths to their
      * MediaStore entry). Android 11+ shows the system's confirmation dialog.
@@ -65,7 +82,8 @@ class MediaServiceClass {
         }
         const deleted = (await this.module.deleteVideos(targets)) === true;
         if (deleted) {
-            this.invalidateCache();
+            // Every list (folders, the folder, search) reloads without the file.
+            this.notifyChanged();
         }
         return deleted;
     }
@@ -79,7 +97,8 @@ class MediaServiceClass {
             return { videos: [], folders: [] };
         }
 
-        const hasPermission = await PermissionService.hasAndroidPermission();
+        // Check only: a data call never prompts. The grant-access screen asks.
+        const hasPermission = (await PermissionService.check('video')) !== 'denied';
         if (!hasPermission) {
             console.warn('[MediaService] No permission to access media');
             return { videos: [], folders: [] };
@@ -159,7 +178,8 @@ class MediaServiceClass {
             return [];
         }
 
-        const hasPermission = await PermissionService.hasAndroidPermission();
+        // Check only: a data call never prompts. The grant-access screen asks.
+        const hasPermission = (await PermissionService.check('video')) !== 'denied';
         if (!hasPermission) {
             return [];
         }
@@ -198,7 +218,8 @@ class MediaServiceClass {
         after?: string,
         forceRefresh = false
     ): Promise<VideoPageResult> {
-        const hasPermission = await PermissionService.hasAndroidPermission();
+        // Check only: a data call never prompts. The grant-access screen asks.
+        const hasPermission = (await PermissionService.check('video')) !== 'denied';
         if (!hasPermission) {
             return { edges: [], page_info: { has_next_page: false } };
         }
@@ -258,7 +279,7 @@ class MediaServiceClass {
 
 export const MediaService = new MediaServiceClass();
 
-// A video added or removed outside Glide (API 2). Older APKs keep the 5-minute cache TTL.
+// A video added or removed outside Glide (API 2): every screen showing the library reloads.
 if (Platform.OS === 'android' && hasNativeApi(2)) {
-    DeviceEventEmitter.addListener('onVideoLibraryChanged', () => MediaService.invalidateCache());
+    DeviceEventEmitter.addListener('onVideoLibraryChanged', () => MediaService.notifyChanged());
 }

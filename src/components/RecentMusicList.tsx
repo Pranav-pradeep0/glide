@@ -5,7 +5,8 @@ import { FlashList } from '@shopify/flash-list';
 import { useAudioStore } from '@/store/audioStore';
 import { useMusicHistoryStore } from '@/store/musicHistoryStore';
 import { AudioMediaService } from '@/services/AudioMediaService';
-import { PermissionService } from '@/services/PermissionService';
+import { usePermissionStore } from '@/store/permissionStore';
+import { PermissionGate } from '@/components/PermissionGate';
 import { TrackRow } from '@/components/TrackRow';
 import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { EmptyState, getRelativeTime } from '@/components/VideoRow';
@@ -31,18 +32,18 @@ export function RecentMusicList() {
     const [library, setLibrary] = useState<AudioTrack[] | null>(null);
     const [selected, setSelected] = useState<AudioTrack | null>(null);
 
-    // Check, never request: asking for a permission belongs to the Music tab, not here.
+    // Loads once access is there, and again when it is granted.
+    const audioAccess = usePermissionStore((s) => s.audio.access);
     useEffect(() => {
+        if (audioAccess !== 'granted') return;
         let alive = true;
-        PermissionService.checkAudioPermission()
-            .then((granted) => (granted ? AudioMediaService.getSongs() : []))
-            .then((songs) => {
-                if (alive) setLibrary(songs);
-            });
+        AudioMediaService.getSongs().then((songs) => {
+            if (alive) setLibrary(songs);
+        });
         return () => {
             alive = false;
         };
-    }, []);
+    }, [audioAccess]);
 
     // Songs no longer on the device (or opened from outside the library) drop out here.
     const recent = useMemo<RecentSong[]>(() => {
@@ -55,6 +56,11 @@ export function RecentMusicList() {
     }, [library, entries]);
     const queue = useMemo(() => recent.map((r) => r.track), [recent]);
 
+    // Without access the songs cannot be matched to the history, so ask rather than say
+    // "nothing played yet".
+    if (audioAccess === 'denied') {
+        return <PermissionGate kind="audio" />;
+    }
     if (!library) {
         return <Loader />;
     }

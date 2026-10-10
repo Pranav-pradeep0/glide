@@ -68,7 +68,7 @@ NativeModules.MediaStoreVideoModule = {
 
 jest.mock('../src/services/PermissionService', () => ({
     PermissionService: {
-        hasAndroidPermission: jest.fn<any>().mockResolvedValue(true),
+        check: jest.fn<any>().mockResolvedValue('granted'),
     },
 }));
 

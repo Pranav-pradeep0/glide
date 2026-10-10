@@ -6,6 +6,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { useAudioStore } from '@/store/audioStore';
+import { usePermissionStore } from '@/store/permissionStore';
+import { PermissionGate } from '@/components/PermissionGate';
 import { AudioMediaService } from '@/services/AudioMediaService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumArt } from '@/hooks/useAlbumArt';
@@ -75,6 +77,8 @@ export default function ArtistDetailScreen() {
     const currentTrack = useAudioStore((s) => s.currentTrack);
     const isPlaying = useAudioStore((s) => s.isPlaying);
 
+    // Reloads when access is granted: the store has dropped the song cache by then.
+    const audioAccess = usePermissionStore((s) => s.audio.access);
     useEffect(() => {
         let isMounted = true;
         setLoading(true);
@@ -88,7 +92,7 @@ export default function ArtistDetailScreen() {
         return () => {
             isMounted = false;
         };
-    }, [artistId]);
+    }, [artistId, audioAccess]);
 
     const handlePlayAll = useCallback(
         (shuffleMode = false) => {
@@ -196,7 +200,9 @@ export default function ArtistDetailScreen() {
                 <View style={{ width: 40 }} />
             </View>
 
-            {loading ? (
+            {audioAccess === 'denied' ? (
+                <PermissionGate kind="audio" />
+            ) : loading ? (
                 <Loader />
             ) : (
                 <FlashList

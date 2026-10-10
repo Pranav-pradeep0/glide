@@ -1,20 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MediaService } from '@/services/MediaService';
 import { VideoFile, VideoFolder } from '@/types';
 
 const albumVideosCache = new Map<string, VideoFile[]>();
-const dirtyAlbumCovers = new Set<string>();
-
-export function markAlbumCoverDirty(albumTitle: string | null | undefined) {
-    if (!albumTitle) {return;}
-    dirtyAlbumCovers.add(albumTitle);
-}
-
-export function consumeDirtyAlbumCovers(): string[] {
-    const albums = Array.from(dirtyAlbumCovers);
-    dirtyAlbumCovers.clear();
-    return albums;
-}
 
 export function useAlbums() {
     const [albums, setAlbums] = useState<VideoFolder[]>([]);
@@ -36,6 +24,9 @@ export function useAlbums() {
 
     useEffect(() => {
         fetchAlbums();
+        // New files, deletions elsewhere, or access just granted: the cache is already
+        // dropped, so a plain fetch scans again (and shares that scan with other screens).
+        return MediaService.onChange(() => fetchAlbums());
     }, [fetchAlbums]);
 
     return { albums, folders: albums, loading, error, refetch: () => fetchAlbums(true) };
@@ -128,6 +119,14 @@ export function useAlbumVideos(albumTitle: string | null, bucketId?: string) {
         setVideos([]);
         fetchVideos(true);
     }, [albumTitle, bucketId, cacheKey]);
+
+    // The library changed (files added or removed, access granted): load this folder again.
+    const fetchRef = useRef(fetchVideos);
+    fetchRef.current = fetchVideos;
+    useEffect(() => MediaService.onChange(() => {
+        if (cacheKey) {albumVideosCache.delete(cacheKey);}
+        fetchRef.current(true);
+    }), [cacheKey]);
 
     return {
         videos,

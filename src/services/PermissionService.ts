@@ -1,40 +1,73 @@
-import { Linking, PermissionsAndroid, Platform } from 'react-native';
+import { Linking, Permission, PermissionsAndroid, Platform } from 'react-native';
 
+/** What Glide may read: everything, only the videos picked (Android 14+), or nothing. */
+export type MediaAccess = 'granted' | 'partial' | 'denied';
+export type MediaKind = 'video' | 'audio';
+
+const { PERMISSIONS, RESULTS } = PermissionsAndroid;
+/** Android API level; 0 elsewhere, where every check returns granted before reading it. */
+const API = Platform.OS === 'android' ? Platform.Version : 0;
+
+/**
+ * Checks never prompt; only `request` does, and only when a person asked for access (the
+ * grant-access screen). Data services check, so loading a list can never pop a dialog.
+ */
 class PermissionServiceClass {
-    /**
-     * Check and request the video permission Glide actually reads on Android.
-     * Returns true if it is granted or not required (iOS).
-     */
-    async hasAndroidPermission(): Promise<boolean> {
-        if (Platform.OS !== 'android') {
-            return true;
+    private readPermission(kind: MediaKind): Permission {
+        if (API < 33) {
+            return PERMISSIONS.READ_EXTERNAL_STORAGE;
         }
+        return kind === 'video' ? PERMISSIONS.READ_MEDIA_VIDEO : PERMISSIONS.READ_MEDIA_AUDIO;
+    }
 
+    async check(kind: MediaKind): Promise<MediaAccess> {
+        if (Platform.OS !== 'android') {
+            return 'granted';
+        }
         try {
-            // Android 13+ (API 33+) uses granular media permissions. Glide reads only
-            // videos, so it must not ask for images or audio to get at them.
-            //
-            // On Android 14+ "Select videos" grants partial access. Glide does not
-            // declare READ_MEDIA_VISUAL_USER_SELECTED and so runs in compatibility
-            // mode: the grant reads as granted but covers only the chosen videos, and
-            // the picker reappears on a later launch. Declaring it would mean owning
-            // re-selection UI, which is not worth it until users ask.
-            if (Platform.Version >= 33) {
-                const status = await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
-                );
-                return status === PermissionsAndroid.RESULTS.GRANTED;
+            if (await PermissionsAndroid.check(this.readPermission(kind))) {
+                return 'granted';
             }
+            // Android 14+ "Select videos": the full permission reads as denied, the
+            // user-selected one as granted, and MediaStore returns only the chosen files.
+            if (kind === 'video' && API >= 34
+                && await PermissionsAndroid.check(PERMISSIONS.READ_MEDIA_VISUAL_USER_SELECTED)) {
+                return 'partial';
+            }
+            return 'denied';
+        } catch (error) {
+            console.error('[PermissionService] Permission check failed:', error);
+            return 'denied';
+        }
+    }
 
-            // Android 12 and below use READ_EXTERNAL_STORAGE
-            const status = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
-            );
-            return status === PermissionsAndroid.RESULTS.GRANTED;
+    /**
+     * Ask for access. On Android 14+ video asks with the partial permission too, which is
+     * what makes the system offer "Select videos" and lets a partial grant be re-asked to
+     * pick more. `blocked` means Android will not show the dialog again ("Don't allow"
+     * twice); the caller sends the person to Settings.
+     */
+    async request(kind: MediaKind): Promise<{ access: MediaAccess; blocked: boolean }> {
+        if (Platform.OS !== 'android') {
+            return { access: 'granted', blocked: false };
+        }
+        const primary = this.readPermission(kind);
+        const permissions = kind === 'video' && API >= 34
+            ? [primary, PERMISSIONS.READ_MEDIA_VISUAL_USER_SELECTED]
+            : [primary];
+        try {
+            const results = await PermissionsAndroid.requestMultiple(permissions);
+            const access = await this.check(kind);
+            const blocked = access === 'denied' && results[primary] === RESULTS.NEVER_ASK_AGAIN;
+            return { access, blocked };
         } catch (error) {
             console.error('[PermissionService] Permission request failed:', error);
-            return false;
+            return { access: 'denied', blocked: false };
         }
+    }
+
+    openSettings() {
+        Linking.openSettings().catch(() => {});
     }
 
     /**
@@ -42,67 +75,24 @@ class PermissionServiceClass {
      * caps it at API 28). From Android 10 the system asks per file instead, so this is true.
      */
     async requestDeletePermission(): Promise<boolean> {
-        if (Platform.OS !== 'android' || Platform.Version >= 29) {
+        if (Platform.OS !== 'android' || API >= 29) {
             return true;
         }
         try {
-            const status = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
-            if (status === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-                await Linking.openSettings().catch(() => {});
+            const status = await PermissionsAndroid.request(PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+            if (status === RESULTS.NEVER_ASK_AGAIN) {
+                this.openSettings();
             }
-            return status === PermissionsAndroid.RESULTS.GRANTED;
+            return status === RESULTS.GRANTED;
         } catch (error) {
             console.error('[PermissionService] Delete permission request failed:', error);
             return false;
         }
     }
 
-    /**
-     * Check if audio permission is granted without prompting.
-     */
+    /** True when audio can be read. Kept for the callers that only need a yes or no. */
     async checkAudioPermission(): Promise<boolean> {
-        if (Platform.OS !== 'android') {
-            return true;
-        }
-        try {
-            if (Platform.Version >= 33) {
-                return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO);
-            }
-            return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
-        } catch (error) {
-            console.error('[PermissionService] Permission check failed:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Request the audio permission Glide needs to scan songs on Android.
-     */
-    async requestAudioPermission(): Promise<boolean> {
-        if (Platform.OS !== 'android') {
-            return true;
-        }
-        try {
-            const perm =
-                Platform.Version >= 33
-                    ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO
-                    : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
-            const status = await PermissionsAndroid.request(perm);
-            if (status === PermissionsAndroid.RESULTS.GRANTED) {
-                return true;
-            }
-            if (status === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-                try {
-                    await Linking.openSettings();
-                } catch {
-                    // ignore
-                }
-            }
-            return false;
-        } catch (error) {
-            console.error('[PermissionService] Audio permission request failed:', error);
-            return false;
-        }
+        return (await this.check('audio')) === 'granted';
     }
 }
 

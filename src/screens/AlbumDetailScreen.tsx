@@ -6,6 +6,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { useAudioStore } from '@/store/audioStore';
+import { usePermissionStore } from '@/store/permissionStore';
+import { PermissionGate } from '@/components/PermissionGate';
 import { AudioMediaService } from '@/services/AudioMediaService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumPalette } from '@/hooks/useAlbumArt';
@@ -44,6 +46,8 @@ export default function AlbumDetailScreen() {
     // of being flat black. Dark swatch in dark mode; a light tint of the main one otherwise.
     const tint = dark ? palette.secondaryColor : palette.primaryColor && `${palette.primaryColor}40`;
 
+    // Reloads when access is granted: the store has dropped the song cache by then.
+    const audioAccess = usePermissionStore((s) => s.audio.access);
     useEffect(() => {
         let isMounted = true;
         setLoading(true);
@@ -56,7 +60,7 @@ export default function AlbumDetailScreen() {
         return () => {
             isMounted = false;
         };
-    }, [albumId]);
+    }, [albumId, audioAccess]);
 
     const totalDuration = useMemo(() => {
         return songs.reduce((acc, curr) => acc + (curr.duration || 0), 0);
@@ -172,7 +176,9 @@ export default function AlbumDetailScreen() {
                 <View style={{ width: 40 }} />
             </View>
 
-            {loading ? (
+            {audioAccess === 'denied' ? (
+                <PermissionGate kind="audio" />
+            ) : loading ? (
                 <Loader />
             ) : (
                 <FlashList

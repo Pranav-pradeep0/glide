@@ -26,12 +26,9 @@ class AudioMediaServiceClass {
             return [];
         }
 
-        const hasPerm = await PermissionService.checkAudioPermission();
-        if (!hasPerm) {
-            const granted = await PermissionService.requestAudioPermission();
-            if (!granted) {
-                return [];
-            }
+        // Check only: a data call never prompts. The grant-access screen asks.
+        if (!(await PermissionService.checkAudioPermission())) {
+            return [];
         }
 
         if (!forceRefresh && this.songsCache) {

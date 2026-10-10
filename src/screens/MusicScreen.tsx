@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-    AppState,
     Image,
     RefreshControl,
     ScrollView,
@@ -17,7 +16,8 @@ import { FlashList } from '@shopify/flash-list';
 import { useAudioStore } from '@/store/audioStore';
 import { useFavoritesStore } from '@/store/favoritesStore';
 import { AudioMediaService } from '@/services/AudioMediaService';
-import { PermissionService } from '@/services/PermissionService';
+import { usePermissionStore } from '@/store/permissionStore';
+import { PermissionGate } from '@/components/PermissionGate';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumArt } from '@/hooks/useAlbumArt';
 import { Button, Chip, IconButton, SortButton, Touchable } from '@/components/ui';
@@ -89,8 +89,7 @@ export default function MusicScreen() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<NavigationProp>();
 
-    const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-    const permissionWasDenied = useRef(false);
+    const audioAccess = usePermissionStore((s) => s.audio.access);
     const [activeTab, setActiveTab] = useState<LibraryTab>('tracks');
     const [loading, setLoading] = useState(true);
 
@@ -123,15 +122,6 @@ export default function MusicScreen() {
     const loadData = useCallback(async (forceRefresh = false) => {
         setLoading(true);
         try {
-            const perm = await PermissionService.checkAudioPermission();
-            setHasPermission(perm);
-            if (!perm) {
-                permissionWasDenied.current = true;
-                setLoading(false);
-                return;
-            }
-            permissionWasDenied.current = false;
-
             const { tracks: songsList, albums: albumsList, artists: artistsList } =
                 await AudioMediaService.getLibrary(forceRefresh);
 
@@ -146,36 +136,13 @@ export default function MusicScreen() {
         }
     }, []);
 
+    // Loads once access is known to be there, and again whenever it is granted (the store
+    // has dropped the song cache by then, so this scans afresh).
     useEffect(() => {
-        loadData();
-    }, [loadData]);
-
-    // Re-check permission on foreground if previously denied
-    useEffect(() => {
-        const sub = AppState.addEventListener('change', (nextState) => {
-            if (nextState === 'active' && permissionWasDenied.current) {
-                PermissionService.checkAudioPermission().then((perm) => {
-                    setHasPermission(perm);
-                    if (perm) {
-                        permissionWasDenied.current = false;
-                        loadData(true);
-                    }
-                });
-            }
-        });
-        return () => sub.remove();
-    }, [loadData]);
-
-    const handleRequestPermission = async () => {
-        const granted = await PermissionService.requestAudioPermission();
-        setHasPermission(granted);
-        if (granted) {
-            permissionWasDenied.current = false;
-            loadData(true);
-        } else {
-            permissionWasDenied.current = true;
+        if (audioAccess === 'granted') {
+            loadData();
         }
-    };
+    }, [audioAccess, loadData]);
 
     const handleSelectFolder = useCallback(async (folder: AudioFolder) => {
         setSelectedFolder(folder);
@@ -411,26 +378,11 @@ export default function MusicScreen() {
         [colors, handleSelectFolder]
     );
 
-    // Permission required view
-    if (hasPermission === false) {
+    if (audioAccess === 'denied') {
         return (
             <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
                 <ListHeader title="Music" />
-                <View style={styles.permContainer}>
-                    <Feather name="music" size={48} color={colors.textTertiary} />
-                    <Text style={[type.title, { color: colors.text, textAlign: 'center' }]}>
-                        Access your Music
-                    </Text>
-                    <Text style={[type.body, { color: colors.textSecondary, textAlign: 'center' }]}>
-                        Allow Glide to access audio files on your device so you can listen to your songs.
-                    </Text>
-                    <Button
-                        label="Grant Permission"
-                        onPress={handleRequestPermission}
-                        variant="primary"
-                        icon="shield"
-                    />
-                </View>
+                <PermissionGate kind="audio" />
             </View>
         );
     }
@@ -683,13 +635,6 @@ export default function MusicScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-    },
-    permContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: metrics.gutter * 2,
-        gap: metrics.space.md,
     },
     searchBar: {
         flexDirection: 'row',
