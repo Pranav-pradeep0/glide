@@ -40,25 +40,31 @@ object GlideEqualizer {
      */
     @JvmStatic
     fun apply(existing: Equalizer?, bands: FloatArray?, audioSessionId: Int): Equalizer? {
-        if (bands == null) {
+        // Flat counts as off. An enabled 0 dB effect sounds the same but still holds the
+        // audio session, which keeps offload from engaging while isFlat says it may.
+        if (bands == null || isFlat(bands)) {
             existing?.release()
             return null
         }
         if (audioSessionId == 0) return existing
 
+        var eq: Equalizer? = existing
         return try {
-            val eq = existing ?: Equalizer(PRIORITY, audioSessionId)
-            val (minLevel, maxLevel) = eq.bandLevelRange.let { it[0] to it[1] }
-            for (band in 0 until eq.numberOfBands) {
+            val effect = eq ?: Equalizer(PRIORITY, audioSessionId).also { eq = it }
+            val (minLevel, maxLevel) = effect.bandLevelRange.let { it[0] to it[1] }
+            for (band in 0 until effect.numberOfBands) {
                 val b = band.toShort()
-                val centreHz = eq.getCenterFreq(b) / 1000
+                val centreHz = effect.getCenterFreq(b) / 1000
                 val millibels = (nearestGainDb(bands, centreHz) * 100).toInt()
-                eq.setBandLevel(b, millibels.coerceIn(minLevel.toInt(), maxLevel.toInt()).toShort())
+                effect.setBandLevel(b, millibels.coerceIn(minLevel.toInt(), maxLevel.toInt()).toShort())
             }
-            eq.enabled = true
-            eq
+            effect.enabled = true
+            effect
         } catch (e: RuntimeException) {
+            // Lost control to another app or an OEM effect, or mediaserver restarted.
+            // Release it: returning null drops our last reference to a native effect.
             Log.w(TAG, "equalizer unavailable: ${e.message}")
+            try { eq?.release() } catch (_: RuntimeException) {}
             null
         }
     }

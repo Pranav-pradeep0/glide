@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -14,13 +15,25 @@ import com.glide.app.pip.PipModule
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class MainActivity : GlideBaseActivity() {
+  private companion object {
+    const val SPLASH_TIMEOUT_MS = 8_000L
+  }
+
   private var isReactReady = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
     val splashScreen = installSplashScreen()
     // In debug, we only keep it until the activity is created to see bundling progress.
     // In release, we keep it until React Native is ready for a perfect transition.
-    splashScreen.setKeepOnScreenCondition { !BuildConfig.DEBUG && !isReactReady }
+    // Capped natively: only JS clears isReactReady, so a bundle that throws before the
+    // navigator is ready -- a bad OTA included -- would otherwise sit on the splash forever,
+    // hiding the error screen, and never crash for Stallion to roll back. The condition is
+    // polled every frame while the splash shows.
+    val splashShownAt = SystemClock.uptimeMillis()
+    splashScreen.setKeepOnScreenCondition {
+      !BuildConfig.DEBUG && !isReactReady &&
+          SystemClock.uptimeMillis() - splashShownAt < SPLASH_TIMEOUT_MS
+    }
     dropPrivateUri(intent)
     super.onCreate(savedInstanceState)
     

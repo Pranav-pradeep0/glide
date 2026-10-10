@@ -619,7 +619,9 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
             return false
         }
         val am = audioManager
-        if (!isListening || am == null || !reactContext.hasActiveReactInstance()) {
+        // Fixed-volume devices (TV boxes, HDMI-CEC) ignore setStreamVolume, and consuming
+        // the key stops the system forwarding it to the TV: leave it to the system.
+        if (!isListening || am == null || am.isVolumeFixed || !reactContext.hasActiveReactInstance()) {
             return false
         }
         val maxVolume = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -651,6 +653,17 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
         Log.i(TAG, "onHostDestroy - cleaning up")
         cancelPendingAudioCallbacks()
         stopListening()
+    }
+
+    /**
+     * A JS reload (and an OTA restart) destroys the module without onHostDestroy, which
+     * left the observer and device callback holding the old context alive.
+     */
+    override fun invalidate() {
+        cancelPendingAudioCallbacks()
+        stopListening()
+        reactContext.removeLifecycleEventListener(this)
+        super.invalidate()
     }
 
     private fun isVolumeRelatedSettingsUri(uri: Uri): Boolean {

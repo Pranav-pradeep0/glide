@@ -394,7 +394,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
      */
     @ReactMethod
     fun alignVideo(videoPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray, audioTrackIndex: Int, promise: Promise) {
-        BackgroundWork.submitLong {
+        BackgroundWork.submitLong(promise) {
             try {
                 val decoded = decodeAudioWindow(videoPath, windowStartS, 300.0, audioTrackIndex)
                     ?: return@submitLong promise.reject("E_NO_AUDIO", "No decodable audio in this video")
@@ -428,7 +428,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
      */
     @ReactMethod
     fun getVideoMetadata(videoPath: String, promise: Promise) {
-        BackgroundWork.submit {
+        BackgroundWork.submit(promise) {
             val context = reactApplicationContext
             val uri = Uri.parse(videoPath)
             var pfd: ParcelFileDescriptor? = null
@@ -522,7 +522,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     @ReactMethod
     fun getSubtitleTracks(videoPath: String, promise: Promise) {
-        BackgroundWork.submit {
+        BackgroundWork.submit(promise) {
             try {
                 val uri = EmbeddedSubtitles.toUri(videoPath)
                 val tracks = Arguments.createArray()
@@ -556,7 +556,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     @ReactMethod
     fun extractSubtitle(videoPath: String, ordinal: Int, promise: Promise) {
-        BackgroundWork.submitLong {
+        BackgroundWork.submitLong(promise) {
             try {
                 val uri = EmbeddedSubtitles.toUri(videoPath)
                 val srt = if (EmbeddedSubtitles.isNetwork(uri)) null

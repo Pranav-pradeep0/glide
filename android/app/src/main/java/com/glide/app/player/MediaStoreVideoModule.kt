@@ -279,7 +279,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getLibrary(promise: Promise) {
-        BackgroundWork.submit {
+        BackgroundWork.submit(promise) {
             try {
                 val resolver = reactContext.contentResolver
                 val selection = "${MediaStore.Video.Media.SIZE} > 0"
@@ -418,7 +418,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getVideos(bucketId: String?, promise: Promise) {
-        BackgroundWork.submit {
+        BackgroundWork.submit(promise) {
             try {
                 val resolver = reactContext.contentResolver
                 val selection = if (!bucketId.isNullOrEmpty()) {

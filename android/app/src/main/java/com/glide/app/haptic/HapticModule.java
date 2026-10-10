@@ -40,8 +40,13 @@ public class HapticModule extends ReactContextBaseJavaModule {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Android 8.0+ - Use VibrationEffect with amplitude control
             int clampedAmplitude = Math.max(1, Math.min(255, amplitude));
-            VibrationEffect effect = VibrationEffect.createOneShot(duration, clampedAmplitude);
-            vibrator.vibrate(effect);
+            // createOneShot throws for duration <= 0. This is an async void method, so a
+            // throw here lands on the native-modules thread and kills the process, out of
+            // reach of any JS try/catch. A haptic is never worth a crash.
+            try {
+                vibrator.vibrate(VibrationEffect.createOneShot(duration, clampedAmplitude));
+            } catch (RuntimeException ignored) {
+            }
         } else {
             // Fallback for older Android versions
             vibrator.vibrate(duration);
@@ -75,8 +80,11 @@ public class HapticModule extends ReactContextBaseJavaModule {
                 amplitudesArray[i] = Math.max(0, Math.min(255, amp));
             }
 
-            VibrationEffect effect = VibrationEffect.createWaveform(timingsArray, amplitudesArray, -1);
-            vibrator.vibrate(effect);
+            // Throws for empty, mismatched or all-zero arrays; see vibrate().
+            try {
+                vibrator.vibrate(VibrationEffect.createWaveform(timingsArray, amplitudesArray, -1));
+            } catch (RuntimeException ignored) {
+            }
         } else {
             // Fallback for older versions - just use timings
             long[] timingsArray = new long[timings.size()];
@@ -100,13 +108,14 @@ public class HapticModule extends ReactContextBaseJavaModule {
     /**
      * Checks if device supports amplitude control
      * 
-     * @return true if Android 8.0+ and has vibrator
+     * @return whether the vibrator can vary strength. Without it every light tap is a full
+     *         buzz, so JS needs the real answer, not just "has a vibrator".
      */
     @ReactMethod(isBlockingSynchronousMethod = true)
     public boolean hasAmplitudeControl() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                 vibrator != null &&
-                vibrator.hasVibrator();
+                vibrator.hasAmplitudeControl();
     }
 
     /**

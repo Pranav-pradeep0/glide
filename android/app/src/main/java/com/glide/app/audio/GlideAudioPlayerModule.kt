@@ -14,6 +14,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
@@ -565,7 +566,9 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                 consecutiveErrors = 0
                 val p = ensurePlayer()
                 GlidePlayerHolder.start(reactContext, p)
-                p.play()
+                // Prepares an idle player (after an error or stop) and restarts an ended queue;
+                // a bare play() does neither, so the button just flipped back.
+                Util.handlePlayButtonAction(p)
                 emitPlaybackState()
                 promise.resolve(true)
             } catch (e: Exception) {
@@ -657,9 +660,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                 val p = player
                 if (p != null && index >= 0 && index < p.mediaItemCount) {
                     p.seekToDefaultPosition(index)
-                    if (!p.isPlaying) {
-                        p.play()
-                    }
+                    Util.handlePlayButtonAction(p)
                     emitTrackChanged()
                     emitPlaybackState()
                 }

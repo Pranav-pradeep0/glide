@@ -101,6 +101,23 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
             } catch (_: Exception) {}
         }
 
+        /**
+         * Embedded covers run to 3000 px and more: decoded whole that is ~36 MB of ARGB, two
+         * at once on the art pool, and OutOfMemoryError is not an Exception, so it killed the
+         * process. Subsample to at least ART_SIZE on the short side instead.
+         */
+        private fun decodeArt(decode: (BitmapFactory.Options) -> Bitmap?): Bitmap? = try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            decode(bounds)
+            var sample = 1
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= ART_SIZE) sample *= 2
+            decode(BitmapFactory.Options().apply { inSampleSize = sample })
+        } catch (e: OutOfMemoryError) {
+            null
+        }
+
+        private const val ART_SIZE = 512
+
         fun getArtworkDetails(context: Context, albumId: Long, songUriStr: String?): ArtDetails {
             if (albumId <= 0 && songUriStr.isNullOrEmpty()) return ArtDetails(null, null, null, null)
 
@@ -123,7 +140,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
                     } catch (_: Exception) {}
                 }
                 try {
-                    val bitmap = BitmapFactory.decodeFile(cacheFile.absolutePath)
+                    val bitmap = decodeArt { BitmapFactory.decodeFile(cacheFile.absolutePath, it) }
                     if (bitmap != null) {
                         val colors = extractPaletteColors(bitmap)
                         savePalette(paletteFile, colors.primary, colors.secondary, colors.onPrimary)
@@ -159,7 +176,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
                         retriever.setDataSource(context, songUri)
                         val rawBytes = retriever.embeddedPicture
                         if (rawBytes != null) {
-                            bitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
+                            bitmap = decodeArt { BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, it) }
                         }
                     } catch (_: Exception) {}
                     finally {
@@ -170,9 +187,13 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
                 }
 
                 if (bitmap != null) {
-                    FileOutputStream(cacheFile).use { out ->
+                    // Through a temp file: a kill mid-write would otherwise leave a truncated
+                    // JPEG that the exists-and-non-empty check above serves forever.
+                    val tmp = File(cacheDir, "$albumId.jpg.tmp")
+                    FileOutputStream(tmp).use { out ->
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
                     }
+                    tmp.renameTo(cacheFile)
                     val colors = extractPaletteColors(bitmap)
                     savePalette(paletteFile, colors.primary, colors.secondary, colors.onPrimary)
                     return ArtDetails("file://${cacheFile.absolutePath}", colors.primary, colors.secondary, colors.onPrimary)
@@ -294,7 +315,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getSongs(promise: Promise) {
-        BackgroundWork.submit {
+        BackgroundWork.submit(promise) {
             try {
                 ensureObserver(reactContext)
                 // A full scan is the fresh truth; drop records for songs that are gone.

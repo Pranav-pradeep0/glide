@@ -313,10 +313,18 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     fun setPaused(paused: Boolean) {
         pausedProp = paused
         val p = player ?: return
-        // ExoPlayer ignores play in STATE_ENDED. Playing a finished video restarts it, as
-        // Media3's own play button does (Util.handlePlayButtonAction).
-        if (!paused && p.playbackState == Player.STATE_ENDED) {
-            p.seekToDefaultPosition()
+        if (!paused) {
+            // ExoPlayer ignores play when ENDED (restart it) or IDLE after a final error or
+            // stopPlayer (prepare it), as Media3's own play button does.
+            when (p.playbackState) {
+                Player.STATE_ENDED -> p.seekToDefaultPosition()
+                Player.STATE_IDLE -> p.prepare()
+            }
+            // Re-register on every resume, not only on open: Media3 drops the service after
+            // ten paused minutes in the background, and its stop releases the video session,
+            // so the next background play would run with no session, notification or FGS.
+            // Idempotent while both are still in place.
+            GlidePlayerHolder.start(context, p, getHostActivity()?.javaClass)
         }
         // A play or pause is never part of a drag. Every drag ends in an exact seek, which
         // turns scrubbing mode off; this is the backstop if one ever does not, since a

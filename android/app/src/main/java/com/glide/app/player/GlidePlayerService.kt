@@ -253,11 +253,15 @@ class GlidePlayerService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         musicSession
 
+    /**
+     * No super: Media3's default also pauses everything when no player `isPlaying()` at that
+     * instant -- buffering, between tracks, or suppressed by a phone call -- so swiping the
+     * task away then stopped music for good. Ongoing means playWhenReady, not isPlaying.
+     */
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (!GlidePlayerHolder.isPlaybackOngoing()) {
-            stopSelf()
+            pauseAllPlayersAndStopSelf()
         }
-        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -359,7 +363,10 @@ class GlidePlayerService : MediaLibraryService() {
                     return@submit MediaSession.MediaItemsWithStartPosition(all.map(::playable), index, startPositionMs)
                 }
             }
-            MediaSession.MediaItemsWithStartPosition(resolve(mediaItems), startIndex, startPositionMs)
+            val resolved = resolve(mediaItems)
+            // resolve() can drop items, which would leave startIndex past the end.
+            val index = if (startIndex == C.INDEX_UNSET) startIndex else startIndex.coerceAtMost(resolved.size - 1)
+            MediaSession.MediaItemsWithStartPosition(resolved, index, startPositionMs)
         }
 
         override fun onAddMediaItems(
@@ -370,10 +377,19 @@ class GlidePlayerService : MediaLibraryService() {
             resolve(mediaItems).toMutableList()
         }
 
-        /** Browsers send ids only; give each item back its URI. Unknown ids stay as sent. */
+        /**
+         * Browsers send ids only; give each item back its URI. An id that resolves to nothing
+         * -- a song deleted while Auto still lists it, or an Assistant search, which sends
+         * no id at all -- is dropped: handed on without a URI, it threw in the media source
+         * factory. Nothing left fails the command instead of clearing the queue.
+         */
         private fun resolve(items: List<MediaItem>): List<MediaItem> {
             val records = MediaStoreAudioModule.getSongsByIds(this@GlidePlayerService, items.map { it.mediaId })
-            return items.map { item -> records[item.mediaId]?.let(::playable) ?: item }
+            val playable = items.mapNotNull { item ->
+                records[item.mediaId]?.let(::playable) ?: item.takeIf { it.localConfiguration != null }
+            }
+            if (playable.isEmpty()) throw UnsupportedOperationException("no playable items")
+            return playable
         }
     }
 

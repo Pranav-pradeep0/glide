@@ -1,6 +1,8 @@
 package com.glide.app.player
 
 import android.os.Process
+import android.util.Log
+import com.facebook.react.bridge.Promise
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -38,7 +40,21 @@ object BackgroundWork {
     private val quick = lane(2, "glide-background")
     private val long = lane(1, "glide-background-long")
 
-    fun submit(block: () -> Unit) = quick.execute(block)
+    fun submit(promise: Promise, block: () -> Unit) = quick.execute(guarded(promise, block))
 
-    fun submitLong(block: () -> Unit) = long.execute(block)
+    fun submitLong(promise: Promise, block: () -> Unit) = long.execute(guarded(promise, block))
+
+    /**
+     * Callers catch [Exception], but an [Error] -- OOM on a huge library or a 4K frame,
+     * a class that failed to initialise -- would escape to the pool thread and kill the
+     * process with the Promise unsettled. Rejecting an already-settled Promise is a no-op.
+     */
+    private fun guarded(promise: Promise, block: () -> Unit) = Runnable {
+        try {
+            block()
+        } catch (t: Throwable) {
+            Log.e("BackgroundWork", "task failed", t)
+            promise.reject("E_BACKGROUND", t.message ?: t.javaClass.simpleName, t)
+        }
+    }
 }

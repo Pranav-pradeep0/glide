@@ -1,20 +1,17 @@
 package com.reactnativesimplethumbnail
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.Process
 import android.provider.MediaStore
-import android.webkit.MimeTypeMap
 import com.facebook.react.bridge.*
 import java.io.File
-import java.io.FileDescriptor
 import java.io.FileOutputStream
-import java.io.IOException
-import java.util.*
 import java.net.URLDecoder
+import java.util.concurrent.Executors
 
 class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -27,8 +24,12 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
         val source = options.getString("source")
         val dest = options.getString("dest")
         val time = if (options.hasKey("time")) options.getInt("time") else 0
-        val width = if (options.hasKey("width")) options.getInt("width").coerceAtLeast(0) else 0
-        val height = if (options.hasKey("height")) options.getInt("height").coerceAtLeast(0) else 0
+        val askedWidth = if (options.hasKey("width")) options.getInt("width").coerceAtLeast(0) else 0
+        val askedHeight = if (options.hasKey("height")) options.getInt("height").coerceAtLeast(0) else 0
+        // One side alone bounds a square box. Scaling used to need both, and
+        // ThumbnailService passes only a width, so every thumbnail was saved full-size.
+        val width = if (askedWidth > 0) askedWidth else askedHeight
+        val height = if (askedHeight > 0) askedHeight else askedWidth
         val quality = if (options.hasKey("quality")) options.getInt("quality").coerceIn(0, 100) else 80
         val format = if (options.hasKey("format")) options.getString("format") else "jpeg"
 
@@ -37,142 +38,116 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
             return
         }
 
-        var retriever: MediaMetadataRetriever? = null
+        // Off the caller's thread: in bridgeless mode every legacy module's async methods
+        // share one native-modules thread, so a slow decode here -- or a cloud content://
+        // URI downloading the whole file -- stalled music controls, volume and PiP with it.
+        executor.execute {
+            try {
+                generateBlocking(source, dest, time, width, height, quality, format, promise)
+            } catch (t: Throwable) {
+                // OutOfMemoryError included: a thumbnail is never worth the process.
+                promise.reject("GEN_ERROR", t.message ?: t.javaClass.simpleName, t)
+            }
+        }
+    }
+
+    private fun generateBlocking(
+        source: String, dest: String, time: Int, width: Int, height: Int,
+        quality: Int, format: String?, promise: Promise
+    ) {
+        val retriever = MediaMetadataRetriever()
         var pfd: ParcelFileDescriptor? = null
-
         try {
-            retriever = MediaMetadataRetriever()
-            val context = reactApplicationContext
-
             if (source.startsWith("content://")) {
-                val uri = Uri.parse(source)
                 try {
-                    pfd = context.contentResolver.openFileDescriptor(uri, "r")
-                    if (pfd != null) {
-                        retriever.setDataSource(pfd.fileDescriptor)
-                    } else {
-                        promise.reject("FILE_ERROR", "Could not open file descriptor for $source")
-                        return
-                    }
+                    pfd = reactApplicationContext.contentResolver.openFileDescriptor(Uri.parse(source), "r")
                 } catch (e: SecurityException) {
                     // Permission denied - external app (like Telegram) didn't grant access
                     promise.reject("PERMISSION_ERROR", "No access to content provider: ${e.message}")
                     return
                 } catch (e: IllegalArgumentException) {
-                    // No content provider found for this URI
                     promise.reject("PROVIDER_ERROR", "No content provider: $source")
                     return
-                } catch (e: Exception) {
-                    promise.reject("CONTENT_ERROR", "Failed to access content: ${e.message}")
+                }
+                val fd = pfd ?: run {
+                    promise.reject("FILE_ERROR", "Could not open file descriptor for $source")
                     return
                 }
+                retriever.setDataSource(fd.fileDescriptor)
+            } else if (source.startsWith("file://")) {
+                // Callers send both encoded URIs and raw paths behind file://. The literal path
+                // wins when it exists: decoding a raw one turned the `+` in
+                // "Movie+Extras.mkv" into a space and failed to open it.
+                val path = source.substring(7)
+                retriever.setDataSource(
+                    if (File(path).exists()) path
+                    else try { URLDecoder.decode(path, "UTF-8") } catch (e: Exception) { path }
+                )
             } else {
-                var path = if (source.startsWith("file://")) source.substring(7) else source
-                try {
-                    path = URLDecoder.decode(path, "UTF-8")
-                } catch (e: Exception) {
-                    // Ignore decode errors, try original path
-                }
-                retriever.setDataSource(path)
+                retriever.setDataSource(source)
             }
-            
-            // Smart Timestamp Logic
+
+            // Smart timestamp: with no time given, aim for 10% in, at least 5 s, to skip the
+            // black frames and logos most videos open with; the middle for short clips.
             var timeUs = time * 1000L
             if (timeUs == 0L) {
-                // If user didn't specify a time, try to find a "good" time (avoid 0:00 black frame)
-                try {
-                   val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                   if (durationStr != null) {
-                       val durationMs = durationStr.toLong()
-                       
-                       // Research-based heuristics for "Visible Frame":
-                       // 1. Movies often have black screens/logos for first 0-30s.
-                       // 2. Short clips might have fade-ins.
-                       // Logic: Aim for 10% of duration, but ensure at least 5s (5000ms).
-                       
-                       var targetMs = (durationMs * 0.10).toLong()
-                       
-                       // Minimum 5 seconds to skip slow intros/logos
-                       if (targetMs < 5000) {
-                           targetMs = 5000
-                       }
-                       
-                       // Safety: Don't exceed video duration (leave 1s buffer)
-                       if (targetMs >= durationMs) {
-                           targetMs = durationMs / 2 // Fallback to middle
-                       }
-                       
-                       timeUs = targetMs * 1000L
-                   }
-                } catch (e: Exception) {
-                    // Ignore metadata errors, fallback to 0
-                }
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    ?.toLongOrNull()
+                    ?.let { durationMs ->
+                        var targetMs = maxOf((durationMs * 0.10).toLong(), 5000L)
+                        if (targetMs >= durationMs) targetMs = durationMs / 2
+                        timeUs = targetMs * 1000L
+                    }
             }
-            
-            // Extract frame at specified time
-            // OPTION_CLOSEST_SYNC is faster than OPTION_CLOSEST
-            var bitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
 
-            if (bitmap == null) {
-                 // Fallback to any frame if specific time fails
-                 bitmap = retriever.frameAtTime
-            }
+            // Scaled by the decoder where possible: a full 4K frame is 33 MB of ARGB, 8K four
+            // times that, only to be shrunk to a list thumbnail.
+            val scaled = width > 0 && height > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
+            var bitmap = (if (scaled) {
+                retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, width, height)
+            } else {
+                retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            }) ?: retriever.frameAtTime // Fallback to any frame if the specific time fails
 
             if (bitmap == null) {
                 promise.reject("GEN_ERROR", "Failed to retrieve frame")
                 return
             }
 
-            // Scale if requested
-            if (width > 0 && height > 0) {
-                val originalWidth = bitmap.width
-                val originalHeight = bitmap.height
-                
-                // Calculate scale to maintain aspect ratio while fitting within bounds
-                val scale = Math.min(
-                    width.toFloat() / originalWidth,
-                    height.toFloat() / originalHeight
-                )
-                
+            if (!scaled && width > 0 && height > 0) {
+                val scale = minOf(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
                 if (scale < 1.0f) {
-                    val newWidth = (originalWidth * scale).toInt()
-                    val newHeight = (originalHeight * scale).toInt()
-                    val scaledBitmap = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
-                    bitmap.recycle() // Recycle original
+                    val scaledBitmap = Bitmap.createScaledBitmap(
+                        bitmap, (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true
+                    )
+                    bitmap.recycle()
                     bitmap = scaledBitmap
                 }
             }
 
-            // Save to file
+            // Through a temp file, renamed into place: JS trusts any existing file as a
+            // finished thumbnail, so a kill mid-write would serve a truncated JPEG forever.
             val compressFormat = if (format == "png") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-            val destFile = File(dest.replace("file://", ""))
-            
-            // Ensure parent dir exists
+            val destFile = File(dest.removePrefix("file://"))
             destFile.parentFile?.mkdirs()
-
-            val fos = FileOutputStream(destFile)
-            bitmap.compress(compressFormat, quality, fos)
-            fos.flush()
-            fos.close()
-            bitmap.recycle()
+            val tmpFile = File(destFile.path + ".tmp")
+            FileOutputStream(tmpFile).use { bitmap.compress(compressFormat, quality, it) }
+            if (!tmpFile.renameTo(destFile)) {
+                tmpFile.delete()
+                promise.reject("GEN_ERROR", "Could not write $destFile")
+                return
+            }
 
             val result = Arguments.createMap()
             result.putString("path", "file://" + destFile.absolutePath)
             result.putInt("width", bitmap.width)
             result.putInt("height", bitmap.height)
-            
+            bitmap.recycle()
             promise.resolve(result)
-
-        } catch (e: Exception) {
-            promise.reject("GEN_ERROR", e.message)
-            e.printStackTrace()
         } finally {
-            try {
-                retriever?.release()
-                pfd?.close()
-            } catch (e: IOException) {
-                // Ignore close errors
-            }
+            // Separately, so a failing release cannot skip closing the descriptor.
+            try { retriever.release() } catch (e: Exception) {}
+            try { pfd?.close() } catch (e: Exception) {}
         }
     }
 
@@ -181,7 +156,7 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
         try {
             val context = reactApplicationContext
             val uri = Uri.parse(uriString)
-            
+
             // 1. If it's already a file path, return it
             if (uri.scheme == null || uri.scheme == "file") {
                 promise.resolve(if (uri.path != null) uri.path else uriString)
@@ -194,26 +169,23 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
             if (uri.scheme == "content" && uri.authority == MediaStore.AUTHORITY) {
                 try {
                     val projection = arrayOf(MediaStore.MediaColumns.DATA)
-                    val cursor = context.contentResolver.query(uri, projection, null, null, null)
-                    
-                    if (cursor != null && cursor.moveToFirst()) {
-                        val columnIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)
-                        val path = cursor.getString(columnIndex)
-                        cursor.close()
-                        if (path != null) {
-                            promise.resolve(path)
-                            return
+                    context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA))
+                            if (path != null) {
+                                promise.resolve(path)
+                                return
+                            }
                         }
                     }
-                    cursor?.close()
                 } catch (e: Exception) {
                     // Ignore query failures, fall through to fallback
                 }
             }
 
             // 3. Fallback: Return original URI (Best effort)
-            // The service can handle content:// URIs directly using our generate() method
-            // so strict path resolution isn't always fatal.
+            // generate() handles content:// URIs directly, so strict path resolution
+            // isn't always fatal.
             promise.resolve(uriString)
 
         } catch (e: Exception) {
@@ -221,163 +193,16 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
         }
     }
 
-    /**
-     * Probe subtitle tracks from a content:// URI using FFprobe with file descriptor.
-     * This works even when the minimal FFmpeg build lacks SAF protocol support.
-     * @param contentUri The content:// URI to probe
-     * @returns Promise<String> JSON string with subtitle track information
-     */
-    @ReactMethod
-    fun probeSubtitleTracks(contentUri: String, promise: Promise) {
-        Thread {
-            var pfd: ParcelFileDescriptor? = null
-            try {
-                val context = reactApplicationContext
-                val uri = Uri.parse(contentUri)
-                
-                // For non-content URIs, return empty - caller should use FFprobeKit directly
-                if (!contentUri.startsWith("content://")) {
-                    promise.resolve("{\"streams\":[]}")
-                    return@Thread
-                }
-                
-                // Open file descriptor from content resolver
-                pfd = context.contentResolver.openFileDescriptor(uri, "r")
-                if (pfd == null) {
-                    promise.reject("FD_ERROR", "Could not open file descriptor for $contentUri")
-                    return@Thread
-                }
-                
-                val fd = pfd.fd
-                
-                // Use pipe: protocol with file descriptor
-                // -v quiet: suppress logs
-                // -print_format json: output as JSON
-                // -show_streams: show stream information
-                // -select_streams s: select only subtitle streams
-                val command = "-v quiet -print_format json -show_streams -select_streams s pipe:$fd"
-                
-                // Execute FFprobe using the FFmpegKit library
-                val ffprobeKitClass = Class.forName("com.arthenica.ffmpegkit.FFprobeKit")
-                val executeMethod = ffprobeKitClass.getMethod("execute", String::class.java)
-                val session = executeMethod.invoke(null, command)
-                
-                // Get return code
-                val getReturnCodeMethod = session.javaClass.getMethod("getReturnCode")
-                val returnCode = getReturnCodeMethod.invoke(session)
-                val getValueMethod = returnCode.javaClass.getMethod("getValue")
-                val codeValue = getValueMethod.invoke(returnCode) as Int
-                
-                // Get output
-                val getOutputMethod = session.javaClass.getMethod("getOutput")
-                val output = getOutputMethod.invoke(session) as? String ?: "{\"streams\":[]}"
-                
-                if (codeValue == 0) {
-                    promise.resolve(output)
-                } else {
-                    // Return empty streams on error rather than rejecting
-                    // This allows the app to continue gracefully
-                    promise.resolve("{\"streams\":[]}")
-                }
-                
-            } catch (e: ClassNotFoundException) {
-                // FFmpegKit not available - caller should handle this
-                promise.reject("FFMPEG_NOT_AVAILABLE", "FFmpegKit library not available: ${e.message}")
-            } catch (e: Exception) {
-                promise.reject("PROBE_ERROR", e.message)
-                e.printStackTrace()
-            } finally {
-                try {
-                    pfd?.close()
-                } catch (e: IOException) {
-                    // Ignore close errors
-                }
-            }
-        }.start()
-    }
-
-    /**
-     * Extract a subtitle track from a content:// URI using FFmpeg with file descriptor.
-     * This works even when the minimal FFmpeg build lacks SAF protocol support.
-     * @param contentUri The content:// URI of the video
-     * @param subtitleIndex The index of the subtitle stream to extract
-     * @param outputPath The path to write the extracted subtitle file
-     * @param outputFormat The output format (srt, vtt, ass)
-     * @returns Promise<String> The path to the extracted subtitle file, or null on error
-     */
-    @ReactMethod
-    fun extractSubtitle(contentUri: String, subtitleIndex: Int, outputPath: String, outputFormat: String, promise: Promise) {
-        Thread {
-            var pfd: ParcelFileDescriptor? = null
-            try {
-                val context = reactApplicationContext
-                val uri = Uri.parse(contentUri)
-                
-                // For non-content URIs, reject - caller should use FFmpegKit directly
-                if (!contentUri.startsWith("content://")) {
-                    promise.reject("INVALID_URI", "extractSubtitle only handles content:// URIs")
-                    return@Thread
-                }
-                
-                // Open file descriptor from content resolver
-                pfd = context.contentResolver.openFileDescriptor(uri, "r")
-                if (pfd == null) {
-                    promise.reject("FD_ERROR", "Could not open file descriptor for $contentUri")
-                    return@Thread
-                }
-                
-                val fd = pfd.fd
-                
-                // Map output format to FFmpeg codec
-                val codec = when (outputFormat.lowercase()) {
-                    "srt" -> "srt"
-                    "vtt" -> "webvtt"
-                    "ass" -> "ass"
-                    else -> "srt"
-                }
-                
-                // Build FFmpeg command
-                // -v quiet: suppress logs
-                // -i pipe:fd: read from file descriptor
-                // -map 0:subtitleIndex: select the specific subtitle stream
-                // -c:s codec: set output codec
-                val command = "-v quiet -i pipe:$fd -map 0:$subtitleIndex -c:s $codec \"$outputPath\""
-                
-                // Execute FFmpeg using the FFmpegKit library
-                val ffmpegKitClass = Class.forName("com.arthenica.ffmpegkit.FFmpegKit")
-                val executeMethod = ffmpegKitClass.getMethod("execute", String::class.java)
-                val session = executeMethod.invoke(null, command)
-                
-                // Get return code
-                val getReturnCodeMethod = session.javaClass.getMethod("getReturnCode")
-                val returnCode = getReturnCodeMethod.invoke(session)
-                val getValueMethod = returnCode.javaClass.getMethod("getValue")
-                val codeValue = getValueMethod.invoke(returnCode) as Int
-                
-                if (codeValue == 0) {
-                    // Check if file was created
-                    val outputFile = File(outputPath)
-                    if (outputFile.exists() && outputFile.length() > 0) {
-                        promise.resolve(outputPath)
-                    } else {
-                        promise.resolve(null)
-                    }
-                } else {
-                    promise.resolve(null)
-                }
-                
-            } catch (e: ClassNotFoundException) {
-                promise.reject("FFMPEG_NOT_AVAILABLE", "FFmpegKit library not available: ${e.message}")
-            } catch (e: Exception) {
-                promise.reject("EXTRACT_ERROR", e.message)
-                e.printStackTrace()
-            } finally {
-                try {
-                    pfd?.close()
-                } catch (e: IOException) {
-                    // Ignore close errors
-                }
-            }
-        }.start()
+    private companion object {
+        /**
+         * Two decodes at a time, at background priority so they never compete with the
+         * playback decoder. ThumbnailService runs four workers; the rest queue here.
+         */
+        val executor = Executors.newFixedThreadPool(2) { runnable ->
+            Thread({
+                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                runnable.run()
+            }, "simple-thumbnail")
+        }
     }
 }
