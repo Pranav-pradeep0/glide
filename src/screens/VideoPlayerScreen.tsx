@@ -19,7 +19,7 @@ import type { PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
 // Native Modules
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
 
-import { finishCurrentActivity, usePipModeListener } from '@/native/PipModule';
+import { currentActivityName, finishCurrentActivity, usePipModeListener } from '@/native/PipModule';
 
 // Components
 import AnimatedVideoView from '@/components/VideoPlayer/AnimatedVideoView';
@@ -1011,11 +1011,18 @@ export default function VideoPlayerScreen({ route }: Props) {
     // Back button handler
     useEffect(() => {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            // Both Activities share this runtime, so a Back pressed in the library while this
+            // video is in PiP or playing behind it reaches this handler first. It is not ours.
+            if (isInPipMode) { return false; }
+            const front = currentActivityName();
+            if (isExternalOpen && front !== undefined && front !== 'VideoPlayerActivity') {
+                return false;
+            }
             handleGoBack();
             return true;
         });
         return () => backHandler.remove();
-    }, [handleGoBack]);
+    }, [handleGoBack, isInPipMode, isExternalOpen]);
 
     // Navigation beforeRemove
     useEffect(() => {

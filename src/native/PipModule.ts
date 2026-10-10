@@ -70,6 +70,21 @@ export async function finishCurrentActivity(): Promise<boolean> {
 }
 
 /**
+ * The simple class name of the Activity in front, e.g. 'VideoPlayerActivity', or null.
+ * Undefined on APKs from before the native freeze, which lack the method.
+ */
+export function currentActivityName(): string | null | undefined {
+    if (Platform.OS !== 'android' || typeof NativePipModule?.currentActivityName !== 'function') {
+        return undefined;
+    }
+    try {
+        return NativePipModule.currentActivityName();
+    } catch {
+        return undefined;
+    }
+}
+
+/**
  * Hook to listen for PIP mode changes.
  * The native callback is authoritative, so there is nothing to poll.
  */

@@ -12,10 +12,13 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
+import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.common.LifecycleState
+import com.glide.app.player.BackgroundWork
 import java.io.File
 
 /**
@@ -24,10 +27,32 @@ import java.io.File
  * identical to an installed one. PackageInstaller reports a real terminal status, which
  * is the only way the app can tell the user why an update did not apply.
  */
-class ApkInstallerModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+class ApkInstallerModule(reactContext: ReactApplicationContext) :
+    ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
 
-    private var pendingPromise: Promise? = null
+    @Volatile private var pendingPromise: Promise? = null
     private var statusReceiver: BroadcastReceiver? = null
+
+    /**
+     * The system confirmation, held while the app is in the background: Android 14+ blocks
+     * that start silently, without throwing, so firing it anyway left the promise unsettled
+     * and every later attempt INSTALL_BUSY until the process died. Shown on the next resume.
+     */
+    private var pendingConfirm: Intent? = null
+
+    init {
+        reactContext.addLifecycleEventListener(this)
+    }
+
+    override fun onHostResume() {
+        val confirm = pendingConfirm ?: return
+        pendingConfirm = null
+        showConfirm(confirm)
+    }
+
+    override fun onHostPause() = Unit
+
+    override fun onHostDestroy() = Unit
 
     override fun getName(): String = "ApkInstallerModule"
 
@@ -89,9 +114,19 @@ class ApkInstallerModule(reactContext: ReactApplicationContext) : ReactContextBa
         pendingPromise = promise
         registerStatusReceiver()
 
+        // Off the native-modules thread every module shares: copying ~15 MB and fsyncing it
+        // stalled music controls and everything else for up to a second.
+        BackgroundWork.submit(promise) { writeAndCommit(file) }
+    }
+
+    private fun writeAndCommit(file: File) {
+        val context = reactApplicationContext
         var sessionId = -1
         val installer = context.packageManager.packageInstaller
         try {
+            // Sessions left by an install the process died during. Ours alone, and nothing
+            // else of ours can be installing: pendingPromise was free.
+            installer.mySessions.forEach { runCatching { installer.abandonSession(it.sessionId) } }
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
             params.setAppPackageName(context.packageName)
             params.setInstallReason(PackageManager.INSTALL_REASON_USER)
@@ -107,7 +142,9 @@ class ApkInstallerModule(reactContext: ReactApplicationContext) : ReactContextBa
                 }
                 session.commit(buildStatusSender(sessionId))
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Throwable, not Exception: an Error left to BackgroundWork would reject the
+            // promise without clearing pendingPromise, and every later install would be BUSY.
             if (sessionId != -1) {
                 runCatching { installer.abandonSession(sessionId) }
             }
@@ -154,8 +191,11 @@ class ApkInstallerModule(reactContext: ReactApplicationContext) : ReactContextBa
                 return
             }
             confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            runCatching { reactApplicationContext.startActivity(confirm) }
-                .onFailure { settleReject("INSTALL_FAILED", it.message ?: "Cannot show the install prompt") }
+            if (reactApplicationContext.lifecycleState == LifecycleState.RESUMED) {
+                showConfirm(confirm)
+            } else {
+                pendingConfirm = confirm
+            }
             return
         }
 
@@ -166,6 +206,11 @@ class ApkInstallerModule(reactContext: ReactApplicationContext) : ReactContextBa
         }
 
         settleReject(errorCodeFor(status), message ?: "Install failed with status $status")
+    }
+
+    private fun showConfirm(confirm: Intent) {
+        runCatching { reactApplicationContext.startActivity(confirm) }
+            .onFailure { settleReject("INSTALL_FAILED", it.message ?: "Cannot show the install prompt") }
     }
 
     private fun errorCodeFor(status: Int): String = when (status) {
@@ -192,6 +237,7 @@ class ApkInstallerModule(reactContext: ReactApplicationContext) : ReactContextBa
 
     private fun cleanUp() {
         pendingPromise = null
+        pendingConfirm = null
         statusReceiver?.let { receiver ->
             runCatching { reactApplicationContext.unregisterReceiver(receiver) }
         }
@@ -200,6 +246,7 @@ class ApkInstallerModule(reactContext: ReactApplicationContext) : ReactContextBa
 
     override fun invalidate() {
         cleanUp()
+        reactApplicationContext.removeLifecycleEventListener(this)
         super.invalidate()
     }
 }

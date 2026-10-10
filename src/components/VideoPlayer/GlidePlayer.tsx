@@ -21,6 +21,7 @@ import {
     ViewStyle,
     StyleProp,
 } from 'react-native';
+import { hasNativeApi } from '@/native/GlideNative';
 
 const NATIVE_NAME = 'RCTGlidePlayer';
 
@@ -102,7 +103,12 @@ const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) =>
         const config = UIManager.getViewManagerConfig(NATIVE_NAME) as {
             Commands: Record<string, number>;
         };
-        UIManager.dispatchViewManagerCommand(handle, config.Commands[command], args);
+        // By name from API 2 (the numeric form is deprecated); older APKs only know the ids.
+        // The typings say number, but the runtime takes either: Fabric stringifies the id
+        // and parses digits back into the Int overload.
+        UIManager.dispatchViewManagerCommand(
+            handle, (hasNativeApi(2) ? command : config.Commands[command]) as number, args,
+        );
     }, []);
 
     useImperativeHandle(ref, () => ({

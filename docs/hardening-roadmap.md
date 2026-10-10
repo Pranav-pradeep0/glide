@@ -316,33 +316,32 @@ timer survive a JS reload (shake menu) mid-song; `NativeModules.GlideNative.apiL
    so a JS reload or OTA restart drops both while music plays on. Move them to
    `GlidePlayerHolder`; give posted runnables an `invalidated` check.
 
-### 8b. Native correctness, remaining
-- Sleep timer runs on uptime, and offload lets the CPU sleep: it can fire hours late.
-  Disable offload while a timer is armed.
-- `setQueue`'s main-thread post can call `play()` after the user left: focus is refused
-  (API 35+) and the FGS start fails. Respect the host being paused.
-- `PipModule.finishCurrentActivity` finishes whichever Activity is current — Back in the
-  library can close it and the PiP video. Finish the player's own host (+ JS half below).
-- Scrubbing mode left on silently suppresses playback until Media3's 10-min stuck
-  timeout; also clear it in `onActivityStopped` and on PiP change.
-- `SubtitleSyncModule`: a codec whose `configure` throws is never released, and the error
-  aborts alignment instead of falling to FFmpeg.
-- `ApkInstallerModule.install`: copy runs on `v_native`; abandon stale sessions first;
-  launch the confirm intent on the next resume (Phase 2 item).
-- `VideoOrientationModule` calls `requestedOrientation` off the UI thread.
-- Player can be built twice on mount (prop order); open media in `onAfterUpdateTransaction`.
-- PiP dismiss with background play on keeps audio running.
-- Songs with `DURATION` NULL never appear (`>= 10000` excludes NULL).
-- No video `ContentObserver`; new files wait for the 5-min TTL.
-- `configChanges` on VideoPlayerActivity lacks `fontScale|locale|layoutDirection|colorMode|
-  navigation|touchscreen`, so those tear playback down (no longer a crash).
-- `receiveCommand(Int)` and `MapBuilder` are deprecated; add the String overload and move
-  JS to command names. `onDropViewInstance` skips `super`.
-- `BEHIND_LIVE_WINDOW` re-prepares unbounded. `AudioDelayProcessor` sits before Sonic, so
-  delay scales with speed.
+### 8b. Native correctness — done, bar two
+All landed in one commit after 8a; `API_LEVEL` is now 2 (`currentActivityName`,
+`onVideoLibraryChanged`, commands by name). Sleep timer vs offload landed with 8a. Done:
+`setQueue` loads paused when the host is paused; `finishCurrentActivity` only finishes
+`VideoPlayerActivity`, and the player's `BackHandler` yields in PiP or when its Activity is
+not in front (also the 8c item); scrubbing mode cleared on stop and PiP change; PiP closed
+with background play on pauses; `SubtitleSyncModule` releases a codec whose `configure`
+throws and falls through to FFmpeg, and the frame-rate read no longer throws; the installer
+copies on `BackgroundWork`, abandons stale sessions, and holds the confirm prompt until
+resume; orientation on the UI thread; media opened once in `onAfterUpdateTransaction`;
+NULL-duration songs listed; a video `ContentObserver` drops the JS library cache (debounced
+1.5 s); `configChanges` extended on both Activities; String `receiveCommand` (Int kept for
+old bundles), `MapBuilder` gone, `onDropViewInstance` calls `super`; `BEHIND_LIVE_WINDOW`
+shares the IO retry budget; audio delay scaled by speed so it stays wall-clock time.
+
+Left:
 - FFmpeg AAR: rebuild in CI from the same Media3 tag with a renderer-construction test;
   consider audio-only (`ExperimentalFfmpegVideoRenderer` runs native decode in-process).
-- `DisplayBrightnessModule` assumes a 0-255 range.
+- `DisplayBrightnessModule` 0-255: won't fix. The OEM's real range is not public API, and
+  the window brightness path it uses is already 0-1.
+
+Device checks: Back in the library while a video is in PiP leaves both alone; closing PiP
+with background play on stops audio; an update downloaded with Glide in the background
+prompts on return; a file copied in via USB shows on the next screen; 200 ms audio delay
+sounds the same at 1x and 2x; changing font size or dark mode mid-video keeps playing; the
+commands (seek, PiP, stop) work on both an old and a new bundle.
 
 ### 8c. JS-side (can ship over the air any time)
 - Enhancement GL errors (7000-range codes) fail every video: turn enhancement off and reopen.
@@ -350,7 +349,6 @@ timer survive a JS reload (shake menu) mid-song; `NativeModules.GlideNative.apiL
 - Thumbnail misses retry on every scroll; add a negative cache with a TTL. Thumbnails made
   before `c0762a0` are full-size on disk; clear the folder once.
 - `ErrorBoundary` should call `SplashModule.hide()`.
-- The player's `BackHandler` must return false while in PiP.
 
 ### 8d. Dependencies and toolchain
 - **Replace `react-native-linear-gradient`** (stable from 2023, legacy interop, no

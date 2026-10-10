@@ -1,4 +1,5 @@
-import { NativeModules, Platform } from 'react-native';
+import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
+import { hasNativeApi } from '@/native/GlideNative';
 import { PermissionService } from './PermissionService';
 import { VideoFile, VideoFolder } from '@/types';
 
@@ -248,3 +249,8 @@ class MediaServiceClass {
 }
 
 export const MediaService = new MediaServiceClass();
+
+// A video added or removed outside Glide (API 2). Older APKs keep the 5-minute cache TTL.
+if (Platform.OS === 'android' && hasNativeApi(2)) {
+    DeviceEventEmitter.addListener('onVideoLibraryChanged', () => MediaService.invalidateCache());
+}

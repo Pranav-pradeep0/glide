@@ -209,8 +209,14 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
             return getArtworkDetails(context, albumId, songUriStr).uri
         }
 
+        /**
+         * Under 10 s is a notification sound or voice clip, not a song. A NULL duration --
+         * the scanner leaves it unset for some files -- is unknown, not short: in SQL
+         * `NULL >= 10000` is false, which hid those songs entirely.
+         */
         private const val SONG_SELECTION =
-            "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= 10000"
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
+                "(${MediaStore.Audio.Media.DURATION} >= 10000 OR ${MediaStore.Audio.Media.DURATION} IS NULL)"
 
         @Volatile private var observerRegistered = false
 

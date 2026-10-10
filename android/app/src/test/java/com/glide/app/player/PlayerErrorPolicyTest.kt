@@ -31,7 +31,9 @@ class PlayerErrorPolicyTest {
 
     @Test
     fun `rejoins the live edge only for a stream that fell behind`() {
-        assertTrue(PlayerErrorPolicy.shouldRejoinLiveEdge(1002))
-        assertFalse(PlayerErrorPolicy.shouldRejoinLiveEdge(2005))
+        assertTrue(PlayerErrorPolicy.shouldRejoinLiveEdge(1002, 0))
+        assertFalse(PlayerErrorPolicy.shouldRejoinLiveEdge(2005, 0))
+        // A window that keeps outrunning the player gives up instead of looping.
+        assertFalse(PlayerErrorPolicy.shouldRejoinLiveEdge(1002, PlayerErrorPolicy.MAX_IO_RETRIES))
     }
 }

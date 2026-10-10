@@ -203,9 +203,20 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                 val format = formats[i] ?: continue
                 val mediaFormat = androidx.media3.common.util.MediaFormatUtil.createMediaFormatFromFormat(format)
                 val name = try { codecs.findDecoderForFormat(mediaFormat) } catch (_: Exception) { null }
-                if (name != null) {
+                // A decoder can be listed for a format and still refuse to configure it
+                // (E-AC-3 JOC, AC-4 on some devices). Fall through to FFmpeg, then the next
+                // track, rather than failing the whole alignment.
+                val platform = name?.let {
+                    try {
+                        MediaCodecPcm(mediaFormat, it, window)
+                    } catch (e: Exception) {
+                        android.util.Log.w(NAME, "decoder $it refused ${format.sampleMimeType}: ${e.message}")
+                        null
+                    }
+                }
+                if (platform != null) {
                     chosen = i
-                    decoder = MediaCodecPcm(mediaFormat, name, window)
+                    decoder = platform
                     description = "${format.sampleMimeType} [track $i] via $name"
                     return
                 }
@@ -267,10 +278,16 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     }
 
     private class MediaCodecPcm(format: MediaFormat, name: String, private val window: WindowMeter) : PcmDecoder {
-        private val codec = MediaCodec.createByCodecName(name).apply {
-            disableDrc(format)
-            configure(format, null, null, 0)
-            start()
+        private val codec = MediaCodec.createByCodecName(name).also {
+            // Released on failure: otherwise a hardware codec slot stays held until GC.
+            try {
+                disableDrc(format)
+                it.configure(format, null, null, 0)
+                it.start()
+            } catch (e: Exception) {
+                it.release()
+                throw e
+            }
         }
         private val info = MediaCodec.BufferInfo()
         private var rate = format.getIntegerOr(MediaFormat.KEY_SAMPLE_RATE, 44100)
@@ -476,7 +493,18 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                     val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
                     if (mime.startsWith("video/") && videoInfo == null) {
                         val codecName = mime.substringAfter("video/").replace("x-vnd.on2.", "").replace("avc", "H264").replace("hevc", "HEVC").uppercase(Locale.US)
-                        val fps = if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) "${format.getInteger(MediaFormat.KEY_FRAME_RATE)} fps" else null
+                        // Extractors store the rate as an int or a float (23.976); getInteger on
+                        // a float throws, which lost the whole metadata result.
+                        val fps = if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
+                            val rate = try {
+                                format.getInteger(MediaFormat.KEY_FRAME_RATE).toString()
+                            } catch (_: ClassCastException) {
+                                format.getFloat(MediaFormat.KEY_FRAME_RATE).let {
+                                    if (it % 1f == 0f) it.toInt().toString() else String.format(Locale.US, "%.2f", it)
+                                }
+                            }
+                            "$rate fps"
+                        } else null
                         videoInfo = listOfNotNull(codecName, fps).joinToString(" · ")
                     } else if (mime.startsWith("audio/") && audioInfo == null) {
                         val codecName = mime.substringAfter("audio/").replace("mp4a-latm", "AAC").uppercase(Locale.US)

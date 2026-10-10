@@ -41,8 +41,13 @@ object PlayerErrorPolicy {
             errorCode !in PERMANENT &&
             retriesSoFar < MAX_IO_RETRIES
 
-    /** A live stream that fell behind its window is not broken; it must rejoin the edge. */
+    /**
+     * A live stream that fell behind its window is not broken; it must rejoin the edge.
+     * Bounded like IO retries: a stream whose window keeps moving past the player (a
+     * server publishing faster than the device can load) would otherwise loop forever.
+     */
     @JvmStatic
-    fun shouldRejoinLiveEdge(errorCode: Int): Boolean =
-        errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW
+    fun shouldRejoinLiveEdge(errorCode: Int, retriesSoFar: Int): Boolean =
+        errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW &&
+            retriesSoFar < MAX_IO_RETRIES
 }

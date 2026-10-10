@@ -155,6 +155,12 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private val pipController = GlidePipController(this)
     private var hostActivity: Activity? = null
 
+    /** A prop asked for the media to be (re)opened; see [applyPendingOpen]. */
+    private var openPending = false
+
+    /** Entered PiP and not yet expanded or closed. */
+    private var inPipSession = false
+
     /**
      * Backgrounding is read from the Activity this view actually lives in. The two player
      * Activities share one ReactHost, so the ReactContext-wide host callbacks fire for
@@ -163,7 +169,10 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private val activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
         override fun onActivityStarted(activity: Activity) {}
-        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivityResumed(activity: Activity) {
+            // Expanded back from PiP (a PiP window is started but never resumed).
+            if (activity === getHostActivity()) inPipSession = false
+        }
         override fun onActivityPaused(activity: Activity) {}
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
 
@@ -175,9 +184,16 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
          */
         override fun onActivityStopped(activity: Activity) {
             if (activity !== getHostActivity()) return
-            if (!playInBackground) {
-                player?.playWhenReady = false
+            val p = player ?: return
+            // A drag cut short by leaving never sends its final exact seek, and scrubbing
+            // mode left on suppresses playback silently until Media3's stuck timeout.
+            p.setScrubbingModeEnabled(false)
+            // Stopped straight from PiP, never resumed, means the window was closed: an
+            // explicit stop, so it pauses even with background play on.
+            if (!playInBackground || inPipSession) {
+                p.playWhenReady = false
             }
+            inPipSession = false
         }
 
         override fun onActivityDestroyed(activity: Activity) {
@@ -307,6 +323,18 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
         sourceUri = uri
         startPositionMs = startMs
+        openPending = true
+    }
+
+    /**
+     * Props arrive as a map in no guaranteed order, so opening from a setter built the whole
+     * player -- codecs, session, surface -- and then rebuilt it at once when a later prop in
+     * the same update (enhancement) needed a re-open. Setters only mark it; the view
+     * manager calls this once the whole update has been applied.
+     */
+    fun applyPendingOpen() {
+        if (!openPending) return
+        openPending = false
         openMedia()
     }
 
@@ -337,7 +365,14 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         if (rate <= 0f) return
         rateProp = rate
         player?.playbackParameters = PlaybackParameters(rate)
+        audioDelayProcessor?.delayMs = delayInContentMs()
     }
+
+    /**
+     * The delay runs before Sonic in the sink, so it is measured in content time: at 2x a
+     * 200 ms delay would be heard as 100 ms. Scaled up by the speed to stay what was asked.
+     */
+    private fun delayInContentMs(): Int = Math.round(audioDelayMs * rateProp)
 
     fun setMuted(muted: Boolean) {
         mutedProp = muted
@@ -413,6 +448,10 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     /** Called by [GlidePipController] once the Activity has changed PiP state. */
     fun onPipModeChangedInternal(inPipMode: Boolean) {
         Log.d(TAG, if (inPipMode) "entered PiP window" else "left PiP window")
+        // Cleared on resume (expanded) or stop (closed), not here: the mode change and the
+        // stop arrive in either order when a PiP window is closed.
+        if (inPipMode) inPipSession = true
+        player?.setScrubbingModeEnabled(false)
         // Whether leaving PiP means expanded or dismissed is the Activity's stop to say,
         // handled in activityLifecycleCallbacks. Here only the window size changed.
         relayoutSurface()
@@ -534,7 +573,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     /** Milliseconds; positive plays the audio later. Live, no re-open. */
     fun setAudioDelay(ms: Int) {
         audioDelayMs = ms
-        audioDelayProcessor?.delayMs = ms
+        audioDelayProcessor?.delayMs = delayInContentMs()
     }
 
     private fun applyEqualizer() {
@@ -559,7 +598,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         // from where it currently is, not from the top.
         val p = player ?: return
         startPositionMs = p.currentPosition.takeIf { it > 0 } ?: C.TIME_UNSET
-        openMedia()
+        openPending = true
     }
 
     private fun buildEffects(): List<Effect> =
@@ -686,7 +725,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         // MODE_ON keeps platform decoders first and falls back to the FFmpeg extension only
         // where the device has none. On the test device that is every one of AC-3, E-AC-3,
         // DTS and TrueHD, which otherwise select no track and play silently with no error.
-        val delayProcessor = AudioDelayProcessor().also { it.delayMs = audioDelayMs }
+        val delayProcessor = AudioDelayProcessor().also { it.delayMs = delayInContentMs() }
         audioDelayProcessor = delayProcessor
         val renderers = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(
@@ -1018,7 +1057,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 return
             }
 
-            if (PlayerErrorPolicy.shouldRejoinLiveEdge(error.errorCode)) {
+            if (PlayerErrorPolicy.shouldRejoinLiveEdge(error.errorCode, ioRetries)) {
+                ioRetries++
                 Log.w(TAG, "behind live window, rejoining at the live edge")
                 player?.seekToDefaultPosition()
                 player?.prepare()

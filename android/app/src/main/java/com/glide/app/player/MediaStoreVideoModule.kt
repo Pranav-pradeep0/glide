@@ -5,9 +5,12 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
@@ -19,6 +22,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
 import java.io.FileOutputStream
 
@@ -80,6 +84,41 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         })
     }
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Debounced: a copy or a scan fires onChange once per file, often dozens in a burst. */
+    private val announceLibraryChange = Runnable {
+        if (reactContext.hasActiveReactInstance()) {
+            reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(EVENT_LIBRARY_CHANGED, null)
+        }
+    }
+
+    /**
+     * A video added, deleted or renamed outside Glide. JS drops its library cache on this, so
+     * the next screen shows it instead of waiting out the five-minute cache.
+     */
+    private val libraryObserver = object : ContentObserver(mainHandler) {
+        override fun onChange(selfChange: Boolean) {
+            mainHandler.removeCallbacks(announceLibraryChange)
+            mainHandler.postDelayed(announceLibraryChange, LIBRARY_CHANGE_DEBOUNCE_MS)
+        }
+    }
+
+    // A second init, after the observer: Kotlin initialises in source order, so registering
+    // from the first one passed a null observer and crashed the module on construction.
+    init {
+        reactContext.contentResolver.registerContentObserver(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, libraryObserver
+        )
+    }
+
+    override fun invalidate() {
+        reactContext.contentResolver.unregisterContentObserver(libraryObserver)
+        mainHandler.removeCallbacks(announceLibraryChange)
+        super.invalidate()
+    }
+
     private data class FolderBucketData(
         val id: String,
         val title: String,
@@ -91,6 +130,8 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
     companion object {
         const val NAME = "MediaStoreVideoModule"
+        const val EVENT_LIBRARY_CHANGED = "onVideoLibraryChanged"
+        private const val LIBRARY_CHANGE_DEBOUNCE_MS = 1500L
         private const val TAG = "MediaStoreVideoModule"
         private const val DELETE_REQUEST_CODE = 42001
         private val thumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)

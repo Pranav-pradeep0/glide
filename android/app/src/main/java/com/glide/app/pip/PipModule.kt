@@ -8,6 +8,7 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.glide.app.VideoPlayerActivity
 
 /**
  * Reports Picture-in-Picture state to JavaScript.
@@ -63,13 +64,16 @@ class PipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     /**
-     * Close the Activity hosting the player. Used when playback was opened from
-     * outside the app, where going "back" should dismiss this Activity rather than
-     * exit the whole process.
+     * Close the external player Activity. Used when playback was opened from outside the
+     * app, where going "back" should dismiss it rather than exit the whole process.
+     *
+     * Only ever that Activity: both share one JS runtime, so a back press handled by the
+     * player's JS can arrive while MainActivity is in front (the video in PiP or playing
+     * in the background), and finishing the current Activity closed the library instead.
      */
     @ReactMethod
     fun finishCurrentActivity(promise: Promise) {
-        val activity = reactApplicationContext.currentActivity
+        val activity = reactApplicationContext.currentActivity as? VideoPlayerActivity
         if (activity == null) {
             promise.resolve(false)
             return
@@ -78,6 +82,15 @@ class PipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
         activity.finish()
         promise.resolve(true)
     }
+
+    /**
+     * The simple class name of the Activity in front, or null. Synchronous because a
+     * hardwareBackPress handler has to answer at once whether the press is its own: React
+     * Native's back event does not say which Activity it came from.
+     */
+    @ReactMethod(isBlockingSynchronousMethod = true)
+    fun currentActivityName(): String? =
+        reactApplicationContext.currentActivity?.javaClass?.simpleName
 
     /** Called from the host Activity's onPictureInPictureModeChanged. */
     fun onPictureInPictureModeChanged(isInPipMode: Boolean) {

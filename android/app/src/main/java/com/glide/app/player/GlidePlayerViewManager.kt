@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.media3.common.util.UnstableApi
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
-import com.facebook.react.common.MapBuilder
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
@@ -24,14 +23,17 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
 
     override fun onDropViewInstance(view: GlidePlayerView) {
         view.cleanUpResources()
+        super.onDropViewInstance(view)
+    }
+
+    /** After every prop in one update is set: open the media once, with all of them. */
+    override fun onAfterUpdateTransaction(view: GlidePlayerView) {
+        super.onAfterUpdateTransaction(view)
+        view.applyPendingOpen()
     }
 
     override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> {
-        val builder = MapBuilder.builder<String, Any>()
-        for (event in GlidePlayerView.EVENTS) {
-            builder.put(event, MapBuilder.of("registrationName", event))
-        }
-        return builder.build()
+        return GlidePlayerView.EVENTS.associateWith { mapOf("registrationName" to it) }
     }
 
     @ReactProp(name = "source")
@@ -108,15 +110,22 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
         "previewSeek" to 8
     )
 
-    override fun receiveCommand(view: GlidePlayerView, commandId: Int, args: ReadableArray?) {
+    override fun receiveCommand(view: GlidePlayerView, commandId: String, args: ReadableArray?) {
         when (commandId) {
-            4 -> view.pausePlayer()
-            5 -> view.stopPlayer()
-            6 -> view.enterPictureInPicture()
-            7 -> args?.let { view.seekTo(it.getDouble(0).toLong(), exact = true) }
-            8 -> args?.let { view.seekTo(it.getDouble(0).toLong(), exact = false) }
+            "pausePlayer" -> view.pausePlayer()
+            "stopPlayer" -> view.stopPlayer()
+            "enterPictureInPicture" -> view.enterPictureInPicture()
+            "seek" -> args?.let { view.seekTo(it.getDouble(0).toLong(), exact = true) }
+            "previewSeek" -> args?.let { view.seekTo(it.getDouble(0).toLong(), exact = false) }
             else -> Unit
         }
+    }
+
+    /** Bundles from before API level 2 send the numeric ids. Kept for them only. */
+    @Deprecated("Use the String overload")
+    override fun receiveCommand(view: GlidePlayerView, commandId: Int, args: ReadableArray?) {
+        val name = commandsMap.entries.firstOrNull { it.value == commandId }?.key ?: return
+        receiveCommand(view, name, args)
     }
 
     private companion object {

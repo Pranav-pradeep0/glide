@@ -400,9 +400,13 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                     MusicPlayback.setBands(p, bandLevels)
 
                     p.prepare()
-                    p.playWhenReady = playWhenReady
+                    // A slow build can land after the user has left. Starting then is refused
+                    // audio focus (API 35+) and a foreground service, so it would play mute
+                    // or not at all: load it paused, ready for Play.
+                    val play = playWhenReady && !hostPaused
+                    p.playWhenReady = play
 
-                    if (playWhenReady) {
+                    if (play) {
                         GlidePlayerHolder.start(reactContext, p)
                     }
 
