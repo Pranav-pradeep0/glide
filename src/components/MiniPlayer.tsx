@@ -4,12 +4,12 @@ import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { makeMutable, runOnJS } from 'react-native-reanimated';
+import Animated, { makeMutable, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useAudioStore } from '@/store/audioStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumPalette } from '@/hooks/useAlbumArt';
-import { IconButton, Touchable } from '@/components/ui';
-import { metrics, type } from '@/theme/theme';
+import { IconButton, Touchable, showSnackbar } from '@/components/ui';
+import { metrics, motion, type } from '@/theme/theme';
 import { RootStackParamList } from '@/types';
 import { haptic } from '@/native/HapticModule';
 
@@ -102,14 +102,53 @@ export function MiniPlayer() {
         skipPrevious();
     }, [skipPrevious]);
 
+    // Swipe down stops playback and clears the queue, with Undo: the bar sits just above the
+    // tabs, where a stray downward swipe is easy.
+    const handleDismiss = useCallback(() => {
+        const { queue, currentIndex, position, queueSource, playQueue, seekTo, clearQueue } = useAudioStore.getState();
+        haptic('tick');
+        clearQueue();
+        showSnackbar({
+            text: 'Playback stopped',
+            action: 'Undo',
+            onAction: () => {
+                playQueue(queue, currentIndex, queueSource ?? undefined).then(() => seekTo(position));
+            },
+        });
+    }, []);
+
+    const dragY = useSharedValue(0);
+    useEffect(() => {
+        if (hasTrack) dragY.value = 0;
+    }, [hasTrack, dragY]);
+    const dragStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: dragY.value }],
+        opacity: 1 - Math.min(1, dragY.value / 80) * 0.6,
+    }));
+
     const panGesture = useMemo(
         () =>
             Gesture.Pan()
                 .activeOffsetX([-20, 20])
                 .activeOffsetY([-20, 20])
+                .onUpdate((e) => {
+                    'worklet';
+                    // Only a mostly-vertical downward drag moves the bar.
+                    if (e.translationY > 0 && e.translationY > Math.abs(e.translationX)) {
+                        dragY.value = e.translationY;
+                    }
+                })
                 .onEnd((e) => {
                     'worklet';
-                    if (e.translationY < -35 && Math.abs(e.translationY) > Math.abs(e.translationX)) {
+                    const vertical = Math.abs(e.translationY) > Math.abs(e.translationX);
+                    if (vertical && (e.translationY > 50 || e.velocityY > 800)) {
+                        dragY.value = withTiming(120, { duration: motion.fadeOut }, (finished) => {
+                            if (finished) runOnJS(handleDismiss)();
+                        });
+                        return;
+                    }
+                    dragY.value = withSpring(0, motion.spatial);
+                    if (vertical && e.translationY < -35) {
                         runOnJS(handlePress)();
                     } else if (e.translationX < -45) {
                         runOnJS(handleSkipNext)();
@@ -117,7 +156,7 @@ export function MiniPlayer() {
                         runOnJS(handleSkipPrev)();
                     }
                 }),
-        [handlePress, handleSkipNext, handleSkipPrev]
+        [dragY, handleDismiss, handlePress, handleSkipNext, handleSkipPrev]
     );
 
     if (!currentTrack) {
@@ -125,70 +164,72 @@ export function MiniPlayer() {
     }
 
     return (
-        <View
-            ref={barRef}
-            collapsable={false}
-            style={[styles.wrapper, { backgroundColor: cardColor, borderColor: colors.border, shadowColor: colors.shadow }]}
-        >
-            <GestureDetector gesture={panGesture}>
-                <Touchable
-                    onPress={handlePress}
-                    scaleTo={0.99}
-                    style={styles.content}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Now playing: ${currentTrack.title} by ${currentTrack.artist}`}
-                >
-                    {/* Artwork */}
-                    <View
-                        ref={artRef}
-                        onLayout={measureArt}
-                        collapsable={false}
-                        style={[styles.artContainer, { backgroundColor: colors.surfaceVariant }]}
+        <Animated.View style={dragStyle}>
+            <View
+                ref={barRef}
+                collapsable={false}
+                style={[styles.wrapper, { backgroundColor: cardColor, borderColor: colors.border, shadowColor: colors.shadow }]}
+            >
+                <GestureDetector gesture={panGesture}>
+                    <Touchable
+                        onPress={handlePress}
+                        scaleTo={0.99}
+                        style={styles.content}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Now playing: ${currentTrack.title} by ${currentTrack.artist}`}
                     >
-                        {artworkUri ? (
-                            <Image source={{ uri: artworkUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                        ) : (
-                            <Feather name="music" size={18} color={colors.textTertiary} />
-                        )}
-                    </View>
-
-                    {/* Track metadata */}
-                    <View style={styles.textContainer}>
-                        <Text style={[type.row, { color: colors.text }]} numberOfLines={1}>
-                            {currentTrack.title}
-                        </Text>
-                        <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={1}>
-                            {currentTrack.artist}
-                        </Text>
-                    </View>
-
-                    {/* Controls */}
-                    <View style={styles.actions} pointerEvents="box-none">
-                        {isBuffering ? (
-                            <View style={styles.spinnerSlot}>
-                                <ActivityIndicator size="small" color={colors.primary} />
-                            </View>
-                        ) : (
+                        {/* Artwork */}
+                        <View
+                            ref={artRef}
+                            onLayout={measureArt}
+                            collapsable={false}
+                            style={[styles.artContainer, { backgroundColor: colors.surfaceVariant }]}
+                        >
+                            {artworkUri ? (
+                                <Image source={{ uri: artworkUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                            ) : (
+                                <Feather name="music" size={18} color={colors.textTertiary} />
+                            )}
+                        </View>
+    
+                        {/* Track metadata */}
+                        <View style={styles.textContainer}>
+                            <Text style={[type.row, { color: colors.text }]} numberOfLines={1}>
+                                {currentTrack.title}
+                            </Text>
+                            <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {currentTrack.artist}
+                            </Text>
+                        </View>
+    
+                        {/* Controls */}
+                        <View style={styles.actions} pointerEvents="box-none">
+                            {isBuffering ? (
+                                <View style={styles.spinnerSlot}>
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                </View>
+                            ) : (
+                                <IconButton
+                                    icon={isPlaying ? 'pause' : 'play'}
+                                    onPress={togglePlayPause}
+                                    accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                                    iconSize={20}
+                                />
+                            )}
                             <IconButton
-                                icon={isPlaying ? 'pause' : 'play'}
-                                onPress={togglePlayPause}
-                                accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                                icon="skip-forward"
+                                onPress={handleSkipNext}
+                                accessibilityLabel="Next track"
                                 iconSize={20}
                             />
-                        )}
-                        <IconButton
-                            icon="skip-forward"
-                            onPress={skipNext}
-                            accessibilityLabel="Next track"
-                            iconSize={20}
-                        />
-                    </View>
-                </Touchable>
-            </GestureDetector>
-
-            {/* Progress along the card's bottom edge */}
-            <MiniPlayerProgressBar />
-        </View>
+                        </View>
+                    </Touchable>
+                </GestureDetector>
+    
+                {/* Progress along the card's bottom edge */}
+                <MiniPlayerProgressBar />
+            </View>
+        </Animated.View>
     );
 }
 
