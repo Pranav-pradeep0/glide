@@ -9,8 +9,6 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { FilenameParser } from '../utils/FilenameParser';
-import { FlashList } from '@shopify/flash-list';
-import type { ListRenderItem } from '@shopify/flash-list';
 import Feather from '@react-native-vector-icons/feather';
 import { SubtitlePickerService } from '../services/SubtitlePickerService';
 import { SubtitleResult, SubtitleCue } from '../types';
@@ -21,7 +19,7 @@ import { EQUALIZER_PRESETS, EQUALIZER_BANDS } from '../config/equalizerPresets';
 import { isAbortError } from '../utils/network';
 import { LANGUAGES } from '../utils/languages';
 import { VerticalSlider } from './VerticalSlider';
-import { Button, Chip, IconButton, ListGroup, ListRow, Touchable } from './ui';
+import { Button, Chip, IconButton, ListGroup, ListRow, Segmented } from './ui';
 import { SidePanel } from './VideoPlayer/SidePanel';
 import { metrics, playerTheme, type as typo } from '@/theme/theme';
 
@@ -142,50 +140,6 @@ interface TrackSelectorProps {
 
 // ---------------------------------------------------------------------------
 
-interface TrackRowProps {
-    title: string;
-    detail?: string;
-    tags?: string[];
-    selected?: boolean;
-    disabled?: boolean;
-    onPress: () => void;
-    right?: React.ReactNode;
-    accessibilityLabel?: string;
-}
-
-/** The selected track carries the accent check; the row itself stays neutral. */
-const TrackRow = React.memo<TrackRowProps>(({ title, detail, tags, selected, disabled, onPress, right, accessibilityLabel }) => (
-    <Touchable
-        onPress={onPress}
-        disabled={disabled}
-        scaleTo={1}
-        stateLayer
-        onPlayer
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? title}
-        accessibilityState={{ selected: !!selected, disabled: !!disabled }}
-        style={styles.row}
-    >
-        <View style={styles.rowBody}>
-            <View style={styles.rowTitleLine}>
-                <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
-                {tags?.map((tag) => (
-                    <View key={tag} style={styles.tag}>
-                        <Text style={styles.tagText}>{tag}</Text>
-                    </View>
-                ))}
-            </View>
-            {!!detail && <Text style={styles.rowDetail} numberOfLines={1}>{detail}</Text>}
-        </View>
-        {right}
-        {selected && <Feather name="check" size={20} color={colors.primary} />}
-    </Touchable>
-));
-
-const EmptyState = React.memo<{ message: string }>(({ message }) => (
-    <Text style={styles.emptyText}>{message}</Text>
-));
-
 const BandSlider = React.memo<{
     label: string;
     index: number;
@@ -216,6 +170,9 @@ const BandSlider = React.memo<{
 });
 
 const noop = () => {};
+
+/** "English · Default"; undefined when there is nothing to say. */
+const joinCaption = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' · ') || undefined;
 
 // ---------------------------------------------------------------------------
 
@@ -506,155 +463,154 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         handleSearch();
     }, [handleSearch]);
 
-    // ---- Render Item Functions ----
-    const renderTrackItem: ListRenderItem<any> = useCallback(
-        ({ item, index }) => {
-            const language = languageName(item.language);
-            const title = item.title || language || `Track ${index + 1}`;
-            return (
-                <TrackRow
-                    title={title}
-                    detail={language && language.toLowerCase() !== title.toLowerCase() ? language : undefined}
-                    tags={item.isDefault ? ['Default'] : undefined}
-                    selected={selectedTrackIndex === item.index}
-                    onPress={() => {
-                        onSelectTrack(item.index);
-                        onClose();
-                    }}
-                />
-            );
-        },
-        [selectedTrackIndex, onSelectTrack, onClose],
-    );
-
-    const renderExternalItem: ListRenderItem<ExternalSubtitle> = useCallback(
-        ({ item }) => (
-            <TrackRow
-                title={item.name}
-                detail={item.source === 'api' ? 'Downloaded' : 'From your device'}
-                tags={item.isSDH ? ['SDH'] : undefined}
-                selected={currentExternalName === item.name}
+    // ---- Rows ----
+    // Grouped rows, the same as the Playback panel: options in rounded groups, the chosen one
+    // ticked, actions (browse, sync) in their own group with an icon and a chevron.
+    const trackRow = (item: any, index: number) => {
+        const language = languageName(item.language);
+        const title = item.title || language || `Track ${index + 1}`;
+        const detail = language && language.toLowerCase() !== title.toLowerCase() ? language : undefined;
+        return (
+            <ListRow
+                key={item.index ?? `track-${index}`}
+                title={title}
+                caption={joinCaption(detail, item.isDefault && 'Default')}
+                selected={selectedTrackIndex === item.index}
                 onPress={() => {
-                    if (!onLoadExternalCues) {return;}
-
-                    onLoadExternalCues(item.cues, item.name, item.isSDH);
-                    if (item.isSDH && onLoadSDHForHaptics) {
-                        onLoadSDHForHaptics(item.cues, item.name);
-                    }
+                    onSelectTrack(item.index);
                     onClose();
                 }}
+                onPlayer
             />
-        ),
-        [currentExternalName, onLoadExternalCues, onLoadSDHForHaptics, onClose],
+        );
+    };
+
+    const externalRow = (item: ExternalSubtitle, index: number) => (
+        <ListRow
+            key={`${item.name}-${index}`}
+            title={item.name}
+            caption={joinCaption(item.source === 'api' ? 'Downloaded' : 'From your device', item.isSDH && 'SDH')}
+            selected={currentExternalName === item.name}
+            onPress={() => {
+                if (!onLoadExternalCues) {return;}
+                onLoadExternalCues(item.cues, item.name, item.isSDH);
+                if (item.isSDH && onLoadSDHForHaptics) {
+                    onLoadSDHForHaptics(item.cues, item.name);
+                }
+                onClose();
+            }}
+            onPlayer
+        />
     );
 
-    const renderOnlineItem: ListRenderItem<SubtitleResult> = useCallback(
-        ({ item }) => {
-            const isSDH = (item.sdhScore || 0) > 5 || item.hearingImpaired;
-            const isDownloading = downloadingId === item.id;
-            const title = item.release || item.name;
-            return (
-                <TrackRow
-                    title={title}
-                    tags={isSDH ? ['SDH'] : undefined}
-                    disabled={isDownloading}
-                    onPress={() => handleDownloadSubtitle(item)}
-                    accessibilityLabel={`Download ${title}`}
-                    right={isDownloading
-                        ? <ActivityIndicator size="small" color={colors.text} />
-                        : <Feather name="download" size={16} color={colors.textTertiary} />}
-                />
-            );
-        },
-        [downloadingId, handleDownloadSubtitle],
-    );
+    const onlineRow = (item: SubtitleResult, index: number) => {
+        const isSDH = (item.sdhScore || 0) > 5 || item.hearingImpaired;
+        const isDownloading = downloadingId === item.id;
+        return (
+            <ListRow
+                key={item.id ?? `online-${index}`}
+                title={item.release || item.name}
+                caption={isSDH ? 'SDH' : undefined}
+                disabled={isDownloading}
+                onPress={() => handleDownloadSubtitle(item)}
+                trailing={isDownloading
+                    ? <ActivityIndicator size="small" color={colors.text} />
+                    : <Feather name="download" size={18} color={colors.textSecondary} />}
+                onPlayer
+            />
+        );
+    };
+
+    /** A group of rows, or a quiet line saying why there are none. */
+    const group = (rows: React.ReactNode[], empty: string) => (rows.length > 0
+        ? <ListGroup inset onPlayer style={styles.group}>{rows}</ListGroup>
+        : <Text style={styles.emptyText}>{empty}</Text>);
 
     // ---- Pieces ----
-    const offRow = type === 'subtitle' ? (
-        <TrackRow
-            title="Off"
-            selected={selectedTrackIndex === null && !currentExternalName}
-            onPress={handleTurnOffSubtitles}
-        />
+    const offGroup = type === 'subtitle' ? (
+        <ListGroup inset onPlayer style={styles.group}>
+            <ListRow
+                title="Off"
+                selected={selectedTrackIndex === null && !currentExternalName}
+                onPress={handleTurnOffSubtitles}
+                onPlayer
+            />
+        </ListGroup>
     ) : null;
 
-    const externalHeader = (
-        <>
-            {offRow}
-            <Button
-                label="Browse files"
-                onPress={handlePickFile}
-                loading={loading}
+    const canSync = (selectedTrackIndex !== null && selectedTrackIndex !== undefined) || !!currentExternalName;
+    const syncGroup = canSync && onOpenSyncPanel ? (
+        <ListGroup inset onPlayer style={styles.group}>
+            <ListRow
+                icon="clock"
+                title={type === 'audio' ? 'Audio sync' : 'Subtitle timing'}
+                caption={type === 'audio' ? 'Fix sound that is ahead of or behind the picture' : 'Fix subtitles that show early or late'}
+                chevron
+                onPress={() => {
+                    onOpenSyncPanel(type);
+                    onClose();
+                }}
                 onPlayer
-                style={styles.listButton}
             />
-        </>
+        </ListGroup>
+    ) : null;
+
+    const browseGroup = (
+        <ListGroup inset onPlayer style={styles.group}>
+            <ListRow
+                icon="folder"
+                title="Browse files"
+                caption="SRT, VTT, ASS or SSA"
+                chevron={!loading}
+                trailing={loading ? <ActivityIndicator size="small" color={colors.text} /> : undefined}
+                disabled={loading}
+                onPress={handlePickFile}
+                onPlayer
+            />
+        </ListGroup>
     );
 
-    const onlineHeader = (
-        <>
-            {offRow}
-            <View style={styles.searchRow}>
-                <View style={[styles.input, styles.searchInput]}>
-                    <TextInput
-                        style={styles.inputText}
-                        placeholder="Movie or series name"
-                        placeholderTextColor={colors.textTertiary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onSubmitEditing={handleSearch}
-                        returnKeyType="search"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        selectionColor={colors.primary}
-                    />
-                    {searchQuery.length > 0 && (
-                        <IconButton icon="x" iconSize={15} color={colors.textTertiary} onPress={() => setSearchQuery('')} accessibilityLabel="Clear search" onPlayer />
-                    )}
-                </View>
-                {isSearching ? (
-                    <View style={styles.searchSpinner}><ActivityIndicator size="small" color={colors.text} /></View>
-                ) : (
-                    <IconButton icon="search" variant="filled" onPress={handleSearch} disabled={!searchQuery.trim()} accessibilityLabel="Search" onPlayer />
+    const searchRow = (
+        <View style={styles.searchRow}>
+            <View style={[styles.input, styles.searchInput]}>
+                <TextInput
+                    style={styles.inputText}
+                    placeholder="Movie or series name"
+                    placeholderTextColor={colors.textTertiary}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    onSubmitEditing={handleSearch}
+                    returnKeyType="search"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    selectionColor={colors.primary}
+                />
+                {searchQuery.length > 0 && (
+                    <IconButton icon="x" iconSize={15} color={colors.textTertiary} onPress={() => setSearchQuery('')} accessibilityLabel="Clear search" onPlayer />
                 )}
-                <IconButton icon="sliders" variant="filled" onPress={() => setOptionsOpen(true)} accessibilityLabel="Search options" onPlayer />
             </View>
-        </>
+            {isSearching ? (
+                <View style={styles.searchSpinner}><ActivityIndicator size="small" color={colors.text} /></View>
+            ) : (
+                <IconButton icon="search" variant="filled" onPress={handleSearch} disabled={!searchQuery.trim()} accessibilityLabel="Search" onPlayer />
+            )}
+            <IconButton icon="sliders" variant="filled" onPress={() => setOptionsOpen(true)} accessibilityLabel="Search options" onPlayer />
+        </View>
     );
 
-    const tabs: { id: string; label: string }[] = type === 'audio'
-        ? [{ id: 'tracks', label: 'Tracks' }, { id: 'effects', label: 'Effects' }]
-        : [{ id: 'embedded', label: 'Built-in' }, { id: 'external', label: 'Files' }, { id: 'online', label: 'Online' }];
+    const tabs = type === 'audio'
+        ? [{ key: 'tracks', label: 'Tracks' }, { key: 'effects', label: 'Effects' }]
+        : [{ key: 'embedded', label: 'Built-in' }, { key: 'external', label: 'Files' }, { key: 'online', label: 'Online' }];
     const currentTab = type === 'audio' ? audioTab : activeTab;
 
-    const canSync = (selectedTrackIndex !== null && selectedTrackIndex !== undefined) || !!currentExternalName;
-
     const tabBar = (
-        <View style={styles.tabBar}>
-            {tabs.map((t) => (
-                <Chip
-                    key={t.id}
-                    label={t.label}
-                    selected={currentTab === t.id}
-                    onPress={() => (type === 'audio' ? setAudioTab(t.id as AudioTab) : setActiveTab(t.id as SubtitleTab))}
-                    onPlayer
-                    style={styles.tab}
-                />
-            ))}
-            {canSync && (
-                <Chip
-                    label="Sync"
-                    icon="clock"
-                    onPress={() => {
-                        onOpenSyncPanel?.(type);
-                        onClose();
-                    }}
-                    accessibilityLabel={type === 'audio' ? 'Adjust audio sync' : 'Adjust subtitle sync'}
-                    onPlayer
-                    style={styles.tab}
-                />
-            )}
-        </View>
+        <Segmented
+            options={tabs}
+            value={currentTab}
+            onChange={(key) => (type === 'audio' ? setAudioTab(key as AudioTab) : setActiveTab(key as SubtitleTab))}
+            onPlayer
+            style={styles.tabBar}
+        />
     );
 
     const renderEffects = () => {
@@ -815,64 +771,50 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         </ScrollView>
     );
 
+    const scroll = (children: React.ReactNode) => (
+        <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {children}
+        </ScrollView>
+    );
+
     const renderContent = () => {
         if (type === 'audio') {
             if (audioTab === 'effects') {return renderEffects();}
-            return (
-                <FlashList
-                    data={filteredTracks}
-                    renderItem={renderTrackItem}
-                    keyExtractor={(item, index) => item.index?.toString() ?? `audio-${index}`}
-                    contentContainerStyle={styles.list}
-                    showsVerticalScrollIndicator={false}
-                    ListEmptyComponent={<EmptyState message="No audio tracks" />}
-                />
-            );
+            return scroll(<>{group(filteredTracks.map(trackRow), 'No audio tracks')}{syncGroup}</>);
         }
 
         switch (activeTab) {
             case 'embedded':
-                return (
-                    <FlashList
-                        data={filteredTracks}
-                        renderItem={renderTrackItem}
-                        keyExtractor={(item, index) => item.index?.toString() ?? `sub-${index}`}
-                        ListHeaderComponent={offRow}
-                        contentContainerStyle={styles.list}
-                        showsVerticalScrollIndicator={false}
-                        ListEmptyComponent={<EmptyState message="This video has no built-in subtitles" />}
-                    />
+                return scroll(
+                    <>
+                        {offGroup}
+                        {group(filteredTracks.map(trackRow), 'This video has no built-in subtitles')}
+                        {syncGroup}
+                    </>,
                 );
-
             case 'external':
-                return (
-                    <FlashList
-                        data={externalSubtitles}
-                        renderItem={renderExternalItem}
-                        keyExtractor={(item, index) => `${item.name}-${index}`}
-                        ListHeaderComponent={externalHeader}
-                        contentContainerStyle={styles.list}
-                        showsVerticalScrollIndicator={false}
-                        ListEmptyComponent={<EmptyState message="No subtitle files loaded yet" />}
-                    />
+                return scroll(
+                    <>
+                        {offGroup}
+                        {browseGroup}
+                        {group(externalSubtitles.map(externalRow), 'No subtitle files loaded yet')}
+                        {syncGroup}
+                    </>,
                 );
-
             case 'online':
                 if (optionsOpen) {return renderSearchOptions();}
-                return (
-                    <FlashList
-                        data={searchResults}
-                        renderItem={renderOnlineItem}
-                        keyExtractor={(item, index) => item.id ?? `online-${index}`}
-                        ListHeaderComponent={onlineHeader}
-                        contentContainerStyle={styles.list}
-                        showsVerticalScrollIndicator={false}
-                        ListEmptyComponent={
-                            <EmptyState message={searchQuery.trim() ? 'No results. Try a different name.' : 'Search by movie or series name'} />
-                        }
-                    />
+                return scroll(
+                    <>
+                        {offGroup}
+                        {searchRow}
+                        {isSearching && searchResults.length === 0
+                            ? null
+                            : group(
+                                searchResults.map(onlineRow),
+                                searchQuery.trim() ? 'No results. Try a different name.' : 'Search by movie or series name',
+                            )}
+                    </>,
                 );
-
             default:
                 return null;
         }
@@ -896,37 +838,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
 });
 
 const styles = StyleSheet.create({
-    tabBar: {
-        flexDirection: 'row',
-        gap: metrics.space.sm,
-        paddingTop: metrics.space.xs,
-        paddingBottom: metrics.space.sm,
-    },
-    tab: { flex: 1 },
-    content: { flex: 1 },
-    list: { paddingBottom: metrics.space.lg },
-    pad: { paddingTop: metrics.space.sm, paddingBottom: metrics.space.xl },
-
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: metrics.space.md,
-        minHeight: 56,
-        paddingHorizontal: metrics.space.xs,
-        paddingVertical: metrics.space.sm,
-        borderRadius: metrics.radius.md,
-    },
-    rowBody: { flex: 1, gap: 2 },
-    rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm },
-    rowTitle: { ...typo.row, color: colors.text, flexShrink: 1 },
-    rowDetail: { ...typo.caption, color: colors.textSecondary },
-    tag: {
-        backgroundColor: colors.fill,
-        borderRadius: metrics.radius.xs,
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-    },
-    tagText: { ...typo.caption, fontSize: 10.5, color: colors.textSecondary },
+tabBar: { marginTop: metrics.space.xs, marginBottom: metrics.space.xs },    content: { flex: 1 },    pad: { paddingBottom: metrics.space.xl },    group: { marginTop: metrics.space.md },    rowBody: { flex: 1, gap: 2 },
 
     emptyText: {
         ...typo.body,
@@ -935,7 +847,6 @@ const styles = StyleSheet.create({
         paddingVertical: metrics.space.xxl,
         paddingHorizontal: metrics.space.xl,
     },
-    listButton: { marginVertical: metrics.space.sm },
 
     searchRow: {
         flexDirection: 'row',

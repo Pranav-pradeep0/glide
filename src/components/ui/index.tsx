@@ -239,6 +239,44 @@ export function Chip({ label, selected, onPress, icon, onPlayer, accessibilityLa
 }
 
 // ---------------------------------------------------------------------------
+// Segmented
+
+interface SegmentedProps<K extends string> {
+    options: { key: K; label: string }[];
+    value: K;
+    onChange: (key: K) => void;
+    onPlayer?: boolean;
+    style?: StyleProp<ViewStyle>;
+}
+
+/** Tabs within one surface. The chosen segment is solid accent, like a selected Chip. */
+export function Segmented<K extends string>({ options, value, onChange, onPlayer, style }: SegmentedProps<K>) {
+    const { colors } = useUiTheme(onPlayer);
+    return (
+        <View style={[styles.segmented, { backgroundColor: colors.fill }, style]} accessibilityRole="tablist">
+            {options.map((o) => {
+                const selected = o.key === value;
+                return (
+                    <Touchable
+                        key={o.key}
+                        onPress={() => onChange(o.key)}
+                        scaleTo={1}
+                        onPlayer={onPlayer}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected }}
+                        style={[styles.segment, selected && { backgroundColor: colors.primary }]}
+                    >
+                        <Text style={[type.label, { color: selected ? colors.onPrimary : colors.textSecondary }]} numberOfLines={1}>
+                            {o.label}
+                        </Text>
+                    </Touchable>
+                );
+            })}
+        </View>
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Switch
 
 interface SwitchProps {
@@ -702,6 +740,15 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     chipText: { fontVariant: ['tabular-nums'] },
+    segmented: { flexDirection: 'row', padding: 3, borderRadius: metrics.radius.pill, gap: 2 },
+    segment: {
+        flex: 1,
+        minHeight: 36,
+        paddingHorizontal: metrics.space.sm,
+        borderRadius: metrics.radius.pill,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 
     switchTrack: { width: SWITCH.w, height: SWITCH.h, borderRadius: SWITCH.h / 2, padding: SWITCH.inset, overflow: 'hidden' },
     switchOn: { borderRadius: SWITCH.h / 2 },
