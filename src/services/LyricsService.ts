@@ -176,6 +176,7 @@ export class LyricsServiceClass {
 
         // 5. LRCLIB online provider
         const onlineLyricsEnabled = useAppStore.getState().settings.onlineLyricsEnabled;
+        let lookupFailed = false;
         if (onlineLyricsEnabled && title && artist && artist !== '<unknown>' && !artist.startsWith('Unknown')) {
             try {
                 const fetched = await this.fetchFromLrclib(title, artist, album, duration);
@@ -191,13 +192,15 @@ export class LyricsServiceClass {
                     }
                 }
             } catch {
-                // Ignore network errors
+                // LRCLIB could not be asked (offline, timeout, server error): not an answer.
+                lookupFailed = true;
             }
         }
 
-        // Only remember "not found" in memory cache if online lookup was enabled, so enabling
-        // the toggle later in settings re-attempts lookup without needing an app restart.
-        if (onlineLyricsEnabled) {
+        // Remember "not found" only when it is an answer: online lookup was on (enabling it
+        // later re-asks without a restart) and LRCLIB was actually reached (a network blip
+        // must not hide lyrics for the rest of the session).
+        if (onlineLyricsEnabled && !lookupFailed) {
             this.cache.set(cacheKey, null);
         }
         return null;
@@ -251,60 +254,56 @@ export class LyricsServiceClass {
             // Fall through to search
         }
 
-        // 2. Fallback search
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 6000);
-            const searchQuery = `${cleanArtist} ${cleanTitle}`.trim();
-            const response = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`, {
-                headers,
-                signal: controller.signal,
-            });
-            clearTimeout(timeout);
-
-            if (response.ok) {
-                const results = await response.json();
-                if (Array.isArray(results) && results.length > 0) {
-                    const normTargetArtist = cleanArtist.toLowerCase().replace(/[^\p{L}\p{N}\p{M}]/gu, '');
-                    // Only accept search candidates that match artist roughly and duration within 4 seconds.
-                    // Reject candidates if either candidate or track has no duration.
-                    const validCandidates = results.filter((item) => {
-                        if (!item) return false;
-
-                        // Reject if either side lacks a valid positive duration
-                        if (!duration || duration <= 0 || typeof item.duration !== 'number' || item.duration <= 0) {
-                            return false;
-                        }
-                        if (Math.abs(item.duration - duration) > 4) {
-                            return false;
-                        }
-
-                        // Artist match using Unicode letter/number/mark normalisation
-                        const normItemArtist = String(item.artistName || '').toLowerCase().replace(/[^\p{L}\p{N}\p{M}]/gu, '');
-                        if (!normTargetArtist || !normItemArtist) {
-                            return false;
-                        }
-                        if (!normItemArtist.includes(normTargetArtist) && !normTargetArtist.includes(normItemArtist)) {
-                            return false;
-                        }
-                        return true;
-                    });
-
-                    if (validCandidates.length > 0) {
-                        const best = validCandidates.find(item => item?.syncedLyrics?.trim()?.length > 0) || validCandidates[0];
-                        if (best?.syncedLyrics?.trim()) {
-                            return best.syncedLyrics;
-                        }
-                        if (best?.plainLyrics?.trim()) {
-                            return best.plainLyrics;
-                        }
-                    }
-                }
-            }
-        } catch {
-            // Search failed
+        // 2. Fallback search. It is the last word, so it is not caught: failing to reach
+        // LRCLIB here (offline, timeout, server error) throws, and the caller then knows it
+        // has no answer rather than a "not found".
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6000);
+        const searchQuery = `${cleanArtist} ${cleanTitle}`.trim();
+        const response = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`, {
+            headers,
+            signal: controller.signal,
+        }).finally(() => clearTimeout(timeout));
+        if (!response.ok) {
+            throw new Error(`LRCLIB search failed: ${response.status}`);
         }
 
+        const results = await response.json();
+        if (!Array.isArray(results) || results.length === 0) {
+            return null;
+        }
+        const normTargetArtist = cleanArtist.toLowerCase().replace(/[^\p{L}\p{N}\p{M}]/gu, '');
+        // Only accept search candidates that match artist roughly and duration within 4 seconds.
+        // Reject candidates if either candidate or track has no duration.
+        const validCandidates = results.filter((item) => {
+            if (!item) return false;
+
+            // Reject if either side lacks a valid positive duration
+            if (!duration || duration <= 0 || typeof item.duration !== 'number' || item.duration <= 0) {
+                return false;
+            }
+            if (Math.abs(item.duration - duration) > 4) {
+                return false;
+            }
+
+            // Artist match using Unicode letter/number/mark normalisation
+            const normItemArtist = String(item.artistName || '').toLowerCase().replace(/[^\p{L}\p{N}\p{M}]/gu, '');
+            if (!normTargetArtist || !normItemArtist) {
+                return false;
+            }
+            if (!normItemArtist.includes(normTargetArtist) && !normTargetArtist.includes(normItemArtist)) {
+                return false;
+            }
+            return true;
+        });
+
+        const best = validCandidates.find(item => item?.syncedLyrics?.trim()?.length > 0) || validCandidates[0];
+        if (best?.syncedLyrics?.trim()) {
+            return best.syncedLyrics;
+        }
+        if (best?.plainLyrics?.trim()) {
+            return best.plainLyrics;
+        }
         return null;
     }
 

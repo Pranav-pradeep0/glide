@@ -21,7 +21,15 @@ jest.mock('react-native-mmkv', () => ({
     }),
 }));
 
-import { isLyricsSynced, parseLrc, parsePlainLyrics } from '../src/services/LyricsService';
+
+jest.mock('../src/store/appStore', () => ({
+    useAppStore: { getState: () => ({ settings: { onlineLyricsEnabled: true } }) },
+}));
+
+jest.mock('../src/services/AudioMediaService', () => ({
+    AudioMediaService: { getEmbeddedLyrics: async () => null },
+}));
+import { LyricsServiceClass, isLyricsSynced, parseLrc, parsePlainLyrics } from '../src/services/LyricsService';
 
 describe('LyricsService parser and sync tests', () => {
     it('parsePlainLyrics marks lines with time: -1', () => {
@@ -65,5 +73,36 @@ describe('LyricsService parser and sync tests', () => {
         expect(clean('عمرو دياب [Amr Diab]')).toContain('دياب');
         // Pure punctuation / spaces becomes empty
         expect(clean('--- ... !!!')).toBe('');
+    });
+});
+
+describe('LyricsService online lookup', () => {
+    const track = { id: 't1', title: 'Song', artist: 'Band', duration: 200 };
+    const notFound = { ok: false, status: 404, json: async () => ({}) };
+    const emptySearch = { ok: true, status: 200, json: async () => [] };
+    let fetchMock: jest.Mock<any>;
+
+    beforeEach(() => {
+        fetchMock = jest.fn();
+        (globalThis as any).fetch = fetchMock;
+    });
+
+    it('asks again after LRCLIB could not be reached', async () => {
+        const service = new LyricsServiceClass();
+        fetchMock.mockRejectedValue(new Error('offline'));
+        expect(await service.getLyricsForTrack(track)).toBeNull();
+
+        fetchMock.mockReset();
+        fetchMock.mockResolvedValueOnce(notFound).mockResolvedValueOnce(emptySearch);
+        expect(await service.getLyricsForTrack(track)).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('remembers a real "not found" for the session', async () => {
+        const service = new LyricsServiceClass();
+        fetchMock.mockResolvedValueOnce(notFound).mockResolvedValueOnce(emptySearch);
+        expect(await service.getLyricsForTrack(track)).toBeNull();
+        expect(await service.getLyricsForTrack(track)).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 });
