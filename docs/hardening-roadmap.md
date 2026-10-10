@@ -209,8 +209,8 @@ Activities, and Android Auto and a Bluetooth head unit still browse the music li
    then flows into history, Recents and Share (whose FileProvider exposes `cache-path "/"`).
    Only trust `_data` when `uri.authority == "media"`; reject `file://` under `/data/`.
 3. **CI supply chain.** The release job holds the keystore and `contents: write` but pins
-   actions by tag, not SHA; no wrapper validation, no `distributionSha256Sum`, no checksum
-   on the committed FFmpeg AAR. Secrets are interpolated into an unquoted heredoc
+   actions by tag, not SHA; no wrapper validation, no `distributionSha256Sum` (the FFmpeg
+   AAR checksum is done, see 8b). Secrets are interpolated into an unquoted heredoc
    (`android-ci.yml:45-58, 195-208`) — a `$` or backtick silently corrupts the baked key.
    Also verify the signing cert SHA-256 before publishing.
 4. **`GlidePlayerService` has no `onConnect`** — exported, so any app can browse the whole
@@ -316,7 +316,7 @@ timer survive a JS reload (shake menu) mid-song; `NativeModules.GlideNative.apiL
    so a JS reload or OTA restart drops both while music plays on. Move them to
    `GlidePlayerHolder`; give posted runnables an `invalidated` check.
 
-### 8b. Native correctness — done, bar two
+### 8b. Native correctness — done (brightness range is won't-fix)
 All landed in one commit after 8a; `API_LEVEL` is now 2 (`currentActivityName`,
 `onVideoLibraryChanged`, commands by name). Sleep timer vs offload landed with 8a. Done:
 `setQueue` loads paused when the host is paused; `finishCurrentActivity` only finishes
@@ -331,9 +331,18 @@ NULL-duration songs listed; a video `ContentObserver` drops the JS library cache
 old bundles), `MapBuilder` gone, `onDropViewInstance` calls `super`; `BEHIND_LIVE_WINDOW`
 shares the IO retry budget; audio delay scaled by speed so it stays wall-clock time.
 
+FFmpeg AAR, done: rebuilt by glide-ffmpeg-decoder's CI (`cb773e8`) against Media3 1.11.1,
+which was 1.11.0. Its `.sha256` from the same run is committed next to it, and both CI jobs
+run `sha256sum -c` before building and check that each release APK still has
+`libffmpegJNI.so` and `FfmpegAudioRenderer` after R8. Already audio-only where it counts:
+only `ac3 eac3 dca mlp truehd` are compiled, so `ExperimentalFfmpegVideoRenderer` supports no
+format and is never selected. No emulator renderer-construction test: the APK check catches
+the failure that has actually happened. To update: run that repo's workflow, copy both
+files from its artifact into `android/app/libs`. Device check: an E-AC-3 or DTS file has
+sound. **Open:** that repo's README flags FFmpeg as statically linked, an LGPL relinking
+question to settle with Phase 1 item 10.
+
 Left:
-- FFmpeg AAR: rebuild in CI from the same Media3 tag with a renderer-construction test;
-  consider audio-only (`ExperimentalFfmpegVideoRenderer` runs native decode in-process).
 - `DisplayBrightnessModule` 0-255: won't fix. The OEM's real range is not public API, and
   the window brightness path it uses is already 0-1.
 

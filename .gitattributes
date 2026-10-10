@@ -1,0 +1,2 @@
+# sha256sum -c reads the filename up to the line end; a CRLF checkout breaks it.
+*.sha256 text eol=lf
