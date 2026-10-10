@@ -21,6 +21,7 @@ class MainActivity : GlideBaseActivity() {
     // In debug, we only keep it until the activity is created to see bundling progress.
     // In release, we keep it until React Native is ready for a perfect transition.
     splashScreen.setKeepOnScreenCondition { !BuildConfig.DEBUG && !isReactReady }
+    dropPrivateUri(intent)
     super.onCreate(savedInstanceState)
     
     // Programmatically set background to ensure it's applied correctly during debug bundling gap
@@ -59,8 +60,18 @@ class MainActivity : GlideBaseActivity() {
    * This ensures Linking.getInitialURL() returns the correct URI for video files
    */
   override fun onNewIntent(intent: Intent?) {
+    // Before super: React Native announces the URI to JS from there.
+    dropPrivateUri(intent)
     super.onNewIntent(intent)
     setIntent(intent)
+  }
+
+  /** "Open with" audio lands here, and this Activity is exported; see [PrivatePath]. */
+  private fun dropPrivateUri(intent: Intent?) {
+    if (intent != null && PrivatePath.isPrivate(this, intent.data)) {
+      android.util.Log.w("MainActivity", "Dropped a URI inside Glide's own storage")
+      intent.data = null
+    }
   }
 
   /**

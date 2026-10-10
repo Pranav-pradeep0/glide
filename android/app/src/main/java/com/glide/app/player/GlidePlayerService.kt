@@ -1,12 +1,17 @@
 package com.glide.app.player
 
+import android.Manifest
 import android.app.Activity
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -288,6 +293,23 @@ class GlidePlayerService : MediaLibraryService() {
             return MediaStoreAudioModule.queryAllSongs(this@GlidePlayerService).also { songs = now to it }
         }
 
+        /**
+         * The service is exported, so any app can bind it, and the browse tree is the whole
+         * music library. Only controllers that could read that library themselves get in:
+         * Glide, the system (notification, Bluetooth, Auto, Assistant), controllers the user
+         * trusts (notification listeners), and apps holding the audio permission.
+         */
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult =
+            if (mayBrowse(controller)) {
+                super.onConnect(session, controller)
+            } else {
+                Log.w(GlidePlayerView.TAG, "Rejected media controller ${controller.packageName}")
+                MediaSession.ConnectionResult.reject()
+            }
+
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
@@ -352,6 +374,25 @@ class GlidePlayerService : MediaLibraryService() {
         private fun resolve(items: List<MediaItem>): List<MediaItem> {
             val records = MediaStoreAudioModule.getSongsByIds(this@GlidePlayerService, items.map { it.mediaId })
             return items.map { item -> records[item.mediaId]?.let(::playable) ?: item }
+        }
+    }
+
+    private fun mayBrowse(controller: MediaSession.ControllerInfo): Boolean {
+        if (controller.uid == Process.myUid() || controller.isTrusted) return true
+        // A binding app is visible to us, so its uid resolves despite package visibility.
+        val packages = packageManager.getPackagesForUid(controller.uid) ?: return false
+        val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        return packages.any { pkg ->
+            val system = try {
+                packageManager.getApplicationInfo(pkg, 0).flags and ApplicationInfo.FLAG_SYSTEM != 0
+            } catch (e: PackageManager.NameNotFoundException) {
+                false
+            }
+            system || packageManager.checkPermission(audioPermission, pkg) == PackageManager.PERMISSION_GRANTED
         }
     }
 

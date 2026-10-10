@@ -94,6 +94,10 @@ class VideoPlayerActivity : GlideBaseActivity() {
     if (uri.schemeSpecificPart.isNullOrBlank()) {
       return null
     }
+    if (PrivatePath.isPrivate(this, uri)) {
+      android.util.Log.w(TAG, "Rejected external intent: path inside Glide's own storage")
+      return null
+    }
 
     val value = uri.toString()
     if (value.length > MAX_URI_LENGTH) {

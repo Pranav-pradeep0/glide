@@ -188,8 +188,10 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
                 return
             }
 
-            // 2. Query MediaStore for _data column
-            if (uri.scheme == "content") {
+            // 2. Query MediaStore for _data column. Only MediaStore's own answer is trusted:
+            // any other provider can return any path it likes, /data/data/com.glide.app
+            // included, and Glide would then open that path with its own permissions.
+            if (uri.scheme == "content" && uri.authority == MediaStore.AUTHORITY) {
                 try {
                     val projection = arrayOf(MediaStore.MediaColumns.DATA)
                     val cursor = context.contentResolver.query(uri, projection, null, null, null)
