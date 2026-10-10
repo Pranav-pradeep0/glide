@@ -378,8 +378,10 @@ commands (seek, PiP, stop) work on both an old and a new bundle.
 - Patch upgrades: fs 2.40.3, gesture-handler 3.3.0, safe-area 5.10.1, screens 4.29.0,
   zip-archive 9.5.3, edge-to-edge 1.8.2. Hold reanimated at 4.6.0 until RN 0.88 and
   reanimated #10734 (Android SIGSEGV since 4.7.0) settle.
-- GitHub Actions are on node20 (`checkout@v4` etc.); GitHub removed Node 20 runners on
-  2026-09-23. Bump to the node24 majors.
+- ~~GitHub Actions on node20~~ **Done.** Each action is on its lowest node24 major, read
+  from its own `action.yml`: `checkout@v5`, `setup-node@v5`, `setup-java@v5`,
+  `attest-build-provenance@v3` (a composite; v2's inner predicate action is node20). The
+  decoder repo got the same plus `cache@v5` and `upload-artifact@v6` (v5 is still node20).
 - Toolchain is pinned by RN and fine through RN 0.88; `builtInKotlin=false`/`newDsl=false`
   die with AGP 10, which only arrives with an RN upgrade.
 - Stale comment about react-native-ffmpeg-kit in `android/build.gradle`.
