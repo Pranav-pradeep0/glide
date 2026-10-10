@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
     },
     blockHeader: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.md },
     slider: { width: '100%', height: metrics.touch },
-    chips: { flexDirection: 'row', gap: metrics.space.sm },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: metrics.space.sm },
     swatchRow: { gap: metrics.space.xs },
     swatchRing: {
         width: metrics.touch,

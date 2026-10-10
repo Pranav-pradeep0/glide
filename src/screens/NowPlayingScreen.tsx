@@ -651,7 +651,7 @@ export default function NowPlayingScreen() {
                                     iconSize={20}
                                 />
                                 {repeatMode === 'one' && (
-                                    <View style={[styles.repeatBadge, { backgroundColor: accentColor }]}>
+                                    <View style={[styles.repeatBadge, { backgroundColor: accentColor, borderColor: colors.background }]}>
                                         <Text style={[styles.repeatBadgeText, { color: onPrimaryColor || colors.onPrimary }]}>1</Text>
                                     </View>
                                 )}
@@ -990,11 +990,13 @@ const styles = StyleSheet.create({
     },
     repeatBadge: {
         position: 'absolute',
-        top: 4,
-        right: 4,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
+        top: 0,
+        right: 0,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        // Ringed so it stays legible on the solid "on" circle when the accent is the same colour.
+        borderWidth: 1.5,
         alignItems: 'center',
         justifyContent: 'center',
     },

@@ -114,7 +114,7 @@ interface IconButtonProps {
     iconSize?: number;
     color?: string;
     disabled?: boolean;
-    /** Selected: accent glyph on an accent tint. */
+    /** On (a toggle that is switched on): inverted glyph on a solid accent circle, like a selected Chip. */
     active?: boolean;
     onPlayer?: boolean;
     style?: StyleProp<ViewStyle>;
@@ -139,11 +139,11 @@ export function IconButton({
             style={[
                 styles.iconButton,
                 variant === 'filled' && { backgroundColor: colors.fill },
-                active && { backgroundColor: colors.primaryContainer },
+                active && { backgroundColor: colors.primary },
                 style,
             ]}
         >
-            <Feather name={icon} size={iconSize} color={active ? colors.primary : color ?? colors.text} />
+            <Feather name={icon} size={iconSize} color={active ? colors.onPrimary : color ?? colors.text} />
         </Touchable>
     );
 }
@@ -616,22 +616,27 @@ export function SnackbarHost({ bottomOffset = 0 }: { bottomOffset?: number }) {
     const [message, setMessage] = useState<SnackbarMessage | null>(null);
     const shown = useSharedValue(0);
 
+    // Unmount once faded: an invisible snackbar still catches taps.
+    const hide = useCallback(() => {
+        shown.value = withTiming(0, { duration: motion.fadeOut }, (finished) => {
+            if (finished) { runOnJS(setMessage)(null); }
+        });
+    }, [shown]);
+
     useEffect(() => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const listener = (m: SnackbarMessage) => {
             clearTimeout(timer);
             setMessage(m);
             shown.value = withSpring(1, motion.spatial);
-            timer = setTimeout(() => {
-                shown.value = withTiming(0, { duration: motion.fadeOut });
-            }, m.action ? 5000 : 3000);
+            timer = setTimeout(hide, m.action ? 5000 : 3000);
         };
         snackbarListeners.push(listener);
         return () => {
             clearTimeout(timer);
             snackbarListeners.splice(snackbarListeners.indexOf(listener), 1);
         };
-    }, [shown]);
+    }, [shown, hide]);
 
     const style = useAnimatedStyle(() => ({
         opacity: shown.value,
@@ -654,7 +659,7 @@ export function SnackbarHost({ bottomOffset = 0 }: { bottomOffset?: number }) {
                         onPlayer
                         onPress={() => {
                             message.onAction?.();
-                            shown.value = withTiming(0, { duration: motion.fadeOut });
+                            hide();
                         }}
                     />
                 )}
