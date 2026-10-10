@@ -413,7 +413,8 @@ describe('Audio Player Utilities and Store', () => {
 
             useAudioStore.getState().setSleepTimer(15);
             expect(useAudioStore.getState().sleepTimerMode).toBe('time');
-            expect(useAudioStore.getState().sleepTimerRemaining).toBe(15 * 60);
+            expect(useAudioStore.getState().sleepTimerMinutes).toBe(15);
+            expect(useAudioStore.getState().sleepTimerEndsAt).toBeGreaterThan(Date.now() + 14 * 60_000);
             expect(NativeModules.GlideAudioPlayerModule.setSleepTimer).toHaveBeenCalledWith(15, false);
 
             useAudioStore.getState().setSleepTimer('end_of_track');
@@ -422,8 +423,16 @@ describe('Audio Player Utilities and Store', () => {
 
             useAudioStore.getState().setSleepTimer('off');
             expect(useAudioStore.getState().sleepTimerMode).toBe('off');
-            expect(useAudioStore.getState().sleepTimerRemaining).toBe(0);
+            expect(useAudioStore.getState().sleepTimerMinutes).toBe(0);
+            expect(useAudioStore.getState().sleepTimerEndsAt).toBe(0);
             expect(NativeModules.GlideAudioPlayerModule.clearSleepTimer).toHaveBeenCalled();
+        });
+
+        it('shows no sleep timer when native fails to set one', async () => {
+            (NativeModules.GlideAudioPlayerModule.setSleepTimer as jest.Mock<any>).mockRejectedValueOnce(new Error('boom'));
+            await useAudioStore.getState().setSleepTimer(30);
+            expect(useAudioStore.getState().sleepTimerMode).toBe('off');
+            expect(useAudioStore.getState().sleepTimerMinutes).toBe(0);
         });
     });
 

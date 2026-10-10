@@ -656,6 +656,11 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                     putDouble("duration", (if ((p?.duration ?: 0L) > 0) p?.duration ?: 0L else 0L) / 1000.0)
                     putString("trackId", p?.currentMediaItem?.mediaId ?: "")
                     putArray("queueIndices", getQueueIndices())
+                    // Native owns the sleep timer and it outlives a JS reload, so JS reads it here.
+                    val sleep = p?.let { MusicPlayback.sleepTimerState(it) }
+                    putString("sleepTimerMode", sleep?.mode ?: "off")
+                    putDouble("sleepTimerMinutes", sleep?.minutes ?: 0.0)
+                    putDouble("sleepTimerEndsAt", (sleep?.endsAtMs ?: 0L).toDouble())
                 }
                 promise.resolve(map)
             } catch (e: Exception) {

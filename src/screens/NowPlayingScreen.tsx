@@ -50,64 +50,47 @@ interface QueueItem {
     index: number;
 }
 
+const SLEEP_MINUTES = [15, 30, 45, 60];
+
 const SleepTimerContent = React.memo(({ onClose }: { onClose: () => void }) => {
     const sleepTimerMode = useAudioStore((s) => s.sleepTimerMode);
-    const sleepTimerRemaining = useAudioStore((s) => s.sleepTimerRemaining);
+    const sleepTimerMinutes = useAudioStore((s) => s.sleepTimerMinutes);
+    const sleepTimerEndsAt = useAudioStore((s) => s.sleepTimerEndsAt);
     const setSleepTimer = useAudioStore((s) => s.setSleepTimer);
+
+    // Time left is read off the end time, refreshed while this sheet is open.
+    const [now, setNow] = useState(Date.now);
+    useEffect(() => {
+        if (sleepTimerMode !== 'time') return;
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [sleepTimerMode]);
+    const minutesLeft = Math.max(1, Math.ceil((sleepTimerEndsAt - now) / 60_000));
+
+    const choose = (option: number | 'end_of_track' | 'off') => {
+        setSleepTimer(option);
+        onClose();
+    };
 
     return (
         <ListGroup inset style={styles.sleepTimerGroup}>
-            <ListRow
-                title="Off"
-                selected={sleepTimerMode === 'off'}
-                onPress={() => {
-                    setSleepTimer('off');
-                    onClose();
-                }}
-            />
-            <ListRow
-                title="15 minutes"
-                selected={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 15}
-                value={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 15 ? `${Math.ceil(sleepTimerRemaining / 60)}m left` : undefined}
-                onPress={() => {
-                    setSleepTimer(15);
-                    onClose();
-                }}
-            />
-            <ListRow
-                title="30 minutes"
-                selected={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 30}
-                value={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 30 ? `${Math.ceil(sleepTimerRemaining / 60)}m left` : undefined}
-                onPress={() => {
-                    setSleepTimer(30);
-                    onClose();
-                }}
-            />
-            <ListRow
-                title="45 minutes"
-                selected={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 45}
-                value={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 45 ? `${Math.ceil(sleepTimerRemaining / 60)}m left` : undefined}
-                onPress={() => {
-                    setSleepTimer(45);
-                    onClose();
-                }}
-            />
-            <ListRow
-                title="60 minutes"
-                selected={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 60}
-                value={sleepTimerMode === 'time' && Math.round(sleepTimerRemaining / 60) === 60 ? `${Math.ceil(sleepTimerRemaining / 60)}m left` : undefined}
-                onPress={() => {
-                    setSleepTimer(60);
-                    onClose();
-                }}
-            />
+            <ListRow title="Off" selected={sleepTimerMode === 'off'} onPress={() => choose('off')} />
+            {SLEEP_MINUTES.map((m) => {
+                const selected = sleepTimerMode === 'time' && sleepTimerMinutes === m;
+                return (
+                    <ListRow
+                        key={m}
+                        title={`${m} minutes`}
+                        selected={selected}
+                        value={selected ? `${minutesLeft} min left` : undefined}
+                        onPress={() => choose(m)}
+                    />
+                );
+            })}
             <ListRow
                 title="At the end of this song"
                 selected={sleepTimerMode === 'end_of_track'}
-                onPress={() => {
-                    setSleepTimer('end_of_track');
-                    onClose();
-                }}
+                onPress={() => choose('end_of_track')}
             />
         </ListGroup>
     );

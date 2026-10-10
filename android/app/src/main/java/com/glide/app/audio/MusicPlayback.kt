@@ -145,18 +145,36 @@ object MusicPlayback {
 
     // ================= Sleep timer =================
 
+    /**
+     * The timer as it stands, for JS to read rather than keep its own copy: native owns it,
+     * and it outlives a JS reload. [endsAtMs] is wall-clock time, 0 when no minutes timer.
+     */
+    class SleepTimerState(val mode: String, val minutes: Double, val endsAtMs: Long)
+
+    private var sleepMinutes = 0.0
+    private var sleepEndsAtMs = 0L
+
+    fun sleepTimerState(player: ExoPlayer): SleepTimerState = when {
+        sleepTimer != null -> SleepTimerState("time", sleepMinutes, sleepEndsAtMs)
+        player.pauseAtEndOfMediaItems -> SleepTimerState("end_of_track", 0.0, 0L)
+        else -> SleepTimerState("off", 0.0, 0L)
+    }
+
     fun setSleepTimer(player: ExoPlayer, minutes: Double, atEndOfMediaItem: Boolean) {
         cancelSleepTimer()
         player.pauseAtEndOfMediaItems = atEndOfMediaItem
         if (!atEndOfMediaItem && minutes > 0.0) {
+            val delayMs = (minutes * 60 * 1000).toLong()
             val timer = Runnable {
-                sleepTimer = null
+                cancelSleepTimer()
                 player.pause()
                 applyEffects(player)
                 listener?.onSleepTimerFired()
             }
             sleepTimer = timer
-            mainHandler.postDelayed(timer, (minutes * 60 * 1000).toLong())
+            sleepMinutes = minutes
+            sleepEndsAtMs = System.currentTimeMillis() + delayMs
+            mainHandler.postDelayed(timer, delayMs)
         }
         applyEffects(player)
     }
@@ -170,6 +188,8 @@ object MusicPlayback {
     private fun cancelSleepTimer() {
         sleepTimer?.let { mainHandler.removeCallbacks(it) }
         sleepTimer = null
+        sleepMinutes = 0.0
+        sleepEndsAtMs = 0L
     }
 
     // ================= Playback resumption =================

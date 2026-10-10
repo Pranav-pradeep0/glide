@@ -229,14 +229,6 @@ function getPresetBands(presetId: string): number[] | null {
     return preset?.values ?? null;
 }
 
-let sleepTimerInterval: any = null;
-function clearSleepTimerInterval() {
-    if (sleepTimerInterval) {
-        clearInterval(sleepTimerInterval);
-        sleepTimerInterval = null;
-    }
-}
-
 export interface AudioStoreState {
     currentTrack: AudioTrack | null;
     queue: AudioTrack[];
@@ -251,7 +243,10 @@ export interface AudioStoreState {
     shuffledIndices: number[];
     queueSource?: string;
     sleepTimerMode: 'off' | 'time' | 'end_of_track';
-    sleepTimerRemaining: number;
+    /** The option chosen, in minutes; 0 unless mode is time. */
+    sleepTimerMinutes: number;
+    /** When a minutes timer fires, epoch ms; 0 unless mode is time. Native owns the timer. */
+    sleepTimerEndsAt: number;
 
     // Actions
     playTrack: (track: AudioTrack, newQueue?: AudioTrack[], queueSource?: string) => Promise<void>;
@@ -297,7 +292,8 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     shuffledIndices: [],
     queueSource: initialPlayback.queueSource || 'Library',
     sleepTimerMode: 'off',
-    sleepTimerRemaining: 0,
+    sleepTimerMinutes: 0,
+    sleepTimerEndsAt: 0,
 
     playTrack: async (track: AudioTrack, newQueue?: AudioTrack[], queueSource?: string) => {
         const queue = newQueue && newQueue.length > 0 ? newQueue : [track];
@@ -529,49 +525,28 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     },
 
     setSleepTimer: async (option: number | 'end_of_track' | 'off') => {
-        clearSleepTimerInterval();
-        const audioModule = getAudioModule();
+        // Native runs the timer (it outlives a JS reload); the store only mirrors what was set.
+        const off = { sleepTimerMode: 'off' as const, sleepTimerMinutes: 0, sleepTimerEndsAt: 0 };
         if (option === 'off') {
-            set({ sleepTimerMode: 'off', sleepTimerRemaining: 0 });
-            if (Platform.OS === 'android' && audioModule) {
-                try {
-                    await audioModule.clearSleepTimer();
-                } catch (err) {
-                    console.error('[AudioStore] clearSleepTimer error:', err);
-                }
-            }
-            return;
+            set(off);
+        } else if (option === 'end_of_track') {
+            set({ ...off, sleepTimerMode: 'end_of_track' });
+        } else {
+            set({ sleepTimerMode: 'time', sleepTimerMinutes: option, sleepTimerEndsAt: Date.now() + option * 60_000 });
         }
-        if (option === 'end_of_track') {
-            set({ sleepTimerMode: 'end_of_track', sleepTimerRemaining: 0 });
-            if (Platform.OS === 'android' && audioModule) {
-                try {
-                    await audioModule.setSleepTimer(0, true);
-                } catch (err) {
-                    console.error('[AudioStore] setSleepTimer error:', err);
-                }
-            }
-            return;
-        }
-        const totalSecs = option * 60;
-        const endTime = Date.now() + totalSecs * 1000;
-        set({ sleepTimerMode: 'time', sleepTimerRemaining: totalSecs });
-        if (Platform.OS === 'android' && audioModule) {
-            try {
-                await audioModule.setSleepTimer(option, false);
-            } catch (err) {
-                console.error('[AudioStore] setSleepTimer error:', err);
-            }
-        }
-        sleepTimerInterval = setInterval(() => {
-            const remaining = Math.max(0, Math.round((endTime - Date.now()) / 1000));
-            if (remaining <= 0) {
-                clearSleepTimerInterval();
-                set({ sleepTimerMode: 'off', sleepTimerRemaining: 0 });
+        const audioModule = getAudioModule();
+        if (Platform.OS !== 'android' || !audioModule) return;
+        try {
+            if (option === 'off') {
+                await audioModule.clearSleepTimer();
             } else {
-                set({ sleepTimerRemaining: remaining });
+                await audioModule.setSleepTimer(option === 'end_of_track' ? 0 : option, option === 'end_of_track');
             }
-        }, 1000);
+        } catch (err) {
+            console.error('[AudioStore] sleep timer error:', err);
+            // Never show a timer native does not have.
+            set(off);
+        }
     },
 
     togglePlayPause: async () => {
@@ -897,12 +872,19 @@ if (Platform.OS === 'android') {
     });
 
     DeviceEventEmitter.addListener('onSleepTimerFired', () => {
-        clearSleepTimerInterval();
-        useAudioStore.setState({ sleepTimerMode: 'off', sleepTimerRemaining: 0 });
+        useAudioStore.setState({ sleepTimerMode: 'off', sleepTimerMinutes: 0, sleepTimerEndsAt: 0 });
     });
 
     if (NativeModules.GlideAudioPlayerModule?.getCurrentState) {
         NativeModules.GlideAudioPlayerModule.getCurrentState().then((state: any) => {
+            // A timer set before a JS reload is still running natively.
+            if (state?.sleepTimerMode === 'time' || state?.sleepTimerMode === 'end_of_track') {
+                useAudioStore.setState({
+                    sleepTimerMode: state.sleepTimerMode,
+                    sleepTimerMinutes: state.sleepTimerMinutes ?? 0,
+                    sleepTimerEndsAt: state.sleepTimerEndsAt ?? 0,
+                });
+            }
             if (state && (state.isPlaying || state.position > 0)) {
                 useAudioStore.getState()._setPlaybackState({
                     isPlaying: !!state.isPlaying,
