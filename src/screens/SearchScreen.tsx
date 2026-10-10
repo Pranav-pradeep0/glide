@@ -6,14 +6,12 @@ import {
     type TextInputInstance,
     StyleSheet,
     RefreshControl,
-    Alert,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import Feather from '@react-native-vector-icons/feather';
-import { MediaService } from '@/services/MediaService';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useVideoSearch } from '@/hooks/useVideoSearch';
@@ -28,7 +26,7 @@ import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { IconButton } from '@/components/ui';
 import {
     EmptyState, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
-    confirmDelete, joinMeta, listContentStyle, shareVideo,
+    deleteVideo, joinMeta, listContentStyle, shareVideo,
 } from '@/components/VideoRow';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -87,21 +85,11 @@ export default function SearchScreen() {
     const handleDelete = () => {
         const video = selectedVideo;
         if (!video) {return;}
-        const videoUri = video.uri;
-        if (!videoUri) {
-            Alert.alert('Delete failed', 'Cannot delete: missing media URI.');
-            return;
-        }
-        confirmDelete(video.name, async () => {
-            try {
-                await MediaService.deleteVideos([videoUri]);
-                clearHistoryForPath(video.path);
-                if (video.album) {markAlbumCoverDirty(video.album);}
-                setDeleted(prev => new Set(prev).add(video.path));
-            } catch (error) {
-                console.error('[SearchScreen] Delete failed:', error);
-                Alert.alert('Delete failed', 'Could not delete the file. Please check permissions.');
-            }
+        deleteVideo(video.name, video.uri || video.path).then((deleted) => {
+            if (!deleted) {return;}
+            clearHistoryForPath(video.path);
+            if (video.album) {markAlbumCoverDirty(video.album);}
+            setDeleted(prev => new Set(prev).add(video.path));
         });
     };
 

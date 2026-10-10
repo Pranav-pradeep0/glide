@@ -9,14 +9,13 @@ import { RootStackParamList, VideoHistoryEntry } from '@/types';
 import { Loader } from '@/components/Loader';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useTheme } from '@/hooks/useTheme';
-import { MediaService } from '@/services/MediaService';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Chip, IconButton, SortButton } from '@/components/ui';
 import { RecentMusicList } from '@/components/RecentMusicList';
 import {
     AmbientBackdrop, ContinueCard, EmptyState, ListHeader, SectionTitle, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
-    confirmDelete, getRelativeTime, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
+    deleteVideo, getRelativeTime, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
 } from '@/components/VideoRow';
 import { metrics } from '@/theme/theme';
 
@@ -96,19 +95,10 @@ export default function RecentsScreen() {
     const handleDelete = () => {
         const video = selectedVideo;
         if (!video) {return;}
-        if (!video.contentUri) {
-            Alert.alert('Cannot delete here', 'Open this video from Videos to delete it.');
-            return;
-        }
-        const contentUri = video.contentUri;
-        confirmDelete(video.videoName, async () => {
-            try {
-                await MediaService.deleteVideos([contentUri]);
-                clearVideoHistory(video.videoPath);
-            } catch (error) {
-                console.error('[RecentsScreen] Delete failed:', error);
-                Alert.alert('Delete failed', 'Could not delete the file. Please check permissions.');
-            }
+        // Native resolves a path to its MediaStore entry, so an entry with no saved URI
+        // (opened from a file manager) deletes the same way.
+        deleteVideo(video.videoName, video.contentUri || video.videoPath).then((deleted) => {
+            if (deleted) {clearVideoHistory(video.videoPath);}
         });
     };
 

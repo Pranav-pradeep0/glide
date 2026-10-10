@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useMemo } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList, VideoFile, VideoHistoryEntry } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { markAlbumCoverDirty, useAlbumVideos } from '@/hooks/useMediaService';
-import { MediaService } from '@/services/MediaService';
 import { formatFileSize } from '@/utils/formatUtils';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
@@ -15,7 +14,7 @@ import { Loader } from '@/components/Loader';
 import { Button, IconButton } from '@/components/ui';
 import {
     EmptyState, ListHeader, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
-    confirmDelete, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
+    deleteVideo, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
 } from '@/components/VideoRow';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { metrics } from '@/theme/theme';
@@ -54,21 +53,11 @@ export default function AlbumVideosScreen() {
     const handleDelete = () => {
         const video = selectedVideo;
         if (!video) {return;}
-        const videoUri = video.uri;
-        if (!videoUri) {
-            Alert.alert('Delete failed', 'Cannot delete: missing media URI.');
-            return;
-        }
-        confirmDelete(video.name, async () => {
-            try {
-                await MediaService.deleteVideos([videoUri]);
-                clearHistoryForPath(video.path);
-                markAlbumCoverDirty(albumTitle);
-                refetch();
-            } catch (error) {
-                console.error('[AlbumVideosScreen] Delete failed:', error);
-                Alert.alert('Delete failed', 'Could not delete the file. Please check permissions.');
-            }
+        deleteVideo(video.name, video.uri || video.path).then((deleted) => {
+            if (!deleted) {return;}
+            clearHistoryForPath(video.path);
+            markAlbumCoverDirty(albumTitle);
+            refetch();
         });
     };
 

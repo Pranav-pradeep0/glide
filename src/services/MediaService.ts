@@ -50,16 +50,24 @@ class MediaServiceClass {
     }
 
     /**
-     * Delete videos by their URIs (content:// or file://).
-     * Prompts the user via the system delete confirmation dialog on Android 11+.
+     * Delete videos by content:// URI, file:// URI or path (native resolves paths to their
+     * MediaStore entry). Android 11+ shows the system's confirmation dialog.
+     *
+     * True when deleted, false when the user cancelled. Throws on failure, with
+     * `code: 'E_PERMISSION'` when Android 9 or below was refused the storage permission.
      */
-    async deleteVideos(uris: string[]): Promise<boolean> {
+    async deleteVideos(targets: string[]): Promise<boolean> {
         if (Platform.OS !== 'android' || !this.module?.deleteVideos) {
             return false;
         }
-        await this.module.deleteVideos(uris);
-        this.invalidateCache();
-        return true;
+        if (!(await PermissionService.requestDeletePermission())) {
+            throw Object.assign(new Error('Storage permission denied'), { code: 'E_PERMISSION' });
+        }
+        const deleted = (await this.module.deleteVideos(targets)) === true;
+        if (deleted) {
+            this.invalidateCache();
+        }
+        return deleted;
     }
 
     /**

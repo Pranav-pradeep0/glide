@@ -38,6 +38,26 @@ class PermissionServiceClass {
     }
 
     /**
+     * Android 9 and below delete media through the storage write permission (the manifest
+     * caps it at API 28). From Android 10 the system asks per file instead, so this is true.
+     */
+    async requestDeletePermission(): Promise<boolean> {
+        if (Platform.OS !== 'android' || Platform.Version >= 29) {
+            return true;
+        }
+        try {
+            const status = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+            if (status === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+                await Linking.openSettings().catch(() => {});
+            }
+            return status === PermissionsAndroid.RESULTS.GRANTED;
+        } catch (error) {
+            console.error('[PermissionService] Delete permission request failed:', error);
+            return false;
+        }
+    }
+
+    /**
      * Check if audio permission is granted without prompting.
      */
     async checkAudioPermission(): Promise<boolean> {

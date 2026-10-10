@@ -21,6 +21,8 @@ import com.facebook.react.uimanager.ViewManager
  * 1: everything up to the native freeze (2026-10).
  * 2: PipModule.currentActivityName(); MediaStoreVideoModule emits onVideoLibraryChanged;
  *    RCTGlidePlayer takes commands by name.
+ * 3: MediaStoreVideoModule.deleteVideos resolves false when the user cancels the system
+ *    delete dialog (it rejected E_DELETE_CANCELLED before).
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -34,7 +36,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 2
+        const val API_LEVEL = 3
     }
 
     class Package : ReactPackage {

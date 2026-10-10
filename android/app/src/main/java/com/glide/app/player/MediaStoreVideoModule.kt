@@ -76,7 +76,8 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                                 p.resolve(true)
                             }
                         } else {
-                            p.reject("E_DELETE_CANCELLED", "Deletion was cancelled or not completed")
+                            // The user said no: an answer, not a failure.
+                            p.resolve(false)
                         }
                     }
                 }

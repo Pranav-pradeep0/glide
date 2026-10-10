@@ -17,6 +17,7 @@ import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
 import { Button, IconButton, Touchable } from '@/components/ui';
+import { MediaService } from '@/services/MediaService';
 
 // ============= HELPERS =============
 
@@ -73,18 +74,36 @@ export async function shareVideo(path: string) {
 }
 
 /**
- * Android 11+ shows its own system dialog inside MediaService.deleteVideos,
- * so only older versions get an in-app confirm.
+ * Delete one video, the same way on every screen. Android 11+ confirms in its own system
+ * dialog (inside MediaService.deleteVideos); older versions get an in-app confirm first.
+ *
+ * Resolves true only when the file is gone, so callers clean up history and lists only then.
+ * A cancel at either dialog is false and silent; a failure says why.
  */
-export function confirmDelete(name: string, run: () => void) {
+export function deleteVideo(name: string, target: string): Promise<boolean> {
+    const run = async () => {
+        try {
+            return await MediaService.deleteVideos([target]);
+        } catch (error: any) {
+            console.error('[deleteVideo] Delete failed:', error);
+            Alert.alert(
+                'Delete failed',
+                error?.code === 'E_PERMISSION'
+                    ? 'Glide needs storage access to delete videos on this version of Android.'
+                    : 'Could not delete the file.',
+            );
+            return false;
+        }
+    };
     if (Platform.OS === 'android' && Platform.Version >= 30) {
-        run();
-        return;
+        return run();
     }
-    Alert.alert(`Delete "${name}"?`, undefined, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: run },
-    ]);
+    return new Promise((resolve) => {
+        Alert.alert(`Delete "${name}"?`, undefined, [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Delete', style: 'destructive', onPress: () => { run().then(resolve); } },
+        ], { cancelable: true, onDismiss: () => resolve(false) });
+    });
 }
 
 // ============= THUMBNAIL =============
