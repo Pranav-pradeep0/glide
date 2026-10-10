@@ -1,18 +1,14 @@
 package com.glide.app.audio
 
-import android.content.Context
-import android.media.audiofx.Equalizer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
@@ -57,12 +53,21 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     }
 
     private var player: ExoPlayer? = null
-    private var equalizer: Equalizer? = null
-    private var currentBandLevels: FloatArray? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var consecutiveErrors = 0
     private var isProgressRunning = false
-    private var sleepTimerRunnable: Runnable? = null
+
+    /**
+     * Set by [invalidate]. Main-thread work posted before a JS reload can still run after
+     * it, and must not attach this dead module's listener next to the new module's.
+     */
+    @Volatile private var invalidated = false
+
+    private val playbackListener = object : MusicPlayback.Listener {
+        override fun onSleepTimerFired() {
+            emitDeviceEvent("onSleepTimerFired", Arguments.createMap())
+            emitPlaybackState()
+        }
+    }
 
     /**
      * In the background nothing is drawing the position, so the 500 ms event is mostly a
@@ -91,6 +96,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     init {
         reactContext.addLifecycleEventListener(this)
         mainHandler.post {
+            if (!invalidated) MusicPlayback.listener = playbackListener
             ensurePlayer()
         }
     }
@@ -122,15 +128,15 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         }
 
         val p = GlidePlayerHolder.getOrCreateAudioPlayer(reactContext)
+        if (invalidated) return p
         player = p
 
+        // Events only. What the player does -- skipping failed files, the equalizer, the
+        // sleep timer -- is MusicPlayback's, so it carries on with no JS attached.
         var listener = playerListener
         if (listener == null) {
             listener = object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    if (isPlaying) {
-                        consecutiveErrors = 0
-                    }
                     emitPlaybackState()
                     if (isPlaying) {
                         startProgressUpdates()
@@ -143,35 +149,11 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                     emitPlaybackState()
                 }
 
-                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                    if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
-                        player?.pauseAtEndOfMediaItems = false
-                        emitDeviceEvent("onSleepTimerFired", Arguments.createMap())
-                    }
-                }
-
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     emitTrackChanged()
                 }
 
-                override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                    equalizer?.release()
-                    equalizer = null
-                    applyEqualizer()
-                }
-
                 override fun onPlayerError(error: PlaybackException) {
-                    Log.w(TAG, "audio player error: ${error.errorCodeName} (${error.errorCode}): ${error.message}")
-                    consecutiveErrors++
-                    val count = p.mediaItemCount
-                    if (consecutiveErrors < count && p.hasNextMediaItem()) {
-                        p.seekToNextMediaItem()
-                        p.prepare()
-                        p.play()
-                    } else {
-                        consecutiveErrors = 0
-                        p.stop()
-                    }
                     val map = Arguments.createMap().apply {
                         putString("error", error.message ?: "Playback error")
                         putInt("errorCode", error.errorCode)
@@ -203,38 +185,6 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     private fun stopProgressUpdates() {
         isProgressRunning = false
         mainHandler.removeCallbacks(progressRunnable)
-    }
-
-    private fun applyEqualizer() {
-        val p = player
-        val sessionId = p?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
-        if (sessionId == C.AUDIO_SESSION_ID_UNSET && currentBandLevels != null) return
-        equalizer = GlideEqualizer.apply(equalizer, currentBandLevels, sessionId)
-        if (p != null) applyAudioOffload(p, GlideEqualizer.isFlat(currentBandLevels))
-    }
-
-    /**
-     * Offload decodes on the DSP with the CPU asleep, which is the largest saving there is
-     * for music in the background. It bypasses the audio session effects attach to, so it
-     * is enabled exactly while the equalizer is flat and dropped the moment it is not.
-     */
-    private fun applyAudioOffload(p: ExoPlayer, enabled: Boolean) {
-        val mode = if (enabled) {
-            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
-        } else {
-            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
-        }
-        if (p.trackSelectionParameters.audioOffloadPreferences.audioOffloadMode == mode) return
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-            .setAudioOffloadPreferences(
-                TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                    .setAudioOffloadMode(mode)
-                    // Gapless matters more than the battery: a queue that pauses between
-                    // tracks is worse than one that keeps the CPU awake.
-                    .setIsGaplessSupportRequired(true)
-                    .build()
-            )
-            .build()
     }
 
     private fun getQueueIndices(): WritableArray {
@@ -433,7 +383,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                     return@post
                 }
                 try {
-                    consecutiveErrors = 0
+                    MusicPlayback.resetErrors()
                     val p = ensurePlayer()
                     p.setMediaItems(
                         mediaItems,
@@ -447,8 +397,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                         else -> Player.REPEAT_MODE_OFF
                     }
 
-                    currentBandLevels = bandLevels ?: currentBandLevels
-                    applyEqualizer()
+                    MusicPlayback.setBands(p, bandLevels)
 
                     p.prepare()
                     p.playWhenReady = playWhenReady
@@ -519,25 +468,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     fun setSleepTimer(minutes: Double, pauseAtEndOfMediaItem: Boolean, promise: Promise) {
         mainHandler.post {
             try {
-                sleepTimerRunnable?.let { mainHandler.removeCallbacks(it) }
-                sleepTimerRunnable = null
-
-                val p = ensurePlayer()
-                if (pauseAtEndOfMediaItem) {
-                    p.pauseAtEndOfMediaItems = true
-                } else {
-                    p.pauseAtEndOfMediaItems = false
-                    if (minutes > 0.0) {
-                        val runnable = Runnable {
-                            player?.pause()
-                            sleepTimerRunnable = null
-                            emitDeviceEvent("onSleepTimerFired", Arguments.createMap())
-                            emitPlaybackState()
-                        }
-                        sleepTimerRunnable = runnable
-                        mainHandler.postDelayed(runnable, (minutes * 60 * 1000).toLong())
-                    }
-                }
+                MusicPlayback.setSleepTimer(ensurePlayer(), minutes, pauseAtEndOfMediaItem)
                 promise.resolve(true)
             } catch (e: Exception) {
                 promise.reject("E_SLEEP_TIMER", e.message, e)
@@ -549,9 +480,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     fun clearSleepTimer(promise: Promise) {
         mainHandler.post {
             try {
-                sleepTimerRunnable?.let { mainHandler.removeCallbacks(it) }
-                sleepTimerRunnable = null
-                player?.pauseAtEndOfMediaItems = false
+                MusicPlayback.clearSleepTimer(ensurePlayer())
                 promise.resolve(true)
             } catch (e: Exception) {
                 promise.reject("E_CLEAR_SLEEP_TIMER", e.message, e)
@@ -563,7 +492,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     fun play(promise: Promise) {
         mainHandler.post {
             try {
-                consecutiveErrors = 0
+                MusicPlayback.resetErrors()
                 val p = ensurePlayer()
                 GlidePlayerHolder.start(reactContext, p)
                 // Prepares an idle player (after an error or stop) and restarts an ended queue;
@@ -595,17 +524,11 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     fun stop(promise: Promise) {
         mainHandler.post {
             try {
-                val p = player
-                sleepTimerRunnable?.let { mainHandler.removeCallbacks(it) }
-                sleepTimerRunnable = null
-                p?.pauseAtEndOfMediaItems = false
-                p?.stop()
-                p?.clearMediaItems()
+                // The listener stays: the player is never released, and music started later
+                // from Auto or a Bluetooth button still has to reach the UI.
+                MusicPlayback.clearSleepTimer(ensurePlayer())
                 stopProgressUpdates()
-                playerListener?.let { p?.removeListener(it) }
-                playerListener = null
                 GlidePlayerHolder.clearAudio(reactContext)
-                player = null
                 emitPlaybackState()
                 promise.resolve(true)
             } catch (e: Exception) {
@@ -656,7 +579,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     fun skipToIndex(index: Int, promise: Promise) {
         mainHandler.post {
             try {
-                consecutiveErrors = 0
+                MusicPlayback.resetErrors()
                 val p = player
                 if (p != null && index >= 0 && index < p.mediaItemCount) {
                     p.seekToDefaultPosition(index)
@@ -706,8 +629,9 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     fun setAudioEqualizer(levels: ReadableArray?, promise: Promise) {
         mainHandler.post {
             try {
-                currentBandLevels = GlideEqualizer.toBandLevels(levels)
-                applyEqualizer()
+                val p = ensurePlayer()
+                val bands = GlideEqualizer.toBandLevels(levels)
+                if (bands == null) MusicPlayback.clearBands(p) else MusicPlayback.setBands(p, bands)
                 promise.resolve(true)
             } catch (e: Exception) {
                 promise.reject("E_EQUALIZER", e.message, e)
@@ -739,21 +663,19 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     // ================= Invalidate =================
 
     override fun invalidate() {
+        invalidated = true
         super.invalidate()
         reactContext.removeLifecycleEventListener(this)
         mainHandler.post {
             stopProgressUpdates()
-            sleepTimerRunnable?.let { mainHandler.removeCallbacks(it) }
-            sleepTimerRunnable = null
-            equalizer?.release()
-            equalizer = null
+            if (MusicPlayback.listener === playbackListener) MusicPlayback.listener = null
             playerListener?.let {
                 player?.removeListener(it)
             }
             playerListener = null
             player = null
-            // We do NOT release the audio player or stop the service here;
-            // background audio playback cleanly survives React Native JS reloads.
+            // The player, its equalizer and any sleep timer all carry on: they belong to
+            // MusicPlayback, and music plays straight through a JS reload or OTA restart.
         }
     }
 }

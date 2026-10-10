@@ -93,6 +93,17 @@
         </intent-filter>
       </service>
 
+      <!-- Playback resumption: a Bluetooth or headset Play with Glide not running starts
+           the service, which resumes the saved queue (onPlaybackResumption). Its presence
+           also lets Android 13+ show Glide's resume card in the media controls. -->
+      <receiver
+        android:name="androidx.media3.session.MediaButtonReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.MEDIA_BUTTON" />
+        </intent-filter>
+      </receiver>
+
       <meta-data
         android:name="com.google.android.gms.car.application"
         android:resource="@xml/automotive_app_desc" />

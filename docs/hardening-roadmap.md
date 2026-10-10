@@ -292,7 +292,14 @@ actually scaled (they were saved full-size), Auto/Assistant unresolvable ids, ha
 crash paths, equalizer leak and flat-means-off, fixed-volume keys, `AudioVolumeModule`
 reload leak. Dead FFmpegKit methods deleted.
 
-### 8a. Contract and architecture (decide first)
+### 8a. Contract and architecture — done
+
+All four landed together (see the commit after `9e816d6`). Device checks before trusting:
+Bluetooth Play with Glide force-stopped resumes the last queue; the Android 13+ resume card
+appears; one notification follows music -> video -> music with no stale one left; Auto
+lists Glide once and a song picked there pauses an open video; EQ and a 1-minute sleep
+timer survive a JS reload (shake menu) mid-song; `NativeModules.GlideNative.apiLevel` is 1.
+
 1. **Native capability contract.** Nothing tells a JS bundle which native it runs on. Export
    one `NATIVE_API` integer (bump on any native surface change), gate new calls in JS on
    it, and target every Stallion release at the app version. Principle from here on:

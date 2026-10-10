@@ -28,6 +28,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
 import com.glide.app.MainActivity
 import com.glide.app.audio.MediaStoreAudioModule
+import com.glide.app.audio.MusicPlayback
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -91,23 +92,24 @@ object GlidePlayerHolder {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
+        MusicPlayback.attach(context, newPlayer)
         audioPlayer = newPlayer
         return newPlayer
     }
 
     /**
-     * A player is about to play. Music and video each have their own session -- music the
-     * library session that controllers and Android Auto browse, video a plain one -- so
-     * neither ever ends up driving the other. Only one plays at a time.
+     * A player is about to play. Only one plays at a time, and the one session follows it:
+     * the notification, lock screen, Bluetooth and Auto all show and drive this player.
      */
     fun start(context: Context, value: ExoPlayer, hostActivity: Class<out Activity>? = null) {
         if (value === audioPlayer) {
             videoPlayer?.pause()
+            service?.showMusic()
         } else {
             audioPlayer?.pause()
             videoPlayer = value
             videoHostActivity = hostActivity
-            service?.attachVideo(value)
+            service?.showVideo(value)
         }
         if (service == null) {
             // A plain start, never startForegroundService: that promises startForeground
@@ -136,7 +138,9 @@ object GlidePlayerHolder {
         }
         videoPlayer = null
         videoHostActivity = null
-        service?.detachVideo()
+        // Back to music, which also drops the video's notification: the music player's
+        // empty queue posts none.
+        service?.showMusic()
         mainHandler.post { stopServiceIfIdle(context) }
     }
 
@@ -167,26 +171,28 @@ object GlidePlayerHolder {
 }
 
 /**
- * Owns the media sessions and their notifications.
+ * Owns the media session and its notification.
  *
- * Music is a [MediaLibrarySession] on the process-wide music player, created here rather
- * than by the React Native module, so a controller binding cold -- Android Auto, a Bluetooth
- * head unit, Assistant -- finds a working session with no JS running. Video gets its own
- * plain [MediaSession] while a video is open.
+ * One [MediaLibrarySession], created here rather than by the React Native module, so a
+ * controller binding cold -- Android Auto, a Bluetooth head unit, Assistant -- finds a
+ * working session with no JS running. It drives whichever player is in use: the
+ * process-wide music player, or the video view's while a video plays. One session, not
+ * one per player: Media3 has a single notification slot, so two sessions took it from each
+ * other -- a stale video notification whose Play started music, a playing video losing its
+ * notification and foreground service to a music event -- and Auto listed the app twice.
  *
- * ExoPlayer *is* a Media3 `Player`, so each is handed to its session directly. There is no
+ * ExoPlayer *is* a Media3 `Player`, so it is handed to the session directly. There is no
  * adapter mirroring engine state, and so none of the divergence bugs that came with one.
  */
 @UnstableApi
 class GlidePlayerService : MediaLibraryService() {
 
-    private var musicSession: MediaLibrarySession? = null
-    private var videoSession: MediaSession? = null
+    private var session: MediaLibrarySession? = null
     private val library = MoreExecutors.listeningDecorator(
         Executors.newSingleThreadExecutor { Thread(it, "glide-media-library") }
     )
 
-    private val sessionActivity by lazy {
+    private val musicActivity by lazy {
         PendingIntent.getActivity(
             this,
             0,
@@ -202,7 +208,7 @@ class GlidePlayerService : MediaLibraryService() {
      * Both are `singleTask`, so SINGLE_TOP alone brings the running instance forward with
      * the player still on screen. CLEAR_TOP would finish it instead.
      */
-    private fun videoSessionActivity(): PendingIntent = PendingIntent.getActivity(
+    private fun videoActivity(): PendingIntent = PendingIntent.getActivity(
         this,
         1,
         Intent(this, GlidePlayerHolder.videoHostActivity ?: MainActivity::class.java).apply {
@@ -218,40 +224,36 @@ class GlidePlayerService : MediaLibraryService() {
         // Registered explicitly: onGetSession only runs when a controller connects, and
         // Glide's own UI drives the players directly, so without this the service would
         // never observe the player or post a notification.
-        musicSession = MediaLibrarySession.Builder(
+        session = MediaLibrarySession.Builder(
             this,
             GlidePlayerHolder.getOrCreateAudioPlayer(this),
             LibraryCallback()
         )
-            .setId(MUSIC_SESSION_ID)
-            .setSessionActivity(sessionActivity)
+            .setId(SESSION_ID)
+            .setSessionActivity(musicActivity)
             .build()
             .also { addSession(it) }
 
-        GlidePlayerHolder.videoPlayer?.let { attachVideo(it) }
-        Log.w(GlidePlayerView.TAG, "media sessions created")
+        GlidePlayerHolder.videoPlayer?.let { showVideo(it) }
+        Log.w(GlidePlayerView.TAG, "media session created")
     }
 
-    fun attachVideo(player: ExoPlayer) {
-        if (videoSession?.player === player) return
-        detachVideo()
-        videoSession = MediaSession.Builder(this, player)
-            .setId(VIDEO_SESSION_ID)
-            .setSessionActivity(videoSessionActivity())
-            .build()
-            .also { addSession(it) }
+    /** The video view's player is in use. It must not be released while the session holds it. */
+    fun showVideo(player: ExoPlayer) = show(player, videoActivity())
+
+    fun showMusic() {
+        GlidePlayerHolder.audioPlayer?.let { show(it, musicActivity) }
     }
 
-    fun detachVideo() {
-        videoSession?.let {
-            removeSession(it)
-            it.release()
-        }
-        videoSession = null
+    private fun show(player: ExoPlayer, activity: PendingIntent) {
+        val s = session ?: return
+        // Both players live on the main looper, which setPlayer requires.
+        if (s.player !== player) s.player = player
+        s.setSessionActivity(activity)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
-        musicSession
+        session
 
     /**
      * No super: Media3's default also pauses everything when no player `isPlaying()` at that
@@ -259,18 +261,19 @@ class GlidePlayerService : MediaLibraryService() {
      * task away then stopped music for good. Ongoing means playWhenReady, not isPlaying.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
+        GlidePlayerHolder.audioPlayer?.let { MusicPlayback.save(it) }
         if (!GlidePlayerHolder.isPlaybackOngoing()) {
             pauseAllPlayersAndStopSelf()
         }
     }
 
     override fun onDestroy() {
-        detachVideo()
-        musicSession?.let {
+        GlidePlayerHolder.audioPlayer?.let { MusicPlayback.save(it) }
+        session?.let {
             removeSession(it)
             it.release()
         }
-        musicSession = null
+        session = null
         library.shutdown()
         GlidePlayerHolder.attachService(null)
         super.onDestroy()
@@ -355,26 +358,67 @@ class GlidePlayerService : MediaLibraryService() {
             mediaItems: MutableList<MediaItem>,
             startIndex: Int,
             startPositionMs: Long
-        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = library.submit<MediaSession.MediaItemsWithStartPosition> {
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            useMusicPlayer()
+            return library.submit<MediaSession.MediaItemsWithStartPosition> { setItems(mediaItems, startIndex, startPositionMs) }
+        }
+
+        private fun setItems(
+            mediaItems: List<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long
+        ): MediaSession.MediaItemsWithStartPosition {
             if (mediaItems.size == 1) {
                 val all = allSongs()
                 val index = all.indexOfFirst { it.id == mediaItems[0].mediaId }
                 if (index >= 0) {
-                    return@submit MediaSession.MediaItemsWithStartPosition(all.map(::playable), index, startPositionMs)
+                    return MediaSession.MediaItemsWithStartPosition(all.map(::playable), index, startPositionMs)
                 }
             }
             val resolved = resolve(mediaItems)
             // resolve() can drop items, which would leave startIndex past the end.
             val index = if (startIndex == C.INDEX_UNSET) startIndex else startIndex.coerceAtMost(resolved.size - 1)
-            MediaSession.MediaItemsWithStartPosition(resolved, index, startPositionMs)
+            return MediaSession.MediaItemsWithStartPosition(resolved, index, startPositionMs)
         }
 
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>
-        ): ListenableFuture<MutableList<MediaItem>> = library.submit<MutableList<MediaItem>> {
-            resolve(mediaItems).toMutableList()
+        ): ListenableFuture<MutableList<MediaItem>> {
+            useMusicPlayer()
+            return library.submit<MutableList<MediaItem>> { resolve(mediaItems).toMutableList() }
+        }
+
+        /**
+         * Bluetooth Play with the app gone, or the System UI resume card: the queue
+         * [MusicPlayback] saved, resolved against MediaStore again. Songs deleted since
+         * drop out; if the current one is among them, playback starts from the top.
+         */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            useMusicPlayer()
+            return library.submit<MediaSession.MediaItemsWithStartPosition> {
+                val saved = MusicPlayback.savedQueue(this@GlidePlayerService)
+                    ?: throw UnsupportedOperationException("nothing to resume")
+                val records = MediaStoreAudioModule.getSongsByIds(this@GlidePlayerService, saved.ids)
+                val items = saved.ids.mapNotNull { id -> records[id]?.let(::playable) }
+                if (items.isEmpty()) throw UnsupportedOperationException("nothing to resume")
+                val (index, positionMs) = saved.startIn(items.map { it.mediaId })
+                MediaSession.MediaItemsWithStartPosition(items, index, positionMs)
+            }
+        }
+
+        /**
+         * A controller asking for songs means music, whatever the session shows now. Called
+         * on the main thread before Media3 applies the items, so they land on the music
+         * player rather than the video's.
+         */
+        private fun useMusicPlayer() {
+            GlidePlayerHolder.audioPlayer?.let { GlidePlayerHolder.start(this@GlidePlayerService, it) }
         }
 
         /**
@@ -440,8 +484,7 @@ class GlidePlayerService : MediaLibraryService() {
         .build()
 
     private companion object {
-        const val MUSIC_SESSION_ID = "glide-music"
-        const val VIDEO_SESSION_ID = "glide-video"
+        const val SESSION_ID = "glide"
         const val ROOT_ID = "root"
         const val SONGS_ID = "songs"
         const val SONGS_TTL_MS = 30_000L
