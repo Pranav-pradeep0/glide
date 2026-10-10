@@ -16,8 +16,8 @@ over the air; `[native]` needs a new APK. Started 2026-10-11 from a walk of the 
 - **Recents › Delete** (`RecentsScreen.tsx:99-101`) — entries without `contentUri` say "Open this video from Videos to delete it", but `MediaService.deleteVideos` already resolves paths to URIs (`e919b33`) — S [JS]
 - **Folders** (`FoldersScreen.tsx:184`) — permission denied shows "No videos found · Refresh"; video permission is only ever *requested*, never checked, and "never ask again" has no route to Settings (`PermissionService.hasAndroidPermission`) — M [JS]
 
-- **Snackbar** (`ui/index.tsx:614-663`) — after fading it stays mounted at opacity 0 and keeps catching taps: an invisible strip over the bottom of the screen (in the player, over the controls) for the rest of the session — S [JS] *(verified)*
-- **Settings › Shake action / Font** (`SettingsScreen.tsx:465, 730`) — chip rows don't wrap; "Backward 10 s" etc. run off-screen and can't be tapped — S [JS] *(verified)*
+- ✅ `f67414e` **Snackbar** (`ui/index.tsx:614-663`) — after fading it stays mounted at opacity 0 and keeps catching taps: an invisible strip over the bottom of the screen (in the player, over the controls) for the rest of the session — S [JS] *(verified)*
+- ✅ `f67414e` **Settings › Shake action / Font** (`SettingsScreen.tsx:465, 730`) — chip rows don't wrap; "Backward 10 s" etc. run off-screen and can't be tapped — S [JS] *(verified)*
 - **Delete, all screens** (`AlbumVideosScreen.tsx:70`, `SearchScreen.tsx:103`, `RecentsScreen.tsx:110`) — cancelling Android's delete dialog rejects `E_DELETE_CANCELLED` and shows "Delete failed… check permissions" — S [JS]
 - **Search** (`useVideoSearch.ts:42-47`, `videoIndexStore.ts:25-40`) — results memo ignores index changes, the index is built once (empty if permission was denied) and never re-synced, a failed first load spins "Preparing search" forever — M [JS]
 - **Album / Artist detail, Recents › Music** (`AlbumDetailScreen.tsx:50`, `ArtistDetailScreen.tsx:81`, `RecentMusicList.tsx:37`) — promises with no `.catch`; a rejection leaves the loader spinning — S [JS]
@@ -32,16 +32,16 @@ over the air; `[native]` needs a new APK. Started 2026-10-11 from a walk of the 
 
 ### Reported by Pranav (2026-10-11)
 
-- **Audio / Subtitles panels** (`TrackSelector.tsx`) — track rows sit flat on the panel (own `TrackRow`, no grouping, no icons) while the ⋮ Playback panel uses grouped `ListGroup`/`ListRow` cards; tabs are full-width chips — M [JS]
-- **Active state** (`PlayerControls.tsx:686`, `GlyphButton`) — "on" is a white icon on a 14% white circle vs a white icon with no circle: enhancement / night mode / mute / rotation lock barely change when switched on — S [JS]
-- **Lock button under the camera hole** (`PlayerControls.tsx:696`) — rail is `left: 8` with no side inset; `effectiveInsets` never passes the real landscape cutout inset, and the top bar / bottom bar ignore left/right too — S [JS]
-- **Mini player** (`MiniPlayer.tsx:105-121`) — no swipe-down to close; `clearQueue()` already stops and clears — S [JS]
+- ✅ `7980891` **Audio / Subtitles panels** (`TrackSelector.tsx`) — track rows sit flat on the panel (own `TrackRow`, no grouping, no icons) while the ⋮ Playback panel uses grouped `ListGroup`/`ListRow` cards; tabs are full-width chips — M [JS]
+- ✅ `e5bcff4` **Active state** (`PlayerControls.tsx:686`, `GlyphButton`) — "on" is a white icon on a 14% white circle vs a white icon with no circle: enhancement / night mode / mute / rotation lock barely change when switched on — S [JS]
+- ✅ `e5bcff4` **Lock button under the camera hole** (`PlayerControls.tsx:696`) — rail is `left: 8` with no side inset; `effectiveInsets` never passes the real landscape cutout inset, and the top bar / bottom bar ignore left/right too — S [JS]
+- ✅ `5821e85` **Mini player** (`MiniPlayer.tsx:105-121`) — no swipe-down to close; `clearQueue()` already stops and clears — S [JS]
 - **Packages** — `react-native-share` (1 call; its merged FileProvider is the `cache-path "/"` exposure), `react-native-zip-archive` (1 call; no size cap / zip-bomb guard), `react-native-linear-gradient` (5 uses; svg already installed), `react-native-config` (9 build-time strings) are all replaceable. Removing any is native → next APK — M [native]
 
 ### Video player
 
-- **Errors** (`PlayerControls.tsx:503`, `usePlayerCore.ts:522`) — the error banner lives inside the controls overlay and fades with it after 3 s, leaving a black screen; it shows raw `ERROR_CODE_*` names; no Retry / Next / Close, and Play does nothing (player is idle). Includes 8c: GL 7000-range errors should switch enhancement off and say so (toggling it off already reopens at the current position) — M [JS] *(verified)*
-- **Audio sync** (`AnimatedVideoView.tsx:187-210`) — `areEqual` never compares `audioDelay`, so the sync slider does nothing until another prop changes — S [JS] *(verified)*
+- ✅ `e5bcff4` **Errors** (`PlayerControls.tsx:503`, `usePlayerCore.ts:522`) — the error banner lives inside the controls overlay and fades with it after 3 s, leaving a black screen; it shows raw `ERROR_CODE_*` names; no Retry / Next / Close, and Play does nothing (player is idle). Includes 8c: GL 7000-range errors should switch enhancement off and say so (toggling it off already reopens at the current position) — M [JS] *(verified)*
+- ✅ `e5bcff4` **Audio sync** (`AnimatedVideoView.tsx:187-210`) — `areEqual` never compares `audioDelay`, so the sync slider does nothing until another prop changes — S [JS] *(verified)*
 - **Next / Prev / autoplay** (`usePlayerSettings.ts:79-97`) — `navigation.replace` remounts the screen: sleep timer, speed, EQ, enhancement, resize and mute reset every episode — M [JS]
 - **Sleep timer** — on expiry calls `goBack()` even for "Open with" (black player; should use `handleGoBack`); "End of video" never fires with Repeat on; Quick Settings shows "30 min" with no countdown — S [JS]
 - **Back** (`VideoPlayerScreen.tsx:1013`) — in landscape, Back with Quick Settings / Playlist / Bookmarks / sync panel open exits the video instead of closing the panel — S [JS]
