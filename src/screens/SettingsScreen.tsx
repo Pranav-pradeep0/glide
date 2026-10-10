@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { SharedValue, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { UpdateActionButton, UpdateNotice } from '@/components/UpdateActionButton';
 import { UpdateNotes } from '@/components/UpdateNotes';
+import { LicencesSheet } from '@/components/LicencesSheet';
 import { useUpdateInstaller } from '@/hooks/useUpdateInstaller';
 import {
     Chip,
@@ -195,6 +196,7 @@ export default function SettingsScreen() {
     const setOnlineLyricsEnabled = useAppStore((state) => state.setOnlineLyricsEnabled);
     const clearAllHistory = useVideoHistoryStore((state) => state.clearAllHistory);
     const [languageModalVisible, setLanguageModalVisible] = React.useState(false);
+    const [licencesVisible, setLicencesVisible] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const [shakeTestEnabled, setShakeTestEnabled] = React.useState(false);
 
@@ -634,6 +636,12 @@ export default function SettingsScreen() {
                 <SectionLabel title="About" />
                 <ListGroup>
                     <ListRow icon="info" title="Version" value={pkg.version} />
+                    <ListRow
+                        icon="file-text"
+                        title="Open source licences"
+                        chevron
+                        onPress={() => setLicencesVisible(true)}
+                    />
                 </ListGroup>
 
                 <SectionLabel title="Storage" />
@@ -691,6 +699,8 @@ export default function SettingsScreen() {
                     }}
                 />
             </Sheet>
+
+            <LicencesSheet visible={licencesVisible} onClose={() => setLicencesVisible(false)} />
         </View>
     );
 }

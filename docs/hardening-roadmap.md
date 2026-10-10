@@ -227,9 +227,11 @@ Activities, and Android Auto and a Bluetooth head unit still browse the music li
    users on the error screen with no rollback.
 9. **Onboarding claims "zero data collection"** (`OnboardingScreen.tsx:105`) — false:
    Stallion sends `ANDROID_ID` on every sync, recap sends dialogue to Groq. Reword.
-10. **FFmpeg ships with no LGPL notice**; add an OSS licences screen. Linking is already
-    LGPL-shaped (8b); the screen still has to credit FFmpeg with the LGPL 2.1 text and
-    point to its unmodified `release/6.0` source.
+10. ~~FFmpeg ships with no LGPL notice~~ **Done.** Settings → About → Open source licences:
+    every dependency with its own LICENSE text, plus FFmpeg (notice, full LGPL 2.1 text,
+    link to its unmodified `release/6.0` source), Media3, AndroidX and Kotlin. Generated
+    by `node scripts/gen-licences.js` into `src/data/licences.json`; a Jest test fails when
+    a dependency is added without regenerating. Linking is LGPL-shaped since 8b.
 
 ## Phase 2 (error handling and subtitles)
 
