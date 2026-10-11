@@ -471,24 +471,25 @@ const alphaOf = (color: string) => (((processColor(color) as number) >>> 24) & 0
 /**
  * A vertical gradient, drawn with react-native-svg.
  *
- * Sized in numbers, not "100%": on Android a resize redraws the svg but keeps each shape's
- * path cached at the old size, and only a change to the Svg's own width / height clears it.
- * With "100%", a player scrim drawn in portrait stayed portrait-wide after rotating, a grey
- * band over the left of the landscape video.
+ * Rebuilt when its box changes size: on Android a resize redraws the svg but keeps each
+ * shape's path cached at the old size, so a player scrim drawn in portrait stayed
+ * portrait-wide after rotating (a grey band over the left of the video). The svg itself
+ * stays "100%" of the box: sized in measured dp, it rounded a fraction of a pixel short
+ * and let a 1 px line of the picture underneath show along the edge.
  */
 export function Gradient({ colors, locations, style, pointerEvents }: GradientProps) {
     const id = `gradient${useId().replace(/[^\w-]/g, '')}`;
-    const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+    const [sizeKey, setSizeKey] = useState('');
     return (
         <View
             style={style}
             pointerEvents={pointerEvents}
             onLayout={e => {
                 const { width, height } = e.nativeEvent.layout;
-                setSize(prev => (prev?.width === width && prev?.height === height ? prev : { width, height }));
+                setSizeKey(`${width}x${height}`);
             }}
         >
-            {size && <Svg width={size.width} height={size.height}>
+            <Svg key={sizeKey} style={StyleSheet.absoluteFill}>
                 <Defs>
                     <SvgLinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
                         {colors.map((color, i) => (
@@ -501,8 +502,8 @@ export function Gradient({ colors, locations, style, pointerEvents }: GradientPr
                         ))}
                     </SvgLinearGradient>
                 </Defs>
-                <Rect width={size.width} height={size.height} fill={`url(#${id})`} />
-            </Svg>}
+                <Rect width="100%" height="100%" fill={`url(#${id})`} />
+            </Svg>
         </View>
     );
 }
