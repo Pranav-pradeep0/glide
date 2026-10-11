@@ -1,18 +1,19 @@
 // src/utils/subdlApi.ts
 
-import { SubtitleResult } from '../types';
+import { SubtitleCue, SubtitleResult } from '../types';
 import { SUBDL_API_URL, SUBDL_API_KEY, SUBDL_DOWNLOAD_URL } from './constants';
 import { NativeModules } from 'react-native';
 import * as RNFS from '@dr.pogodin/react-native-fs';
 import { hasNativeApi } from '@/native/GlideNative';
 import { FilenameParser } from './FilenameParser';
+import { SubtitleParser } from './SubtitleParser';
 import { createCoalescedRequest, fetchWithTimeout, InFlightRequest, isAbortError, NetworkTimeoutError } from './network';
 
 const LOG_PREFIX = '[SubDL]';
 const SUBDL_SEARCH_TIMEOUT_MS = 12000;
 const SUBDL_DOWNLOAD_TIMEOUT_MS = 20000;
 const inFlightSubtitleSearches = new Map<string, InFlightRequest<{ subtitles: SubtitleResult[] }>>();
-const inFlightSubtitleDownloads = new Map<string, InFlightRequest<string | null>>();
+const inFlightSubtitleDownloads = new Map<string, InFlightRequest<SubtitleCue[] | null>>();
 
 function createDownloadAbortError(): Error {
     const error = new Error('Download aborted');
@@ -213,13 +214,13 @@ function processSubtitleResults(
 }
 
 /**
- * Download subtitle file from SubDL
- * Handles ZIP files by extracting and finding the .srt file inside
+ * Download a subtitle from SubDL and parse it (SRT, VTT or ASS/SSA, detected from the content).
+ * Null when the download fails or the file has no readable cues.
  */
 export async function downloadSubtitle(
     downloadUrl: string,
     signal?: AbortSignal
-): Promise<string | null> {
+): Promise<SubtitleCue[] | null> {
     const requestKey = downloadUrl.startsWith('http')
         ? downloadUrl
         : `${SUBDL_DOWNLOAD_URL}${downloadUrl}`;
@@ -301,7 +302,7 @@ async function executeSubtitleSearch(
 async function executeSubtitleDownload(
     downloadUrl: string,
     signal?: AbortSignal
-): Promise<string | null> {
+): Promise<SubtitleCue[] | null> {
     const timestamp = Date.now();
     const zipPath = `${RNFS.CachesDirectoryPath}/subtitle_${timestamp}.zip`;
     let downloadJobId: number | null = null;
@@ -367,14 +368,14 @@ async function executeSubtitleDownload(
             return null;
         }
 
-        // Verify it's valid subtitle content
-        if (!subtitleContent.includes('-->')) {
-            console.error(`${LOG_PREFIX} File content is not valid subtitle format`);
+        const cues = SubtitleParser.parse(subtitleContent);
+        if (cues.length === 0) {
+            console.error(`${LOG_PREFIX} No readable cues in the subtitle file`);
             return null;
         }
 
-        if (__DEV__) {console.log(`${LOG_PREFIX} Loaded ${subtitleContent.length} chars`);}
-        return subtitleContent;
+        if (__DEV__) {console.log(`${LOG_PREFIX} Parsed ${cues.length} cues`);}
+        return cues;
 
     } catch (error) {
         if (signal?.aborted || isAbortError(error)) {

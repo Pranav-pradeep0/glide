@@ -13,7 +13,6 @@ import Feather from '@react-native-vector-icons/feather';
 import { SubtitlePickerService } from '../services/SubtitlePickerService';
 import { SubtitleResult, SubtitleCue } from '../types';
 import { searchAllSubtitles, downloadSubtitle } from '../utils/subdlApi';
-import { SubtitleParser } from '../utils/SubtitleParser';
 import { SubtitleSelectionService } from '../services/SubtitleSelectionService';
 import { EQUALIZER_PRESETS, EQUALIZER_BANDS } from '../config/equalizerPresets';
 import { isAbortError } from '../utils/network';
@@ -441,10 +440,8 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                 setNotice(null);
                 downloadAbortRef.current?.abort();
                 downloadAbortRef.current = new AbortController();
-                const content = await downloadSubtitle(subtitle.downloadUrl, downloadAbortRef.current.signal);
-
-                const cues = content ? SubtitleParser.parse(content, 'srt') : [];
-                if (cues.length === 0) {
+                const cues = await downloadSubtitle(subtitle.downloadUrl, downloadAbortRef.current.signal);
+                if (!cues) {
                     setNotice('That subtitle came through empty or unreadable. Try another one.');
                     return;
                 }

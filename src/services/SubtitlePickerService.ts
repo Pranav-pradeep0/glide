@@ -9,11 +9,8 @@ import { SUBTITLE_EXTENSIONS } from '../utils/constants';
 const LOG_PREFIX = '[SubtitlePicker]';
 
 export interface PickedSubtitle {
-    path: string;
     name: string;
-    content: string;
     cues: SubtitleCue[];
-    format: 'srt' | 'vtt' | 'ass';
 }
 
 export class SubtitlePickerService {
@@ -47,22 +44,19 @@ export class SubtitlePickerService {
                 throw new Error(`Unsupported subtitle format: ${ext}. Please select .srt, .vtt, or .ass file.`);
             }
 
-            // Get the file path
-            let filePath = file.uri;
-
-            // Handle content:// URIs on Android - copy to cache
-            if (Platform.OS === 'android' && filePath.startsWith('content://')) {
+            let content: string;
+            // content:// URIs on Android are read through a cache copy, deleted once read
+            if (Platform.OS === 'android' && file.uri.startsWith('content://')) {
                 const cachePath = `${RNFS.CachesDirectoryPath}/picked_subtitle_${Date.now()}${ext}`;
-                await RNFS.copyFile(filePath, cachePath);
-                filePath = cachePath;
-                if (__DEV__) {console.log(`${LOG_PREFIX} Copied to cache:`, cachePath);}
+                try {
+                    await RNFS.copyFile(file.uri, cachePath);
+                    content = await RNFS.readFile(cachePath, 'utf8');
+                } finally {
+                    RNFS.unlink(cachePath).catch(() => {});
+                }
             } else {
-                // Clean file:// prefix if present
-                filePath = filePath.replace('file://', '');
+                content = await RNFS.readFile(file.uri.replace('file://', ''), 'utf8');
             }
-
-            // Read file content
-            const content = await RNFS.readFile(filePath, 'utf8');
             if (__DEV__) {console.log(`${LOG_PREFIX} Read file: ${content.length} chars`);}
 
             // Parse subtitle
@@ -75,13 +69,7 @@ export class SubtitlePickerService {
 
             if (__DEV__) {console.log(`${LOG_PREFIX} Parsed ${cues.length} cues`);}
 
-            return {
-                path: filePath,
-                name: fileName,
-                content,
-                cues,
-                format: format as 'srt' | 'vtt' | 'ass',
-            };
+            return { name: fileName, cues };
         } catch (error: any) {
             // Check if user cancelled using error code
             if (isErrorWithCode(error) && error.code === 'OPERATION_CANCELED') {
@@ -170,13 +158,7 @@ export class SubtitlePickerService {
                 return null;
             }
 
-            return {
-                path: cleanPath,
-                name: fileName,
-                content,
-                cues,
-                format: format as 'srt' | 'vtt' | 'ass',
-            };
+            return { name: fileName, cues };
         } catch (error) {
             console.error(`${LOG_PREFIX} Error loading subtitle:`, error);
             return null;

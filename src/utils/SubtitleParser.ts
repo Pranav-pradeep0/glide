@@ -135,6 +135,8 @@ export class SubtitleParser {
     // Auto-detect format and parse
     static parse(content: string, format?: string): SubtitleCue[] {
         if (!content) { return []; }
+        // Windows line endings (most .ass files) would leave a trailing break on every cue
+        content = content.replace(/\r\n?/g, '\n');
 
         // Auto-detect format if not specified
         if (!format) {

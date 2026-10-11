@@ -1,5 +1,7 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
-import { searchAllSubtitles } from '../src/utils/subdlApi';
+import { NativeModules } from 'react-native';
+import * as RNFS from '@dr.pogodin/react-native-fs';
+import { downloadSubtitle, searchAllSubtitles } from '../src/utils/subdlApi';
 import * as network from '../src/utils/network';
 
 jest.mock('@dr.pogodin/react-native-fs', () => ({
@@ -11,6 +13,13 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
     readDir: jest.fn(),
     readFile: jest.fn(),
     unlink: jest.fn(),
+}));
+
+jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { Text: 'Text' } }));
+
+jest.mock('../src/native/GlideNative', () => ({
+    ...(jest.requireActual('../src/native/GlideNative') as object),
+    hasNativeApi: () => true,
 }));
 
 jest.mock('../src/utils/network', () => {
@@ -112,5 +121,19 @@ describe('subdlApi', () => {
     it('rejects on a network failure instead of reporting no results', async () => {
         (network.fetchWithTimeout as jest.Mock<any>).mockRejectedValueOnce(new Error('Network failure'));
         await expect(searchAllSubtitles('Test.Movie.mkv')).rejects.toThrow('Network failure');
+    });
+
+    it('downloads an .ass subtitle as cues instead of rejecting it', async () => {
+        (RNFS.downloadFile as jest.Mock<any>).mockReturnValueOnce({
+            jobId: 1,
+            promise: Promise.resolve({ statusCode: 200, bytesWritten: 10 }),
+        });
+        (RNFS.exists as jest.Mock<any>).mockResolvedValue(false);
+        NativeModules.SubtitleSyncModule = {
+            readSubtitleFromZip: jest.fn(async () => '[Script Info]\r\n[Events]\r\nDialogue: 0,0:00:01.00,0:00:02.50,Default,,0,0,0,,Hello\r\n'),
+        };
+        const cues = await downloadSubtitle('/subtitle/1.zip');
+        expect(cues).toHaveLength(1);
+        expect(cues?.[0]).toMatchObject({ startTime: 1, endTime: 2.5, text: 'Hello' });
     });
 });

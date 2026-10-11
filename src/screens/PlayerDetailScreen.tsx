@@ -23,7 +23,6 @@ import { useAppStore } from '@/store/appStore';
 import { SubtitleCueStore } from '@/services/SubtitleCueStore';
 import { ContentDetector } from '../services/ContentDetector';
 import { OMDBResult } from '../services/OMDBService';
-import { SubtitleParser } from '../utils/SubtitleParser';
 import { SubtitleSelectionService } from '../services/SubtitleSelectionService';
 import { SubtitlePickerService } from '../services/SubtitlePickerService';
 import { searchSDHSubtitles, downloadSubtitle } from '../utils/subdlApi';
@@ -137,12 +136,9 @@ export default function PlayerDetailScreen() {
 
             const bestAPI = apiResult.subtitles.find(s => s.hearingImpaired || (s.sdhScore && s.sdhScore > 5));
             if (bestAPI) {
-                const content = await downloadSubtitle(bestAPI.downloadUrl, signal);
-                if (content) {
-                    const cues = SubtitleParser.parse(content, 'srt');
-                    if (cues.length > 0) {
-                        setHapticCues(cues);
-                    }
+                const cues = await downloadSubtitle(bestAPI.downloadUrl, signal);
+                if (cues) {
+                    setHapticCues(cues);
                 }
             }
 
@@ -270,14 +266,12 @@ export default function PlayerDetailScreen() {
             networkAbortRef.current = new AbortController();
             setLoading(true);
 
-            const content = await downloadSubtitle(sub.downloadUrl, networkAbortRef.current.signal);
-            if (!content) {
+            const cues = await downloadSubtitle(sub.downloadUrl, networkAbortRef.current.signal);
+            if (!cues) {
                 Alert.alert('Error', 'Could not download subtitle');
                 setLoading(false);
                 return;
             }
-
-            const cues = SubtitleParser.parse(content, 'srt');
 
             setShowManualPicker(false);
             setLoading(false);
