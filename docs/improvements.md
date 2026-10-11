@@ -63,7 +63,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 ## UI / UX rough edges
 
 - ✅ **Recents** — thumbnails are the generic frame, not where you stopped; `ThumbnailService` already takes a time, `useThumbnail` always passes 0. Also: the native side seeked to the nearest keyframe (`OPTION_CLOSEST_SYNC`), seconds off — S
-- **Now Playing › Queue** — reorder is up/down chevrons with 32 dp targets, hidden while shuffle is on; no drag — M
+- ✅ **Now Playing › Queue** — reorder is up/down chevrons with 32 dp targets, hidden while shuffle is on; no drag. Now a drag handle that also works in shuffle (native `moveInShuffleOrder`, API 5); TalkBack gets Move up / Move down actions — M
 - **Now Playing › Lyrics** — auto-scroll yanks back while you're reading; box is only cover-sized; empty LRC lines render as blank rows; no hint that online lyrics are off in Settings when nothing is found — M
 - **Now Playing** — heart uses the app primary while every other control uses the cover accent; equalizer icon never shows "active" when a preset is on — S
 - **Music** — Albums / Artists / Folders tabs show a blank list when empty or when search matches nothing (only Tracks has an EmptyState) — S
@@ -76,7 +76,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Settings** — "Reset to default" for subtitle appearance has no confirm; "Clear subtitle cache" always says Done — S
 - ✅ **Search** — `No videos match "a"` flashes during the 300 ms debounce — S
 - **MiniPlayer** (`MiniPlayer.tsx:181`) — Next has no haptic (swipe does); while buffering the spinner replaces play/pause so you can't pause — S
-- **Touch targets** — TrackRow "more" 28 dp, Album/Artist "more" 32 dp, queue buttons 32 dp — S
+- **Touch targets** — TrackRow "more" 28 dp, Album/Artist "more" 32 dp, ~~queue buttons 32 dp~~ (✅ with the queue drag) — S
 - **Small features** — theme "Auto" (follow system); re-tapping a tab scrolls to top; AlbumVideos sort + folder-scoped search; consider "Third-party licences" as the Settings label so nobody reads it as Glide being open source — S each
 
 - **Music queue after a late grant** (`audioStore.ts:97`) — the saved queue is resolved against MediaStore once at launch; granting audio access later leaves it unresolved until the next launch — S

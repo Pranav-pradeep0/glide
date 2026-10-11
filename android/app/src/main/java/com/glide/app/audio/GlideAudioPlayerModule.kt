@@ -12,6 +12,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
@@ -187,21 +188,24 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         mainHandler.removeCallbacks(progressRunnable)
     }
 
-    private fun getQueueIndices(): WritableArray {
-        val array = Arguments.createArray()
-        val p = player ?: return array
+    /** Queue indices in the order they play: the queue order, or the shuffle order. */
+    private fun playOrder(p: ExoPlayer): List<Int> {
         val timeline = p.currentTimeline
         if (timeline.isEmpty || !p.shuffleModeEnabled) {
-            for (i in 0 until p.mediaItemCount) {
-                array.pushInt(i)
-            }
-            return array
+            return List(p.mediaItemCount) { it }
         }
+        val order = ArrayList<Int>(timeline.windowCount)
         var idx = timeline.getFirstWindowIndex(true)
         while (idx != C.INDEX_UNSET) {
-            array.pushInt(idx)
+            order.add(idx)
             idx = timeline.getNextWindowIndex(idx, Player.REPEAT_MODE_OFF, true)
         }
+        return order
+    }
+
+    private fun getQueueIndices(): WritableArray {
+        val array = Arguments.createArray()
+        player?.let { p -> playOrder(p).forEach { array.pushInt(it) } }
         return array
     }
 
@@ -464,6 +468,31 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                 promise.resolve(true)
             } catch (e: Exception) {
                 promise.reject("E_MOVE_MEDIA_ITEM", e.message, e)
+            }
+        }
+    }
+
+    /**
+     * Moves queue item [index] to [toPosition] in the shuffled play order, leaving the queue
+     * order alone: dragging a song while shuffle is on. moveMediaItem can't do this -- the
+     * shuffle order re-inserts a moved item at a random spot. Takes the item, not its old
+     * position, so a JS order a step behind still moves the song that was dragged.
+     */
+    @ReactMethod
+    fun moveInShuffleOrder(index: Int, toPosition: Int, promise: Promise) {
+        mainHandler.post {
+            try {
+                val p = player
+                if (p != null && p.shuffleModeEnabled && index in 0 until p.mediaItemCount && toPosition in 0 until p.mediaItemCount) {
+                    val order = playOrder(p).toMutableList()
+                    order.removeAt(order.indexOf(index))
+                    order.add(toPosition, index)
+                    p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+                    emitTrackChanged()
+                }
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("E_MOVE_SHUFFLED", e.message, e)
             }
         }
     }

@@ -6,6 +6,7 @@ import { AudioMediaService } from '@/services/AudioMediaService';
 import { PermissionService } from '@/services/PermissionService';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { useMusicHistoryStore } from '@/store/musicHistoryStore';
+import { hasNativeApi } from '@/native/GlideNative';
 
 const getAudioModule = () => NativeModules.GlideAudioPlayerModule;
 const mmkv = createMMKV({ id: 'glide_audio_store_v1' });
@@ -254,6 +255,7 @@ export interface AudioStoreState {
     playNext: (track: AudioTrack) => Promise<void>;
     addToQueue: (track: AudioTrack) => Promise<void>;
     removeFromQueue: (index: number) => Promise<void>;
+    /** Positions in the order songs play: the queue order, or the shuffle order when shuffle is on. */
     moveQueueItem: (fromIndex: number, toIndex: number) => Promise<void>;
     setSleepTimer: (option: number | 'end_of_track' | 'off') => void;
     togglePlayPause: () => Promise<void>;
@@ -483,7 +485,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     },
 
     moveQueueItem: async (fromIndex: number, toIndex: number) => {
-        const { queue, currentIndex } = get();
+        const { queue, currentIndex, shuffle, shuffledIndices } = get();
         if (
             fromIndex < 0 ||
             fromIndex >= queue.length ||
@@ -491,6 +493,22 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
             toIndex >= queue.length ||
             fromIndex === toIndex
         ) {
+            return;
+        }
+
+        if (shuffle) {
+            // Reorder what plays next and leave the queue alone, so turning shuffle off
+            // still goes back to the album order.
+            if (shuffledIndices.length !== queue.length || !hasNativeApi(5)) {return;}
+            const order = [...shuffledIndices];
+            const [moved] = order.splice(fromIndex, 1);
+            order.splice(toIndex, 0, moved);
+            set({ shuffledIndices: order });
+            try {
+                await getAudioModule()?.moveInShuffleOrder(moved, toIndex);
+            } catch (err) {
+                console.error('[AudioStore] moveInShuffleOrder error:', err);
+            }
             return;
         }
 

@@ -25,6 +25,7 @@ NativeModules.GlideAudioPlayerModule = {
     addMediaItem: jest.fn<any>().mockReturnValue(Promise.resolve(true)),
     removeMediaItem: jest.fn<any>().mockReturnValue(Promise.resolve(true)),
     moveMediaItem: jest.fn<any>().mockReturnValue(Promise.resolve(true)),
+    moveInShuffleOrder: jest.fn<any>().mockReturnValue(Promise.resolve(true)),
     setSleepTimer: jest.fn<any>().mockReturnValue(Promise.resolve(true)),
     clearSleepTimer: jest.fn<any>().mockReturnValue(Promise.resolve(true)),
     play: jest.fn<any>().mockReturnValue(Promise.resolve(true)),
@@ -61,6 +62,8 @@ jest.mock('../src/services/PermissionService', () => ({
         requestAudioPermission: jest.fn().mockReturnValue(Promise.resolve(true)),
     },
 }));
+
+jest.mock('../src/native/GlideNative', () => ({ NATIVE_API_LEVEL: 5, hasNativeApi: () => true }));
 
 jest.mock('@dr.pogodin/react-native-fs', () => ({
     exists: jest.fn(async () => false),
@@ -405,6 +408,20 @@ describe('Audio Player Utilities and Store', () => {
             expect(state.queue[2].id).toBe('101');
             expect(state.currentIndex).toBe(2);
             expect(NativeModules.GlideAudioPlayerModule.moveMediaItem).toHaveBeenCalledWith(0, 2);
+        });
+
+        it('reorders the shuffle order, not the queue, while shuffle is on', async () => {
+            await useAudioStore.getState().playQueue([dummyTrack1, dummyTrack2, dummyTrack3], 0);
+            useAudioStore.setState({ shuffle: true, shuffledIndices: [2, 0, 1] });
+            (NativeModules.GlideAudioPlayerModule.moveMediaItem as jest.Mock<any>).mockClear();
+            // Drag the last song in play order (queue item 1) to the top.
+            await useAudioStore.getState().moveQueueItem(2, 0);
+
+            const state = useAudioStore.getState();
+            expect(state.shuffledIndices).toEqual([1, 2, 0]);
+            expect(state.queue.map((t) => t.id)).toEqual(['101', '102', '103']);
+            expect(NativeModules.GlideAudioPlayerModule.moveInShuffleOrder).toHaveBeenCalledWith(1, 0);
+            expect(NativeModules.GlideAudioPlayerModule.moveMediaItem).not.toHaveBeenCalled();
         });
 
         it('activates and clears sleep timer via native calls', () => {

@@ -25,6 +25,8 @@ import com.facebook.react.uimanager.ViewManager
  *    delete dialog (it rejected E_DELETE_CANCELLED before).
  * 4: GlideAudioPlayerModule.getCurrentState() includes sleepTimerMode, sleepTimerMinutes
  *    and sleepTimerEndsAt (epoch ms).
+ * 5: GlideAudioPlayerModule.moveInShuffleOrder(index, toPosition) reorders the shuffled
+ *    play order without touching the queue order.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -38,7 +40,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 4
+        const val API_LEVEL = 5
     }
 
     class Package : ReactPackage {

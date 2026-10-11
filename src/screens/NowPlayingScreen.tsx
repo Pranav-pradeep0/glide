@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
     ActivityIndicator,
     BackHandler,
-    FlatList,
     type HostInstance,
     Image,
     StyleSheet,
@@ -40,15 +39,11 @@ import { useAlbumPalette } from '@/hooks/useAlbumArt';
 import { LyricsService } from '@/services/LyricsService';
 import { Chip, IconButton, ListGroup, ListRow, Sheet, Touchable } from '@/components/ui';
 import { metrics, motion, type } from '@/theme/theme';
-import { formatDuration } from '@/utils/formatUtils';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
-import { AudioTrack, LyricLine } from '@/types';
+import { LyricLine } from '@/types';
 import { haptic } from '@/native/HapticModule';
-
-interface QueueItem {
-    track: AudioTrack;
-    index: number;
-}
+import { hasNativeApi } from '@/native/GlideNative';
+import { QueueList, type QueueItem } from '@/components/QueueList';
 
 const SLEEP_MINUTES = [15, 30, 45, 60];
 
@@ -421,11 +416,14 @@ export default function NowPlayingScreen() {
         return queue.map((track, index) => ({ track, index }));
     }, [queue, shuffle, shuffledIndices]);
 
-    // Compute initial scroll index for the current playing song
-    const currentQueueDisplayIndex = useMemo(() => {
-        const idx = displayQueue.findIndex((item) => item.index === currentIndex);
-        return idx >= 0 ? idx : 0;
-    }, [displayQueue, currentIndex]);
+    // With shuffle on, the list is the shuffle order, so it can only be dragged once that
+    // order has arrived from native and native can reorder it.
+    const canReorderQueue = !shuffle || (shuffledIndices.length === queue.length && hasNativeApi(5));
+
+    const playFromQueue = useCallback((index: number) => {
+        skipToIndex(index);
+        setShowQueue(false);
+    }, [skipToIndex]);
 
     if (!currentTrack) {
         return (
@@ -680,89 +678,15 @@ export default function NowPlayingScreen() {
                         onClose={() => setShowQueue(false)}
                         title={`Queue (${queue.length})`}
                     >
-                        <View style={styles.sheetListWrap}>
-                            <FlatList
-                                data={displayQueue}
-                                keyExtractor={(item) => `${item.track.id}-${item.index}`}
-                                initialScrollIndex={currentQueueDisplayIndex}
-                                getItemLayout={(_, index) => ({
-                                    length: 58,
-                                    offset: 58 * index,
-                                    index,
-                                })}
-                                onScrollToIndexFailed={() => {
-                                    // Gracefully ignore layout calculation failure
-                                }}
-                                renderItem={({ item, index: displayIndex }) => {
-                                    const isCurrent = item.index === currentIndex;
-                                    return (
-                                        <View style={[styles.queueRowWrap, isCurrent && { backgroundColor: colors.primaryContainer }]}>
-                                            <Touchable
-                                                style={styles.queueRowTouchable}
-                                                onPress={() => {
-                                                    skipToIndex(item.index);
-                                                    setShowQueue(false);
-                                                }}
-                                                scaleTo={0.98}
-                                            >
-                                                <Feather
-                                                    name={isCurrent ? 'volume-2' : 'music'}
-                                                    size={18}
-                                                    color={isCurrent ? accentColor : colors.textTertiary}
-                                                />
-                                                <View style={styles.queueItemInfo}>
-                                                    <Text
-                                                        style={[
-                                                            type.row,
-                                                            { color: isCurrent ? accentColor : colors.text, fontWeight: isCurrent ? '700' : '400' },
-                                                        ]}
-                                                        numberOfLines={1}
-                                                    >
-                                                        {item.track.title}
-                                                    </Text>
-                                                    <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={1}>
-                                                        {item.track.artist} · {formatDuration(item.track.duration)}
-                                                    </Text>
-                                                </View>
-                                            </Touchable>
-
-                                            {/* Queue item actions: reorder & remove */}
-                                            <View style={styles.queueItemActions}>
-                                                {!shuffle && displayIndex > 0 && (
-                                                    <IconButton
-                                                        icon="chevron-up"
-                                                        onPress={() => moveQueueItem(item.index, item.index - 1)}
-                                                        accessibilityLabel="Move up"
-                                                        iconSize={16}
-                                                        style={styles.smallQueueBtn}
-                                                    />
-                                                )}
-                                                {!shuffle && displayIndex < displayQueue.length - 1 && (
-                                                    <IconButton
-                                                        icon="chevron-down"
-                                                        onPress={() => moveQueueItem(item.index, item.index + 1)}
-                                                        accessibilityLabel="Move down"
-                                                        iconSize={16}
-                                                        style={styles.smallQueueBtn}
-                                                    />
-                                                )}
-                                                <IconButton
-                                                    icon="x"
-                                                    onPress={() => removeFromQueue(item.index)}
-                                                    accessibilityLabel="Remove from queue"
-                                                    iconSize={16}
-                                                    style={styles.smallQueueBtn}
-                                                />
-                                            </View>
-                                        </View>
-                                    );
-                                }}
-                                initialNumToRender={15}
-                                maxToRenderPerBatch={10}
-                                windowSize={5}
-                                showsVerticalScrollIndicator={false}
-                            />
-                        </View>
+                        <QueueList
+                            items={displayQueue}
+                            currentIndex={currentIndex}
+                            accentColor={accentColor}
+                            canReorder={canReorderQueue}
+                            onPlay={playFromQueue}
+                            onRemove={removeFromQueue}
+                            onMove={moveQueueItem}
+                        />
                     </Sheet>
 
                     {/* Sleep Timer Bottom Sheet */}
@@ -1000,34 +924,6 @@ const styles = StyleSheet.create({
         paddingVertical: metrics.space.sm,
         borderRadius: metrics.radius.pill,
         gap: metrics.space.xs,
-    },
-    sheetListWrap: {
-        maxHeight: 420,
-    },
-    queueRowWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: metrics.gutter,
-        height: 58,
-        borderRadius: metrics.radius.md,
-    },
-    queueRowTouchable: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: metrics.space.md,
-    },
-    queueItemInfo: {
-        flex: 1,
-        gap: 2,
-    },
-    queueItemActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    smallQueueBtn: {
-        width: 32,
-        height: 32,
     },
     sleepTimerGroup: {
         paddingHorizontal: metrics.gutter,
