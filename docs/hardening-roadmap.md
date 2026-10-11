@@ -220,12 +220,13 @@ Activities, and Android Auto and a Bluetooth head unit still browse the music li
    step `env:`, and the signing passwords reach Gradle as `ORG_GRADLE_PROJECT_*`. Still
    open: wrapper validation, `distributionSha256Sum` (the FFmpeg AAR checksum is done, see
    8b), and checking the signing cert SHA-256 before publishing.
-4. **`GlidePlayerService` has no `onConnect`** — exported, so any app can browse the whole
-   music library without the media permission.
-5. **Subtitle size caps**: (the zip's subtitle is capped and never extracted since `fbcfe05`;
-   the download itself is still unbounded) nothing bounds the SubDL zip download, the extracted file, or
-   `readFile` (`SubtitleExtractor.ts:108` stats but only logs). Zip bombs are unhandled.
-   Accept `https:` only for `downloadUrl`.
+4. ✅ `356efea` **`GlidePlayerService` has no `onConnect`** — exported, so any app could browse
+   the whole music library without the media permission. Now only Glide, system apps,
+   trusted controllers (`isTrusted`) and apps holding the audio permission connect.
+5. ✅ 2026-10-11 **Subtitle size caps**: the zip's subtitle is capped and never extracted
+   (`fbcfe05`); the SubDL zip download stops past 10 MB, and `downloadUrl` is fetched over
+   `https:` only (`subtitleDownloadUrl`). Still open, low: `SubtitleExtractor.ts` reads an
+   embedded subtitle extracted from the user's own video uncapped.
 6. **SubDL/OMDB keys behind the worker** (Groq already is). Not just key hiding: the OMDB
    key is 1000 req/day shared by every user, and nothing caches.
 7. **`/v1/recap` has no client auth** — per-IP rate limits exist, but add an install token

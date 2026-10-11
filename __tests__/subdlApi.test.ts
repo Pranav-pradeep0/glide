@@ -1,7 +1,7 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import { NativeModules } from 'react-native';
 import * as RNFS from '@dr.pogodin/react-native-fs';
-import { downloadSubtitle, searchAllSubtitles } from '../src/utils/subdlApi';
+import { downloadSubtitle, searchAllSubtitles, subtitleDownloadUrl } from '../src/utils/subdlApi';
 import * as network from '../src/utils/network';
 
 jest.mock('@dr.pogodin/react-native-fs', () => ({
@@ -135,5 +135,26 @@ describe('subdlApi', () => {
         const cues = await downloadSubtitle('/subtitle/1.zip');
         expect(cues).toHaveLength(1);
         expect(cues?.[0]).toMatchObject({ startTime: 1, endTime: 2.5, text: 'Hello' });
+    });
+
+    it('fetches only https download URLs', () => {
+        expect(subtitleDownloadUrl('/subtitle/1.zip')).toMatch(/^https:\/\/.+\/subtitle\/1\.zip$/);
+        expect(subtitleDownloadUrl('https://dl.subdl.com/a.zip')).toBe('https://dl.subdl.com/a.zip');
+        expect(subtitleDownloadUrl('http://dl.subdl.com/a.zip')).toBeNull();
+        expect(subtitleDownloadUrl('file:///data/a.zip')).toBeNull();
+    });
+
+    it('stops a download that grows past the cap', async () => {
+        (RNFS.downloadFile as jest.Mock<any>).mockImplementationOnce((options: any) => ({
+            jobId: 7,
+            promise: (async () => {
+                await Promise.resolve(); // progress arrives as a later event, as from native
+                options.progress({ contentLength: -1, bytesWritten: 11 * 1024 * 1024 });
+                throw new Error('Download has been aborted');
+            })(),
+        }));
+        (RNFS.exists as jest.Mock<any>).mockResolvedValue(false);
+        expect(await downloadSubtitle('/subtitle/2.zip')).toBeNull();
+        expect(RNFS.stopDownload).toHaveBeenCalledWith(7);
     });
 });

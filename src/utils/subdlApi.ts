@@ -12,6 +12,8 @@ import { createCoalescedRequest, fetchWithTimeout, InFlightRequest, isAbortError
 const LOG_PREFIX = '[SubDL]';
 const SUBDL_SEARCH_TIMEOUT_MS = 12000;
 const SUBDL_DOWNLOAD_TIMEOUT_MS = 20000;
+/** A subtitle zip is tens of KB, a full-season pack a few MB; the subtitle inside is capped natively. */
+const MAX_SUBTITLE_ZIP_BYTES = 10 * 1024 * 1024;
 const inFlightSubtitleSearches = new Map<string, InFlightRequest<{ subtitles: SubtitleResult[] }>>();
 const inFlightSubtitleDownloads = new Map<string, InFlightRequest<SubtitleCue[] | null>>();
 
@@ -221,15 +223,23 @@ export async function downloadSubtitle(
     downloadUrl: string,
     signal?: AbortSignal
 ): Promise<SubtitleCue[] | null> {
-    const requestKey = downloadUrl.startsWith('http')
-        ? downloadUrl
-        : `${SUBDL_DOWNLOAD_URL}${downloadUrl}`;
+    const fullUrl = subtitleDownloadUrl(downloadUrl);
+    if (!fullUrl) {
+        console.error(`${LOG_PREFIX} Refused a non-https download URL`);
+        return null;
+    }
     return createCoalescedRequest(
         inFlightSubtitleDownloads,
-        requestKey,
-        (sharedSignal) => executeSubtitleDownload(downloadUrl, sharedSignal),
+        fullUrl,
+        (sharedSignal) => executeSubtitleDownload(fullUrl, sharedSignal),
         signal
     );
+}
+
+/** SubDL gives a path on its download host, or a full URL; only https is fetched. */
+export function subtitleDownloadUrl(downloadUrl: string): string | null {
+    const fullUrl = /^[a-z][a-z0-9+.-]*:/i.test(downloadUrl) ? downloadUrl : `${SUBDL_DOWNLOAD_URL}${downloadUrl}`;
+    return fullUrl.toLowerCase().startsWith('https://') ? fullUrl : null;
 }
 
 async function executeSubtitleSearch(
@@ -300,7 +310,7 @@ async function executeSubtitleSearch(
 }
 
 async function executeSubtitleDownload(
-    downloadUrl: string,
+    fullUrl: string,
     signal?: AbortSignal
 ): Promise<SubtitleCue[] | null> {
     const timestamp = Date.now();
@@ -309,15 +319,12 @@ async function executeSubtitleDownload(
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let abortHandler: (() => void) | null = null;
     let didTimeout = false;
+    let tooLarge = false;
 
     try {
         if (!hasNativeApi(7)) {
             throw new Error('Subtitle download needs the latest Glide update');
         }
-        const fullUrl = downloadUrl.startsWith('http')
-            ? downloadUrl
-            : `${SUBDL_DOWNLOAD_URL}${downloadUrl}`;
-
         if (__DEV__) {console.log(`${LOG_PREFIX} Downloading from:`, fullUrl);}
 
         const download = RNFS.downloadFile({
@@ -325,6 +332,13 @@ async function executeSubtitleDownload(
             toFile: zipPath,
             headers: {
                 'User-Agent': 'Glide/1.0',
+            },
+            // Reported per 8 KB read; the declared length can be missing or lie, so both count.
+            progress: ({ contentLength, bytesWritten }) => {
+                if (!tooLarge && Math.max(contentLength, bytesWritten) > MAX_SUBTITLE_ZIP_BYTES) {
+                    tooLarge = true;
+                    RNFS.stopDownload(download.jobId);
+                }
             },
         });
         downloadJobId = download.jobId;
@@ -384,6 +398,10 @@ async function executeSubtitleDownload(
         }
         if (didTimeout) {
             throw new NetworkTimeoutError(SUBDL_DOWNLOAD_TIMEOUT_MS);
+        }
+        if (tooLarge) {
+            console.error(`${LOG_PREFIX} Download is over ${MAX_SUBTITLE_ZIP_BYTES / 1024 / 1024} MB, stopped`);
+            return null;
         }
         console.error(`${LOG_PREFIX} Download error:`, error);
         return null;
