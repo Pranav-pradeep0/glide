@@ -78,7 +78,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
   - hardware volume keys re-render the whole player on every press (7–11 renders/s while held): the HUD show dispatches go through `useReducer`, which has no eager bail-out
   - ✅ **Time labels** re-rendered twice a second with the controls hidden, and kept updating at opacity 0 while scrubbing (~340 label renders/s) *(they update only while their row can be seen: 0/s hidden, ≤160/s scrubbing — the bubble's own two labels)*
   - ✅ **Quick Settings speed / colour-strength sliders** re-rendered the whole screen per step *(still live: the label follows the thumb inside the panel, the player gets at most 10 values a second and always the release value; ≤5 screen renders/s seen while dragging)*
-  - landscape playlist is mounted (rows + thumbnails) from the moment the player opens, even if never opened
+  - ✅ **Landscape playlist** was mounted (rows + thumbnails) from the moment the player opened, even if never opened *(built on first open; FlashList, so only rows near the screen exist and ask for thumbnails)*
   - PlayerDetail: tapping Play straight away took 1.0–2.6 s to playing vs 0.3 s when the page had settled — its subtitle extraction and SubDL work keep running
 - ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
 - ✅ **Episode order** (`useMediaService.ts` `sortVideosByName`) — name order puts `Show.2019.S01E02` before `Show.S01E01`, so Next skips around — S *(season/episode decide when every file in the folder has one; anime `Show - 12` and `Ep 9` aren't parsed and keep the name order)*

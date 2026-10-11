@@ -1,5 +1,6 @@
-import React, { memo, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, FlatList } from 'react-native';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Image } from 'react-native';
+import { FlashList, FlashListRef } from '@shopify/flash-list';
 import { Feather } from '@react-native-vector-icons/feather';
 import { VideoFile, VideoSort } from '@/types';
 import { useAlbumVideos } from '@/hooks/useMediaService';
@@ -103,24 +104,19 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
         onClose();
     }, [onPlayVideo, onClose]);
 
-    // Open on the current video. Landscape keeps the list mounted while closed, so this runs
-    // on every open, not just the first. Rows vary in height (one- or two-line titles), so a
-    // row not yet measured fails the first try: jump near it, then try again.
-    const listRef = useRef<FlatList<VideoFile>>(null);
+    // Landscape keeps the panel mounted while closed, so the list (and every row's thumbnail
+    // request) waits for the first open, then stays for the next ones.
+    const [opened, setOpened] = useState(visible);
+    if (visible && !opened) { setOpened(true); }
+
+    // Open on the current video, on every open. FlashList estimates rows it hasn't measured.
+    const listRef = useRef<FlashListRef<VideoFile>>(null);
     const currentIndex = videos.findIndex(v => v.path === currentVideoPath);
-    const scrollRetries = useRef(0);
     useEffect(() => {
-        scrollRetries.current = 0;
-        if (visible && currentIndex > 0) {
+        if (visible && opened && currentIndex > 0) {
             listRef.current?.scrollToIndex({ index: currentIndex, viewPosition: 0.3, animated: false });
         }
-    }, [visible, currentIndex]);
-    const onScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
-        listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-        if (scrollRetries.current >= 3) { return; }
-        scrollRetries.current += 1;
-        setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.3, animated: false }), 50);
-    }, []);
+    }, [visible, opened, currentIndex]);
 
     return (
         <SidePanel
@@ -129,17 +125,12 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
             onClose={onClose}
             onBack={onBack}
         >
-            <FlatList
+            {opened && <FlashList
                 ref={listRef}
                 data={videos}
-                onScrollToIndexFailed={onScrollToIndexFailed}
                 style={styles.list}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
-                removeClippedSubviews={true}
-                initialNumToRender={10}
-                maxToRenderPerBatch={5}
-                windowSize={5}
                 keyExtractor={(item) => item.path}
                 renderItem={({ item }) => (
                     <PlaylistItem
@@ -151,7 +142,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
                 ListEmptyComponent={
                     <Text style={styles.emptyText}>{loading ? 'Loading…' : 'This playlist is empty'}</Text>
                 }
-            />
+            />}
         </SidePanel>
     );
 }, (prevProps, nextProps) => {
