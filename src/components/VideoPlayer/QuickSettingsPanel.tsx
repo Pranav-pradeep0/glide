@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Animated, { SlideInLeft, SlideInRight, SlideOutLeft, SlideOutRight } from 'react-native-reanimated';
@@ -8,6 +8,7 @@ import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { haptic } from '@/native/HapticModule';
 import { DISPLAY_MODES, formatRate } from './PlayerIcons';
 import { SidePanel } from './SidePanel';
+import { throttle } from '../../hooks/video-player/types';
 import { useAppStore } from '../../store/appStore';
 import HapticModule from '../../native/HapticModule';
 
@@ -94,6 +95,35 @@ interface QuickSettingsPanelProps {
     subtitleValue?: string;
 }
 
+/**
+ * A slider that previews live without re-rendering the player per step: its label follows the
+ * thumb here, the player gets at most one value per 100 ms, and the release value always lands.
+ * The slider's own `value` holds still while dragging, so a late echo can't pull the thumb back.
+ */
+function useCappedSlider(value: number, onChange: (v: number) => void) {
+    const [drag, setDrag] = useState<{ start: number; now: number } | null>(null);
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
+    const send = useMemo(() => throttle((v: number) => onChangeRef.current(v), 100), []);
+    useEffect(() => send.flush, [send]);
+    return {
+        shown: drag?.now ?? value,
+        value: drag?.start ?? value,
+        onSlidingStart: (v: number) => setDrag({ start: v, now: v }),
+        onValueChange: (v: number) => {
+            setDrag(d => d && { ...d, now: v });
+            send(v);
+        },
+        onSlidingComplete: (v: number) => {
+            send(v);
+            send.flush();
+            setDrag(null);
+        },
+    };
+}
+
+const roundRate = (v: number) => Math.round(v * 100) / 100;
+
 export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props) => {
     const hapticSettings = useAppStore((state) => state.settings.hapticSettings);
     const setHapticIntensity = useAppStore((state) => state.setHapticIntensity);
@@ -126,13 +156,15 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
         setPage(next);
     };
 
+    const speed = useCappedSlider(props.playbackRate, props.onPlaybackRateChange);
     const setRate = (rate: number, fromSlider: boolean) => {
         const prev = lastRate.current;
         lastRate.current = rate;
         // One tick as the slider passes normal speed.
         if (fromSlider && ((prev < 1 && rate >= 1) || (prev > 1 && rate <= 1))) { haptic('segmentTick'); }
-        props.onPlaybackRateChange(rate);
+        if (fromSlider) { speed.onValueChange(rate); } else { props.onPlaybackRateChange(rate); }
     };
+    const enhancement = useCappedSlider(props.videoEnhancementStrength ?? 1, v => props.onSetVideoEnhancementStrength?.(v));
 
     // `stretch` renders exactly like `fill`, which is the option shown for it.
     const displayMode = props.resizeMode === 'stretch' ? 'fill' : props.resizeMode;
@@ -179,7 +211,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
 
             <View style={styles.speedHead}>
                 <Text style={[type.label, styles.speedLabel]}>Speed</Text>
-                <Text style={[type.row, styles.speedValue]}>{formatRate(props.playbackRate)}</Text>
+                <Text style={[type.row, styles.speedValue]}>{formatRate(speed.shown)}</Text>
             </View>
             <View style={styles.chips}>
                 {SPEED_CHIPS.map(rate => (
@@ -198,8 +230,10 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                 minimumValue={0.25}
                 maximumValue={4}
                 step={0.05}
-                value={props.playbackRate}
-                onValueChange={v => setRate(Math.round(v * 100) / 100, true)}
+                value={speed.value}
+                onSlidingStart={speed.onSlidingStart}
+                onValueChange={v => setRate(roundRate(v), true)}
+                onSlidingComplete={v => speed.onSlidingComplete(roundRate(v))}
                 minimumTrackTintColor={colors.primary}
                 maximumTrackTintColor={colors.fillStrong}
                 thumbTintColor={colors.primary}
@@ -268,14 +302,16 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                                 minimumValue={0}
                                 maximumValue={1.5}
                                 step={0.05}
-                                value={enhancementStrength}
-                                onValueChange={props.onSetVideoEnhancementStrength}
+                                value={enhancement.value}
+                                onSlidingStart={enhancement.onSlidingStart}
+                                onValueChange={enhancement.onValueChange}
+                                onSlidingComplete={enhancement.onSlidingComplete}
                                 minimumTrackTintColor={colors.primary}
                                 maximumTrackTintColor={colors.fillStrong}
                                 thumbTintColor={colors.primary}
                                 accessibilityLabel="Color enhancement strength"
                             />
-                            <Text style={[type.body, styles.valueText]}>{Math.round(enhancementStrength * 100)}%</Text>
+                            <Text style={[type.body, styles.valueText]}>{Math.round(enhancement.shown * 100)}%</Text>
                         </View>
                     </View>
                 )}

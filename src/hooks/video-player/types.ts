@@ -496,22 +496,28 @@ export const formatTime = (seconds: number): string => {
 };
 
 /**
- * RAF-based throttle for smooth UI updates
+ * Calls `fn` at most once per `ms`: the first call at once, then the latest of the calls
+ * made during the wait when it ends. `flush` runs a waiting call now.
  */
-export const rafThrottle = <T extends (...args: any[]) => void>(fn: T) => {
-    let rafId: number | null = null;
-    let lastArgs: any[] | null = null;
-    return (...args: Parameters<T>) => {
-        lastArgs = args;
-        if (rafId !== null) { return; }
-        rafId = requestAnimationFrame(() => {
-            rafId = null;
-            if (lastArgs) {
-                fn(...(lastArgs as any[]));
-                lastArgs = null;
-            }
-        });
+export const throttle = <A extends unknown[]>(fn: (...args: A) => void, ms: number) => {
+    let last = -Infinity;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pending: A | null = null;
+    const run = (args: A) => {
+        last = Date.now();
+        fn(...args);
     };
+    const flush = () => {
+        if (timer !== null) { clearTimeout(timer); timer = null; }
+        if (pending) { const args = pending; pending = null; run(args); }
+    };
+    const throttled = (...args: A) => {
+        pending = args;
+        const wait = ms - (Date.now() - last);
+        if (wait <= 0) { flush(); } else if (timer === null) { timer = setTimeout(flush, wait); }
+    };
+    throttled.flush = flush;
+    return throttled;
 };
 
 /**
