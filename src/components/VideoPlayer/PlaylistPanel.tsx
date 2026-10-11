@@ -1,9 +1,11 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Image, FlatList } from 'react-native';
 import { Feather } from '@react-native-vector-icons/feather';
 import { VideoFile } from '@/types';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
+import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { ProgressLine, progressOf } from '@/components/VideoRow';
 import { Touchable } from '@/components/ui';
 import { metrics, playerTheme, type } from '@/theme/theme';
 import { SidePanel } from './SidePanel';
@@ -40,6 +42,11 @@ const PlaylistItem = memo<{
     onPlay: (video: VideoFile) => void;
 }>(({ item, isCurrent, onPlay }) => {
     const { thumbnail } = useThumbnail(item.path);
+    // A number, so a position save elsewhere re-renders only the row whose bar moved.
+    const progress = useVideoHistoryStore((s) => {
+        const entry = s.getVideoHistory(item.path);
+        return progressOf(entry?.duration, entry?.lastPausedPosition);
+    });
 
     const handlePlay = useCallback(() => {
         onPlay(item);
@@ -64,6 +71,7 @@ const PlaylistItem = memo<{
                 ) : (
                     <Feather name="video" size={20} color={colors.textTertiary} />
                 )}
+                {progress > 0 && <ProgressLine progress={progress} style={styles.progress} />}
             </View>
 
             <View style={styles.info}>
@@ -105,6 +113,25 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
         onClose();
     }, [onPlayVideo, onClose]);
 
+    // Open on the current video. Landscape keeps the list mounted while closed, so this runs
+    // on every open, not just the first. Rows vary in height (one- or two-line titles), so a
+    // row not yet measured fails the first try: jump near it, then try again.
+    const listRef = useRef<FlatList<VideoFile>>(null);
+    const currentIndex = videos.findIndex(v => v.path === currentVideoPath);
+    const scrollRetries = useRef(0);
+    useEffect(() => {
+        scrollRetries.current = 0;
+        if (visible && currentIndex > 0) {
+            listRef.current?.scrollToIndex({ index: currentIndex, viewPosition: 0.3, animated: false });
+        }
+    }, [visible, currentIndex]);
+    const onScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+        listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+        if (scrollRetries.current >= 3) { return; }
+        scrollRetries.current += 1;
+        setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.3, animated: false }), 50);
+    }, []);
+
     return (
         <SidePanel
             visible={visible}
@@ -113,7 +140,9 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
             onBack={onBack}
         >
             <FlatList
+                ref={listRef}
                 data={videos}
+                onScrollToIndexFailed={onScrollToIndexFailed}
                 style={styles.list}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -175,6 +204,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     thumbnailImage: { width: '100%', height: '100%' },
+    progress: { position: 'absolute', left: 0, right: 0, bottom: 0 },
     info: { flex: 1, gap: 2 },
     title: { ...type.row, color: colors.text },
     duration: { ...type.caption, color: colors.textSecondary, fontVariant: ['tabular-nums'] },

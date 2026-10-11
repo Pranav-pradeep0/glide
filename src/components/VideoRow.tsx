@@ -112,7 +112,7 @@ export function deleteVideo(name: string, target: string): Promise<boolean> {
 
 // ============= THUMBNAIL =============
 
-function ProgressLine({ progress, style }: { progress: number; style?: object }) {
+export function ProgressLine({ progress, style }: { progress: number; style?: object }) {
     const { colors } = useTheme();
     return (
         <View style={[styles.track, style]}>
