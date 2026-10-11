@@ -29,6 +29,8 @@ interface VideoHistoryState {
     updateVideoHistory: (entry: Partial<VideoHistoryEntry> & { videoPath: string; videoName: string }) => void;
     incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number) => void;
     updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrackId?: number, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, brightness?: number, fileSize?: number) => void;
+    /** Play from start / mark (un)watched: the position only, leaving when it was watched alone. */
+    setWatchedPosition: (videoPath: string, videoName: string, position: number, duration: number) => void;
     setStopFrame: (videoPath: string, videoName: string, stopFrameMs: number | undefined) => void;
     addBookmark: (videoPath: string, videoName: string, timestamp: number, label?: string) => void;
     removeBookmark: (videoPath: string, bookmarkId: string) => void;
@@ -299,6 +301,27 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                 });
             }
 
+            return { history: newHistory };
+        });
+        debouncedPersist();
+    },
+
+    // Not updateVideoHistory: that stamps "watched now", and marking an old episode watched
+    // shouldn't move it to the top of Recents.
+    setWatchedPosition: (videoPath, videoName, position, duration) => {
+        set((state) => {
+            const newHistory = new Map(state.history);
+            const match = findHistoryEntry(newHistory, videoPath, generateVideoId(videoName));
+            // The stop frame is where you left off, which neither the start nor the end is.
+            const updates = { lastPausedPosition: position, duration, stopFrameMs: undefined };
+            if (match) {
+                newHistory.set(match.key, { ...match.entry, ...updates });
+            } else {
+                newHistory.set(videoPath, {
+                    videoPath, videoName, videoId: generateVideoId(videoName),
+                    lastWatchedTime: Date.now(), viewCount: 0, bookmarks: [], ...updates,
+                });
+            }
             return { history: newHistory };
         });
         debouncedPersist();

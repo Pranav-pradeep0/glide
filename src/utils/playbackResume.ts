@@ -17,3 +17,8 @@ export function getResumablePosition(
 
     return position;
 }
+
+/** Watched to the end (or marked so): no resume prompt, a full progress bar, not "Continue watching". */
+export function isFinished(position: number, duration: number): boolean {
+    return duration > 0 && position >= duration - RESUME_EDGE_GUARD_SECONDS;
+}

@@ -11,6 +11,7 @@ jest.mock('react-native-mmkv', () => ({
 
 import { prune, useVideoHistoryStore } from '../src/store/videoHistoryStore';
 import { VideoHistoryEntry } from '../src/types';
+import { isFinished } from '../src/utils/playbackResume';
 
 // The whole history is rewritten on every save, so its size is the cost of saving a
 // resume position. Nothing ever removed an entry before this.
@@ -85,5 +86,22 @@ describe('video history stop frame', () => {
     it('never creates an entry', () => {
         useVideoHistoryStore.getState().setStopFrame('/videos/none.mp4', 'none.mp4', 1000);
         expect(useVideoHistoryStore.getState().getVideoHistory('/videos/none.mp4')).toBeNull();
+    });
+});
+
+describe('setWatchedPosition', () => {
+    afterAll(() => useVideoHistoryStore.getState().persistNow());
+
+    it('marks a video watched without moving it up Recents', () => {
+        const old = { ...entry(7), stopFrameMs: 30_000 };
+        useVideoHistoryStore.setState({ history: new Map([[old.videoPath, old]]) });
+        useVideoHistoryStore.getState().setWatchedPosition(old.videoPath, old.videoName, 100, 100);
+
+        const saved = useVideoHistoryStore.getState().getVideoHistory(old.videoPath)!;
+        expect(saved.lastPausedPosition).toBe(100);
+        expect(saved.lastWatchedTime).toBe(7);
+        expect(saved.stopFrameMs).toBeUndefined();
+        expect(isFinished(saved.lastPausedPosition, saved.duration)).toBe(true);
+        expect(isFinished(98, 100)).toBe(false);
     });
 });

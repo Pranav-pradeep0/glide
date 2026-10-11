@@ -7,6 +7,8 @@ import { VideoFile, VideoHistoryEntry } from '@/types';
 import { formatDuration, formatFileSize } from '@/utils/formatUtils';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { ListGroup, ListRow, Sheet } from '@/components/ui';
+import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { getResumablePosition, isFinished } from '@/utils/playbackResume';
 import { metrics, type } from '@/theme/theme';
 
 interface VideoOptionsProps {
@@ -53,6 +55,15 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
     const dateLabel = video && 'lastWatchedTime' in video ? 'Watched' : 'Modified';
     const resolution = video && 'width' in video && video.width && video.height ? `${video.width} × ${video.height}` : null;
     const folder = path.split('/').slice(0, -1).pop();
+
+    // The store, not `video`: a Recents entry handed in is a snapshot.
+    const entry = useVideoHistoryStore((s) => (path ? s.getVideoHistory(path) : null));
+    const setWatchedPosition = useVideoHistoryStore((s) => s.setWatchedPosition);
+    const watchedDuration = entry?.duration || duration;
+    const position = entry?.lastPausedPosition ?? 0;
+    const resumeAt = getResumablePosition(position, watchedDuration);
+    const finished = isFinished(position, watchedDuration);
+    const setPosition = (seconds: number) => setWatchedPosition(path, name, seconds, watchedDuration);
 
     // From Recents, the same stop frame the row shows.
     const { thumbnail } = useThumbnail(path, video && 'videoPath' in video ? video.stopFrameMs : undefined);
@@ -154,7 +165,14 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
                 </View>
 
                 <ListGroup inset>
-                    <ListRow icon="play" title="Play" onPress={() => handleAction(onPlay)} />
+                    <ListRow icon="play" title={resumeAt !== null ? `Resume from ${formatDuration(resumeAt)}` : 'Play'} onPress={() => handleAction(onPlay)} />
+                    {resumeAt !== null && (
+                        <ListRow icon="rotate-ccw" title="Play from start" onPress={() => handleAction(() => { setPosition(0); onPlay(); })} />
+                    )}
+                    {watchedDuration > 0 && (finished
+                        ? <ListRow icon="eye-off" title="Mark as unwatched" onPress={() => handleAction(() => setPosition(0))} />
+                        : <ListRow icon="check-circle" title="Mark as watched" onPress={() => handleAction(() => setPosition(watchedDuration))} />
+                    )}
                     <ListRow icon="share-2" title="Share" onPress={() => handleAction(onShare)} />
                     {onClearHistory && (
                         <ListRow icon="x-circle" title="Remove from Recents" onPress={() => handleAction(onClearHistory)} />

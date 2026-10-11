@@ -18,6 +18,7 @@ import {
     deleteVideo, getRelativeTime, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
 } from '@/components/VideoRow';
 import { metrics } from '@/theme/theme';
+import { isFinished } from '@/utils/playbackResume';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'grid' | 'list';
@@ -112,8 +113,10 @@ export default function RecentsScreen() {
     };
 
     const grid = viewMode === 'grid';
-    // The hero is "what you were just watching", so it only leads the recency order.
-    const hero = sortBy === 'recent' ? history[0] : undefined;
+    // The hero is "what you were just watching", so it only leads the recency order, and
+    // only while there's something left of it to continue.
+    const latest = sortBy === 'recent' ? history[0] : undefined;
+    const hero = latest && !isFinished(latest.lastPausedPosition, latest.duration) ? latest : undefined;
     const rest = hero ? history.slice(1) : history;
 
     const metaFor = useCallback((item: VideoHistoryEntry) => joinMeta(
