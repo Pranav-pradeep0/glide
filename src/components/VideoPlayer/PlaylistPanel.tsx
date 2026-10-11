@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Image, FlatList } from 'react-native';
 import { Feather } from '@react-native-vector-icons/feather';
-import { VideoFile } from '@/types';
+import { VideoFile, VideoSort } from '@/types';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
@@ -21,6 +21,7 @@ interface PlaylistPanelProps {
     isLandscape: boolean;
     albumName?: string;
     bucketId?: string;
+    videoSort?: VideoSort;
     onBack?: () => void;
 }
 
@@ -92,9 +93,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
     onPlayVideo,
     albumName,
     bucketId,
+    videoSort,
     onBack,
 }) => {
-    const { videos, loading } = useAlbumVideos(albumName || null, bucketId);
+    const { videos, loading } = useAlbumVideos(albumName || null, bucketId, videoSort);
 
     const handlePlayAndClose = useCallback((video: VideoFile) => {
         onPlayVideo(video);

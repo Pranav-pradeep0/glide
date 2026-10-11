@@ -72,6 +72,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Perf** — HUD state in the 1400-line screen re-renders it on every gesture step; brightness "throttle" is `floor(y) % 5`; Quick Settings sliders send a native prop per step; landscape playlist mounts and queues thumbnails at open; hidden time labels still tick React state — S–M
 - ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
 - ✅ **Episode order** (`useMediaService.ts` `sortVideosByName`) — name order puts `Show.2019.S01E02` before `Show.S01E01`, so Next skips around — S *(season/episode decide when every file in the folder has one; anime `Show - 12` and `Ep 9` aren't parsed and keep the name order)*
+- ✅ **Folder order** (tester) — since `e919b33` every folder sorted by name, so camera and WhatsApp folders lost their newest-first order, and natural name order read as neither A–Z nor by date — S *(a series keeps episode order, anything else is newest first; Newest / Name / Largest sort button in the count row, carried to the player so Next and the playlist follow the list)*
 - ✅ **Up next** — autoplay-next jumped after 500 ms with no warning or way out — S *(`UpNextCard`: 10 s countdown with Cancel / Play now; with autoplay off, the name and Play now; read-only while locked, hidden in PiP; dropped when the ended video is played again)*
 - ✅ **Previous button** — `handlePrevious` existed but no control called it — S *(landscape: a "Previous" pill at the left end of the bottom row, mirroring Next; portrait: Previous / Next flank Play, a missing one disabled so Play stays centred)*
 - **Portrait tools row overflow** (`PlayerControls.tsx` `tools`) — five 40 dp buttons plus the display-mode pill: "Original size" (~139 dp) makes it ~339 dp against 320 dp on a 360 dp phone, pushing PiP off the edge — S *(Next moved to the centre already freed 40 dp; check on device)*
@@ -98,7 +99,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Search** — `No videos match "a"` flashes during the 300 ms debounce — S
 - **MiniPlayer** (`MiniPlayer.tsx:181`) — Next has no haptic (swipe does); while buffering the spinner replaces play/pause so you can't pause — S
 - **Touch targets** — TrackRow "more" 28 dp, Album/Artist "more" 32 dp, ~~queue buttons 32 dp~~ (✅ with the queue drag) — S
-- **Small features** — theme "Auto" (follow system); re-tapping a tab scrolls to top; AlbumVideos sort + folder-scoped search; consider "Third-party licences" as the Settings label so nobody reads it as Glide being open source — S each
+- **Small features** — theme "Auto" (follow system); re-tapping a tab scrolls to top; ~~AlbumVideos sort~~ ✅ + folder-scoped search; consider "Third-party licences" as the Settings label so nobody reads it as Glide being open source — S each
 
 - ✅ **Music queue after a late grant** (`audioStore.ts:97`) — the saved queue is resolved against MediaStore once at launch; granting audio access later leaves it unresolved until the next launch — S *(resolved when access is granted, unless the one-song stand-in was already played or replaced by then — Play next / Add to queue before granting still saves the shorter queue)*
 

@@ -11,7 +11,7 @@ jest.mock('react-native-mmkv', () => {
 });
 
 import { useVideoHistoryStore } from '../src/store/videoHistoryStore';
-import { sortVideosByName } from '../src/hooks/useMediaService';
+import { defaultVideoSort, sortVideos, sortVideosByName } from '../src/hooks/useMediaService';
 import type { VideoFile } from '../src/types';
 
 describe('Phase 0 Bug Fixes', () => {
@@ -51,6 +51,19 @@ describe('Phase 0 Bug Fixes', () => {
             // One file without an episode number: plain name order for the whole folder.
             const mixed = [...queue, { name: 'Extras.mkv' }] as VideoFile[];
             expect(sortVideosByName(mixed)[0].name).toBe('Extras.mkv');
+        });
+
+        it('defaults a series to episode order and anything else to newest first', () => {
+            const series = ['Show.S01E02.mkv', 'Show.S01E01.mkv'].map(name => ({ name })) as VideoFile[];
+            expect(defaultVideoSort(series)).toBe('name');
+            const camera = [
+                { name: 'VID_20250101.mp4', modifiedDate: 1, size: 30 },
+                { name: 'VID_20260101.mp4', modifiedDate: 3, size: 10 },
+                { name: 'IMG_9.mp4', modifiedDate: 2, size: 20 },
+            ] as VideoFile[];
+            expect(defaultVideoSort(camera)).toBe('date');
+            expect(sortVideos(camera, 'date').map(v => v.modifiedDate)).toEqual([3, 2, 1]);
+            expect(sortVideos(camera, 'size').map(v => v.size)).toEqual([30, 20, 10]);
         });
 
         it('leaves the array it was given alone', () => {

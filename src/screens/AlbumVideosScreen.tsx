@@ -4,7 +4,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RootStackParamList, VideoFile, VideoHistoryEntry } from '@/types';
+import { RootStackParamList, VideoFile, VideoSort } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 import { usePermissionStore } from '@/store/permissionStore';
@@ -13,7 +13,7 @@ import { formatFileSize } from '@/utils/formatUtils';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
-import { Button, IconButton } from '@/components/ui';
+import { Button, IconButton, SortButton } from '@/components/ui';
 import {
     EmptyState, ListHeader, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
     deleteVideo, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
@@ -25,6 +25,12 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AlbumVideosRouteProp = RouteProp<RootStackParamList, 'AlbumVideos'>;
 type ViewMode = 'grid' | 'list';
 
+const SORT_OPTIONS: { key: VideoSort; label: string }[] = [
+    { key: 'date', label: 'Newest' },
+    { key: 'name', label: 'Name' },
+    { key: 'size', label: 'Largest' },
+];
+
 export default function AlbumVideosScreen() {
     const theme = useTheme();
     const navigation = useNavigation<NavigationProp>();
@@ -33,7 +39,9 @@ export default function AlbumVideosScreen() {
     const clearHistoryForPath = useVideoHistoryStore(state => state.clearVideoHistory);
     const history = useVideoHistoryStore(state => state.history);
     const { albumTitle, bucketId } = route.params;
-    const { videos, loading, loadingMore, hasMore, loadMore } = useAlbumVideos(albumTitle, bucketId);
+    // Unpicked: episode order for a series, newest first otherwise (useAlbumVideos).
+    const [sort, setSort] = useState<VideoSort>();
+    const { videos, order, loading, loadingMore, hasMore, loadMore } = useAlbumVideos(albumTitle, bucketId, sort);
     const videoAccess = usePermissionStore((s) => s.video.access);
     const [viewMode, setViewMode] = useState<ViewMode>('list');
     const [selectedVideo, setSelectedVideo] = useState<VideoFile | null>(null);
@@ -45,8 +53,9 @@ export default function AlbumVideosScreen() {
             contentUri: video.uri, // Original content:// URI for history storage
             albumName: albumTitle,
             bucketId: video.bucketId || bucketId,
+            videoSort: sort,
         });
-    }, [navigation, albumTitle, bucketId]);
+    }, [navigation, albumTitle, bucketId, sort]);
 
     // Straight into the player (no detail page) so the whole folder plays through.
     const handlePlayAll = () => {
@@ -58,6 +67,7 @@ export default function AlbumVideosScreen() {
             albumName: albumTitle,
             bucketId: first.bucketId || bucketId,
             playAll: true,
+            videoSort: sort,
         });
     };
 
@@ -147,9 +157,12 @@ export default function AlbumVideosScreen() {
                     }}
                     ListHeaderComponent={(
                         <View style={styles.countRow}>
-                            <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
-                                {videos.length} video{videos.length !== 1 ? 's' : ''}
-                            </Text>
+                            <View style={styles.countText}>
+                                <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
+                                    {videos.length} video{videos.length !== 1 ? 's' : ''} ·
+                                </Text>
+                                <SortButton options={SORT_OPTIONS} value={order} onChange={setSort} />
+                            </View>
                             <Button label="Play all" icon="play" variant="primary" onPress={handlePlayAll} />
                         </View>
                     )}
@@ -180,4 +193,5 @@ const styles = StyleSheet.create({
         paddingHorizontal: metrics.space.sm,
         paddingBottom: metrics.space.sm,
     },
+    countText: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs },
 });

@@ -76,7 +76,7 @@ import { useAppStore } from '@/store/appStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 
 // Types
-import { SubtitleCue, VideoFile } from '@/types';
+import { SubtitleCue, VideoFile, VideoSort } from '@/types';
 import type { PlayerCarry } from '@/hooks/video-player';
 
 // ============================================================================
@@ -98,6 +98,8 @@ type RouteParams = {
     carry?: PlayerCarry;
     /** Started from a folder's "Play all": plays through even with auto-play next off. */
     playAll?: boolean;
+    /** The folder screen's order: Next, Previous and the playlist follow it. */
+    videoSort?: VideoSort;
 };
 
 type Props = {
@@ -123,6 +125,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         cleanTitle,
         carry,
         playAll,
+        videoSort,
     } = route.params;
 
     // "The.Boys.S05E04.1080p" → "The Boys" + "S5 E4", as in the library.
@@ -740,9 +743,10 @@ export default function VideoPlayerScreen({ route }: Props) {
             bucketId: routeBucketId || video.bucketId,
             playMode,
             playAll,
+            videoSort,
             carry: carryRef.current,
         });
-    }, [navigation, ui, albumName, routeBucketId, playMode, playAll]);
+    }, [navigation, ui, albumName, routeBucketId, playMode, playAll, videoSort]);
 
     // ========================================================================
     // CONTROL HANDLERS
@@ -904,7 +908,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     // Get album videos for playlist navigation
-    const { videos: albumVideos } = useAlbumVideos(albumName || null, routeBucketId);
+    const { videos: albumVideos } = useAlbumVideos(albumName || null, routeBucketId, videoSort);
 
     // Find current video index in playlist
     const currentVideoIndex = useMemo(() => {
@@ -927,10 +931,11 @@ export default function VideoPlayerScreen({ route }: Props) {
                 bucketId: routeBucketId || prevVideo.bucketId,
                 playMode: playMode,
                 playAll,
+                videoSort,
                 carry: carryRef.current,
             });
         }
-    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll]);
+    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort]);
 
     const handleNext = useCallback(() => {
         if (!hasNext) {return;}
@@ -944,10 +949,11 @@ export default function VideoPlayerScreen({ route }: Props) {
                 bucketId: routeBucketId || nextVideo.bucketId,
                 playMode: playMode,
                 playAll,
+                videoSort,
                 carry: carryRef.current,
             });
         }
-    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll]);
+    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort]);
 
     // ========================================================================
     // UPDATE
@@ -1398,6 +1404,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     isLandscape={isLandscape}
                     albumName={albumName ?? undefined}
                     bucketId={routeBucketId}
+                    videoSort={videoSort}
                 />
             )}
 

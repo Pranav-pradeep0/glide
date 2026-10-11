@@ -119,6 +119,9 @@ export type SortOption = 'name' | 'date' | 'size';
 
 export type PlayMode = 'with-haptics' | 'normal';
 
+/** A folder's order: name (episode order for a series), newest first, or largest first. */
+export type VideoSort = 'name' | 'date' | 'size';
+
 export type RootStackParamList = {
     Onboarding: undefined;
     MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
@@ -129,6 +132,8 @@ export type RootStackParamList = {
         albumName?: string;
         bucketId?: string;
         imdbId?: string;
+        // The order picked on the folder screen, passed on to the player
+        videoSort?: VideoSort;
     };
     VideoPlayer: {
         videoPath: string;
@@ -148,6 +153,8 @@ export type RootStackParamList = {
         isExternalOpen?: boolean;
         // Started from a folder's "Play all": plays through even with auto-play next off
         playAll?: boolean;
+        // The folder screen's order, so Next / Previous / the playlist follow it
+        videoSort?: VideoSort;
     };
     AlbumVideos: {
         albumTitle: string;

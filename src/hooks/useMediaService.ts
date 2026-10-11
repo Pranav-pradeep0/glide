@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MediaService } from '@/services/MediaService';
-import { VideoFile, VideoFolder } from '@/types';
+import { VideoFile, VideoFolder, VideoSort } from '@/types';
 import { FilenameParser } from '@/utils/FilenameParser';
 
 const albumVideosCache = new Map<string, VideoFile[]>();
@@ -69,6 +69,17 @@ export function useVideos() {
  */
 const videoNameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
+/** A series (every file has an episode number) plays in episode order; anything else newest first. */
+export function defaultVideoSort(list: VideoFile[]): VideoSort {
+    return list.length > 1 && list.every(v => FilenameParser.parse(v.name).episode !== undefined) ? 'name' : 'date';
+}
+
+export function sortVideos(list: VideoFile[], sort: VideoSort): VideoFile[] {
+    if (sort === 'name') { return sortVideosByName(list); }
+    const key = sort === 'date' ? (v: VideoFile) => v.modifiedDate : (v: VideoFile) => v.size;
+    return [...list].sort((a, b) => key(b) - key(a));
+}
+
 export function sortVideosByName(list: VideoFile[]): VideoFile[] {
     const byName = (a: VideoFile, b: VideoFile) => videoNameCollator.compare(a.name, b.name);
     // Names alone put "Show.2019.S01E02" before "Show.S01E01". When every file carries an
@@ -85,8 +96,14 @@ export function sortVideosByName(list: VideoFile[]): VideoFile[] {
         .map(x => x.v);
 }
 
-export function useAlbumVideos(albumTitle: string | null, bucketId?: string) {
-    const [videos, setVideos] = useState<VideoFile[]>([]);
+/**
+ * A folder's videos in `sort` order, or the folder's default order when none was picked.
+ * The folder screen and the player both read it, so Next follows what the list showed.
+ */
+export function useAlbumVideos(albumTitle: string | null, bucketId?: string, sort?: VideoSort) {
+    const [unsorted, setVideos] = useState<VideoFile[]>([]);
+    const order = useMemo(() => sort ?? defaultVideoSort(unsorted), [sort, unsorted]);
+    const videos = useMemo(() => sortVideos(unsorted, order), [unsorted, order]);
     const [loading, setLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(false);
@@ -102,9 +119,7 @@ export function useAlbumVideos(albumTitle: string | null, bucketId?: string) {
         }
 
         try {
-            const result = sortVideosByName(
-                await MediaService.getVideosByAlbum(albumTitle || '', refresh, bucketId)
-            );
+            const result = await MediaService.getVideosByAlbum(albumTitle || '', refresh, bucketId);
             setVideos(result);
             if (cacheKey) {
                 albumVideosCache.set(cacheKey, result);
@@ -143,6 +158,7 @@ export function useAlbumVideos(albumTitle: string | null, bucketId?: string) {
 
     return {
         videos,
+        order,
         loading,
         loadingMore,
         hasMore,
