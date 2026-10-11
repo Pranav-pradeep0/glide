@@ -77,7 +77,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Recents** — thumbnails are the generic frame, not where you stopped; `ThumbnailService` already takes a time, `useThumbnail` always passes 0. Also: the native side seeked to the nearest keyframe (`OPTION_CLOSEST_SYNC`), seconds off — S
 - ✅ **Now Playing › Queue** — reorder is up/down chevrons with 32 dp targets, hidden while shuffle is on; no drag. Now a drag handle that also works in shuffle (native `moveInShuffleOrder`, API 5); TalkBack gets Move up / Move down actions — M
 - ✅ **Now Playing › Lyrics** — box is only cover-sized; empty LRC lines render as blank rows; no hint that online lyrics are off in Settings when nothing is found; the current line grows 16→18 px and reflows the list — M *(full-screen view, ♪ breaks, one-tap "Turn on online lyrics", fixed-size lines)*
-- **Now Playing › Lyrics** — auto-scroll yanks back while you're reading (pause it while the user scrolls) — S
+- ✅ **Now Playing › Lyrics** — auto-scroll yanks back while you're reading (pause it while the user scrolls) — S *(follows again 3 s after the drag or fling ends, or at once on a line tap)*
 - **Now Playing** — heart uses the app primary while every other control uses the cover accent; equalizer icon never shows "active" when a preset is on — S
 - ✅ **Music** — Albums / Artists / Folders tabs show a blank list when empty or when search matches nothing (only Tracks has an EmptyState) — S
 - ✅ **EmptyState** (`VideoRow.tsx:365-374`) — always a film icon, including on Music and Recents › Music — S *(optional `icon`; Music tabs and Recents › Music use music icons)*

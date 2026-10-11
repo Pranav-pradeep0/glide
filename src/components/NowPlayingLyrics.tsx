@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Feather from '@react-native-vector-icons/feather';
 import { Button, IconButton, Touchable } from '@/components/ui';
@@ -19,6 +19,8 @@ interface NowPlayingLyricsProps {
     /** Card only: opens the full-screen view. */
     onExpand?: () => void;
 }
+
+const RESUME_FOLLOW_MS = 3000;
 
 /** Index of the line playing at `position`, or -1 if unsynced or before the first line. */
 function activeLineIndex(lyrics: LyricLine[], position: number, isSynced: boolean): number {
@@ -76,7 +78,11 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
         const isBreak = line.text === INSTRUMENTAL;
         return (
             <Touchable
-                onPress={() => seekTo(line.time)}
+                onPress={() => {
+                    seekTo(line.time);
+                    if (followTimer.current) { clearTimeout(followTimer.current); }
+                    setFollowing(true);
+                }}
                 style={styles.lyricRow}
                 scaleTo={0.98}
                 accessibilityLabel={isBreak ? 'Instrumental' : line.text}
@@ -95,14 +101,30 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
         );
     }, [isSynced, activeLyricIndex, accentColor, colors.text, colors.textSecondary, seekTo, textStyle]);
 
+    // Scrolling by hand stops the list following the song; it picks the current line up again
+    // a few seconds after the finger (or the fling) stops, or at once when a line is tapped.
+    const [following, setFollowing] = useState(true);
+    const followTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const stopFollowing = useCallback(() => {
+        if (followTimer.current) { clearTimeout(followTimer.current); }
+        setFollowing(false);
+    }, []);
+    const followSoon = useCallback(() => {
+        if (followTimer.current) { clearTimeout(followTimer.current); }
+        followTimer.current = setTimeout(() => setFollowing(true), RESUME_FOLLOW_MS);
+    }, []);
+    useEffect(() => () => {
+        if (followTimer.current) { clearTimeout(followTimer.current); }
+    }, []);
+
     const viewPosition = full ? 0.4 : 0.5;
     const scrollRetries = useRef(0);
     useEffect(() => {
         scrollRetries.current = 0;
-        if (isSynced && activeLyricIndex >= 0 && lyricsListRef.current) {
+        if (following && isSynced && activeLyricIndex >= 0 && lyricsListRef.current) {
             lyricsListRef.current.scrollToIndex({ index: activeLyricIndex, viewPosition, animated: true });
         }
-    }, [activeLyricIndex, isSynced, viewPosition]);
+    }, [activeLyricIndex, isSynced, viewPosition, following]);
 
     // Opened mid-song, the active line is not measured yet, so the first scroll fails (with an
     // average row height of 0 before anything is laid out). Jump near it, which renders that
@@ -134,6 +156,9 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={{ paddingVertical: isSynced ? edgePadding : metrics.space.lg }}
                         onScrollToIndexFailed={onScrollToIndexFailed}
+                        onScrollBeginDrag={stopFollowing}
+                        onScrollEndDrag={followSoon}
+                        onMomentumScrollEnd={followSoon}
                         renderItem={renderLine}
                         extraData={activeLyricIndex}
                     />
