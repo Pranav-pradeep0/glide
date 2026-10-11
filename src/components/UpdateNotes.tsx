@@ -109,7 +109,8 @@ export function UpdateNotes({ notes, maxHeight = 200 }: UpdateNotesProps) {
 }
 
 const styles = StyleSheet.create({
-    block: { marginBottom: metrics.space.lg },
+    // Gives way to the buttons below it when the sheet hits its height cap (landscape).
+    block: { flexShrink: 1, marginBottom: metrics.space.lg },
     title: { marginBottom: metrics.space.sm },
     lineHeading: { marginTop: metrics.space.sm, marginBottom: metrics.space.xs },
     body: { lineHeight: 20 },

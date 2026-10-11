@@ -43,6 +43,8 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Now Playing › Lyrics** (`NowPlayingLyrics.tsx`) — opened mid-song, the first line sits in the middle instead of the current one: the first scroll runs before any row is measured and the fallback scrolls to 0 × average height; nothing retried until the next line — S
 - ✅ **Player, landscape** — a grey shade over the left ~45% while the controls show — S *(the scrims: react-native-svg on Android keeps a shape's path cached at its first size, and a resize only drops the bitmap. Drawn in portrait (controls up behind the resume prompt), the `100%` gradient stayed portrait-wide after rotating. `Gradient` now sizes the Svg in numbers from `onLayout`, so a resize is a prop change and clears the cache)*
 
+- ✅ **Update sheet, landscape** (`UpdateNotes.tsx`) — the notes block (200 dp) never shrank, so the sheet's 90% height cap pushed Download / Not now off the bottom — S *(notes now give way and scroll)*
+
 ### Video player
 
 - ✅ `e5bcff4` **Errors** (`PlayerControls.tsx:503`, `usePlayerCore.ts:522`) — the error banner lives inside the controls overlay and fades with it after 3 s, leaving a black screen; it shows raw `ERROR_CODE_*` names; no Retry / Next / Close, and Play does nothing (player is idle). Includes 8c: GL 7000-range errors should switch enhancement off and say so (toggling it off already reopens at the current position) — M *(verified)*
