@@ -223,6 +223,8 @@ export interface PlayerSettings {
     muted: boolean;
     repeat: boolean;
     sleepTimer: number | null; // null = off, -1 = end of video, number = minutes
+    /** Epoch ms a minutes timer fires at; carried to the next video so it keeps counting. */
+    sleepTimerEndsAt: number | null;
     resizeMode: PlayerResizeMode;
     skipDuration: 5 | 10 | 30; // seconds for skip forward/backward
     backgroundPlayEnabled: boolean; // Continue audio when app is backgrounded
@@ -247,6 +249,18 @@ export interface PlayerSettings {
     subtitleBackgroundColor: string;
     subtitleBackgroundOpacity: number;
     subtitleEdgeStyle: 'none' | 'outline' | 'dropShadow';
+}
+
+/**
+ * What Next / Previous / autoplay / a playlist pick hand the next video's screen, which
+ * `navigation.replace` mounts fresh. Audio and subtitle delay stay per-video (history).
+ */
+export interface PlayerCarry {
+    settings: PlayerSettings;
+    playbackRate: number;
+    nightMode: boolean;
+    hapticsEnabled: boolean;
+    orientationLocked: boolean;
 }
 
 // ============================================================================

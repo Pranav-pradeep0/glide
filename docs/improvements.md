@@ -42,15 +42,15 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 
 - ✅ `e5bcff4` **Errors** (`PlayerControls.tsx:503`, `usePlayerCore.ts:522`) — the error banner lives inside the controls overlay and fades with it after 3 s, leaving a black screen; it shows raw `ERROR_CODE_*` names; no Retry / Next / Close, and Play does nothing (player is idle). Includes 8c: GL 7000-range errors should switch enhancement off and say so (toggling it off already reopens at the current position) — M *(verified)*
 - ✅ `e5bcff4` **Audio sync** (`AnimatedVideoView.tsx:187-210`) — `areEqual` never compares `audioDelay`, so the sync slider does nothing until another prop changes — S *(verified)*
-- **Next / Prev / autoplay** (`usePlayerSettings.ts:79-97`) — `navigation.replace` remounts the screen: sleep timer, speed, EQ, enhancement, resize and mute reset every episode — M
-- **Sleep timer** — on expiry calls `goBack()` even for "Open with" (black player; should use `handleGoBack`); "End of video" never fires with Repeat on; Quick Settings shows "30 min" with no countdown — S
-- **Back** (`VideoPlayerScreen.tsx:1013`) — in landscape, Back with Quick Settings / Playlist / Bookmarks / sync panel open exits the video instead of closing the panel — S
-- **Lock / rotation** (`usePlayerUI.ts:159,172`) — unlocking re-enables auto-rotate even when the rotation-lock toggle is on — S
+- ✅ **Next / Prev / autoplay** (`usePlayerSettings.ts:79-97`) — `navigation.replace` remounts the screen: sleep timer, speed, EQ, enhancement, resize and mute reset every episode — M *(now a `carry` route param; also night mode, haptics toggle, rotation lock)*
+- ✅ **Sleep timer** — on expiry calls `goBack()` even for "Open with" (black player; should use `handleGoBack`); "End of video" never fires with Repeat on; Quick Settings shows "30 min" with no countdown — S
+- ✅ **Back** (`VideoPlayerScreen.tsx:1013`) — in landscape, Back with Quick Settings / Playlist / Bookmarks / sync panel open exits the video instead of closing the panel — S
+- ✅ **Lock / rotation** (`usePlayerUI.ts:159,172`) — unlocking re-enables auto-rotate even when the rotation-lock toggle is on — S
 - **Resume prompt** (`useResumePlayback.ts:47-77`) — the "paused 5 min" prompt shows the position from when the video opened, not now; dismissing ResumeModal starts playback despite the comment saying it doesn't — S
 - **External subtitle** (`usePlayerTracks.ts:214`) — saved as track `-999` with no file; reopening restores nothing and shows "Off" — S
 - **Stale exit save** (`PlayerControls.tsx:628-650`) — memo skips handlers, so on-screen Back while paused can save an old audio track / delay — S
 - **Resize pill** — cycles 6 modes incl. `scale-down`, Quick Settings knows 5; on `scale-down` nothing is ticked — S
-- **Playlist pick** drops `playMode` (haptics mode lost); scrub to 0:00 then exit doesn't save — S
+- ~~**Playlist pick** drops `playMode`~~ ✅; scrub to 0:00 then exit doesn't save — S
 - **SystemBars** (`VideoPlayerScreen.tsx:1062`) — cleanup un-hides bars on every controls toggle, likely a bar flash — S
 - **Subtitle failures** (`TrackSelector.tsx`) — pick/download/parse/search failures silent; one AbortController shared by search and download — S
 - **Panels pausing** — Quick Settings pauses and doesn't resume; audio/subtitle panels don't pause; Recap backdrop resumes but Resume backdrop doesn't — S
@@ -58,6 +58,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Subtitle size** — default 0.38 never applies (`?? 0.42`); pinch-resize not saved — S
 - **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S
 - **Perf** — HUD state in the 1400-line screen re-renders it on every gesture step; brightness "throttle" is `floor(y) % 5`; Quick Settings sliders send a native prop per step; landscape playlist mounts and queues thumbnails at open; hidden time labels still tick React state — S–M
+- **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
 - **Small features** — no on-screen Previous button; autoplay-next has no "Up next" countdown/cancel; playlist doesn't scroll to current or show watched progress; no "Play from start" / "Mark as watched" in video options — S each
 
 ## UI / UX rough edges

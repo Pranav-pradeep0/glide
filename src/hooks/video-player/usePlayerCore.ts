@@ -46,7 +46,6 @@ interface UsePlayerCoreOptions {
     onSubtitleTracksLoaded?: (tracks: any[]) => void;
     onPlaybackPositionRestore?: (position: number) => void;
     getResumePosition?: () => number | null;
-    repeat?: boolean;
     sleepTimer?: number | null;
     onSleepTimerEnd?: () => void;
     onProgressSave?: () => void;
@@ -479,19 +478,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
      */
 
     const handleEnd = useCallback(() => {
-        const { repeat = false, sleepTimer = null } = optsRef.current;
-        if (__DEV__) {console.log('[END] video ended | repeat=' + repeat + ' sleepTimer=' + sleepTimer);}
-
-        if (repeat) {
-            videoRef.current?.seek(0);
-            currentTimeRef.current = 0;
-            currentTimeShared.value = 0;
-            lastSyncPosition.value = 0;
-            lastSyncTimestamp.value = Date.now();
-            setState(prev => ({ ...prev, isPlaying: true }));
-            if (__DEV__) {console.log('[END] repeating from start');}
-            return;
-        }
+        // Repeat never gets here: native loops (REPEAT_MODE_ONE) and never reports the end.
+        const { sleepTimer = null } = optsRef.current;
+        if (__DEV__) {console.log('[END] video ended | sleepTimer=' + sleepTimer);}
 
         if (sleepTimer === -1) {
             if (__DEV__) {console.log('[END] sleep timer triggered');}
@@ -514,7 +503,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
         optsRef.current.onProgressSave?.();
         if (__DEV__) {console.log('[END] playerStopped=true');}
-    }, [currentTimeShared, lastSyncPosition, lastSyncTimestamp, isPlayingShared]);
+    }, [currentTimeShared, isPlayingShared]);
 
     /**
      * handleError — Player error.

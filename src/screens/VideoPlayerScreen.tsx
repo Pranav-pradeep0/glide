@@ -45,6 +45,7 @@ import { getResumablePosition } from '@/utils/playbackResume';
 import {
     usePlayerCore,
     usePlayerUI,
+    anyPanelOpen,
     usePlayerHUD,
     usePlayerGestures,
     usePlayerTracks,
@@ -71,6 +72,7 @@ import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 
 // Types
 import { SubtitleCue, VideoFile } from '@/types';
+import type { PlayerCarry } from '@/hooks/video-player';
 
 // ============================================================================
 // TYPES
@@ -88,6 +90,7 @@ type RouteParams = {
     isExternalOpen?: boolean;
     imdbId?: string;
     cleanTitle?: string;
+    carry?: PlayerCarry;
 };
 
 type Props = {
@@ -111,6 +114,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         bucketId: routeBucketId,
         imdbId,
         cleanTitle,
+        carry,
     } = route.params;
 
     // "The.Boys.S05E04.1080p" → "The Boys" + "S5 E4", as in the library.
@@ -214,20 +218,21 @@ export default function VideoPlayerScreen({ route }: Props) {
     const isLandscape = useMemo(() => width > height, [width, height]);
     const isNetworkStream = useMemo(() => NavigationService.isNetworkStream(videoPath), [videoPath]);
 
+    const [orientationLocked, setOrientationLocked] = React.useState(carry?.orientationLocked ?? false);
+
     // UI and HUD hooks (needed by handlers below)
-    const ui = usePlayerUI();
+    const ui = usePlayerUI(orientationLocked);
     const hud = usePlayerHUD();
 
     // ========================================================================
     // ORIENTATION LOCK STATE
     // ========================================================================
 
-    const [orientationLocked, setOrientationLocked] = React.useState(false);
     const [scrubbing, setScrubbing] = React.useState(false);
     /** Audio/Subtitles/Playlist/Bookmarks opened from the Playback panel get a back arrow to it. */
     const [openedFromPlayback, setOpenedFromPlayback] = React.useState(false);
     const [syncPanelType, setSyncPanelType] = React.useState<'audio' | 'subtitle' | null>(null);
-    const [basePlaybackRate, setBasePlaybackRate] = React.useState(1.0);
+    const [basePlaybackRate, setBasePlaybackRate] = React.useState(carry?.playbackRate ?? 1.0);
     const [temporaryHoldRate, setTemporaryHoldRate] = React.useState<number | null>(null);
 
     const handleToggleOrientationLock = useCallback(() => {
@@ -249,7 +254,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     // Night Mode simply puts a semi-transparent black overlay over the video
-    const [nightMode, setNightMode] = React.useState(false);
+    const [nightMode, setNightMode] = React.useState(carry?.nightMode ?? false);
 
     const toggleNightMode = useCallback(() => {
         setNightMode(prev => !prev);
@@ -258,7 +263,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     }, [ui]);
 
     // Haptics State (User toggle)
-    const [hapticsEnabled, setHapticsEnabled] = React.useState(true);
+    const [hapticsEnabled, setHapticsEnabled] = React.useState(carry?.hapticsEnabled ?? true);
 
     const effectivePlaybackRate = useMemo(
         () => temporaryHoldRate ?? basePlaybackRate,
@@ -324,28 +329,24 @@ export default function VideoPlayerScreen({ route }: Props) {
     const playerRef = useRef<UsePlayerCoreReturn | null>(null);
     const tracksRef = useRef<UsePlayerTracksReturn | null>(null);
     const showToastRef = useRef<(message: string) => void>(() => { });
+    // Leaves like Back does, so an "Open with" video closes its Activity instead of going black.
+    const handleGoBackRef = useRef<() => void>(() => { });
 
     // Settings hook (independent, needed by other hooks)
     const settingsHook = usePlayerSettings({
         showToast: (message) => showToastRef.current(message),
-        onSleepTimerEnd: () => {
-            playerRef.current?.stop();
-            navigation.goBack();
-        },
+        onSleepTimerEnd: () => handleGoBackRef.current(),
         initialAudioDelay,
         initialSubtitleDelay,
+        carried: carry?.settings,
     });
 
     // Core player hook
     const player = usePlayerCore({
         videoPath,
         getResumePosition: () => resumePosition, // Adapt to hook's expected signature
-        repeat: settingsHook.settings.repeat,
         sleepTimer: settingsHook.settings.sleepTimer,
-        onSleepTimerEnd: () => {
-            playerRef.current?.stop();
-            navigation.goBack();
-        },
+        onSleepTimerEnd: () => handleGoBackRef.current(),
         onProgressSave: () => savePlaybackRef.current(),
         onAudioTracksLoaded: (tracks) => tracksRef.current?.setAudioTracksFromNative(tracks),
         onSubtitleTracksLoaded: (tracks) => tracksRef.current?.setSubtitleTracksFromPlayer(tracks),
@@ -669,6 +670,18 @@ export default function VideoPlayerScreen({ route }: Props) {
         ui.showControls();
         ui.scheduleAutoHide();
     }, [navigation, exitPlayer, isExternalOpen, ui]);
+    handleGoBackRef.current = handleGoBack;
+
+    // Next / Previous / autoplay / a playlist pick remount the screen; this keeps the session.
+    const carryNow: PlayerCarry = {
+        settings: settingsHook.settings,
+        playbackRate: basePlaybackRate,
+        nightMode,
+        hapticsEnabled,
+        orientationLocked,
+    };
+    const carryRef = useRef(carryNow);
+    carryRef.current = carryNow;
 
     // Play on the idle player is the retry: native prepares it again from where it failed.
     const handleRetry = useCallback(() => {
@@ -698,8 +711,10 @@ export default function VideoPlayerScreen({ route }: Props) {
             videoName: video.name,
             albumName: albumName || undefined,
             bucketId: routeBucketId || video.bucketId,
+            playMode,
+            carry: carryRef.current,
         });
-    }, [navigation, ui, albumName, routeBucketId]);
+    }, [navigation, ui, albumName, routeBucketId, playMode]);
 
     // ========================================================================
     // CONTROL HANDLERS
@@ -886,6 +901,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 albumName: albumName || undefined,
                 bucketId: routeBucketId || prevVideo.bucketId,
                 playMode: playMode,
+                carry: carryRef.current,
             });
         }
     }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode]);
@@ -901,6 +917,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 albumName: albumName || undefined,
                 bucketId: routeBucketId || nextVideo.bucketId,
                 playMode: playMode,
+                carry: carryRef.current,
             });
         }
     }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode]);
@@ -952,11 +969,12 @@ export default function VideoPlayerScreen({ route }: Props) {
         if (autoPlayTimerRef.current) { clearTimeout(autoPlayTimerRef.current); }
         autoPlayTimerRef.current = setTimeout(() => {
             autoPlayTimerRef.current = null;
-            if (autoPlayNext && hasNext) {
+            // "End of video" sleep has already left the player.
+            if (autoPlayNext && hasNext && settingsHook.settings.sleepTimer !== -1) {
                 handleNext();
             }
         }, 500);
-    }, [player, autoPlayNext, hasNext, handleNext]);
+    }, [player, autoPlayNext, hasNext, handleNext, settingsHook.settings.sleepTimer]);
 
     // ========================================================================
     // LIFECYCLE EFFECTS
@@ -1034,12 +1052,14 @@ export default function VideoPlayerScreen({ route }: Props) {
         return () => exitPlayerRef.current();
     }, []);
 
-    // Set orientation immediately on mount (avoid waiting for nav transition).
+    // Set orientation immediately on mount (avoid waiting for nav transition). A rotation
+    // lock carried from the previous video holds; the toggle handles changes after that.
     useEffect(() => {
-        VideoOrientationService.enableAuto();
+        if (orientationLocked) { VideoOrientationService.disableAuto(); } else { VideoOrientationService.enableAuto(); }
         return () => {
             VideoOrientationService.release();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
     }, []);
 
     // Back button handler
@@ -1052,11 +1072,15 @@ export default function VideoPlayerScreen({ route }: Props) {
             if (isExternalOpen && front !== undefined && front !== 'VideoPlayerActivity') {
                 return false;
             }
+            // Portrait panels are Modals and take Back themselves; landscape side panels and
+            // the floating sync panel are plain views, so Back closes them here.
+            if (syncPanelType) { setSyncPanelType(null); return true; }
+            if (anyPanelOpen(ui.state)) { ui.closeAllPanels(); return true; }
             handleGoBack();
             return true;
         });
         return () => backHandler.remove();
-    }, [handleGoBack, isInPipMode, isExternalOpen]);
+    }, [handleGoBack, isInPipMode, isExternalOpen, syncPanelType, ui]);
 
     // Navigation beforeRemove
     useEffect(() => {
@@ -1117,7 +1141,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                         paused={player.state.paused || resumeModalVisible || recapVisible}
                         rate={effectivePlaybackRate}
                         muted={settingsHook.settings.muted || resumeModalVisible}
-                        repeat={settingsHook.settings.repeat}
+                        // "End of video" sleep needs the end, which native looping never reaches.
+                        repeat={settingsHook.settings.repeat && settingsHook.settings.sleepTimer !== -1}
                         resizeMode={settingsHook.settings.resizeMode}
                         playInBackground={settingsHook.settings.backgroundPlayEnabled}
                         pipEnabled={pipEnabled}
@@ -1279,6 +1304,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     repeat={settingsHook.settings.repeat}
                     onToggleRepeat={settingsHook.toggleRepeat}
                     sleepTimer={settingsHook.settings.sleepTimer}
+                    sleepTimerEndsAt={settingsHook.settings.sleepTimerEndsAt}
                     onSetSleepTimer={settingsHook.setSleepTimer}
                     onOpenPlaylist={isNetworkStream ? undefined : handleQSOpenPlaylist}
                     onOpenAudio={handleQSOpenAudio}

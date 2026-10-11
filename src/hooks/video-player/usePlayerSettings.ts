@@ -19,6 +19,8 @@ interface UsePlayerSettingsOptions {
     showToast?: (message: string, icon?: string) => void;
     initialAudioDelay?: number;
     initialSubtitleDelay?: number;
+    /** The previous video's settings, when Next / Previous / autoplay opened this one. */
+    carried?: PlayerSettings;
 }
 
 
@@ -30,6 +32,7 @@ const initialSettings: PlayerSettings = {
     muted: false,
     repeat: false,
     sleepTimer: null,
+    sleepTimerEndsAt: null,
     resizeMode: 'contain',
     skipDuration: 30,
     backgroundPlayEnabled: false,
@@ -74,26 +77,35 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         showToast,
         initialAudioDelay = 0,
         initialSubtitleDelay = 0,
+        carried,
     } = options;
 
     const [settings, setSettings] = useState<PlayerSettings>({
-        ...initialSettings,
+        ...(carried ?? initialSettings),
         audioDelay: initialAudioDelay,
         subtitleDelay: initialSubtitleDelay,
     });
 
     const sleepTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const onSleepTimerEndRef = useRef(onSleepTimerEnd);
+    onSleepTimerEndRef.current = onSleepTimerEnd;
 
-    // ========================================================================
-    // CLEANUP
-    // ========================================================================
+    const armSleepTimer = useCallback((endsAt: number) => {
+        sleepTimerRef.current = setTimeout(() => {
+            if (__DEV__) { console.log('[usePlayerSettings] Sleep timer triggered'); }
+            onSleepTimerEndRef.current?.();
+        }, endsAt - Date.now());
+    }, []);
 
+    // A timer carried from the previous video keeps its original end time.
     useEffect(() => {
+        if (settings.sleepTimerEndsAt !== null) { armSleepTimer(settings.sleepTimerEndsAt); }
         return () => {
             if (sleepTimerRef.current) {
                 clearTimeout(sleepTimerRef.current);
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
     }, []);
 
     // ========================================================================
@@ -156,18 +168,15 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         // Clear existing timer
         clearSleepTimer();
 
+        const endsAt = minutes !== null && minutes > 0 ? Date.now() + minutes * 60_000 : null;
         setSettings(prev => ({
             ...prev,
             sleepTimer: minutes,
+            sleepTimerEndsAt: endsAt,
         }));
 
-        if (minutes !== null && minutes > 0) {
-            // Set actual timer
-            sleepTimerRef.current = setTimeout(() => {
-                if (__DEV__) { console.log('[usePlayerSettings] Sleep timer triggered'); }
-                onSleepTimerEnd?.();
-            }, minutes * 60 * 1000);
-
+        if (endsAt !== null) {
+            armSleepTimer(endsAt);
             showToast?.(`Sleep timer set for ${minutes} minutes`);
         } else if (minutes === -1) {
             // End of video - handled in player's onEnd
@@ -175,7 +184,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         } else {
             showToast?.('Sleep timer disabled');
         }
-    }, [clearSleepTimer, onSleepTimerEnd, showToast]);
+    }, [clearSleepTimer, armSleepTimer, showToast]);
 
     // ========================================================================
     // BACKGROUND PLAY

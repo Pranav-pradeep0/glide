@@ -58,6 +58,7 @@ interface QuickSettingsPanelProps {
     repeat: boolean;
     onToggleRepeat: () => void;
     sleepTimer: number | null;
+    sleepTimerEndsAt: number | null;
     onSetSleepTimer: (minutes: number | null) => void;
     onOpenPlaylist?: () => void;
     onOpenAudio: () => void;
@@ -133,7 +134,17 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
     // `stretch` renders exactly like `fill`, which is the option shown for it.
     const displayMode = props.resizeMode === 'stretch' ? 'fill' : props.resizeMode;
     const displayLabel = DISPLAY_MODES.find(m => m.mode === displayMode)?.label;
-    const sleepLabel = SLEEP_TIMER_OPTIONS.find(o => o.value === props.sleepTimer)?.label ?? 'Off';
+    // Time left is read off the end time, refreshed while the panel is open.
+    const { sleepTimerEndsAt } = props;
+    const [now, setNow] = useState(Date.now);
+    useEffect(() => {
+        if (sleepTimerEndsAt === null) { return; }
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [sleepTimerEndsAt]);
+    const sleepLabel = sleepTimerEndsAt !== null
+        ? `${Math.max(1, Math.ceil((sleepTimerEndsAt - now) / 60_000))} min left`
+        : SLEEP_TIMER_OPTIONS.find(o => o.value === props.sleepTimer)?.label ?? 'Off';
     const enhancementStrength = props.videoEnhancementStrength ?? 1;
     const seconds = props.seekDuration ?? 30;
     const shakeActions: Array<{ id: ShakeAction; label: string }> = [

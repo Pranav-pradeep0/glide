@@ -7,7 +7,7 @@
 
 // Core hooks
 export { usePlayerCore, initialPlayerState } from './usePlayerCore';
-export { usePlayerUI } from './usePlayerUI';
+export { usePlayerUI, anyPanelOpen } from './usePlayerUI';
 export { usePlayerHUD } from './usePlayerHUD';
 
 // Gesture hooks
