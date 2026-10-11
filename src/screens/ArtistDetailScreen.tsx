@@ -15,6 +15,7 @@ import { Button, IconButton, Touchable, useSnackbarClearance } from '@/component
 import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { Loader } from '@/components/Loader';
+import { EmptyState } from '@/components/VideoRow';
 import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { AudioAlbum, AudioTrack, RootStackParamList } from '@/types';
@@ -205,6 +206,8 @@ export default function ArtistDetailScreen() {
                 <PermissionGate kind="audio" />
             ) : loading ? (
                 <Loader />
+            ) : songs.length === 0 ? (
+                <EmptyState icon="music" text="No songs by this artist on this device" />
             ) : (
                 <FlashList
                     data={songs}
