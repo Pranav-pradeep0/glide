@@ -54,7 +54,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ~~**Playlist pick** drops `playMode`~~ ✅; scrub to 0:00 then exit doesn't save — S
 - **SystemBars** (`VideoPlayerScreen.tsx:1062`) — cleanup un-hides bars on every controls toggle, likely a bar flash — S
 - **Subtitle failures** (`TrackSelector.tsx`) — pick/download/parse/search failures silent; one AbortController shared by search and download — S
-- **Panels pausing** — Quick Settings pauses and doesn't resume; audio/subtitle panels don't pause; Recap backdrop resumes but Resume backdrop doesn't — S
+- ✅ **Panels pausing** — Quick Settings pauses and doesn't resume; audio/subtitle panels don't pause; Recap backdrop resumes but Resume backdrop doesn't — S *(decided: panels never pause; closing Recap or Continue watching stays paused, only their Resume button plays)*
 - **Bookmarks** — add / list buttons landscape-only though empty state says "tap the bookmark button"; delete has no Undo — S
 - **Subtitle size** — default 0.38 never applies (`?? 0.42`); pinch-resize not saved — S
 - **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S

@@ -523,6 +523,13 @@ export default function VideoPlayerScreen({ route }: Props) {
         setRecapLoadingMessage,
     } = recap;
 
+    // Like Continue watching: closing never starts playback; only Resume does.
+    const closeRecap = useCallback(() => {
+        setRecapVisible(false);
+        setIsGeneratingRecap(false);
+        setRecapLoadingMessage(undefined);
+    }, [setRecapVisible, setIsGeneratingRecap, setRecapLoadingMessage]);
+
     const {
         resumeModalVisible,
         closeResumeModal,
@@ -1026,14 +1033,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         }
     }, [insets, ui.state.controlsVisible, ui.state.quickSettingsOpen]);
 
-    // Pause when quick settings is open
-    useEffect(() => {
-        if (ui.state.quickSettingsOpen && player.state.isPlaying) {
-            player.pause();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ui.state.quickSettingsOpen, player.state.isPlaying]);
-
     // App state handling - respect background play setting
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
@@ -1469,11 +1468,10 @@ export default function VideoPlayerScreen({ route }: Props) {
                 <View style={styles.modalPortalWrapper} pointerEvents="box-none">
                     <RecapModal
                         visible={recapVisible}
-                        onClose={() => {
-                            setRecapVisible(false);
-                            setIsGeneratingRecap(false);
-                            setRecapLoadingMessage(undefined);
-                            player.play(); // Resume video playback
+                        onClose={closeRecap}
+                        onResume={() => {
+                            closeRecap();
+                            player.play();
                         }}
                         recapText={recapText}
                         videoName={cleanTitle || albumName || videoName}

@@ -18,7 +18,10 @@ const { colors } = playerTheme;
 
 interface RecapModalProps {
     visible: boolean;
+    /** X, backdrop, Back: closes and stays paused. */
     onClose: () => void;
+    /** The Resume button: closes and plays. */
+    onResume: () => void;
     recapText: string | null; // null means loading
     videoName: string;
     isLoading?: boolean;
@@ -28,6 +31,7 @@ interface RecapModalProps {
 export const RecapModal: React.FC<RecapModalProps> = ({
     visible,
     onClose,
+    onResume,
     recapText,
     videoName,
     isLoading = false,
@@ -83,7 +87,7 @@ export const RecapModal: React.FC<RecapModalProps> = ({
                         variant="primary"
                         size="lg"
                         icon="play"
-                        onPress={onClose}
+                        onPress={onResume}
                         onPlayer
                     />
                 </Animated.View>
