@@ -75,10 +75,10 @@ export function migrateSettings(settings: AppSettings): AppSettings {
         ...merged,
         subtitlePositionPortrait: typeof merged.subtitlePositionPortrait === 'number'
             ? merged.subtitlePositionPortrait
-            : 0.42,
+            : DEFAULT_APP_SETTINGS.subtitlePositionPortrait,
         subtitlePositionLandscape: typeof merged.subtitlePositionLandscape === 'number'
             ? merged.subtitlePositionLandscape
-            : 0.42,
+            : DEFAULT_APP_SETTINGS.subtitlePositionLandscape,
         // Netflix Sans was removed (not licensed for redistribution).
         subtitleFontFamily: merged.subtitleFontFamily?.startsWith('NetflixSans')
             ? SUBTITLE_FONT_FAMILY

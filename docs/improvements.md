@@ -56,7 +56,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Subtitle failures** (`TrackSelector.tsx`) — pick/download/parse/search failures silent; one AbortController shared by search and download — S
 - ✅ **Panels pausing** — Quick Settings pauses and doesn't resume; audio/subtitle panels don't pause; Recap backdrop resumes but Resume backdrop doesn't — S *(decided: panels never pause; closing Recap or Continue watching stays paused, only their Resume button plays)*
 - **Bookmarks** — add / list buttons landscape-only though empty state says "tap the bookmark button"; delete has no Undo — S
-- **Subtitle size** — default 0.38 never applies (`?? 0.42`); pinch-resize not saved — S
+- ✅ **Subtitle size** — default 0.38 never applies (`?? 0.42`); pinch-resize not saved — S *(pinch now saves via `setSubtitleFontSize`, capped at the slider's 40 px; the 0.38 claim was mostly wrong: defaults merge in, only dead `0.42` fallbacks, now pointed at the defaults)*
 - **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S
 - **Perf** — HUD state in the 1400-line screen re-renders it on every gesture step; brightness "throttle" is `floor(y) % 5`; Quick Settings sliders send a native prop per step; landscape playlist mounts and queues thumbnails at open; hidden time labels still tick React state — S–M
 - ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S

@@ -19,6 +19,7 @@ export const PlayerSubtitleOverlay: React.FC<PlayerSubtitleOverlayProps> = React
     const { height } = useWindowDimensions();
     const currentCue = useSubtitleCueStore((s) => s.currentCue);
     const setSubtitlePosition = useAppStore((s) => s.setSubtitlePosition);
+    const setSubtitleFontSize = useAppStore((s) => s.setSubtitleFontSize);
 
     // Fine-grained selectors for subtitle appearance
     const subtitleFontFamily = useAppStore((s) => s.settings.subtitleFontFamily);
@@ -46,9 +47,7 @@ export const PlayerSubtitleOverlay: React.FC<PlayerSubtitleOverlayProps> = React
             outlineColor: subtitleEdgeStyle !== 'none' ? '#000000' : 'transparent',
             outlineWidth: subtitleEdgeStyle === 'none' ? 0 : subtitleOutlineWidth,
             position: 'bottom',
-            positionOffsetRatio: isLandscape
-                ? subtitlePositionLandscape ?? 0.42
-                : subtitlePositionPortrait ?? 0.42,
+            positionOffsetRatio: isLandscape ? subtitlePositionLandscape : subtitlePositionPortrait,
         };
     }, [
         subtitleFontFamily,
@@ -69,11 +68,14 @@ export const PlayerSubtitleOverlay: React.FC<PlayerSubtitleOverlayProps> = React
         setSubtitlePosition(orientation, yOffset / height);
     }, [height, isLandscape, setSubtitlePosition]);
 
+    const handleFontSizeChange = useCallback((size: number) => setSubtitleFontSize(Math.round(size)), [setSubtitleFontSize]);
+
     return (
         <SubtitleOverlay
             currentCue={currentCue}
             settings={subtitleSettings}
             onPositionChange={handleSubtitlePositionChange}
+            onFontSizeChange={handleFontSizeChange}
         />
     );
 });

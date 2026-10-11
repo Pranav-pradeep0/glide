@@ -61,7 +61,7 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = React.memo(({
 
     // Font size constraints
     const MIN_FONT_SIZE = 12;
-    const MAX_FONT_SIZE = 48;
+    const MAX_FONT_SIZE = 40; // the Settings slider's range, so a pinched size shows there
 
     // Padding around text in gesture indicator
     const INDICATOR_PADDING = 20;
