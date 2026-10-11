@@ -115,6 +115,8 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 
 - ✅ **Music queue after a late grant** (`audioStore.ts:97`) — the saved queue is resolved against MediaStore once at launch; granting audio access later leaves it unresolved until the next launch — S *(resolved when access is granted, unless the one-song stand-in was already played or replaced by then — Play next / Add to queue before granting still saves the shorter queue)*
 
+- ✅ **Splash** — since the forced 1 s hold was dropped (`5fa61f5`), a fast start cut the icon's play-to-pause morph off midway *(a cold start holds until its 800 ms have played)*
+
 ## Slow paths
 
 - **Folders** (`FoldersScreen.tsx:149-150`) — `onPress={() => handleAlbumPress(item)}` is a new closure per render, defeating the cards' `React.memo` (the VideoRow fix in `21dce13` never reached this screen) — S

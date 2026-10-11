@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
 import android.os.SystemClock
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -17,6 +18,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 class MainActivity : GlideBaseActivity() {
   private companion object {
     const val SPLASH_TIMEOUT_MS = 8_000L
+    /** windowSplashScreenAnimationDuration in values-v31/styles.xml. */
+    const val SPLASH_ICON_MS = 800L
   }
 
   private var isReactReady = false
@@ -30,9 +33,13 @@ class MainActivity : GlideBaseActivity() {
     // hiding the error screen, and never crash for Stallion to roll back. The condition is
     // polled every frame while the splash shows.
     val splashShownAt = SystemClock.uptimeMillis()
+    // A fast start also cut the icon's play-to-pause morph off midway, so a cold start holds
+    // until it has played; it starts with the process. (An exit listener could time it
+    // exactly, but it moves the splash into our window and the tab bar jumps on removal.)
     splashScreen.setKeepOnScreenCondition {
-      !BuildConfig.DEBUG && !isReactReady &&
-          SystemClock.uptimeMillis() - splashShownAt < SPLASH_TIMEOUT_MS
+      val now = SystemClock.uptimeMillis()
+      !BuildConfig.DEBUG && now - splashShownAt < SPLASH_TIMEOUT_MS &&
+          (!isReactReady || now - Process.getStartUptimeMillis() < SPLASH_ICON_MS)
     }
     dropPrivateUri(intent)
     super.onCreate(savedInstanceState)
