@@ -2,7 +2,6 @@ import React, { FC, useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@react-native-vector-icons/feather';
 import { EdgeInsets } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -21,7 +20,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
     PipIcon, AudioIcon, SubtitleIcon, BookmarkListIcon, VisualEnhancementIcon, OrientationLockIcon, NightModeIcon, SkipRingIcon, getResizeModeIcon, getResizeModeLabel, formatRate,
 } from './PlayerIcons';
-import { Button, IconButton, Touchable } from '@/components/ui';
+import { Button, Gradient, IconButton, Touchable } from '@/components/ui';
 import { haptic } from '@/native/HapticModule';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { HUD_PILL } from '@/theme/colors';
@@ -455,9 +454,9 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
             pointerEvents={showControls ? 'box-none' : 'none'}
         >
             <Animated.View style={[styles.topScrim, othersStyle]} pointerEvents="none">
-                <LinearGradient colors={TOP_SCRIM} style={{ height: 96 + insets.top }} />
+                <Gradient colors={TOP_SCRIM} style={{ height: 96 + insets.top }} />
             </Animated.View>
-            <LinearGradient colors={BOTTOM_SCRIM} style={[styles.bottomScrim, { height: 130 + bottomPad }]} pointerEvents="none" />
+            <Gradient colors={BOTTOM_SCRIM} style={[styles.bottomScrim, { height: 130 + bottomPad }]} pointerEvents="none" />
 
             {/* Top bar */}
             <Animated.View

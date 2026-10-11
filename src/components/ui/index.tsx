@@ -10,7 +10,7 @@
  *
  * `onPlayer` switches to the always-dark player palette for overlays on video.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useId, useState } from 'react';
 import {
     ActivityIndicator,
     Modal,
@@ -22,8 +22,10 @@ import {
     View,
     ViewProps,
     ViewStyle,
+    processColor,
     useWindowDimensions,
 } from 'react-native';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import Animated, {
     runOnJS,
     useAnimatedStyle,
@@ -448,6 +450,46 @@ interface CardProps extends ViewProps {
 export function Card({ onPlayer, padding = metrics.space.lg, style, ...rest }: CardProps) {
     const { colors } = useUiTheme(onPlayer);
     return <View style={[styles.card, { backgroundColor: colors.surface, padding }, style]} {...rest} />;
+}
+
+// ---------------------------------------------------------------------------
+// Gradient
+
+interface GradientProps {
+    /** Top to bottom. Any colour React Native takes, alpha included. */
+    colors: string[];
+    /** 0..1, one per colour; evenly spaced when left out. Past the last stop its colour holds. */
+    locations?: number[];
+    style?: StyleProp<ViewStyle>;
+    pointerEvents?: ViewProps['pointerEvents'];
+}
+
+/** svg ignores a stop colour's own alpha and reads only stopOpacity, so it is split out. */
+// eslint-disable-next-line no-bitwise -- the alpha byte of processColor's ARGB int
+const alphaOf = (color: string) => (((processColor(color) as number) >>> 24) & 0xff) / 255;
+
+/** A vertical gradient, drawn with react-native-svg. */
+export function Gradient({ colors, locations, style, pointerEvents }: GradientProps) {
+    const id = `gradient${useId().replace(/[^w-]/g, '')}`;
+    return (
+        <View style={style} pointerEvents={pointerEvents}>
+            <Svg style={StyleSheet.absoluteFill}>
+                <Defs>
+                    <SvgLinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+                        {colors.map((color, i) => (
+                            <Stop
+                                key={i}
+                                offset={locations?.[i] ?? i / (colors.length - 1)}
+                                stopColor={color}
+                                stopOpacity={alphaOf(color)}
+                            />
+                        ))}
+                    </SvgLinearGradient>
+                </Defs>
+                <Rect width="100%" height="100%" fill={`url(#${id})`} />
+            </Svg>
+        </View>
+    );
 }
 
 // ---------------------------------------------------------------------------

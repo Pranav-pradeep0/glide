@@ -14,7 +14,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Feather from '@react-native-vector-icons/feather';
 import { NowPlayingProgressBar } from '@/components/NowPlayingProgressBar';
 import { NowPlayingLyrics } from '@/components/NowPlayingLyrics';
-import LinearGradient from 'react-native-linear-gradient';
 import Animated, {
     Extrapolation,
     interpolate,
@@ -37,7 +36,7 @@ import { useFavoritesStore } from '@/store/favoritesStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumPalette } from '@/hooks/useAlbumArt';
 import { LyricsService } from '@/services/LyricsService';
-import { Chip, IconButton, ListGroup, ListRow, Sheet, Touchable } from '@/components/ui';
+import { Chip, Gradient, IconButton, ListGroup, ListRow, Sheet, Touchable } from '@/components/ui';
 import { metrics, motion, type } from '@/theme/theme';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { LyricLine } from '@/types';
@@ -452,7 +451,7 @@ export default function NowPlayingScreen() {
                     pointerEvents="none"
                     style={[styles.backdrop, { backgroundColor: colors.background }, backdropStyle]}
                 >
-                    <LinearGradient
+                    <Gradient
                         colors={
                             primaryColor
                                 ? [
@@ -462,9 +461,8 @@ export default function NowPlayingScreen() {
                                   ]
                                 : [dark ? '#1c1c1f' : '#e6e6ea', colors.background]
                         }
+                        locations={primaryColor ? [0, 0.45, 0.9] : [0, 0.9]}
                         style={StyleSheet.absoluteFill}
-                        start={{ x: 0.5, y: 0 }}
-                        end={{ x: 0.5, y: 0.9 }}
                     />
                     <View
                         style={[

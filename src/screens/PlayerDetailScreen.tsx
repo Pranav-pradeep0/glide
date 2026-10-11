@@ -17,7 +17,6 @@ import {
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
-import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { useAppStore } from '@/store/appStore';
@@ -31,7 +30,7 @@ import { searchSDHSubtitles, downloadSubtitle } from '../utils/subdlApi';
 import { RootStackParamList, SubtitleResult, SubtitleCue } from '../types';
 import { ImdbIcon, RottenTomatoesIcon } from '../components/VideoPlayer/PlayerIcons';
 import { isAbortError } from '../utils/network';
-import { Button, IconButton, ListGroup, ListRow, Sheet } from '@/components/ui';
+import { Button, Gradient, IconButton, ListGroup, ListRow, Sheet } from '@/components/ui';
 import { metrics, type } from '@/theme/theme';
 
 type DetailRouteProp = RouteProp<RootStackParamList, 'PlayerDetail'>;
@@ -401,7 +400,7 @@ export default function PlayerDetailScreen() {
                     </View>
                 )}
                 {!isLandscape && (
-                    <LinearGradient
+                    <Gradient
                         colors={[`${colors.background}00`, colors.background]}
                         style={styles.fade}
                         pointerEvents="none"

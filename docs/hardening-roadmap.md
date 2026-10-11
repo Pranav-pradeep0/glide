@@ -377,8 +377,8 @@ commands (seek, PiP, stop) work on both an old and a new bundle.
 - `ErrorBoundary` should call `SplashModule.hide()`.
 
 ### 8d. Dependencies and toolchain
-- **Replace `react-native-linear-gradient`** (stable from 2023, legacy interop, no
-  namespace) with react-native-svg's `LinearGradient`.
+- ✅ 2026-10-11 **Replaced `react-native-linear-gradient`** with `Gradient` (ui kit) on
+  react-native-svg, which reads stop alpha only from `stopOpacity`, so `Gradient` splits it out.
 - ✅ 2026-10-11 `react-native-share` → `MediaStoreVideoModule.shareVideo` (API 6).
 - ✅ 2026-10-11 `react-native-zip-archive` → `SubtitleZip.kt` (API 7): reads the chosen entry
   in memory with a 10 MB / 1000-entry cap and never extracts, so zip-slip has nothing to hit.

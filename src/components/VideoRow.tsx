@@ -7,7 +7,6 @@
  */
 import React, { useMemo } from 'react';
 import { Alert, Image, Platform, StyleSheet, Text, View } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
 import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { useThumbnail } from '@/hooks/useThumbnails';
@@ -15,7 +14,7 @@ import { playerColors } from '@/theme/colors';
 import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
-import { Button, IconButton, Touchable, showSnackbar } from '@/components/ui';
+import { Button, Gradient, IconButton, showSnackbar, Touchable } from '@/components/ui';
 import { MediaService } from '@/services/MediaService';
 
 // ============= HELPERS =============
@@ -278,7 +277,7 @@ export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnai
             style={[styles.hero, { backgroundColor: colors.surfaceVariant }]}
         >
             {thumbnail && <Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
-            <LinearGradient
+            <Gradient
                 colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.88)']}
                 locations={[0.25, 0.55, 1]}
                 style={StyleSheet.absoluteFill}
@@ -313,7 +312,7 @@ export function AmbientBackdrop({ path, thumbnailTime }: { path?: string; thumbn
     return (
         <View style={styles.ambient} pointerEvents="none">
             <Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} blurRadius={40} resizeMode="cover" />
-            <LinearGradient
+            <Gradient
                 colors={[`${colors.background}CC`, `${colors.background}F2`, colors.background]}
                 locations={[0, 0.6, 1]}
                 style={StyleSheet.absoluteFill}

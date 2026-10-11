@@ -11,8 +11,7 @@ import { PermissionGate } from '@/components/PermissionGate';
 import { AudioMediaService } from '@/services/AudioMediaService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumPalette } from '@/hooks/useAlbumArt';
-import LinearGradient from 'react-native-linear-gradient';
-import { Button, IconButton, Touchable } from '@/components/ui';
+import { Button, Gradient, IconButton, Touchable } from '@/components/ui';
 import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { Loader } from '@/components/Loader';
@@ -155,7 +154,7 @@ export default function AlbumDetailScreen() {
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {!!tint && (
-                <LinearGradient
+                <Gradient
                     pointerEvents="none"
                     colors={[tint, colors.background]}
                     style={styles.headerWash}
