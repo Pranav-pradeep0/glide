@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, type RefObject } from 'react';
 import { formatTime } from './types';
 import { RECAP_AVAILABLE } from '@/utils/constants';
 
@@ -14,6 +14,9 @@ interface UseResumePlaybackOptions {
     recapChecked: boolean;
     recapVisible: boolean;
     isPaused: boolean;
+    currentTimeRef: RefObject<number>;
+    /** The long-pause prompt offers to resume from here, not from where the video was opened. */
+    onPromptPosition: (seconds: number) => void;
     onPlay: () => void;
     onPause: () => void;
     onSeekToStart: () => void;
@@ -31,6 +34,8 @@ export function useResumePlayback({
     recapChecked,
     recapVisible,
     isPaused,
+    currentTimeRef,
+    onPromptPosition,
     onPlay,
     onPause,
     onSeekToStart,
@@ -72,13 +77,20 @@ export function useResumePlayback({
             if (lastPauseTimeRef.current) {
                 const pauseDuration = Date.now() - lastPauseTimeRef.current;
                 if (!isNetworkStream && pauseDuration > RECAP_INACTIVITY_THRESHOLD && !resumeModalVisible && !recapVisible) {
+                    onPromptPosition(currentTimeRef.current);
                     setResumeModalVisible(true);
                     onPause();
                 }
             }
             lastPauseTimeRef.current = null;
         }
-    }, [isPaused, resumeModalVisible, recapVisible, isNetworkStream, onPause]);
+    }, [isPaused, resumeModalVisible, recapVisible, isNetworkStream, onPause, onPromptPosition, currentTimeRef]);
+
+    // The modal holds playback paused while it's up; closing it must leave the player paused.
+    const closeResumeModal = useCallback(() => {
+        setResumeModalVisible(false);
+        onPause();
+    }, [onPause]);
 
     const handleResumeModalAction = useCallback((action: 'resume' | 'restart' | 'recap') => {
         if (action === 'resume') {
@@ -97,6 +109,7 @@ export function useResumePlayback({
     return {
         resumeModalVisible,
         setResumeModalVisible,
+        closeResumeModal,
         resumeModalData,
         handleResumeModalAction,
     };

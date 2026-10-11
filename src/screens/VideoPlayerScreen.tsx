@@ -444,6 +444,8 @@ export default function VideoPlayerScreen({ route }: Props) {
     });
 
     // AI Recap & Resume Setup
+    // Where "Continue watching" resumes from: the saved position at open, then wherever a long pause began.
+    const [promptPosition, setPromptPosition] = React.useState(resumePosition ?? 0);
     const resumeModalSetterRef = useRef<((v: boolean) => void) | null>(null);
     const handleDismissResumeModal = useCallback(() => {
         resumeModalSetterRef.current?.(false);
@@ -457,7 +459,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         albumName,
         imdbId,
         isNetworkStream,
-        resumePosition: resumePosition ?? 0,
+        resumePosition: promptPosition,
         subtitleTracks: tracksHook.subtitleTracks,
         subtitleTracksReady: tracksHook.subtitleTracksReady,
         subtitleCues: tracksHook.subtitleCues,
@@ -469,14 +471,16 @@ export default function VideoPlayerScreen({ route }: Props) {
     // Resume Playback Hook
     const resume = useResumePlayback({
         isNetworkStream,
-        resumePosition: resumePosition ?? 0,
-        savedDuration,
+        resumePosition: promptPosition,
+        savedDuration: player.state.duration > 0 ? player.state.duration : savedDuration,
         imdbId,
         albumName,
         isRecapEligible: recap.isRecapEligible,
         recapChecked: recap.recapChecked,
         recapVisible: recap.recapVisible,
         isPaused: player.state.paused,
+        currentTimeRef: player.currentTimeRef,
+        onPromptPosition: setPromptPosition,
         onPlay: player.play,
         onPause: player.pause,
         onSeekToStart: () => {
@@ -520,7 +524,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const {
         resumeModalVisible,
-        setResumeModalVisible,
+        closeResumeModal,
         resumeModalData,
         handleResumeModalAction,
     } = resume;
@@ -1505,7 +1509,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         onResume={() => handleResumeModalAction('resume')}
                         onRestart={() => handleResumeModalAction('restart')}
                         onRecap={() => handleResumeModalAction('recap')}
-                        onClose={() => setResumeModalVisible(false)}
+                        onClose={closeResumeModal}
                     />
                 </View>
             )}

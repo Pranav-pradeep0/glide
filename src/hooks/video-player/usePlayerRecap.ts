@@ -42,6 +42,9 @@ export function usePlayerRecap({
     const [isRecapEligible, setIsRecapEligible] = useState(false);
     const [recapChecked, setRecapChecked] = useState(false);
 
+    // A recap covers everything up to resumePosition; a later long-pause prompt moves it.
+    useEffect(() => setRecapText(null), [resumePosition]);
+
     const isMounted = useRef(true);
     useEffect(() => {
         isMounted.current = true;
