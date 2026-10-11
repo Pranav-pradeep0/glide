@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useMemo } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
@@ -19,7 +19,7 @@ import {
     deleteVideo, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
 } from '@/components/VideoRow';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
-import { metrics } from '@/theme/theme';
+import { metrics, type } from '@/theme/theme';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AlbumVideosRouteProp = RouteProp<RootStackParamList, 'AlbumVideos'>;
@@ -115,7 +115,6 @@ export default function AlbumVideosScreen() {
         <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
             <ListHeader
                 title={albumTitle}
-                subtitle={`${videos.length} video${videos.length !== 1 ? 's' : ''}`}
                 onBack={() => navigation.goBack()}
             >
                 <IconButton
@@ -147,13 +146,11 @@ export default function AlbumVideosScreen() {
                         if (hasMore) {loadMore();}
                     }}
                     ListHeaderComponent={(
-                        <View style={styles.playAll}>
-                            <Button
-                                label="Play all"
-                                icon="play"
-                                variant="primary"
-                                onPress={handlePlayAll}
-                            />
+                        <View style={styles.countRow}>
+                            <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
+                                {videos.length} video{videos.length !== 1 ? 's' : ''}
+                            </Text>
+                            <Button label="Play all" icon="play" variant="primary" onPress={handlePlayAll} />
                         </View>
                     )}
                     ListFooterComponent={loadingMore ? <Loader fullScreen={false} size="small" /> : null}
@@ -176,5 +173,11 @@ export default function AlbumVideosScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    playAll: { alignItems: 'flex-start', paddingHorizontal: metrics.space.sm, paddingVertical: metrics.space.sm },
+    countRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: metrics.space.sm,
+        paddingBottom: metrics.space.sm,
+    },
 });
