@@ -76,7 +76,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
   - ✅ **Scrub** — every live preview seek (25/s) reported buffering then ready, and `handleBuffering` set a new state object each time: ~20 screen renders/s while dragging the seek bar, now ≤5/s
   - ✅ **Brightness / volume "throttle"** was `floor(y) % 5`: it fired on pixel rows, not on change, so a fast swipe skipped steps, and volume had no final apply — a swipe could end with the system level and the 100–200 % boost a step behind the HUD *(each 1 % step is now sent once)*
   - hardware volume keys re-render the whole player on every press (7–11 renders/s while held): the HUD show dispatches go through `useReducer`, which has no eager bail-out
-  - hidden time labels still re-render twice a second; while scrubbing they re-render ~300 times a second through React state
+  - ✅ **Time labels** re-rendered twice a second with the controls hidden, and kept updating at opacity 0 while scrubbing (~340 label renders/s) *(they update only while their row can be seen: 0/s hidden, ≤160/s scrubbing — the bubble's own two labels)*
   - Quick Settings speed / colour-strength sliders re-render the whole screen per step
   - landscape playlist is mounted (rows + thumbnails) from the moment the player opens, even if never opened
   - PlayerDetail: tapping Play straight away took 1.0–2.6 s to playing vs 0.3 s when the page had settled — its subtitle extraction and SubDL work keep running

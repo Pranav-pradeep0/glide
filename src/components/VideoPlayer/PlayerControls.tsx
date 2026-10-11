@@ -65,9 +65,11 @@ interface ReanimatedTextProps {
     formatter: (val: number) => string;
     style?: any;
     fallbackText?: string;
+    /** False while the label can't be seen: no updates then, and the current text on return. */
+    live?: SharedValue<boolean>;
 }
 
-const ReanimatedText: React.FC<ReanimatedTextProps> = ({ value, formatter, style, fallbackText }) => {
+const ReanimatedText: React.FC<ReanimatedTextProps> = ({ value, formatter, style, fallbackText, live }) => {
     const [text, setText] = useState(fallbackText ?? '');
     const updateText = useCallback((next: string) => setText(prev => prev === next ? prev : next), []);
 
@@ -76,9 +78,9 @@ const ReanimatedText: React.FC<ReanimatedTextProps> = ({ value, formatter, style
     }, [fallbackText, updateText]);
 
     useAnimatedReaction(
-        () => formatter(value.value),
+        () => (!live || live.value ? formatter(value.value) : null),
         (next, prev) => {
-            if (next !== prev) {runOnJS(updateText)(next);}
+            if (next !== null && next !== prev) {runOnJS(updateText)(next);}
         });
 
     return <Text style={[styles.time, style]}>{text}</Text>;
@@ -448,6 +450,8 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     const grow = useDerivedValue<number>(() => withSpring(dragging.value || swipeSeeking.value ? 1 : 0, motion.spatial));
     // Everything except the bar steps aside while scrubbing.
     const othersStyle = useAnimatedStyle(() => ({ opacity: 1 - grow.value }));
+    // The time labels re-render through React, so they only update while their row can be seen.
+    const timeRowLive = useDerivedValue(() => showControls && grow.value < 1, [showControls]);
 
     // A swipe-seek brings the bar up even with controls hidden, and takes it away again after.
     const overlayStyle = useAnimatedStyle(() => {
@@ -585,9 +589,9 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
             >
                 <Animated.View style={[styles.timeRow, othersStyle]}>
                     {/* Elapsed on the left; time left / total on the right: all three, no tap to find them. */}
-                    <ReanimatedText value={elapsed} formatter={formatClock} fallbackText={fallbackElapsed} />
+                    <ReanimatedText value={elapsed} formatter={formatClock} fallbackText={fallbackElapsed} live={timeRowLive} />
                     <View style={styles.endGroup}>
-                        <ReanimatedText value={remaining} formatter={remainingFormatter} fallbackText={fallbackRemaining} style={styles.timeMuted} />
+                        <ReanimatedText value={remaining} formatter={remainingFormatter} fallbackText={fallbackRemaining} style={styles.timeMuted} live={timeRowLive} />
                         <Text style={styles.time}> / {totalText}</Text>
                     </View>
                 </Animated.View>
