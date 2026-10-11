@@ -122,13 +122,15 @@ interface IconButtonProps {
     /** On (a toggle that is switched on): inverted glyph on a solid accent circle, like a selected Chip. */
     active?: boolean;
     onPlayer?: boolean;
+    /** Accent dot on the glyph's corner: something inside wants attention (an update). */
+    badge?: boolean;
     style?: StyleProp<ViewStyle>;
 }
 
 /** 40 dp visual, 48 dp target. */
 export function IconButton({
     icon, onPress, accessibilityLabel, variant = 'plain', iconSize = 22, color,
-    disabled, active, onPlayer, style,
+    disabled, active, onPlayer, badge, style,
 }: IconButtonProps) {
     const { colors } = useUiTheme(onPlayer);
     return (
@@ -149,6 +151,7 @@ export function IconButton({
             ]}
         >
             <Feather name={icon} size={iconSize} color={active ? colors.onPrimary : color ?? colors.text} />
+            {badge && <View style={[styles.badge, styles.iconButtonBadge, { backgroundColor: colors.primary }]} />}
         </Touchable>
     );
 }
@@ -390,10 +393,12 @@ interface ListRowProps {
     /** Anything else on the right. */
     trailing?: React.ReactNode;
     disabled?: boolean;
+    /** Accent dot on the icon's corner, as on IconButton. */
+    badge?: boolean;
 }
 
 export function ListRow({
-    title, caption, icon, value, chevron, toggle, selected, destructive, onPress, onPlayer, trailing, disabled,
+    title, caption, icon, value, chevron, toggle, selected, destructive, onPress, onPlayer, trailing, disabled, badge,
 }: ListRowProps) {
     const { colors } = useUiTheme(onPlayer);
     const fg = destructive ? colors.error : colors.text;
@@ -405,7 +410,12 @@ export function ListRow({
         : onPress;
     const content = (
         <>
-            {icon && <Feather name={icon} size={20} color={destructive ? colors.error : colors.textSecondary} />}
+            {icon && (
+                <View>
+                    <Feather name={icon} size={20} color={destructive ? colors.error : colors.textSecondary} />
+                    {badge && <View style={[styles.badge, styles.rowIconBadge, { backgroundColor: colors.primary }]} />}
+                </View>
+            )}
             <View style={styles.rowText}>
                 <Text style={[type.row, styles.rowTitle, { color: fg }]} numberOfLines={2}>{title}</Text>
                 {!!caption && <Text style={[type.caption, { color: colors.textSecondary }]}>{caption}</Text>}
@@ -824,6 +834,9 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     buttonWithIcon: { paddingLeft: 16 },
+    badge: { position: 'absolute', width: 8, height: 8, borderRadius: 4 },
+    iconButtonBadge: { top: 7, right: 7 },
+    rowIconBadge: { top: -2, right: -3 },
     chip: {
         height: 34,
         paddingHorizontal: 14,

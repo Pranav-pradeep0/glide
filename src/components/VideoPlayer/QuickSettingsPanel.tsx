@@ -170,6 +170,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                         title="Update available"
                         value={`v${props.updateVersion}`}
                         chevron
+                        badge
                         onPress={props.onOpenUpdate}
                         onPlayer
                     />

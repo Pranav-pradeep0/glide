@@ -1276,6 +1276,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onOpenAudio={handleToggleAudio}
                     onAddBookmark={isNetworkStream ? undefined : handleAddBookmark}
                     onOpenPlayback={handleToggleQuickSettings}
+                    updatePending={updatePending}
                     playbackRate={basePlaybackRate}
                     paused={displayPaused}
                     onTogglePlayPause={handleTogglePlayPause}
