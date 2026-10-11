@@ -470,7 +470,7 @@ const alphaOf = (color: string) => (((processColor(color) as number) >>> 24) & 0
 
 /** A vertical gradient, drawn with react-native-svg. */
 export function Gradient({ colors, locations, style, pointerEvents }: GradientProps) {
-    const id = `gradient${useId().replace(/[^w-]/g, '')}`;
+    const id = `gradient${useId().replace(/[^\w-]/g, '')}`;
     return (
         <View style={style} pointerEvents={pointerEvents}>
             <Svg style={StyleSheet.absoluteFill}>
