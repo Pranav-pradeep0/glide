@@ -1,5 +1,6 @@
 /* eslint-disable no-shadow */
 import { parseSource, Source } from './source.js';
+import { execFirst } from './utils.js';
 export var Resolution;
 (function (Resolution) {
     Resolution.R2160P = '2160P';
@@ -15,16 +16,9 @@ const R720pExp = /(?<R720P>720(i|p)|1280x720|960p)(10bit)?/i;
 const R576pExp = /(?<R576P>576(i|p))/i;
 const R540pExp = /(?<R540P>540(i|p))/i;
 const R480Exp = /(?<R480P>480(i|p)|640x480|848x480)/i;
-const resolutionExp = new RegExp([
-    R2160pExp.source,
-    R1080pExp.source,
-    R720pExp.source,
-    R576pExp.source,
-    R540pExp.source,
-    R480Exp.source,
-].join('|'), 'i');
+const resolutionExps = [R2160pExp, R1080pExp, R720pExp, R576pExp, R540pExp, R480Exp];
 export function parseResolution(title) {
-    const result = resolutionExp.exec(title);
+    const result = execFirst(title, resolutionExps);
     if (result?.groups) {
         for (const key of Object.keys(Resolution)) {
             if (result.groups[key] !== undefined) {

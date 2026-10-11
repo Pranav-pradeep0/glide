@@ -49,10 +49,16 @@ describe('FilenameParser', () => {
         expect(result.year).toBe(2020);
     });
 
-    // Still broken upstream: see the note in FilenameParser.ts. The year is read
-    // correctly, so only the title is lost.
-    it.failing('keeps titles that are not written in Latin', () => {
+    it('keeps titles that are not written in Latin', () => {
         expect(FilenameParser.parse('Амели.2001.1080p.mkv').title).toBe('Амели');
+    });
+
+    // React Native's Babel preset strips group names from a regex's .source, which
+    // used to leave every resolution unread (a WEBRip then defaulted to 480P).
+    it('reads the resolution and release group', () => {
+        const result = FilenameParser.parse('The Boys (2026) S05E06 Hin-Eng (2160p 10bit HDR10Plus DV WEBRip HEVC x265 MSub PSA) [PMZ].mkv');
+        expect(result.quality).toMatch(/^2160P/);
+        expect(FilenameParser.parse('Movie.2010.1080p.BluRay.DTS.5.1.x264-GRP.mkv')).toMatchObject({ quality: expect.stringMatching(/^1080P/), group: 'GRP DTS 5.1' });
     });
 
     it('drops a bracketed year instead of leaving half of it', () => {

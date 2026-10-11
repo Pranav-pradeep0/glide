@@ -1,4 +1,5 @@
 /* eslint-disable no-shadow */
+import { execFirst } from './utils.js';
 const mp3CodecExp = /\b(?<mp3>(LAME(?:\d)+-?(?:\d)+)|(mp3))\b/i;
 const mp2CodecExp = /\b(?<mp2>(mp2))\b/i;
 const dolbyCodecExp = /\b(?<dolby>(Dolby)|(Dolby-?Digital)|(DD)|(AC3D?))\b/i;
@@ -13,22 +14,22 @@ const opusCodecExp = /\b(?<opus>(Opus))\b/i;
 const vorbisCodecExp = /\b(?<vorbis>(Vorbis))\b/i;
 const pcmCodecExp = /\b(?<pcm>(PCM))\b/i;
 const lpcmCodecExp = /\b(?<lpcm>(LPCM))\b/i;
-const audioCodecExp = new RegExp([
-    mp3CodecExp.source,
-    mp2CodecExp.source,
-    dolbyCodecExp.source,
-    dolbyAtmosCodecExp.source,
-    aacAtmosCodecExp.source,
-    eac3CodecExp.source,
-    flacCodecExp.source,
-    dtsHdCodecExp.source,
-    dtsCodecExp.source,
-    trueHdCodecExp.source,
-    opusCodecExp.source,
-    vorbisCodecExp.source,
-    pcmCodecExp.source,
-    lpcmCodecExp.source,
-].join('|'), 'i');
+const audioCodecExps = [
+    mp3CodecExp,
+    mp2CodecExp,
+    dolbyCodecExp,
+    dolbyAtmosCodecExp,
+    aacAtmosCodecExp,
+    eac3CodecExp,
+    flacCodecExp,
+    dtsHdCodecExp,
+    dtsCodecExp,
+    trueHdCodecExp,
+    opusCodecExp,
+    vorbisCodecExp,
+    pcmCodecExp,
+    lpcmCodecExp,
+];
 export var AudioCodec;
 (function (AudioCodec) {
     AudioCodec.MP3 = 'MP3';
@@ -46,7 +47,7 @@ export var AudioCodec;
     AudioCodec.LPCM = 'LPCM';
 })(AudioCodec || (AudioCodec = {}));
 export function parseAudioCodec(title) {
-    const audioResult = audioCodecExp.exec(title);
+    const audioResult = execFirst(title, audioCodecExps);
     if (!audioResult?.groups) {
         return {};
     }

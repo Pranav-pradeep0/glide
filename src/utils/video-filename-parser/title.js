@@ -3,19 +3,21 @@ import { parseAudioCodec } from './audioCodec.js';
 import { parseResolution } from './resolution.js';
 import { releaseTitleCleaner, simplifyTitle } from './simplifyTitle.js';
 import { parseVideoCodec } from './videoCodec.js';
+// Separators are [^\p{L}\p{N}] with the u flag, not [-_\W]: JS \W counts every non-ASCII
+// letter, so "Амели.2001" lazily matched a title of just "А".
 const movieTitleYearRegex = [
     // Special, Despecialized, etc. Edition Movies, e.g: Mission.Impossible.3.Special.Edition.2011
-    /^(?<title>(?![([]).+?)?(?:(?:[-_\W](?<![)[!]))*\(?\b(?<edition>(((Extended.|Ultimate.)?(Director.?s|Collector.?s|Theatrical|Anniversary|The.Uncut|Ultimate|Final(?=(.(Cut|Edition|Version)))|Extended|Rogue|Special|Despecialized|\d{2,3}(th)?.Anniversary)(.(Cut|Edition|Version))?(.(Extended|Uncensored|Remastered|Unrated|Uncut|IMAX|Fan.?Edit))?|((Uncensored|Remastered|Unrated|Uncut|IMAX|Fan.?Edit|Edition|Restored|((2|3|4)in1))))))\b\)?.{1,3}(?<year>(1(8|9)|20)\d{2}(?!p|i|\d+|\]|\W\d+)))+(\W+|_|$)(?!\\)/i,
+    /^(?<title>(?![([]).+?)?(?:(?:[^\p{L}\p{N}](?<![)[!]))*\(?\b(?<edition>(((Extended.|Ultimate.)?(Director.?s|Collector.?s|Theatrical|Anniversary|The.Uncut|Ultimate|Final(?=(.(Cut|Edition|Version)))|Extended|Rogue|Special|Despecialized|\d{2,3}(th)?.Anniversary)(.(Cut|Edition|Version))?(.(Extended|Uncensored|Remastered|Unrated|Uncut|IMAX|Fan.?Edit))?|((Uncensored|Remastered|Unrated|Uncut|IMAX|Fan.?Edit|Edition|Restored|((2|3|4)in1))))))\b\)?.{1,3}(?<year>(1(8|9)|20)\d{2}(?!p|i|\d+|\]|\W\d+)))+(\W+|_|$)(?!\\)/iu,
     // Folder movie format, e.g: Blade Runner 2049 (2017)
-    /^(?<title>(?![([]).+?)?(?:(?:[-_\W](?<![)[!]))*\((?<year>(1(8|9)|20)\d{2}(?!p|i|(1(8|9)|20)\d{2}|\]|\W(1(8|9)|20)\d{2})))+/i,
+    /^(?<title>(?![([]).+?)?(?:(?:[^\p{L}\p{N}](?<![)[!]))*\((?<year>(1(8|9)|20)\d{2}(?!p|i|(1(8|9)|20)\d{2}|\]|\W(1(8|9)|20)\d{2})))+/iu,
     // Normal movie format, e.g: Mission.Impossible.3.2011
-    /^(?<title>(?![([]).+?)?(?:(?:[-_\W](?<![)[!]))*(?<year>(1(8|9)|20)\d{2}(?!p|i|(1(8|9)|20)\d{2}|\]|\W(1(8|9)|20)\d{2})))+(\W+|_|$)(?!\\)/i,
+    /^(?<title>(?![([]).+?)?(?:(?:[^\p{L}\p{N}](?<![)[!]))*(?<year>(1(8|9)|20)\d{2}(?!p|i|(1(8|9)|20)\d{2}|\]|\W(1(8|9)|20)\d{2})))+(\W+|_|$)(?!\\)/iu,
     // PassThePopcorn Torrent names: Star.Wars[PassThePopcorn]
-    /^(?<title>.+?)?(?:(?:[-_\W](?<![()[!]))*(?<year>(\[\w *\])))+(\W+|_|$)(?!\\)/i,
+    /^(?<title>.+?)?(?:(?:[^\p{L}\p{N}](?<![()[!]))*(?<year>(\[\w *\])))+(\W+|_|$)(?!\\)/iu,
     // That did not work? Maybe some tool uses [] for years. Who would do that?
-    /^(?<title>(?![([]).+?)?(?:(?:[-_\W](?<![)!]))*(?<year>(1(8|9)|20)\d{2}(?!p|i|\d+|\W\d+)))+(\W+|_|$)(?!\\)/i,
+    /^(?<title>(?![([]).+?)?(?:(?:[^\p{L}\p{N}](?<![)!]))*(?<year>(1(8|9)|20)\d{2}(?!p|i|\d+|\W\d+)))+(\W+|_|$)(?!\\)/iu,
     // As a last resort for movies that have ( or [ in their title.
-    /^(?<title>.+?)?(?:(?:[-_\W](?<![)[!]))*(?<year>(1(8|9)|20)\d{2}(?!p|i|\d+|\]|\W\d+)))+(\W+|_|$)(?!\\)/i,
+    /^(?<title>.+?)?(?:(?:[^\p{L}\p{N}](?<![)[!]))*(?<year>(1(8|9)|20)\d{2}(?!p|i|\d+|\]|\W\d+)))+(\W+|_|$)(?!\\)/iu,
 ];
 export function parseTitleAndYear(title) {
     const simpleTitle = simplifyTitle(title);

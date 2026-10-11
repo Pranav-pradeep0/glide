@@ -110,15 +110,6 @@ export class FilenameParser {
             if (title) {
                 // Letters and digits in any script: an [a-zA-Z0-9] trim ate the whole
                 // title of anything not written in Latin, leaving only "2001 1080p".
-                //
-                // Not the whole story. video-filename-parser's title patterns separate
-                // fields with [-_\W], and JS \W counts every non-ASCII letter, so a lazy
-                // (?<title>.+?) stops after one character and the rest of a Cyrillic,
-                // Devanagari or CJK title is eaten as separators -- "Амели.2001" parses
-                // to "А". Fixing that means making those patterns Unicode-aware
-                // (\P{L} with the u flag) in src/utils/video-filename-parser/title.js,
-                // or falling back to the cleaned filename when the parsed title is a
-                // degenerate prefix of it. See the failing test in filenameParser.test.ts.
                 // "The Boys (2026)": the trim below would take the ")" and leave "The Boys (2026".
                 title = title.replace(/\s*[([]\s*(?:19|20)\d{2}\s*[)\]]?\s*$/, '');
                 title = title.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');

@@ -27,15 +27,7 @@ export function parseGroup(title) {
         return animeResult.groups.subgroup ?? '';
     }
     trimmed = trimmed.replace(cleanReleaseGroupExp, '');
-    const globalReleaseGroupExp = new RegExp(releaseGroupRegexExp.source, 'ig');
-    let result;
-    // biome-ignore lint/suspicious/noAssignInExpressions: <explanation>
-    while ((result = globalReleaseGroupExp.exec(trimmed))) {
-        if (!result?.groups) {
-            continue;
-        }
-        const group = result.groups.releasegroup ?? '';
-        return group;
-    }
-    return null;
+    // Not rebuilt from .source: Babel's named-group rewrite would drop .groups (see execFirst).
+    const result = releaseGroupRegexExp.exec(trimmed);
+    return result ? (result.groups?.releasegroup ?? '') : null;
 }
