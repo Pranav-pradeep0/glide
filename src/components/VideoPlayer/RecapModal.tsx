@@ -13,6 +13,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Button, SheetHeader } from '@/components/ui';
 import { PLAYER_BACKDROP } from '@/theme/colors';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
+import { parseEmphasis } from '@/utils/markdownEmphasis';
 
 const { colors } = playerTheme;
 
@@ -77,7 +78,10 @@ export const RecapModal: React.FC<RecapModalProps> = ({
                     ) : (
                         <ScrollView style={{ maxHeight: scrollMaxHeight }} showsVerticalScrollIndicator={false}>
                             <Animated.Text entering={FadeIn.duration(motion.fadeIn)} style={styles.recapText}>
-                                {recapText}
+                                {parseEmphasis(recapText).map((span, i) => (span.bold || span.italic
+                                    ? <Text key={i} style={span.bold ? styles.bold : styles.italic}>{span.text}</Text>
+                                    : span.text
+                                ))}
                             </Animated.Text>
                         </ScrollView>
                     )}
@@ -120,4 +124,6 @@ const styles = StyleSheet.create({
     },
     loadingText: { ...type.body, color: colors.textSecondary },
     recapText: { ...type.body, color: colors.text, fontSize: 16, lineHeight: 24 },
+    bold: { fontWeight: '700' },
+    italic: { fontStyle: 'italic' },
 });
