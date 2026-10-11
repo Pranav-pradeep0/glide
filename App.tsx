@@ -10,8 +10,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { withStallion } from 'react-native-stallion';
 import { NativeModules } from 'react-native';
-import { UpdateService } from '@/services/UpdateService';
 import UpdateModal from '@/components/UpdateModal';
+import { refreshUpdateStatus } from '@/services/refreshUpdateStatus';
 
 function App() {
   const [appReady, setAppReady] = useState(false);
@@ -19,7 +19,6 @@ function App() {
   const theme = useTheme();
   const hasCompletedOnboarding = useAppStore((state) => state.settings.hasCompletedOnboarding);
   const updateStatus = useAppStore((state) => state.updateStatus);
-  const setUpdateStatus = useAppStore((state) => state.setUpdateStatus);
   const markUpdateNotified = useAppStore((state) => state.markUpdateNotified);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
@@ -39,25 +38,8 @@ function App() {
       return;
     }
 
-    const runUpdateCheck = async () => {
-      const result = await UpdateService.checkForUpdates();
-      // A failed check knows nothing. Writing it would clear an update found earlier, and
-      // the Settings card and tab badge would vanish until a check happened to succeed.
-      if (result.checkFailed) {
-        return;
-      }
-      setUpdateStatus({
-        available: result.available,
-        latestVersion: result.latestVersion,
-        releaseUrl: result.releaseUrl,
-        releaseNotes: result.releaseNotes,
-        apkUrl: result.apkUrl,
-        apkSha256Url: result.apkSha256Url,
-      });
-    };
-
-    runUpdateCheck();
-  }, [appReady, setUpdateStatus]);
+    refreshUpdateStatus();
+  }, [appReady]);
 
   const [splashHidden, setSplashHidden] = useState(false);
 

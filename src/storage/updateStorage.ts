@@ -8,6 +8,7 @@ export type UpdateApkCache = {
 };
 
 const UPDATE_APK_KEY = '@glide_update_apk';
+const NOTIFIED_VERSION_KEY = '@glide_update_notified_version';
 
 const mmkv = createMMKV({
     id: UPDATE_APK_KEY,
@@ -37,6 +38,15 @@ export const updateStorage = {
         } catch (error) {
             console.error('[UpdateStorage] Failed to save cache:', error);
         }
+    },
+
+    /** The version the user was last told about, so each release is announced once. */
+    notifiedVersion(): string | null {
+        return mmkv.getString(NOTIFIED_VERSION_KEY) ?? null;
+    },
+
+    setNotifiedVersion(version: string): void {
+        mmkv.set(NOTIFIED_VERSION_KEY, version);
     },
 
     clear(): void {

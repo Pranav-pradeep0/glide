@@ -59,6 +59,9 @@ interface QuickSettingsPanelProps {
     onToggleRepeat: () => void;
     sleepTimer: number | null;
     sleepTimerEndsAt: number | null;
+    /** A pending update's version: a row at the top opens the update. */
+    updateVersion: string | null;
+    onOpenUpdate: () => void;
     onSetSleepTimer: (minutes: number | null) => void;
     onOpenPlaylist?: () => void;
     onOpenAudio: () => void;
@@ -160,6 +163,19 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
 
     const renderMain = () => (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+            {props.updateVersion && (
+                <ListGroup inset onPlayer style={styles.updateGroup}>
+                    <ListRow
+                        icon="download"
+                        title="Update available"
+                        value={`v${props.updateVersion}`}
+                        chevron
+                        onPress={props.onOpenUpdate}
+                        onPlayer
+                    />
+                </ListGroup>
+            )}
+
             <View style={styles.speedHead}>
                 <Text style={[type.label, styles.speedLabel]}>Speed</Text>
                 <Text style={[type.row, styles.speedValue]}>{formatRate(props.playbackRate)}</Text>
@@ -400,6 +416,7 @@ const styles = StyleSheet.create({
     slider: { height: 40, marginTop: metrics.space.xs },
     sliderFlex: { flex: 1 },
     group: { marginTop: metrics.space.lg },
+    updateGroup: { marginBottom: metrics.space.lg },
     subOptions: { padding: metrics.space.lg, paddingTop: metrics.space.xs, gap: metrics.space.sm },
     sliderRow: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm },
     valueText: { color: colors.text, fontVariant: ['tabular-nums'], minWidth: 44, textAlign: 'right' },

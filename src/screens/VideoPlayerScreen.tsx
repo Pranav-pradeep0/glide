@@ -28,6 +28,7 @@ import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
 import { SnackbarHost, showSnackbar } from '@/components/ui';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
+import UpdateModal from '@/components/UpdateModal';
 import { isEnhancementError } from '@/utils/playerErrors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
 import { BookmarkPanel } from '@/components/VideoPlayer/BookmarkPanel';
@@ -159,6 +160,8 @@ export default function VideoPlayerScreen({ route }: Props) {
     const defaultAudioLanguage = useAppStore(state => state.settings.defaultAudioLanguage);
     const seekDuration = useAppStore(state => state.settings.seekDuration);
     const autoPlayNext = useAppStore(state => state.settings.autoPlayNext);
+    const updateStatus = useAppStore(state => state.updateStatus);
+    const markUpdateNotified = useAppStore(state => state.markUpdateNotified);
     const shakeThreshold = useAppStore(state => state.settings.shakeThreshold);
     const shakeEnabled = useAppStore(state => state.settings.shakeEnabled ?? false);
     const shakeAction = useAppStore(state => state.settings.shakeAction ?? 'play_pause');
@@ -932,6 +935,30 @@ export default function VideoPlayerScreen({ route }: Props) {
         }
     }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode]);
 
+    // ========================================================================
+    // UPDATE
+    // ========================================================================
+
+    // "Open with" never reaches the library's update prompt, so the player says it, once per
+    // release, after the video is under way. ⋮ Playback keeps a row while it is pending.
+    const [updateModalVisible, setUpdateModalVisible] = React.useState(false);
+    const updatePending = updateStatus.available && !!updateStatus.latestVersion;
+    const { pause: pausePlayer } = player;
+    const handleOpenUpdate = useCallback(() => {
+        ui.closeAllPanels();
+        pausePlayer();
+        setUpdateModalVisible(true);
+    }, [ui, pausePlayer]);
+    useEffect(() => {
+        if (!isExternalOpen || !updatePending || updateStatus.notified || !player.state.isPlaying) { return; }
+        const timer = setTimeout(() => {
+            markUpdateNotified();
+            showSnackbar({ text: `Glide ${updateStatus.latestVersion} is available`, action: 'View', onAction: handleOpenUpdate });
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, [isExternalOpen, updatePending, updateStatus.notified, updateStatus.latestVersion, player.state.isPlaying,
+        markUpdateNotified, handleOpenUpdate]);
+
     const handleShakeAction = useCallback(() => {
         if (shakeAction === 'play_pause') {
             handleTogglePlayPause();
@@ -1318,6 +1345,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onToggleRepeat={settingsHook.toggleRepeat}
                     sleepTimer={settingsHook.settings.sleepTimer}
                     sleepTimerEndsAt={settingsHook.settings.sleepTimerEndsAt}
+                    updateVersion={updatePending ? updateStatus.latestVersion : null}
+                    onOpenUpdate={handleOpenUpdate}
                     onSetSleepTimer={settingsHook.setSleepTimer}
                     onOpenPlaylist={isNetworkStream ? undefined : handleQSOpenPlaylist}
                     onOpenAudio={handleQSOpenAudio}
@@ -1451,6 +1480,16 @@ export default function VideoPlayerScreen({ route }: Props) {
                     />
                 </View>
             )}
+
+            <UpdateModal
+                visible={updateModalVisible}
+                latestVersion={updateStatus.latestVersion}
+                releaseNotes={updateStatus.releaseNotes}
+                releaseUrl={updateStatus.releaseUrl}
+                apkUrl={updateStatus.apkUrl}
+                apkSha256Url={updateStatus.apkSha256Url}
+                onDismiss={() => setUpdateModalVisible(false)}
+            />
 
             {/* Resume Modal */}
             {!pipPresentationActive && !isNetworkStream && (

@@ -23,7 +23,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ~~**Album / Artist detail, Recents › Music** — promises with no `.catch`~~ not a bug: `AudioMediaService.getSongs` catches and never rejects
 - **Album / Artist detail** — (permission gate ✅) no empty state: "0 songs" with Play All / Shuffle that do nothing — S
 - **AlbumVideos** (`AlbumVideosScreen.tsx:130-150`) — no pull-to-refresh; "Play all" only opens the first video (one file if auto-play-next is off) — S
-- **Update modal** — reappears every cold start (`updateStatus` memory-only; roadmap Phase 2) — S
+- ✅ **Update modal** — reappears every cold start (`updateStatus` memory-only; roadmap Phase 2) — S *(the announced version is now kept in update storage)*
 - **Subtitles** — SubDL `.ass`/`.ssa` are rejected by the `-->` check in `subdlApi.ts`, and downloads are always parsed as `'srt'` (`PlayerDetailScreen.tsx:143, 281`); `picked_subtitle_*` never cleaned (roadmap Phase 2) — S
 - **TrackOptionsSheet** (`TrackOptionsSheet.tsx:38-40`) — returns null as soon as `track` clears, so the close animation never plays; double horizontal inset — S
 - **Licences sheet** — hardware Back on a licence closes the whole sheet instead of returning to the list — S
@@ -36,6 +36,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ `e5bcff4` **Active state** (`PlayerControls.tsx:686`, `GlyphButton`) — "on" is a white icon on a 14% white circle vs a white icon with no circle: enhancement / night mode / mute / rotation lock barely change when switched on — S *(the solid disc read too loud; now the filled icon plus a dot under it)*
 - ✅ `e5bcff4` **Lock button under the camera hole** (`PlayerControls.tsx:696`) — rail is `left: 8` with no side inset; `effectiveInsets` never passes the real landscape cutout inset, and the top bar / bottom bar ignore left/right too — S *(refined: with a punch hole only the controls level with it move in; `getCutoutRects`, API 9)*
 - ✅ `5821e85` **Mini player** (`MiniPlayer.tsx:105-121`) — no swipe-down to close; `clearQueue()` already stops and clears — S
+- ✅ **Updates under "Open with"** — the check and the prompt lived only in `App.tsx`, so a video opened from another app never learned of an update; now a one-time snackbar and a row in ⋮ Playback — M
 - **Packages** — ~~`react-native-share` (1 call; its merged FileProvider is the `cache-path "/"` exposure)~~ ✅ native `shareVideo` (API 6), ~~`react-native-zip-archive` (1 call; no size cap / zip-bomb guard)~~ ✅ `SubtitleZip.kt` (API 7), ~~`react-native-linear-gradient` (5 uses; svg already installed)~~ ✅ `Gradient` in the ui kit, ~~`react-native-config` (9 build-time strings)~~ ✅ `.env` read in `app/build.gradle`, served as `GlideNative.env` (API 8) — M
 
 ### Video player

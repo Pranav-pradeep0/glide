@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { Appearance } from 'react-native';
 import { AppSettings, HapticSettings, ShakeAction } from '../types';
 import type { UpdateError } from '../hooks/useUpdateInstaller';
-import type { UpdateApkCache } from '../storage/updateStorage';
+import { updateStorage, type UpdateApkCache } from '../storage/updateStorage';
 import { storage } from '../storage/storage';
 
 /**
@@ -339,14 +339,15 @@ export const useAppStore = create<AppStore>((set) => ({
 
     setUpdateStatus: (data) =>
         set((state) => {
-            const versionChanged = data.latestVersion && data.latestVersion !== state.updateStatus.latestVersion;
             return {
                 updateStatus: {
                     ...state.updateStatus,
                     ...data,
                     lastCheckedAt: Date.now(),
                     seen: data.available ? false : state.updateStatus.seen,
-                    notified: data.available ? (versionChanged ? false : state.updateStatus.notified) : false,
+                    // Kept across launches: a release is announced once, not on every cold start.
+                    notified: data.available && data.latestVersion !== null
+                        && updateStorage.notifiedVersion() === data.latestVersion,
                 },
             };
         }),
@@ -358,12 +359,10 @@ export const useAppStore = create<AppStore>((set) => ({
             },
         })),
     markUpdateNotified: () =>
-        set((state) => ({
-            updateStatus: {
-                ...state.updateStatus,
-                notified: true,
-            },
-        })),
+        set((state) => {
+            if (state.updateStatus.latestVersion) { updateStorage.setNotifiedVersion(state.updateStatus.latestVersion); }
+            return { updateStatus: { ...state.updateStatus, notified: true } };
+        }),
 }));
 
 // Automatically persist settings to MMKV whenever they change

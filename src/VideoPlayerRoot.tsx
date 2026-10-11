@@ -12,6 +12,8 @@ import { DeepLinkService } from '@/services/DeepLinkService';
 import { ContentDetector } from '@/services/ContentDetector';
 import { NavigationService } from '@/services/NavigationService';
 import { SystemBars } from 'react-native-edge-to-edge';
+import { useAppStore } from '@/store/appStore';
+import { refreshUpdateStatus } from '@/services/refreshUpdateStatus';
 
 const Stack = createNativeStackNavigator();
 
@@ -51,6 +53,12 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
 
     const [ready, setReady] = useState(false);
     const [initialState, setInitialState] = useState<OpenRequest | null>(null);
+
+    // The library checks for updates when it starts; an "Open with" launch may never start
+    // it. Both share this runtime, so skip the check if the library already ran one.
+    useEffect(() => {
+        if (useAppStore.getState().updateStatus.lastCheckedAt === null) { refreshUpdateStatus(); }
+    }, []);
 
     useEffect(() => {
         const prepare = async () => {
