@@ -535,11 +535,13 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
         if (bufferingTimeoutRef.current) {clearTimeout(bufferingTimeoutRef.current);}
 
+        // Every live seek while scrubbing reports buffering then ready; a new state object for
+        // an unchanged flag re-rendered the whole player at the preview-seek rate.
         if (isBuffering) {
-            setState(prev => ({ ...prev, isBuffering: true }));
+            setState(prev => (prev.isBuffering ? prev : { ...prev, isBuffering: true }));
         } else {
             bufferingTimeoutRef.current = setTimeout(() => {
-                setState(prev => ({ ...prev, isBuffering: false }));
+                setState(prev => (prev.isBuffering ? { ...prev, isBuffering: false } : prev));
             }, PLAYER_CONSTANTS.BUFFERING_TIMEOUT_MS);
         }
     }, []);

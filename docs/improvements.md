@@ -71,7 +71,14 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S *(confirmed in code: a `Sheet` is a Modal, its own window over the player's host. Every open sheet now hosts snackbars, and a host closing mid-message hands it to the one below; app-wide, not just the player)*
 - ✅ **Snackbar dismissal** — no way to clear one; on the player it sat over the controls for 3 s — S *(swipe sideways or tap to dismiss; plain messages 2–5 s by length, with an action 5 s)*
 - ✅ **Recap formatting** (`RecapModal.tsx`) — the AI writes Markdown, so titles showed as "*Frankenstein*" with the asterisks — S *(`parseEmphasis`: `*italic*` and `**bold**` render as styled text; the subtitle formatter reads HTML tags, not Markdown)*
-- **Perf** — HUD state in the 1400-line screen re-renders it on every gesture step; brightness "throttle" is `floor(y) % 5`; Quick Settings sliders send a native prop per step; landscape playlist mounts and queues thumbnails at open; hidden time labels still tick React state — S–M
+- **Perf** — measured on a Nothing Phone 2 (release build, temporary render counter) — S–M
+  - ~~HUD state re-renders the screen on every gesture step~~ not any more: brightness / volume swipes re-render the screen once or twice per swipe (3 renders over ~8 s of brightness swipes); the HUD reads shared values
+  - ✅ **Scrub** — every live preview seek (25/s) reported buffering then ready, and `handleBuffering` set a new state object each time: ~20 screen renders/s while dragging the seek bar, now ≤5/s
+  - brightness / volume "throttle" is `floor(y) % 5`
+  - hidden time labels still re-render twice a second; while scrubbing they re-render ~300 times a second through React state
+  - Quick Settings speed / colour-strength sliders re-render the whole screen per step
+  - landscape playlist is mounted (rows + thumbnails) from the moment the player opens, even if never opened
+  - PlayerDetail: tapping Play straight away took 1.0–2.6 s to playing vs 0.3 s when the page had settled — its subtitle extraction and SubDL work keep running
 - ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
 - ✅ **Episode order** (`useMediaService.ts` `sortVideosByName`) — name order puts `Show.2019.S01E02` before `Show.S01E01`, so Next skips around — S *(season/episode decide when every file in the folder has one; anime `Show - 12` and `Ep 9` aren't parsed and keep the name order)*
 - ✅ **Folder order** (tester) — since `e919b33` every folder sorted by name, so camera and WhatsApp folders lost their newest-first order, and natural name order read as neither A–Z nor by date — S *(a series keeps episode order, anything else is newest first; Newest / Name / Largest sort button in the count row, carried to the player so Next and the playlist follow the list)*
