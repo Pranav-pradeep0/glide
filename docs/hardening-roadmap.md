@@ -215,14 +215,15 @@ Activities, and Android Auto and a Bluetooth head unit still browse the music li
    then flows into history and Recents. (Share no longer can: since 2026-10-11 it sends only
    a MediaStore entry, and the FileProvider with `cache-path "/"` is gone.)
    Only trust `_data` when `uri.authority == "media"`; reject `file://` under `/data/`.
-3. **CI supply chain.** The release job holds the keystore and `contents: write` but pins
-   actions by tag, not SHA; no wrapper validation, no `distributionSha256Sum` (the FFmpeg
-   AAR checksum is done, see 8b). Secrets are interpolated into an unquoted heredoc
-   (`android-ci.yml:45-58, 195-208`) — a `$` or backtick silently corrupts the baked key.
-   Also verify the signing cert SHA-256 before publishing.
+3. **CI supply chain.** ✅ 2026-10-11: actions pinned by commit SHA (version in a comment),
+   and no secret is pasted into a script any more: `.env` and the keystore read them from
+   step `env:`, and the signing passwords reach Gradle as `ORG_GRADLE_PROJECT_*`. Still
+   open: wrapper validation, `distributionSha256Sum` (the FFmpeg AAR checksum is done, see
+   8b), and checking the signing cert SHA-256 before publishing.
 4. **`GlidePlayerService` has no `onConnect`** — exported, so any app can browse the whole
    music library without the media permission.
-5. **Subtitle size caps**: nothing bounds the SubDL zip download, the extracted file, or
+5. **Subtitle size caps**: (the zip's subtitle is capped and never extracted since `fbcfe05`;
+   the download itself is still unbounded) nothing bounds the SubDL zip download, the extracted file, or
    `readFile` (`SubtitleExtractor.ts:108` stats but only logs). Zip bombs are unhandled.
    Accept `https:` only for `downloadUrl`.
 6. **SubDL/OMDB keys behind the worker** (Groq already is). Not just key hiding: the OMDB

@@ -31,10 +31,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: 'npm'
@@ -58,7 +58,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Verify the FFmpeg decoder AAR
         # The AAR is a binary copied in from glide-ffmpeg-decoder's CI. Its checksum file
@@ -67,7 +67,7 @@ jobs:
         run: sha256sum -c lib-decoder-ffmpeg-release.aar.sha256
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: 'npm'
@@ -76,18 +76,28 @@ jobs:
         run: npm ci
 
       - name: Create .env file
+        # Secrets come in as env vars, never pasted into the script: a value holding $, `
+        # or a line reading EOF is written as-is instead of running or ending the heredoc.
+        env:
+          SUBDL_API_KEY: ${{ secrets.SUBDL_API_KEY }}
+          SUBDL_API_URL: ${{ secrets.SUBDL_API_URL }}
+          SUBDL_DOWNLOAD_URL: ${{ secrets.SUBDL_DOWNLOAD_URL }}
+          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
+          OMDB_API_URL: ${{ secrets.OMDB_API_URL }}
+          STALLION_PROJECT_ID: ${{ secrets.STALLION_PROJECT_ID }}
+          STALLION_APP_TOKEN: ${{ secrets.STALLION_APP_TOKEN }}
         run: |
           cat << EOF > .env
-          SUBDL_API_KEY=${{ secrets.SUBDL_API_KEY }}
-          SUBDL_API_URL=${{ secrets.SUBDL_API_URL }}
-          SUBDL_DOWNLOAD_URL=${{ secrets.SUBDL_DOWNLOAD_URL }}
-          OMDB_API_KEY=${{ secrets.OMDB_API_KEY }}
-          OMDB_API_URL=${{ secrets.OMDB_API_URL }}
+          SUBDL_API_KEY=$SUBDL_API_KEY
+          SUBDL_API_URL=$SUBDL_API_URL
+          SUBDL_DOWNLOAD_URL=$SUBDL_DOWNLOAD_URL
+          OMDB_API_KEY=$OMDB_API_KEY
+          OMDB_API_URL=$OMDB_API_URL
           AI_PROXY_URL=$AI_PROXY_URL
           GITHUB_OWNER=Pranav-pradeep0
           GITHUB_REPO=glide-public
-          STALLION_PROJECT_ID=${{ secrets.STALLION_PROJECT_ID }}
-          STALLION_APP_TOKEN=${{ secrets.STALLION_APP_TOKEN }}
+          STALLION_PROJECT_ID=$STALLION_PROJECT_ID
+          STALLION_APP_TOKEN=$STALLION_APP_TOKEN
           EOF
 
       - name: Typecheck
@@ -100,7 +110,7 @@ jobs:
         run: npx jest --ci
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: 17
@@ -174,7 +184,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
 
@@ -237,7 +247,7 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: 'npm'
@@ -246,18 +256,28 @@ jobs:
         run: npm ci
 
       - name: Create .env file
+        # Secrets come in as env vars, never pasted into the script: a value holding $, `
+        # or a line reading EOF is written as-is instead of running or ending the heredoc.
+        env:
+          SUBDL_API_KEY: ${{ secrets.SUBDL_API_KEY }}
+          SUBDL_API_URL: ${{ secrets.SUBDL_API_URL }}
+          SUBDL_DOWNLOAD_URL: ${{ secrets.SUBDL_DOWNLOAD_URL }}
+          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
+          OMDB_API_URL: ${{ secrets.OMDB_API_URL }}
+          STALLION_PROJECT_ID: ${{ secrets.STALLION_PROJECT_ID }}
+          STALLION_APP_TOKEN: ${{ secrets.STALLION_APP_TOKEN }}
         run: |
           cat << EOF > .env
-          SUBDL_API_KEY=${{ secrets.SUBDL_API_KEY }}
-          SUBDL_API_URL=${{ secrets.SUBDL_API_URL }}
-          SUBDL_DOWNLOAD_URL=${{ secrets.SUBDL_DOWNLOAD_URL }}
-          OMDB_API_KEY=${{ secrets.OMDB_API_KEY }}
-          OMDB_API_URL=${{ secrets.OMDB_API_URL }}
+          SUBDL_API_KEY=$SUBDL_API_KEY
+          SUBDL_API_URL=$SUBDL_API_URL
+          SUBDL_DOWNLOAD_URL=$SUBDL_DOWNLOAD_URL
+          OMDB_API_KEY=$OMDB_API_KEY
+          OMDB_API_URL=$OMDB_API_URL
           AI_PROXY_URL=$AI_PROXY_URL
           GITHUB_OWNER=Pranav-pradeep0
           GITHUB_REPO=glide-public
-          STALLION_PROJECT_ID=${{ secrets.STALLION_PROJECT_ID }}
-          STALLION_APP_TOKEN=${{ secrets.STALLION_APP_TOKEN }}
+          STALLION_PROJECT_ID=$STALLION_PROJECT_ID
+          STALLION_APP_TOKEN=$STALLION_APP_TOKEN
           EOF
 
       - name: Typecheck
@@ -270,7 +290,7 @@ jobs:
         run: npx jest --ci
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: 17
@@ -285,8 +305,10 @@ jobs:
           ./gradlew :app:testDebugUnitTest :react-native-simple-thumbnail:testDebugUnitTest
 
       - name: Decode Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/glide-release.keystore
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/glide-release.keystore
           if [ ! -s android/app/glide-release.keystore ]; then
             echo "Error: Decoded keystore is empty"
             exit 1
@@ -294,13 +316,16 @@ jobs:
 
       - name: Build signed APKs
         working-directory: android
+        # Gradle reads ORG_GRADLE_PROJECT_<name> as the property <name>, so the signing
+        # secrets reach it without passing through the shell.
+        env:
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_FILE: glide-release.keystore
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease \
-            -PMYAPP_UPLOAD_STORE_FILE="glide-release.keystore" \
-            -PMYAPP_UPLOAD_KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}" \
-            -PMYAPP_UPLOAD_STORE_PASSWORD="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            -PMYAPP_UPLOAD_KEY_PASSWORD="${{ secrets.ANDROID_KEY_PASSWORD }}"
+          ./gradlew assembleRelease
 
       - name: Verify the FFmpeg decoder shipped
         run: |
@@ -359,7 +384,7 @@ jobs:
           echo "ARM64_PATH=$ARM64_DEST" >> "$GITHUB_ENV"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-path: |
             ${{ env.ARM_PATH }}

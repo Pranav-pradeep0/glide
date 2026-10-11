@@ -100,3 +100,6 @@ android/app/libs/*.aar
 # CI could not build a release at all. Committed until the GitHub Packages coordinate from
 # glide-ffmpeg-decoder exists (plan section 4.3), which is the real fix.
 !android/app/libs/lib-decoder-ffmpeg-release.aar
+
+# Stallion bundle-signing private key (npx stallion generate-key-pair writes it here)
+stallion/secret-keys/
