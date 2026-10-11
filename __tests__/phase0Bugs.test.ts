@@ -42,6 +42,17 @@ describe('Phase 0 Bug Fixes', () => {
             ]);
         });
 
+        it('orders by season and episode when every file has one', () => {
+            const names = ['Show.S02E01.mkv', 'Show.2019.S01E02.mkv', 'Show.S01E10.mkv', 'Show.S01E01.mkv'];
+            const queue = names.map(name => ({ name })) as VideoFile[];
+            expect(sortVideosByName(queue).map(v => v.name)).toEqual([
+                'Show.S01E01.mkv', 'Show.2019.S01E02.mkv', 'Show.S01E10.mkv', 'Show.S02E01.mkv',
+            ]);
+            // One file without an episode number: plain name order for the whole folder.
+            const mixed = [...queue, { name: 'Extras.mkv' }] as VideoFile[];
+            expect(sortVideosByName(mixed)[0].name).toBe('Extras.mkv');
+        });
+
         it('leaves the array it was given alone', () => {
             const queue = [{ name: 'b.mkv' }, { name: 'a.mkv' }] as VideoFile[];
             sortVideosByName(queue);

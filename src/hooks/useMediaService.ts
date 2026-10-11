@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MediaService } from '@/services/MediaService';
 import { VideoFile, VideoFolder } from '@/types';
+import { FilenameParser } from '@/utils/FilenameParser';
 
 const albumVideosCache = new Map<string, VideoFile[]>();
 
@@ -69,7 +70,19 @@ export function useVideos() {
 const videoNameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 export function sortVideosByName(list: VideoFile[]): VideoFile[] {
-    return [...list].sort((a, b) => videoNameCollator.compare(a.name, b.name));
+    const byName = (a: VideoFile, b: VideoFile) => videoNameCollator.compare(a.name, b.name);
+    // Names alone put "Show.2019.S01E02" before "Show.S01E01". When every file carries an
+    // episode number, season and episode decide; all-or-nothing, because mixing the two
+    // orders in one comparator is not transitive and sort() would scramble the list.
+    const parsed = list.map(v => ({ v, p: FilenameParser.parse(v.name) }));
+    if (list.length < 2 || parsed.some(x => x.p.episode === undefined)) {
+        return [...list].sort(byName);
+    }
+    return parsed
+        .sort((a, b) => (a.p.season ?? 0) - (b.p.season ?? 0)
+            || a.p.episode! - b.p.episode!
+            || byName(a.v, b.v))
+        .map(x => x.v);
 }
 
 export function useAlbumVideos(albumTitle: string | null, bucketId?: string) {

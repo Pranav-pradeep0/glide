@@ -64,6 +64,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S
 - **Perf** — HUD state in the 1400-line screen re-renders it on every gesture step; brightness "throttle" is `floor(y) % 5`; Quick Settings sliders send a native prop per step; landscape playlist mounts and queues thumbnails at open; hidden time labels still tick React state — S–M
 - ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
+- ✅ **Episode order** (`useMediaService.ts` `sortVideosByName`) — name order puts `Show.2019.S01E02` before `Show.S01E01`, so Next skips around — S *(season/episode decide when every file in the folder has one; anime `Show - 12` and `Ep 9` aren't parsed and keep the name order)*
 - **Small features** — no on-screen Previous button; autoplay-next has no "Up next" countdown/cancel; playlist doesn't scroll to current or show watched progress; no "Play from start" / "Mark as watched" in video options — S each
 
 ## UI / UX rough edges
