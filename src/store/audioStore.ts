@@ -6,6 +6,7 @@ import { AudioMediaService } from '@/services/AudioMediaService';
 import { PermissionService } from '@/services/PermissionService';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { useMusicHistoryStore } from '@/store/musicHistoryStore';
+import { usePermissionStore } from '@/store/permissionStore';
 import { hasNativeApi } from '@/native/GlideNative';
 
 const getAudioModule = () => NativeModules.GlideAudioPlayerModule;
@@ -87,22 +88,31 @@ function readPersistedIds(): string[] {
  * is saved whole, so the mini player is right before this finishes.
  *
  * Without the audio permission there is no library to resolve against, and asking for it
- * at launch is not this function's business, so only the saved current track is restored.
+ * at launch is not this function's business, so only the saved current track is restored,
+ * as a stand-in queue. It runs again when access is granted (see the subscription below).
  */
 async function hydratePersistedQueue() {
     try {
         const ids = readPersistedIds();
-        if (useAudioStore.getState().queue.length > 0) { return; }
+        const before = useAudioStore.getState().queue;
+        if (before.length > 0 && before !== standInQueue) { return; }
+        // Playing the stand-in loaded it into the player as it is; it is the queue now.
+        if (before === standInQueue && (await getAudioModule()?.getCurrentState?.())?.trackId) {
+            standInQueue = null;
+            return;
+        }
 
         let queue: AudioTrack[] = [];
-        if (ids.length > 0 && await PermissionService.checkAudioPermission()) {
+        const readable = ids.length > 0 && await PermissionService.checkAudioPermission();
+        if (readable) {
             const byId = new Map((await AudioMediaService.getSongs()).map((s) => [String(s.id), s]));
             queue = ids.map((id) => byId.get(id)).filter((t): t is AudioTrack => !!t);
         }
 
         const current = useAudioStore.getState();
         // Something started playing while the library was being read; leave it alone.
-        if (current.queue.length > 0) { return; }
+        // Every queue change makes a new array, so identity tells.
+        if (current.queue !== before) { return; }
 
         const track = current.currentTrack;
         const byTrack = track ? queue.findIndex((t) => String(t.id) === String(track.id)) : -1;
@@ -120,6 +130,7 @@ async function hydratePersistedQueue() {
         }
         if (queue.length === 0) { return; }
 
+        standInQueue = ids.length > 0 && !readable ? queue : null;
         useAudioStore.setState({
             queue,
             currentIndex: safeIndex,
@@ -129,6 +140,9 @@ async function hydratePersistedQueue() {
         // ignore
     }
 }
+
+/** The queue holding only the saved track because the library could not be read yet. */
+let standInQueue: AudioTrack[] | null = null;
 /**
  * Settles once the saved queue is back. Queue actions wait on it: before it settles the
  * queue is empty while the mini player already shows the saved track, so play would start
@@ -922,6 +936,13 @@ if (Platform.OS === 'android') {
         }).catch(() => {});
     }
 }
+
+// Audio access granted after launch: resolve the rest of the saved queue.
+usePermissionStore.subscribe((state, prev) => {
+    if (standInQueue && state.audio.access === 'granted' && prev.audio.access !== 'granted') {
+        hydratePersistedQueue();
+    }
+});
 
 // Recents > Music. One place catches every way a song starts: a tap, skip, auto-advance or
 // the notification controls. The song restored at launch is not a change, so it is not counted.

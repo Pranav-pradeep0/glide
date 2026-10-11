@@ -6,6 +6,7 @@ jest.mock('react-native-mmkv', () => ({
     createMMKV: () => ({
         set: (k: string, v: string) => mockMMKVStore.set(k, v),
         getString: (k: string) => mockMMKVStore.get(k),
+        getBoolean: () => undefined,
         delete: (k: string) => mockMMKVStore.delete(k),
         remove: (k: string) => mockMMKVStore.delete(k),
         clearAll: () => mockMMKVStore.clear(),
@@ -59,6 +60,7 @@ jest.mock('@react-native-documents/picker', () => ({
 jest.mock('../src/services/PermissionService', () => ({
     PermissionService: {
         checkAudioPermission: jest.fn().mockReturnValue(Promise.resolve(true)),
+        check: jest.fn().mockReturnValue(Promise.resolve('granted')),
         requestAudioPermission: jest.fn().mockReturnValue(Promise.resolve(true)),
     },
 }));
@@ -75,6 +77,8 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
 import { formatDuration } from '../src/utils/formatUtils';
 import { useAudioStore, flushPendingWrites } from '../src/store/audioStore';
 import { useFavoritesStore } from '../src/store/favoritesStore';
+import { usePermissionStore } from '../src/store/permissionStore';
+import { PermissionService } from '../src/services/PermissionService';
 import { AudioMediaService, folderPathOf } from '../src/services/AudioMediaService';
 import { parseLrc } from '../src/services/LyricsService';
 import { AudioTrack } from '../src/types';
@@ -266,6 +270,32 @@ describe('Audio Player Utilities and Store', () => {
             const state = useAudioStore.getState();
             expect(state.queue.map((t) => t.id)).toEqual([opened.id]);
             expect(state.queue[state.currentIndex].id).toBe(opened.id);
+        });
+
+        it('resolves the rest of the saved queue when audio access arrives later', async () => {
+            const checkAudio = PermissionService.checkAudioPermission as jest.Mock<any>;
+            NativeModules.MediaStoreAudioModule.getSongs.mockReturnValue(
+                Promise.resolve([dummyTrack1, dummyTrack2])
+            );
+            AudioMediaService.invalidateCache();
+            mockMMKVStore.set('@glide_audio_queue_ids', JSON.stringify(['101', '102']));
+            useAudioStore.setState({ queue: [], currentTrack: dummyTrack2, currentIndex: 1 });
+            usePermissionStore.setState({ audio: { access: 'denied', blocked: false } });
+
+            checkAudio.mockReturnValue(Promise.resolve(false));
+            await useAudioStore.getState().hydrateQueue();
+            expect(useAudioStore.getState().queue.map((t) => t.id)).toEqual(['102']);
+
+            // Granted in Settings; nothing loaded in the player yet.
+            checkAudio.mockReturnValue(Promise.resolve(true));
+            NativeModules.GlideAudioPlayerModule.getCurrentState.mockReturnValueOnce(Promise.resolve({}));
+            usePermissionStore.setState({ audio: { access: 'granted', blocked: false } });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            const state = useAudioStore.getState();
+            expect(state.queue.map((t) => t.id)).toEqual(['101', '102']);
+            expect(state.currentTrack?.id).toBe('102');
+            expect(state.currentIndex).toBe(1);
         });
 
         it('preserves position when track index has not changed in _setTrackChanged', () => {

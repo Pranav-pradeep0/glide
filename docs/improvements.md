@@ -83,7 +83,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Touch targets** — TrackRow "more" 28 dp, Album/Artist "more" 32 dp, ~~queue buttons 32 dp~~ (✅ with the queue drag) — S
 - **Small features** — theme "Auto" (follow system); re-tapping a tab scrolls to top; AlbumVideos sort + folder-scoped search; consider "Third-party licences" as the Settings label so nobody reads it as Glide being open source — S each
 
-- **Music queue after a late grant** (`audioStore.ts:97`) — the saved queue is resolved against MediaStore once at launch; granting audio access later leaves it unresolved until the next launch — S
+- ✅ **Music queue after a late grant** (`audioStore.ts:97`) — the saved queue is resolved against MediaStore once at launch; granting audio access later leaves it unresolved until the next launch — S *(resolved when access is granted, unless the one-song stand-in was already played or replaced by then — Play next / Add to queue before granting still saves the shorter queue)*
 
 ## Slow paths
 
