@@ -717,7 +717,7 @@ interface SnackbarMessage {
  */
 const snackbarListeners: ((m: SnackbarMessage) => void)[] = [];
 
-/** One message at a time, bottom of the screen, 3 s (5 s with an action). */
+/** One message at a time, bottom of the screen, 2–5 s by length (5 s with an action); swipe or tap dismisses. */
 export function showSnackbar(message: SnackbarMessage) {
     if (message.tone) { haptic(message.tone); }
     snackbarListeners[snackbarListeners.length - 1]?.(message);
@@ -755,6 +755,8 @@ export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffse
     // The message still on its way in or up; handed on if this host goes first.
     const liveRef = useRef<SnackbarMessage | null>(null);
     const shown = useSharedValue(0);
+    const swipe = useSharedValue(0);
+    const snackWidth = useSharedValue(1);
 
     // Unmount once faded: an invisible snackbar still catches taps.
     const hide = useCallback(() => {
@@ -764,14 +766,37 @@ export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffse
         });
     }, [shown]);
 
+    const swipedAway = useCallback(() => {
+        liveRef.current = null;
+        shown.value = 0;
+        setMessage(null);
+    }, [shown]);
+
+    // Swiped sideways past 30% of its width (or flung), it leaves that way.
+    const swipeGesture = Gesture.Pan()
+        .activeOffsetX([-12, 12])
+        .onUpdate(e => { swipe.value = e.translationX; })
+        .onEnd(e => {
+            if (Math.abs(e.translationX) > snackWidth.value * 0.3 || Math.abs(e.velocityX) > 800) {
+                const to = Math.sign(e.translationX || e.velocityX) * snackWidth.value * 1.2;
+                swipe.value = withTiming(to, { duration: motion.fadeOut }, done => {
+                    if (done) { runOnJS(swipedAway)(); }
+                });
+            } else {
+                swipe.value = withSpring(0, motion.spatial);
+            }
+        });
+
     useEffect(() => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const listener = (m: SnackbarMessage) => {
             clearTimeout(timer);
             liveRef.current = m;
             setMessage(m);
+            swipe.value = 0;
             shown.value = withSpring(1, motion.spatial);
-            timer = setTimeout(hide, m.action ? 5000 : 3000);
+            // Long enough to read: "Sleep timer set" 2 s, a two-line explanation ~3.5 s.
+            timer = setTimeout(hide, m.action ? 5000 : Math.min(5000, Math.max(2000, m.text.length * 50)));
         };
         snackbarListeners.push(listener);
         return () => {
@@ -780,32 +805,41 @@ export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffse
             // A sheet closing as it confirms something: the host underneath shows the message.
             if (liveRef.current) { snackbarListeners[snackbarListeners.length - 1]?.(liveRef.current); }
         };
-    }, [shown, hide]);
+    }, [shown, swipe, hide]);
 
     const style = useAnimatedStyle(() => ({
-        opacity: shown.value,
+        opacity: shown.value * (1 - Math.min(1, Math.abs(swipe.value) / snackWidth.value)),
         bottom: Math.max(insets.bottom, aboveBottomBar ? bottomBarHeight.value : 0) + bottomOffset + metrics.space.lg,
-        transform: [{ translateY: (1 - shown.value) * 24 }],
+        transform: [{ translateY: (1 - shown.value) * 24 }, { translateX: swipe.value }],
     }));
 
     if (!message) { return null; }
     const { colors } = playerTheme;
     return (
         <Animated.View pointerEvents="box-none" style={[styles.snackWrap, style]}>
-            <View style={[styles.snack, { backgroundColor: '#2A2A2E' }]} accessibilityLiveRegion="polite">
-                <Text style={[type.body, styles.snackText, { color: colors.text }]} numberOfLines={2}>{message.text}</Text>
-                {message.action && (
-                    <Button
-                        variant="ghost"
-                        label={message.action}
-                        onPlayer
-                        onPress={() => {
-                            message.onAction?.();
-                            hide();
-                        }}
-                    />
-                )}
-            </View>
+            <GestureDetector gesture={swipeGesture}>
+                {/* A tap anywhere but the action dismisses it too. */}
+                <Pressable
+                    onPress={hide}
+                    onLayout={e => { snackWidth.value = Math.max(1, e.nativeEvent.layout.width); }}
+                    style={[styles.snack, { backgroundColor: '#2A2A2E' }]}
+                    accessibilityLiveRegion="polite"
+                    accessibilityHint="Dismisses the message"
+                >
+                    <Text style={[type.body, styles.snackText, { color: colors.text }]} numberOfLines={2}>{message.text}</Text>
+                    {message.action && (
+                        <Button
+                            variant="ghost"
+                            label={message.action}
+                            onPlayer
+                            onPress={() => {
+                                message.onAction?.();
+                                hide();
+                            }}
+                        />
+                    )}
+                </Pressable>
+            </GestureDetector>
         </Animated.View>
     );
 }
