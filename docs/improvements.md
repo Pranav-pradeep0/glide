@@ -74,7 +74,8 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Perf** — measured on a Nothing Phone 2 (release build, temporary render counter) — S–M
   - ~~HUD state re-renders the screen on every gesture step~~ not any more: brightness / volume swipes re-render the screen once or twice per swipe (3 renders over ~8 s of brightness swipes); the HUD reads shared values
   - ✅ **Scrub** — every live preview seek (25/s) reported buffering then ready, and `handleBuffering` set a new state object each time: ~20 screen renders/s while dragging the seek bar, now ≤5/s
-  - brightness / volume "throttle" is `floor(y) % 5`
+  - ✅ **Brightness / volume "throttle"** was `floor(y) % 5`: it fired on pixel rows, not on change, so a fast swipe skipped steps, and volume had no final apply — a swipe could end with the system level and the 100–200 % boost a step behind the HUD *(each 1 % step is now sent once)*
+  - hardware volume keys re-render the whole player on every press (7–11 renders/s while held): the HUD show dispatches go through `useReducer`, which has no eager bail-out
   - hidden time labels still re-render twice a second; while scrubbing they re-render ~300 times a second through React state
   - Quick Settings speed / colour-strength sliders re-render the whole screen per step
   - landscape playlist is mounted (rows + thumbnails) from the moment the player opens, even if never opened

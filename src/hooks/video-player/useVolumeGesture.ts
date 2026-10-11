@@ -59,6 +59,7 @@ export function useVolumeGesture(options: UseVolumeGestureOptions) {
     } = options;
 
     const isGestureActive = useSharedValue(false);
+    const lastAppliedPercent = useSharedValue(-1);
 
     const gesture = useMemo(() => {
         return Gesture.Pan()
@@ -91,6 +92,7 @@ export function useVolumeGesture(options: UseVolumeGestureOptions) {
 
                 // Capture starting volume
                 volumeStart.value = currentVolume.value;
+                lastAppliedPercent.value = Math.round(currentVolume.value * 100);
 
                 // Show HUD immediately (for visibility)
                 runOnJS(onVolumeChange)(currentVolume.value);
@@ -110,8 +112,11 @@ export function useVolumeGesture(options: UseVolumeGestureOptions) {
                 // Update shared value (HUD reads this directly)
                 currentVolume.value = newValue;
 
-                // Throttle system volume updates (pixel-based, matching brightness)
-                if (Math.floor(Math.abs(event.translationY)) % 5 === 0) {
+                // Send each whole percent once (applyVolume rounds to it), so the value the HUD
+                // ends on is always the one applied, with no call while the finger holds still.
+                const percent = Math.round(newValue * 100);
+                if (percent !== lastAppliedPercent.value) {
+                    lastAppliedPercent.value = percent;
                     runOnJS(onVolumeApply)(newValue, true);
                 }
             })
@@ -131,6 +136,8 @@ export function useVolumeGesture(options: UseVolumeGestureOptions) {
         isLockedShared,
         currentVolume,
         volumeStart,
+        isGestureActive,
+        lastAppliedPercent,
         maxVolume,
         onVolumeChange,
         onVolumeApply,

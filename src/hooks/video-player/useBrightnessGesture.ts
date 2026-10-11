@@ -62,6 +62,7 @@ export function useBrightnessGesture(options: UseBrightnessGestureOptions) {
     } = options;
 
     const isGestureActive = useSharedValue(false);
+    const lastAppliedPercent = useSharedValue(-1);
     const effectiveBrightnessApply = onBrightnessApply || applyBrightnessDefault;
 
     const gesture = useMemo(() => {
@@ -95,6 +96,7 @@ export function useBrightnessGesture(options: UseBrightnessGestureOptions) {
 
                 // Capture starting brightness
                 brightnessStart.value = currentBrightness.value;
+                lastAppliedPercent.value = Math.round(currentBrightness.value * 100);
 
                 // Show HUD immediately (still need to notify JS to show the component)
                 runOnJS(onBrightnessChange)(currentBrightness.value);
@@ -114,10 +116,11 @@ export function useBrightnessGesture(options: UseBrightnessGestureOptions) {
                 // Update shared value (HUD will read this directly)
                 currentBrightness.value = newValue;
 
-                // Update system brightness - throttle to avoid bridge congestion
-                // Update every 3rd pixel roughly (sensitivity 0.008 -> 125px full range)
-                // Just use frame throttle
-                if (Math.floor(Math.abs(event.translationY)) % 5 === 0) {
+                // Send each 1% step once: no call while the finger holds still, and a fast
+                // swipe no longer skips the frames that miss a 5 px row.
+                const percent = Math.round(newValue * 100);
+                if (percent !== lastAppliedPercent.value) {
+                    lastAppliedPercent.value = percent;
                     runOnJS(effectiveBrightnessApply)(newValue);
                 }
             })
@@ -142,6 +145,8 @@ export function useBrightnessGesture(options: UseBrightnessGestureOptions) {
         isLockedShared,
         currentBrightness,
         brightnessStart,
+        isGestureActive,
+        lastAppliedPercent,
         onBrightnessChange,
         effectiveBrightnessApply,
         onGestureStart,
