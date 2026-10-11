@@ -11,7 +11,7 @@ import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useTheme } from '@/hooks/useTheme';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
-import { Chip, IconButton, SortButton } from '@/components/ui';
+import { IconButton, Segmented, SortButton } from '@/components/ui';
 import { RecentMusicList } from '@/components/RecentMusicList';
 import {
     AmbientBackdrop, ContinueCard, EmptyState, ListHeader, SectionTitle, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
@@ -23,6 +23,7 @@ import { isFinished } from '@/utils/playbackResume';
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'grid' | 'list';
 type RecentsKind = 'videos' | 'music';
+const KINDS: { key: RecentsKind; label: string }[] = [{ key: 'videos', label: 'Videos' }, { key: 'music', label: 'Music' }];
 
 type SortByOption = 'recent' | 'views' | 'name';
 
@@ -193,10 +194,7 @@ export default function RecentsScreen() {
                         </>
                     )}
                 </ListHeader>
-                <View style={styles.kindRow}>
-                    <Chip label="Videos" selected={kind === 'videos'} onPress={() => setKind('videos')} />
-                    <Chip label="Music" selected={kind === 'music'} onPress={() => setKind('music')} />
-                </View>
+                <Segmented options={KINDS} value={kind} onChange={setKind} style={styles.kindRow} />
             </View>
 
             {kind === 'music' ? (
@@ -244,6 +242,6 @@ export default function RecentsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    kindRow: { flexDirection: 'row', gap: metrics.space.sm, paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.sm },
+    kindRow: { marginHorizontal: metrics.gutter, marginBottom: metrics.space.sm },
         sortBar: { alignSelf: 'flex-end', marginRight: metrics.gutter, marginTop: metrics.space.sm, marginBottom: metrics.space.sm },
 });
