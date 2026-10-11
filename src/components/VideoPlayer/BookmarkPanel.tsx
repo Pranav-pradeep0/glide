@@ -5,7 +5,7 @@ import { useAnimatedReaction, runOnJS } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 import { VideoBookmark } from '@/types';
 import { findActiveBookmarkId } from '@/hooks/video-player/types';
-import { IconButton, Touchable } from '@/components/ui';
+import { Button, IconButton, Touchable } from '@/components/ui';
 import { metrics, playerTheme, type } from '@/theme/theme';
 import { SidePanel } from './SidePanel';
 
@@ -20,6 +20,8 @@ interface BookmarkPanelProps {
     onBack?: () => void;
     onSelectBookmark: (timestamp: number) => void;
     onDeleteBookmark: (bookmarkId: string) => void;
+    /** Saves the current moment; the panel stays open so the new bookmark shows up. */
+    onAddBookmark: () => void;
     formatTime: (seconds: number) => string;
 }
 
@@ -91,6 +93,7 @@ export const BookmarkPanel: React.FC<BookmarkPanelProps> = memo(({
     onBack,
     onSelectBookmark,
     onDeleteBookmark,
+    onAddBookmark,
     formatTime,
 }) => {
     const sortedBookmarks = useMemo(() => {
@@ -132,7 +135,8 @@ export const BookmarkPanel: React.FC<BookmarkPanelProps> = memo(({
                 {count === 0 ? (
                     <View style={styles.emptyState}>
                         <Text style={styles.emptyText}>No bookmarks yet</Text>
-                        <Text style={styles.emptySubtext}>Tap the bookmark button while watching to save a moment.</Text>
+                        <Text style={styles.emptySubtext}>Save moments to jump back to them later.</Text>
+                        <Button label="Add bookmark here" icon="bookmark" variant="primary" onPress={onAddBookmark} onPlayer style={styles.emptyButton} />
                     </View>
                 ) : (
                     sortedBookmarks.map((bookmark) => (
@@ -168,6 +172,7 @@ const styles = StyleSheet.create({
     scrollContent: { paddingBottom: metrics.space.xl },
     emptyState: { alignItems: 'center', paddingVertical: 64, paddingHorizontal: metrics.space.xl, gap: 6 },
     emptyText: { ...type.heading, color: colors.text },
+    emptyButton: { marginTop: metrics.space.lg },
     emptySubtext: { ...type.body, color: colors.textSecondary, textAlign: 'center' },
     row: { flexDirection: 'row', alignItems: 'center' },
     rowMain: {

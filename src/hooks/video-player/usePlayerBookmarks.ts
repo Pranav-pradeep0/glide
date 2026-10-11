@@ -59,9 +59,14 @@ export function usePlayerBookmarks(options: UsePlayerBookmarksOptions): UsePlaye
     }, [videoPath, videoName, duration, currentTimeRef, storeAddBookmark, storeRemoveBookmark]);
 
     const deleteBookmark = useCallback((bookmarkId: string) => {
+        const removed = bookmarks.find(b => b.id === bookmarkId);
         storeRemoveBookmark(videoPath, bookmarkId);
-        showToastWithMessage('Bookmark deleted');
-    }, [videoPath, storeRemoveBookmark]);
+        showSnackbar({
+            text: 'Bookmark deleted',
+            action: removed ? 'Undo' : undefined,
+            onAction: removed ? () => storeAddBookmark(videoPath, videoName, removed.timestamp, removed.label) : undefined,
+        });
+    }, [videoPath, videoName, bookmarks, storeRemoveBookmark, storeAddBookmark]);
 
     const jumpToBookmark = useCallback((timestamp: number) => {
         onSeekToBookmark(timestamp);

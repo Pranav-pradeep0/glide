@@ -1447,6 +1447,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onBack={openedFromPlayback ? handleBackToPlayback : undefined}
                     onSelectBookmark={bookmarksHook.jumpToBookmark}
                     onDeleteBookmark={bookmarksHook.deleteBookmark}
+                    onAddBookmark={bookmarksHook.addBookmark}
                     formatTime={formatTime}
                 />
             )}
