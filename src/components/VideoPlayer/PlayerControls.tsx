@@ -408,7 +408,6 @@ interface PlayerControlsProps {
 }
 
 const NO_BOOKMARKS: number[] = [];
-const noop = () => {};
 const SEEK_ACTIONS = [{ name: 'increment' }, { name: 'decrement' }];
 
 type Handler = (...args: unknown[]) => unknown;
@@ -552,17 +551,16 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
             </Animated.View>
 
             {/* Lock, alone on the left edge (clear of a landscape camera cutout), vertically centred where the thumb rests */}
-            <Animated.View style={[styles.rail, { left: metrics.space.sm + edge('left', railMiddle - 24, railMiddle + 24) }, othersStyle]} pointerEvents="box-none">
-                {/* Small and bare, as it always was: an 18 px glyph about 20 dp from the edge. */}
-                <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
-            </Animated.View>
+            {/* Portrait has no side room (the centre row reaches the edges), so its lock is in the tools row. */}
+            {isLandscape && (
+                <Animated.View style={[styles.rail, { left: metrics.space.sm + edge('left', railMiddle - 24, railMiddle + 24) }, othersStyle]} pointerEvents="box-none">
+                    {/* Small and bare, as it always was: an 18 px glyph about 20 dp from the edge. */}
+                    <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
+                </Animated.View>
+            )}
 
-            {/* Centre transport. Portrait's bottom row has no room, so Previous / Next sit here as a
-                pair: a missing one is shown disabled, which keeps Play in the middle. */}
+            {/* Centre transport. Portrait's Previous / Next sit at the ends of the time row. */}
             <Animated.View style={[styles.center, !isLandscape && styles.centerPortrait, othersStyle]} pointerEvents="box-none">
-                {!isLandscape && (onPrevious || onNext) && (
-                    <IconButton icon="skip-back" iconSize={26} onPress={onPrevious ?? noop} disabled={!onPrevious} accessibilityLabel="Previous video" onPlayer />
-                )}
                 {showSeekButtons && (
                     <SkipButton seconds={seekDuration} onPress={onJumpBackward} />
                 )}
@@ -577,9 +575,6 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 {showSeekButtons && (
                     <SkipButton forward seconds={seekDuration} onPress={onJumpForward} />
                 )}
-                {!isLandscape && (onPrevious || onNext) && (
-                    <IconButton icon="skip-forward" iconSize={26} onPress={onNext ?? noop} disabled={!onNext} accessibilityLabel="Next video" onPlayer />
-                )}
             </Animated.View>
 
             {/* Bottom */}
@@ -589,10 +584,18 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
             >
                 <Animated.View style={[styles.timeRow, othersStyle]}>
                     {/* Elapsed on the left; time left / total on the right: all three, no tap to find them. */}
-                    <ReanimatedText value={elapsed} formatter={formatClock} fallbackText={fallbackElapsed} live={timeRowLive} />
+                    <View style={styles.endGroup}>
+                        {!isLandscape && onPrevious && (
+                            <IconButton icon="skip-back" iconSize={20} onPress={onPrevious} accessibilityLabel="Previous video" onPlayer />
+                        )}
+                        <ReanimatedText value={elapsed} formatter={formatClock} fallbackText={fallbackElapsed} live={timeRowLive} />
+                    </View>
                     <View style={styles.endGroup}>
                         <ReanimatedText value={remaining} formatter={remainingFormatter} fallbackText={fallbackRemaining} style={styles.timeMuted} live={timeRowLive} />
                         <Text style={styles.time}> / {totalText}</Text>
+                        {!isLandscape && onNext && (
+                            <IconButton icon="skip-forward" iconSize={20} onPress={onNext} accessibilityLabel="Next video" onPlayer />
+                        )}
                     </View>
                 </Animated.View>
 
@@ -628,6 +631,9 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                             style={styles.previous}
                         />
                     )}
+                    {!isLandscape && (
+                        <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
+                    )}
                     {onToggleNightMode && (
                         <GlyphButton onPress={onToggleNightMode} label="Night mode" active={nightModeActive}>
                             {c => <NightModeIcon size={20} color={c} active={nightModeActive} />}
@@ -657,10 +663,11 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                         scaleTo={0.94}
                         accessibilityRole="button"
                         accessibilityLabel={`Display mode: ${getResizeModeLabel(resizeMode)}. Tap to change`}
-                        style={styles.modePill}
+                        style={[styles.modePill, !isLandscape && styles.modePillIcon]}
                     >
                         <ResizeModeIcon size={18} color={colors.text} />
-                        <Text style={styles.modeText}>{getResizeModeLabel(resizeMode)}</Text>
+                        {/* Portrait's row has room for the icon only; a change still names the mode in the HUD. */}
+                        {isLandscape && <Text style={styles.modeText}>{getResizeModeLabel(resizeMode)}</Text>}
                     </Touchable>
                     {onEnterPip && (
                         <GlyphButton onPress={onEnterPip} label="Picture in picture">
@@ -756,10 +763,10 @@ const styles = StyleSheet.create({
     play: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center' },
     glyphLayer: { position: 'absolute' },
     bottom: { position: 'absolute', left: 0, right: 0, bottom: 0 },
-    timeRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    timeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     time: { ...type.caption, color: colors.text, fontVariant: ['tabular-nums'], includeFontPadding: false },
     timeMuted: { color: colors.textSecondary },
-    endGroup: { flexDirection: 'row' },
+    endGroup: { flexDirection: 'row', alignItems: 'center' },
     seekBar: { height: 28, justifyContent: 'center' },
     track: { backgroundColor: 'rgba(255,255,255,0.28)', overflow: 'hidden' },
     fill: { ...StyleSheet.absoluteFill, backgroundColor: colors.primary, transformOrigin: 'left' },
@@ -792,6 +799,7 @@ const styles = StyleSheet.create({
     tools: { flexDirection: 'row', alignItems: 'center', minHeight: metrics.touch },
     next: { marginLeft: metrics.space.sm },
     previous: { marginRight: metrics.space.sm },
+    modePillIcon: { width: 40, paddingHorizontal: 0, justifyContent: 'center' },
     modePill: {
         flexDirection: 'row',
         alignItems: 'center',
