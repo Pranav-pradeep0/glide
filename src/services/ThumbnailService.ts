@@ -2,8 +2,15 @@ import SimpleThumbnail from '../../libs/react-native-simple-thumbnail';
 import * as RNFS from '@dr.pogodin/react-native-fs';
 import { FileService } from './FileService';
 import { MediaService } from './MediaService';
+import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 
 const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails`;
+/**
+ * Frames taken at a set time -- only Recents' stop frames ask for one. Kept apart so the
+ * launch sweep can drop every one no history entry points to any more: replaced by a later
+ * stop, or the entry deleted, removed, cleared or pruned.
+ */
+const AT_TIME_DIR = `${THUMBNAIL_DIR}/at`;
 const MAX_CONCURRENT_WORKERS = 4;
 const MAX_MEMO_ENTRIES = 2000;
 
@@ -43,7 +50,29 @@ class ThumbnailServiceClass {
     }
 
     private async init() {
-        await FileService.ensureDir(THUMBNAIL_DIR);
+        await FileService.ensureDir(AT_TIME_DIR);
+        try {
+            const wanted = new Set<string>();
+            for (const entry of useVideoHistoryStore.getState().history.values()) {
+                if (entry.stopFrameMs) {
+                    wanted.add(this.fileName(entry.videoPath, entry.stopFrameMs));
+                }
+            }
+            const files = await RNFS.readDir(AT_TIME_DIR);
+            await Promise.all(files
+                .filter(file => !wanted.has(file.name))
+                .map(file => RNFS.unlink(file.path)));
+        } catch (error) {
+            console.warn('[ThumbnailService] Stop-frame sweep failed:', error);
+        }
+    }
+
+    private fileName(videoPath: string, timeMs: number): string {
+        return `${this.hashPath(`${videoPath}::${timeMs}`)}.jpg`;
+    }
+
+    private outPath(videoPath: string, timeMs: number): string {
+        return `${timeMs > 0 ? AT_TIME_DIR : THUMBNAIL_DIR}/${this.fileName(videoPath, timeMs)}`;
     }
 
     /**
@@ -74,9 +103,8 @@ class ThumbnailServiceClass {
         }
 
         // Create a unique key for this request (path + time)
-        const key = `${videoPath}::${timeMs}`;
-        const filename = `${this.hashPath(key)}.jpg`;
-        const outPath = `${THUMBNAIL_DIR}/${filename}`;
+        const key = memo;
+        const outPath = this.outPath(videoPath, timeMs);
 
         // 1. Check Disk Cache
         if (await FileService.exists(outPath)) {
@@ -158,8 +186,7 @@ class ThumbnailServiceClass {
         this.activeWorkers++;
         this.processingKeys.add(task.key);
 
-        const filename = `${this.hashPath(task.key)}.jpg`;
-        const outPath = `${THUMBNAIL_DIR}/${filename}`;
+        const outPath = this.outPath(task.path, task.time);
 
         try {
             // Resolve content:// URIs

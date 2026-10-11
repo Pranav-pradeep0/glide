@@ -234,7 +234,12 @@ export interface VideoHistoryEntry {
     duration: number;
     viewCount: number;
     bookmarks: VideoBookmark[];
-    thumbnailPath?: string;
+    /**
+     * Where you stopped, in ms, for Recents' thumbnail. Set only on leaving the player: the
+     * periodic position save would ask for a new frame every few seconds of watching.
+     * Unset (finished, or never left at a position) means the usual smart-scan frame.
+     */
+    stopFrameMs?: number;
     fileSize?: number;
     selectedAudioTrackId?: number;
     selectedSubtitleTrackId?: number; // Index of the subtitle track

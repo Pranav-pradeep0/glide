@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ThumbnailService } from '@/services/ThumbnailService';
 
-export function useThumbnail(videoPath: string | undefined) {
+/** `timeMs` picks the frame; 0 is the service's smart scan. */
+export function useThumbnail(videoPath: string | undefined, timeMs = 0) {
     const [thumbnail, setThumbnail] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -21,7 +22,7 @@ export function useThumbnail(videoPath: string | undefined) {
         const fetchThumbnail = async () => {
             setLoading(true);
             try {
-                const thumb = await ThumbnailService.getThumbnail(videoPath, 0, token);
+                const thumb = await ThumbnailService.getThumbnail(videoPath, timeMs, token);
                 if (isMounted) {
                     setThumbnail(thumb);
                 }
@@ -39,10 +40,10 @@ export function useThumbnail(videoPath: string | undefined) {
         return () => {
             isMounted = false;
             if (videoPath) {
-                ThumbnailService.cancelRequest(videoPath, 0, token);
+                ThumbnailService.cancelRequest(videoPath, timeMs, token);
             }
         };
-    }, [videoPath]);
+    }, [videoPath, timeMs]);
 
     return { thumbnail, loading };
 }

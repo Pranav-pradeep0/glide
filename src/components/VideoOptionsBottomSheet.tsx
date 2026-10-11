@@ -54,7 +54,8 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
     const resolution = video && 'width' in video && video.width && video.height ? `${video.width} × ${video.height}` : null;
     const folder = path.split('/').slice(0, -1).pop();
 
-    const { thumbnail } = useThumbnail(path);
+    // From Recents, the same stop frame the row shows.
+    const { thumbnail } = useThumbnail(path, video && 'videoPath' in video ? video.stopFrameMs : undefined);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [extendedMeta, setExtendedMeta] = useState<ExtendedMeta>({ loading: false });
 

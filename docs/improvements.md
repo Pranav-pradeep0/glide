@@ -62,7 +62,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 
 ## UI / UX rough edges
 
-- **Recents** — thumbnails are the generic frame, not where you stopped; `ThumbnailService` already takes a time, `useThumbnail` always passes 0 — S
+- ✅ **Recents** — thumbnails are the generic frame, not where you stopped; `ThumbnailService` already takes a time, `useThumbnail` always passes 0. Also: the native side seeked to the nearest keyframe (`OPTION_CLOSEST_SYNC`), seconds off — S
 - **Now Playing › Queue** — reorder is up/down chevrons with 32 dp targets, hidden while shuffle is on; no drag — M
 - **Now Playing › Lyrics** — auto-scroll yanks back while you're reading; box is only cover-sized; empty LRC lines render as blank rows; no hint that online lyrics are off in Settings when nothing is found — M
 - **Now Playing** — heart uses the app primary while every other control uses the cover accent; equalizer icon never shows "active" when a preset is on — S

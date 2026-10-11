@@ -134,6 +134,7 @@ export default function RecentsScreen() {
                     meta={metaFor(item)}
                     duration={item.duration}
                     progress={progressOf(item.duration, item.lastPausedPosition)}
+                    thumbnailTime={item.stopFrameMs}
                     onPress={handleVideoPress}
                     onMore={handleOpenOptions}
                 />
@@ -156,6 +157,7 @@ export default function RecentsScreen() {
                         name={hero.videoName}
                         meta={timeLabel(hero.duration, hero.lastPausedPosition) ?? ''}
                         progress={progressOf(hero.duration, hero.lastPausedPosition)}
+                        thumbnailTime={hero.stopFrameMs}
                         onPress={handleVideoPress}
                         onMore={handleOpenOptions}
                     />
@@ -168,7 +170,7 @@ export default function RecentsScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {kind === 'videos' && <AmbientBackdrop path={hero?.videoPath} />}
+            {kind === 'videos' && <AmbientBackdrop path={hero?.videoPath} thumbnailTime={hero?.stopFrameMs} />}
             <View style={{ paddingTop: insets.top }}>
                 <ListHeader title="Recents">
                     {kind === 'videos' && (

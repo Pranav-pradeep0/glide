@@ -145,6 +145,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const updatePlaybackPosition = useVideoHistoryStore(state => state.updatePlaybackPosition);
     const incrementViewCount = useVideoHistoryStore(state => state.incrementViewCount);
     const persistNow = useVideoHistoryStore(state => state.persistNow);
+    const setStopFrame = useVideoHistoryStore(state => state.setStopFrame);
 
     // Fine-grained global settings selectors
     const brightnessMode = useAppStore(state => state.settings.brightnessMode);
@@ -523,7 +524,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // SAVING LOGIC (Defined after hooks to avoid circular dependencies)
     // ========================================================================
 
-    const savePlaybackProgress = useCallback(() => {
+    const savePlaybackProgress = useCallback((atExit = false) => {
         if (!videoPath || !videoName) {return;}
 
         const isNetwork = NavigationService.isNetworkStream(videoPath);
@@ -551,11 +552,18 @@ export default function VideoPlayerScreen({ route }: Props) {
                 // Only save brightness to history if in video mode
                 brightnessMode === 'video' ? brightnessRef.current : undefined
             );
+            // Recents shows the frame you stopped at; a finished video goes back to the
+            // usual one rather than the end credits.
+            if (atExit) {
+                const stopped = currentTime > 0 && currentTime < player.state.duration;
+                setStopFrame(videoPath, videoName, stopped ? Math.round(currentTime * 1000) : undefined);
+            }
         }
     }, [
         videoPath,
         videoName,
         updatePlaybackPosition,
+        setStopFrame,
         player.state.duration,
         player.currentTimeRef,
         tracksHook.selectedAudioTrackId,
@@ -589,10 +597,11 @@ export default function VideoPlayerScreen({ route }: Props) {
         exitedRef.current = true;
 
         BrightnessModule?.resetBrightnessSync?.();
-        forceSave();
+        savePlaybackProgress(true);
+        persistNow();
         player.stop();
         VideoOrientationService.release();
-    }, [forceSave, player]);
+    }, [savePlaybackProgress, persistNow, player]);
 
     const exitPlayerRef = useRef(exitPlayer);
     exitPlayerRef.current = exitPlayer;

@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { afterAll, describe, expect, it, jest } from '@jest/globals';
 
 const mockStore = new Map<string, string>();
 jest.mock('react-native-mmkv', () => ({
@@ -9,7 +9,7 @@ jest.mock('react-native-mmkv', () => ({
     }),
 }));
 
-import { prune } from '../src/store/videoHistoryStore';
+import { prune, useVideoHistoryStore } from '../src/store/videoHistoryStore';
 import { VideoHistoryEntry } from '../src/types';
 
 // The whole history is rewritten on every save, so its size is the cost of saving a
@@ -63,5 +63,27 @@ describe('video history prune', () => {
 
         expect(kept).toHaveLength(500);
         expect(kept.some((e) => e.videoPath === '/videos/0.mp4')).toBe(true);
+    });
+});
+
+describe('video history stop frame', () => {
+    // Flush the debounced save, so its timer does not fire after the test environment is gone.
+    afterAll(() => useVideoHistoryStore.getState().persistNow());
+
+    it('sets the frame on the existing entry without touching when it was watched', () => {
+        const store = useVideoHistoryStore.getState();
+        store.incrementViewCount('/videos/a.mp4', 'a.mp4');
+        const watched = store.getVideoHistory('/videos/a.mp4')!.lastWatchedTime;
+        useVideoHistoryStore.getState().setStopFrame('/videos/a.mp4', 'a.mp4', 61500);
+        const after = useVideoHistoryStore.getState().getVideoHistory('/videos/a.mp4')!;
+        expect(after.stopFrameMs).toBe(61500);
+        expect(after.lastWatchedTime).toBe(watched);
+        useVideoHistoryStore.getState().setStopFrame('/videos/a.mp4', 'a.mp4', undefined);
+        expect(useVideoHistoryStore.getState().getVideoHistory('/videos/a.mp4')!.stopFrameMs).toBeUndefined();
+    });
+
+    it('never creates an entry', () => {
+        useVideoHistoryStore.getState().setStopFrame('/videos/none.mp4', 'none.mp4', 1000);
+        expect(useVideoHistoryStore.getState().getVideoHistory('/videos/none.mp4')).toBeNull();
     });
 });

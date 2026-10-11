@@ -29,6 +29,7 @@ interface VideoHistoryState {
     updateVideoHistory: (entry: Partial<VideoHistoryEntry> & { videoPath: string; videoName: string }) => void;
     incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number) => void;
     updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrackId?: number, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, brightness?: number, fileSize?: number) => void;
+    setStopFrame: (videoPath: string, videoName: string, stopFrameMs: number | undefined) => void;
     addBookmark: (videoPath: string, videoName: string, timestamp: number, label?: string) => void;
     removeBookmark: (videoPath: string, bookmarkId: string) => void;
     updateBookmarkLabel: (videoPath: string, bookmarkId: string, label: string) => void;
@@ -298,6 +299,17 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                 });
             }
 
+            return { history: newHistory };
+        });
+        debouncedPersist();
+    },
+
+    setStopFrame: (videoPath, videoName, stopFrameMs) => {
+        set((state) => {
+            const match = findHistoryEntry(state.history, videoPath, generateVideoId(videoName));
+            if (!match || match.entry.stopFrameMs === stopFrameMs) {return state;}
+            const newHistory = new Map(state.history);
+            newHistory.set(match.key, { ...match.entry, stopFrameMs });
             return { history: newHistory };
         });
         debouncedPersist();

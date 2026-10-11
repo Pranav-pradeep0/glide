@@ -117,9 +117,9 @@ function ProgressLine({ progress, style }: { progress: number; style?: object })
     );
 }
 
-function Thumbnail({ path, progress, duration, style }: { path: string; progress: number; duration?: number; style: object }) {
+function Thumbnail({ path, timeMs, progress, duration, style }: { path: string; timeMs?: number; progress: number; duration?: number; style: object }) {
     const { colors } = useTheme();
-    const { thumbnail } = useThumbnail(path);
+    const { thumbnail } = useThumbnail(path, timeMs);
     return (
         <View style={[styles.thumb, { backgroundColor: colors.surfaceVariant }, style]}>
             {thumbnail
@@ -170,6 +170,8 @@ interface VideoItemProps<T> {
     duration?: number;
     /** 0..1 watched. */
     progress?: number;
+    /** Frame to show, in ms; unset for the usual one. */
+    thumbnailTime?: number;
     /** Search term to mark in the title. */
     highlight?: string;
     onPress: (item: T) => void;
@@ -186,7 +188,7 @@ function useItemText(name: string, meta: string) {
     }, [name, meta]);
 }
 
-function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, highlight, onPress, onMore }: VideoItemProps<T>) {
+function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     return (
@@ -200,7 +202,7 @@ function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, highl
             accessibilityHint={text.meta}
             style={styles.row}
         >
-            <Thumbnail path={path} progress={progress} duration={duration} style={styles.rowThumb} />
+            <Thumbnail path={path} timeMs={thumbnailTime} progress={progress} duration={duration} style={styles.rowThumb} />
             <View style={styles.info}>
                 <HighlightedTitle title={text.title} highlight={highlight} lines={2} />
                 {!!text.meta && (
@@ -218,7 +220,7 @@ function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, highl
 }
 export const VideoRow = React.memo(VideoRowBase) as VideoItemComponent;
 
-function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, highlight, onPress, onMore }: VideoItemProps<T>) {
+function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     return (
@@ -231,7 +233,7 @@ function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, high
             accessibilityHint={text.meta}
             style={styles.gridCard}
         >
-            <Thumbnail path={path} progress={progress} duration={duration} style={styles.gridThumb} />
+            <Thumbnail path={path} timeMs={thumbnailTime} progress={progress} duration={duration} style={styles.gridThumb} />
             <View style={styles.gridInfo}>
                 <View style={styles.info}>
                     <HighlightedTitle title={text.title} highlight={highlight} lines={1} />
@@ -256,10 +258,10 @@ export const VideoCard = React.memo(VideoCardBase) as VideoItemComponent;
 // ============= HERO =============
 
 /** The one thing you were just watching, full width, with the picture doing the work. */
-export function ContinueCard<T>({ item, path, name, meta, progress = 0, onPress, onMore }: VideoItemProps<T>) {
+export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnailTime, onPress, onMore }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
-    const { thumbnail } = useThumbnail(path);
+    const { thumbnail } = useThumbnail(path, thumbnailTime);
     return (
         <Touchable
             onPress={() => onPress(item)}
@@ -299,9 +301,9 @@ export function ContinueCard<T>({ item, path, name, meta, progress = 0, onPress,
 }
 
 /** A soft wash of the hero's picture behind the top of the screen. */
-export function AmbientBackdrop({ path }: { path?: string }) {
+export function AmbientBackdrop({ path, thumbnailTime }: { path?: string; thumbnailTime?: number }) {
     const { colors } = useTheme();
-    const { thumbnail } = useThumbnail(path);
+    const { thumbnail } = useThumbnail(path, thumbnailTime);
     if (!thumbnail) {return null;}
     return (
         <View style={styles.ambient} pointerEvents="none">

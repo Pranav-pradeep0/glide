@@ -90,6 +90,10 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
             // Smart timestamp: with no time given, aim for 10% in, at least 5 s, to skip the
             // black frames and logos most videos open with; the middle for short clips.
             var timeUs = time * 1000L
+            // An asked-for time means that exact frame (Recents shows where you stopped), so
+            // decode on from the keyframe before it; the nearest keyframe can be seconds away.
+            // The smart scan only needs a representative frame, and the keyframe is cheaper.
+            val seek = if (timeUs == 0L) MediaMetadataRetriever.OPTION_CLOSEST_SYNC else MediaMetadataRetriever.OPTION_CLOSEST
             if (timeUs == 0L) {
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                     ?.toLongOrNull()
@@ -104,9 +108,9 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
             // times that, only to be shrunk to a list thumbnail.
             val scaled = width > 0 && height > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
             var bitmap = (if (scaled) {
-                retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, width, height)
+                retriever.getScaledFrameAtTime(timeUs, seek, width, height)
             } else {
-                retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                retriever.getFrameAtTime(timeUs, seek)
             }) ?: retriever.frameAtTime // Fallback to any frame if the specific time fails
 
             if (bitmap == null) {
