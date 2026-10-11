@@ -55,6 +55,10 @@ describe('FilenameParser', () => {
         expect(FilenameParser.parse('Амели.2001.1080p.mkv').title).toBe('Амели');
     });
 
+    it('drops a bracketed year instead of leaving half of it', () => {
+        expect(FilenameParser.parse('The Boys (2026) S05E05 2160p WEBRip.mkv').title).toBe('The Boys');
+    });
+
     it('still reads the year of a title that is not written in Latin', () => {
         expect(FilenameParser.parse('Амели.2001.1080p.mkv').year).toBe(2001);
     });

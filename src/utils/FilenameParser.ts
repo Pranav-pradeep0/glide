@@ -119,6 +119,8 @@ export class FilenameParser {
                 // (\P{L} with the u flag) in src/utils/video-filename-parser/title.js,
                 // or falling back to the cleaned filename when the parsed title is a
                 // degenerate prefix of it. See the failing test in filenameParser.test.ts.
+                // "The Boys (2026)": the trim below would take the ")" and leave "The Boys (2026".
+                title = title.replace(/\s*[([]\s*(?:19|20)\d{2}\s*[)\]]?\s*$/, '');
                 title = title.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
                 title = title.replace(/\s+/g, ' ').trim();
             }
