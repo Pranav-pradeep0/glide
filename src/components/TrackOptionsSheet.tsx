@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import Feather from '@react-native-vector-icons/feather';
 import { useAudioStore } from '@/store/audioStore';
@@ -19,13 +19,18 @@ interface TrackOptionsSheetProps {
 }
 
 export function TrackOptionsSheet({
-    track,
+    track: incoming,
     visible,
     onClose,
     onGoToAlbum,
     onGoToArtist,
 }: TrackOptionsSheetProps) {
     const { colors } = useTheme();
+    // Callers clear the track to close; keep showing it while the sheet slides away.
+    const [track, setTrack] = useState(incoming);
+    if (incoming && incoming !== track) {
+        setTrack(incoming);
+    }
     const playNext = useAudioStore((s) => s.playNext);
     const addToQueue = useAudioStore((s) => s.addToQueue);
     const shuffle = useAudioStore((s) => s.shuffle);
@@ -93,7 +98,7 @@ export function TrackOptionsSheet({
             </View>
 
             {/* Menu Options */}
-            <ListGroup inset style={styles.optionsGroup}>
+            <ListGroup inset>
                 {!shuffle && (
                     <ListRow
                         title="Play next"
@@ -142,7 +147,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: metrics.space.md,
         borderRadius: metrics.radius.md,
-        marginHorizontal: metrics.gutter,
         marginBottom: metrics.space.md,
         gap: metrics.space.md,
     },
@@ -158,8 +162,5 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         gap: 2,
-    },
-    optionsGroup: {
-        marginHorizontal: metrics.gutter,
     },
 });
