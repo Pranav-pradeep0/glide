@@ -28,6 +28,7 @@ import { TrackRow } from '@/components/TrackRow';
 import { metrics, type } from '@/theme/theme';
 import { AudioAlbum, AudioArtist, AudioFolder, AudioTrack, RootStackParamList } from '@/types';
 import { Loader } from '@/components/Loader';
+import { letterJumpIndex } from '@/utils/alphabetIndex';
 
 type LibraryTab = 'tracks' | 'albums' | 'artists' | 'folders' | 'favorites';
 type TrackSortBy = 'title' | 'artist' | 'dateAdded' | 'duration';
@@ -43,7 +44,10 @@ const SORT_OPTIONS: { key: TrackSortBy; label: string }[] = [
     { key: 'duration', label: 'Duration' },
 ];
 
-const trackCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+const trackTitle = (t: AudioTrack) => t.title;
+const trackArtist = (t: AudioTrack) => t.artist;
+
+const trackCollator =new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 function sortTracks(list: AudioTrack[], sortBy: TrackSortBy): AudioTrack[] {
     const sorted = [...list];
@@ -253,23 +257,17 @@ export default function MusicScreen() {
         [currentTrack?.id, navigation, playTrack, displayedTracks, activeTab, selectedFolder]
     );
 
-    // Alphabet jump scroller
+    // A–Z strip: letters only mean something when sorted by a name.
+    const letterKey = sortBy === 'title' ? trackTitle : sortBy === 'artist' ? trackArtist : null;
     const handleLetterPress = useCallback(
         (letter: string) => {
-            if (displayedTracks.length === 0) return;
-            let targetIndex = -1;
-            if (letter === '#') {
-                targetIndex = displayedTracks.findIndex((t) => !/^[a-zA-Z]/.test(t.title));
-            } else {
-                targetIndex = displayedTracks.findIndex((t) =>
-                    t.title.toUpperCase().startsWith(letter)
-                );
-            }
+            if (!letterKey) return;
+            const targetIndex = letterJumpIndex(displayedTracks, letter, letterKey);
             if (targetIndex >= 0) {
                 flashListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
             }
         },
-        [displayedTracks]
+        [displayedTracks, letterKey]
     );
 
     // Track row renderer
@@ -550,7 +548,7 @@ export default function MusicScreen() {
                         />
 
                         {/* A–Z Fast Scroller Column */}
-                        {activeTab === 'tracks' && !searchQuery && displayedTracks.length > 20 && (
+                        {activeTab === 'tracks' && letterKey && !searchQuery && displayedTracks.length > 20 && (
                             <View style={styles.alphabetIndexCol}>
                                 {ALPHABET.map((letter) => (
                                     <Touchable
