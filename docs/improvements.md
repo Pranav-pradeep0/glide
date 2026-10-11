@@ -28,7 +28,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **TrackOptionsSheet** (`TrackOptionsSheet.tsx:38-40`) — returns null as soon as `track` clears, so the close animation never plays; double horizontal inset — S
 - ✅ **Licences sheet** — hardware Back on a licence closes the whole sheet instead of returning to the list — S *(root cause in `Sheet`: Android Back always closed; it now follows the header's back arrow, which also fixes portrait player panels on a sub-page or opened from ⋮ Playback)*
 - **Landscape player panels** (`VideoPlayerScreen.tsx:1114`) — Back on a sub-page (Quick Settings page, track options) or a panel opened from ⋮ Playback closes everything instead of going back a step; side panels are plain views and the screen's single Back listener calls `closeAllPanels`. A per-panel listener would race the screen's re-subscription and could take Back from the library during PiP — S
-- **Snackbar position** (`RootNavigator.tsx:361`) — offset ignores the mini player, so snackbars overlap it; 64 dp too high on stack screens — S
+- ✅ **Snackbar position** (`RootNavigator.tsx:361`) — offset ignores the mini player, so snackbars overlap it; 64 dp too high on stack screens — S *(the bar at the bottom of the focused screen — tabs plus mini player, or the mini player on Album / Artist — reports its height through `useSnackbarClearance`)*
 
 
 ### Reported by Pranav (2026-10-11)
@@ -66,7 +66,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Panels pausing** — Quick Settings pauses and doesn't resume; audio/subtitle panels don't pause; Recap backdrop resumes but Resume backdrop doesn't — S *(decided: panels never pause; closing Recap or Continue watching stays paused, only their Resume button plays)*
 - ✅ **Bookmarks** — add / list buttons landscape-only though empty state says "tap the bookmark button"; delete has no Undo — S *(partly wrong: portrait reaches both through ⋮ Playback; the empty panel now has its own "Add bookmark here", and delete offers Undo)*
 - ✅ **Subtitle size** — default 0.38 never applies (`?? 0.42`); pinch-resize not saved — S *(pinch now saves via `setSubtitleFontSize`, capped at the slider's 40 px; the 0.38 claim was mostly wrong: defaults merge in, only dead `0.42` fallbacks, now pointed at the defaults)*
-- **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S
+- ✅ **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S *(confirmed in code: a `Sheet` is a Modal, its own window over the player's host. Every open sheet now hosts snackbars, and a host closing mid-message hands it to the one below; app-wide, not just the player)*
 - **Perf** — HUD state in the 1400-line screen re-renders it on every gesture step; brightness "throttle" is `floor(y) % 5`; Quick Settings sliders send a native prop per step; landscape playlist mounts and queues thumbnails at open; hidden time labels still tick React state — S–M
 - ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
 - ✅ **Episode order** (`useMediaService.ts` `sortVideosByName`) — name order puts `Show.2019.S01E02` before `Show.S01E01`, so Next skips around — S *(season/episode decide when every file in the folder has one; anime `Show - 12` and `Ep 9` aren't parsed and keep the name order)*

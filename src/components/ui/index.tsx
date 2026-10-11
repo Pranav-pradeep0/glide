@@ -10,7 +10,7 @@
  *
  * `onPlayer` switches to the always-dark player palette for overlays on video.
  */
-import React, { useCallback, useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Modal,
@@ -18,6 +18,7 @@ import {
     PressableProps,
     StyleProp,
     StyleSheet,
+    LayoutChangeEvent,
     Text,
     View,
     ViewProps,
@@ -27,6 +28,7 @@ import {
 } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import Animated, {
+    makeMutable,
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
@@ -35,6 +37,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { haptic } from '@/native/HapticModule';
@@ -630,6 +633,7 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
                     </GestureDetector>
                     {children}
                 </Animated.View>
+                <SnackbarHost />
             </GestureHandlerRootView>
         </Modal>
     );
@@ -697,7 +701,10 @@ interface SnackbarMessage {
     tone?: 'confirm' | 'reject';
 }
 
-/** Newest mounted host wins, so the player can host its own above the app root's. */
+/**
+ * Newest mounted host wins, so the player and open sheets (separate Modal windows, drawn
+ * over everything else) host their own above the app root's.
+ */
 const snackbarListeners: ((m: SnackbarMessage) => void)[] = [];
 
 /** One message at a time, bottom of the screen, 3 s (5 s with an action). */
@@ -706,14 +713,42 @@ export function showSnackbar(message: SnackbarMessage) {
     snackbarListeners[snackbarListeners.length - 1]?.(message);
 }
 
-/** Mount once per root. `bottomOffset` clears a tab bar or player controls. */
-export function SnackbarHost({ bottomOffset = 0 }: { bottomOffset?: number }) {
+/** Bars flush with the bottom of focused screens (tab bar, mini player); the last one counts. */
+const bottomBars: { height: number }[] = [];
+const bottomBarHeight = makeMutable(0);
+const syncBottomBar = () => { bottomBarHeight.value = bottomBars[bottomBars.length - 1]?.height ?? 0; };
+
+/** `onLayout` for a bar at the bottom of a screen: the app's snackbars sit above it while the screen is focused. */
+export function useSnackbarClearance() {
+    const focused = useIsFocused();
+    const [height, setHeight] = useState(0);
+    useEffect(() => {
+        if (!focused) { return; }
+        const bar = { height };
+        bottomBars.push(bar);
+        syncBottomBar();
+        return () => {
+            bottomBars.splice(bottomBars.indexOf(bar), 1);
+            syncBottomBar();
+        };
+    }, [focused, height]);
+    return useCallback((e: LayoutChangeEvent) => setHeight(e.nativeEvent.layout.height), []);
+}
+
+/**
+ * Mount once per root. `bottomOffset` clears player controls; `aboveBottomBar` (the app root)
+ * clears whatever bar `useSnackbarClearance` reports.
+ */
+export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffset?: number; aboveBottomBar?: boolean }) {
     const insets = useSafeAreaInsets();
     const [message, setMessage] = useState<SnackbarMessage | null>(null);
+    // The message still on its way in or up; handed on if this host goes first.
+    const liveRef = useRef<SnackbarMessage | null>(null);
     const shown = useSharedValue(0);
 
     // Unmount once faded: an invisible snackbar still catches taps.
     const hide = useCallback(() => {
+        liveRef.current = null;
         shown.value = withTiming(0, { duration: motion.fadeOut }, (finished) => {
             if (finished) { runOnJS(setMessage)(null); }
         });
@@ -723,6 +758,7 @@ export function SnackbarHost({ bottomOffset = 0 }: { bottomOffset?: number }) {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const listener = (m: SnackbarMessage) => {
             clearTimeout(timer);
+            liveRef.current = m;
             setMessage(m);
             shown.value = withSpring(1, motion.spatial);
             timer = setTimeout(hide, m.action ? 5000 : 3000);
@@ -731,21 +767,21 @@ export function SnackbarHost({ bottomOffset = 0 }: { bottomOffset?: number }) {
         return () => {
             clearTimeout(timer);
             snackbarListeners.splice(snackbarListeners.indexOf(listener), 1);
+            // A sheet closing as it confirms something: the host underneath shows the message.
+            if (liveRef.current) { snackbarListeners[snackbarListeners.length - 1]?.(liveRef.current); }
         };
     }, [shown, hide]);
 
     const style = useAnimatedStyle(() => ({
         opacity: shown.value,
+        bottom: Math.max(insets.bottom, aboveBottomBar ? bottomBarHeight.value : 0) + bottomOffset + metrics.space.lg,
         transform: [{ translateY: (1 - shown.value) * 24 }],
     }));
 
     if (!message) { return null; }
     const { colors } = playerTheme;
     return (
-        <Animated.View
-            pointerEvents="box-none"
-            style={[styles.snackWrap, { bottom: insets.bottom + bottomOffset + metrics.space.lg }, style]}
-        >
+        <Animated.View pointerEvents="box-none" style={[styles.snackWrap, style]}>
             <View style={[styles.snack, { backgroundColor: '#2A2A2E' }]} accessibilityLiveRegion="polite">
                 <Text style={[type.body, styles.snackText, { color: colors.text }]} numberOfLines={2}>{message.text}</Text>
                 {message.action && (

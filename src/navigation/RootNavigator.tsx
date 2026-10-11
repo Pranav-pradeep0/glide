@@ -8,7 +8,7 @@ import { Feather } from '@react-native-vector-icons/feather';
 import { DeepLinkService } from '../services/DeepLinkService';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { Button, Touchable, SnackbarHost } from '@/components/ui';
+import { Button, Touchable, SnackbarHost, useSnackbarClearance } from '@/components/ui';
 import { ErrorBoundary } from '../../ErrorBoundary';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { metrics, type } from '@/theme/theme';
@@ -67,6 +67,7 @@ const renderTabBar = (props: BottomTabBarProps) => <TabBar {...props} />;
 function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
     const { colors } = useTheme();
     const tabBarHeight = TAB_HEIGHT + insets.bottom;
+    const onBarLayout = useSnackbarClearance();
     // Slides down out of the way as Now Playing opens and back up as it collapses, its top edge
     // tracking the player's bottom edge, so the player never covers the tabs.
     const slideStyle = useAnimatedStyle(() => ({
@@ -74,7 +75,7 @@ function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
     }));
     return (
         // The page colour, not the tab bar's: the mini player is a card floating over the page.
-        <View style={{ backgroundColor: colors.background }}>
+        <View style={{ backgroundColor: colors.background }} onLayout={onBarLayout}>
             <MiniPlayer />
             <Animated.View
                 style={[
@@ -361,7 +362,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                     </>
                 )}
             </Stack.Navigator>
-            <SnackbarHost bottomOffset={TAB_HEIGHT} />
+            <SnackbarHost aboveBottomBar />
         </NavigationContainer>
     );
 }

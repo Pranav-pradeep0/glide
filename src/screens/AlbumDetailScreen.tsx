@@ -11,7 +11,7 @@ import { PermissionGate } from '@/components/PermissionGate';
 import { AudioMediaService } from '@/services/AudioMediaService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumPalette } from '@/hooks/useAlbumArt';
-import { Button, Gradient, IconButton, Touchable } from '@/components/ui';
+import { Button, Gradient, IconButton, Touchable, useSnackbarClearance } from '@/components/ui';
 import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { Loader } from '@/components/Loader';
@@ -25,6 +25,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export default function AlbumDetailScreen() {
     const { colors, dark } = useTheme();
     const insets = useSafeAreaInsets();
+    const onMiniPlayerLayout = useSnackbarClearance();
     const navigation = useNavigation<NavigationProp>();
     const route = useRoute<AlbumDetailRouteProp>();
 
@@ -255,7 +256,7 @@ export default function AlbumDetailScreen() {
             />
 
             {/* Sticky Mini Player */}
-            <View style={{ paddingBottom: insets.bottom }}>
+            <View style={{ paddingBottom: insets.bottom }} onLayout={onMiniPlayerLayout}>
                 <MiniPlayer />
             </View>
         </View>

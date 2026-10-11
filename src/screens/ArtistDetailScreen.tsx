@@ -11,7 +11,7 @@ import { PermissionGate } from '@/components/PermissionGate';
 import { AudioMediaService } from '@/services/AudioMediaService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumArt } from '@/hooks/useAlbumArt';
-import { Button, IconButton, Touchable } from '@/components/ui';
+import { Button, IconButton, Touchable, useSnackbarClearance } from '@/components/ui';
 import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { Loader } from '@/components/Loader';
@@ -62,6 +62,7 @@ const AlbumCardHorizontal = React.memo(function AlbumCardHorizontalComponent({
 export default function ArtistDetailScreen() {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
+    const onMiniPlayerLayout = useSnackbarClearance();
     const navigation = useNavigation<NavigationProp>();
     const route = useRoute<ArtistDetailRouteProp>();
 
@@ -288,7 +289,7 @@ export default function ArtistDetailScreen() {
             />
 
             {/* Sticky Mini Player */}
-            <View style={{ paddingBottom: insets.bottom }}>
+            <View style={{ paddingBottom: insets.bottom }} onLayout={onMiniPlayerLayout}>
                 <MiniPlayer />
             </View>
         </View>
