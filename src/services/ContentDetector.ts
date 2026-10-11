@@ -16,7 +16,8 @@ export interface ContentClassification {
 
 // Technical patterns - very high confidence of professional content
 const TECHNICAL_PATTERNS = [
-    /\b(1080p|720p|480p|2160p|4k|uhd)\b/i,
+    /\b(1080p|720p|480p|2160p|4k|uhd|fhd|full ?hd)\b/i,
+    /[([](19|20)\d{2}\b/,  // "Title (1994)": the Plex/Jellyfin film naming convention
     /\b(bluray|bdrip|brrip|webrip|web-?dl|hdtv|dvdrip|hdrip|hdcam|hd-?rip)\b/i,
     /\b(x264|x265|hevc|avc|xvid|divx|h\.?264|h\.?265)\b/i,
     /\b(aac|ac3|dts|truehd|atmos|dd5\.?1|5\.1|7\.1)\b/i,
@@ -62,6 +63,10 @@ const HOME_VIDEO_PATTERNS = [
     /^GOPR\d{4}/i,                 // GoPro format
 ];
 
+// Callers pass full paths; the folders would leak into the parsed title and
+// stop the ^-anchored home-video patterns from ever matching.
+const baseName = (path: string) => path.split('/').pop() ?? path;
+
 export class ContentDetector {
     /**
      * Main detection method - analyzes filename and optionally verifies with OMDB
@@ -71,6 +76,7 @@ export class ContentDetector {
         verifyWithOMDB: boolean = true
     ): Promise<ContentClassification> {
         const startTime = Date.now();
+        filename = baseName(filename);
         if (__DEV__) { console.log(`${LOG_PREFIX} Classifying:`, filename); }
 
         // Step 1: Quick reject home videos (no API call needed)
@@ -117,17 +123,21 @@ export class ContentDetector {
         // Allow short titles (like "Us", "Up") ONLY if we have a year to avoid false positives
         if (verifyWithOMDB && parsed.title && (parsed.title.length > 1 || (parsed.title.length > 0 && parsed.year))) {
             try {
-                let omdbResult = await OMDBService.search(parsed.title, parsed.year);
+                // OMDB matches a series only by its first year, and a year in an episode's
+                // name is usually the season's: "The Boys (2026)" with y=2026 finds a different show.
+                const type = isSeries ? 'series' : undefined;
+                const year = isSeries ? undefined : parsed.year;
+                let omdbResult = await OMDBService.search(parsed.title, year, type);
 
                 // Fallback: If exact search fails, try fuzzy search (s parameter)
                 if (!omdbResult) {
                     if (__DEV__) { console.log(`${LOG_PREFIX} Exact match failed, trying fuzzy search...`); }
-                    const fuzzyResults = await OMDBService.fuzzySearch(parsed.title);
+                    const fuzzyResults = await OMDBService.fuzzySearch(parsed.title, type);
 
                     // Look for a result with matching year and high title similarity
                     if (fuzzyResults.length > 0) {
                         const bestFuzzy = fuzzyResults.find(r =>
-                            (!parsed.year || r.Year.includes(parsed.year.toString())) &&
+                            (!year || r.Year.includes(year.toString())) &&
                             (r.Type === 'movie' || r.Type === 'series')
                         );
 
@@ -192,6 +202,7 @@ export class ContentDetector {
         likelyContent: boolean;
         contentType: 'movie' | 'series' | 'home_video' | 'unknown';
     } {
+        filename = baseName(filename);
         if (this.isHomeVideo(filename)) {
             return { likelyContent: false, contentType: 'home_video' };
         }

@@ -149,8 +149,9 @@ export class DeepLinkService {
                 const lastPart = parts[parts.length - 1];
                 // Decode URI component and remove query params
                 const decoded = decodeURIComponent(lastPart.split('?')[0]);
+                // A document URI decodes to "primary:Folder/File.mkv"; keep only the file name.
                 if (decoded && decoded.includes('.')) {
-                    return decoded;
+                    return decoded.split('/').pop()!;
                 }
                 // Try to get display name from document pattern
                 // content://com.android.externalstorage.documents/document/primary%3ADownload%2Fvideo.mp4

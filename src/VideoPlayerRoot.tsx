@@ -28,9 +28,10 @@ type OpenRequest = { routeName: string; params: any };
  * first; anything else, and every stream, goes straight to the player.
  */
 async function resolveRoute(uri: string): Promise<OpenRequest> {
-    const videoName = DeepLinkService.getVideoNameFromUri(uri);
     // Resolve content URI to file path
     const resolvedPath = await DeepLinkService.resolveToFilePath(uri);
+    // Name it from the resolved path: a MediaStore URI (.../video/media/1234) only names "External Video".
+    const videoName = DeepLinkService.getVideoNameFromUri(resolvedPath);
 
     let routeName = 'VideoPlayer';
     if (!NavigationService.isNetworkStream(resolvedPath)) {

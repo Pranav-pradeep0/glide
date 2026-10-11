@@ -34,7 +34,7 @@ export class OMDBService {
      * Uses 't' parameter for exact title match (more accurate)
      * Returns null if no match or API error
      */
-    static async search(title: string, year?: number): Promise<OMDBResult | null> {
+    static async search(title: string, year?: number, type?: 'movie' | 'series'): Promise<OMDBResult | null> {
         try {
             const params = new URLSearchParams({
                 apikey: OMDB_API_KEY,
@@ -43,6 +43,9 @@ export class OMDBService {
 
             if (year) {
                 params.append('y', year.toString());
+            }
+            if (type) {
+                params.append('type', type);
             }
 
             if (__DEV__) {console.log(`${LOG_PREFIX} Searching:`, { title, year });}
