@@ -21,7 +21,7 @@ import { usePermissionStore } from '@/store/permissionStore';
 import { PermissionGate } from '@/components/PermissionGate';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumArt } from '@/hooks/useAlbumArt';
-import { Button, Chip, IconButton, SortButton, Touchable } from '@/components/ui';
+import { Button, Chip, IconButton, IconName, SortButton, Touchable } from '@/components/ui';
 import { EmptyState, ListHeader } from '@/components/VideoRow';
 import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { TrackRow } from '@/components/TrackRow';
@@ -393,6 +393,20 @@ export default function MusicScreen() {
         );
     }
 
+    // A search with no matches offers to clear it; an empty library offers a rescan.
+    const search = searchQuery.trim();
+    const renderEmpty = (icon: IconName, things: string) =>
+        search ? (
+            <EmptyState
+                icon={icon}
+                text={`No ${things} match "${search}"`}
+                action="Clear search"
+                onAction={() => setSearchQuery('')}
+            />
+        ) : (
+            <EmptyState icon={icon} text={`No ${things} found`} action="Refresh" onAction={() => loadData(true)} />
+        );
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
@@ -510,17 +524,11 @@ export default function MusicScreen() {
                 <Loader />
             ) : activeTab === 'tracks' || activeTab === 'favorites' || selectedFolder ? (
                 displayedTracks.length === 0 ? (
-                    <EmptyState
-                        text={
-                            activeTab === 'favorites'
-                                ? 'No favorite songs yet'
-                                : searchQuery
-                                ? 'No matching songs found'
-                                : 'No songs found'
-                        }
-                        action="Refresh"
-                        onAction={() => loadData(true)}
-                    />
+                    activeTab === 'favorites' && !search ? (
+                        <EmptyState icon="heart" text="No favorite songs yet" />
+                    ) : (
+                        renderEmpty('music', 'songs')
+                    )
                 ) : (
                     <View style={styles.listContainerWithScroller}>
                         {/* Each tab's list gets its own key: FlashList keeps column and size
@@ -566,6 +574,8 @@ export default function MusicScreen() {
                         )}
                     </View>
                 )
+            ) : activeTab === 'albums' && displayedAlbums.length === 0 ? (
+                renderEmpty('disc', 'albums')
             ) : activeTab === 'albums' ? (
                 <FlashList
                     key="albums"
@@ -586,6 +596,8 @@ export default function MusicScreen() {
                     }
                     showsVerticalScrollIndicator={false}
                 />
+            ) : activeTab === 'artists' && displayedArtists.length === 0 ? (
+                renderEmpty('user', 'artists')
             ) : activeTab === 'artists' ? (
                 <FlashList
                     key="artists"
@@ -605,6 +617,8 @@ export default function MusicScreen() {
                     }
                     showsVerticalScrollIndicator={false}
                 />
+            ) : displayedFolders.length === 0 ? (
+                renderEmpty('folder', 'folders')
             ) : (
                 <FlashList
                     key="folders"

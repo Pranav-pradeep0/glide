@@ -68,6 +68,7 @@ export function RecentMusicList() {
     if (recent.length === 0) {
         return (
             <EmptyState
+                icon="music"
                 text="Nothing played yet"
                 action="Browse music"
                 onAction={() => navigation.navigate('MainTabs', { screen: 'Music' })}

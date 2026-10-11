@@ -14,7 +14,7 @@ import { playerColors } from '@/theme/colors';
 import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
-import { Button, Gradient, IconButton, showSnackbar, Touchable } from '@/components/ui';
+import { Button, Gradient, IconButton, IconName, showSnackbar, Touchable } from '@/components/ui';
 import { MediaService } from '@/services/MediaService';
 
 // ============= HELPERS =============
@@ -387,11 +387,21 @@ export function ListHeader({ title, subtitle, onBack, children }: ListHeaderProp
     );
 }
 
-export function EmptyState({ text, action, onAction }: { text: string; action?: string; onAction?: () => void }) {
+export function EmptyState({
+    text,
+    action,
+    onAction,
+    icon = 'film',
+}: {
+    text: string;
+    action?: string;
+    onAction?: () => void;
+    icon?: IconName;
+}) {
     const { colors } = useTheme();
     return (
         <View style={styles.empty}>
-            <Feather name="film" size={48} color={colors.textTertiary} />
+            <Feather name={icon} size={48} color={colors.textTertiary} />
             <Text style={[type.body, styles.emptyText, { color: colors.textSecondary }]}>{text}</Text>
             {action && onAction && <Button label={action} variant="primary" onPress={onAction} />}
         </View>

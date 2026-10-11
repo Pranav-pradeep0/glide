@@ -70,8 +70,8 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Now Playing › Lyrics** — box is only cover-sized; empty LRC lines render as blank rows; no hint that online lyrics are off in Settings when nothing is found; the current line grows 16→18 px and reflows the list — M *(full-screen view, ♪ breaks, one-tap "Turn on online lyrics", fixed-size lines)*
 - **Now Playing › Lyrics** — auto-scroll yanks back while you're reading (pause it while the user scrolls) — S
 - **Now Playing** — heart uses the app primary while every other control uses the cover accent; equalizer icon never shows "active" when a preset is on — S
-- **Music** — Albums / Artists / Folders tabs show a blank list when empty or when search matches nothing (only Tracks has an EmptyState) — S
-- **EmptyState** (`VideoRow.tsx:365-374`) — always a film icon, including on Music and Recents › Music — S
+- ✅ **Music** — Albums / Artists / Folders tabs show a blank list when empty or when search matches nothing (only Tracks has an EmptyState) — S
+- ✅ **EmptyState** (`VideoRow.tsx:365-374`) — always a film icon, including on Music and Recents › Music — S *(optional `icon`; Music tabs and Recents › Music use music icons)*
 - **Music › A–Z scroller** — 10 px letters with ~14 dp targets, tap-only (no drag along the strip) — S
 - **Folders / Recents / Music / Search / AlbumVideos** — view mode, sort and Recents' Videos/Music chip reset every launch (roadmap Phase 6) — S
 - ✅ **Permission dead ends, app-wide** — Folders, AlbumVideos, Search, Recents › Music, Album/Artist detail all show plain "nothing here" copy when access is denied; Android 14 "Select videos" partial access has no "select more / allow all"; Music's button still says "Grant Permission" when tapping it opens Settings. Extract Music's screen into a shared `PermissionGate` — M
