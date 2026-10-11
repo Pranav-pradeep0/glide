@@ -118,11 +118,7 @@ export const NightModeIcon = ({ size = 20, color = DEFAULT_COLOR, active = false
 );
 
 /**
- * The display modes offered to the user, in plain words. `stretch` is omitted because it
- * renders exactly like `fill`; a stored `stretch` still plays and reads as "Stretch".
- */
-/**
- * The modes the player offers, in cycle order. Every one maps to its own branch of the native
+ * The modes the player offers, in cycle order, for both the resize pill and the Display page. Every one maps to its own branch of the native
  * computeGeometry (GlidePlayerView.kt), and each looks different on a typical video.
  * 'scale-down' is left out: it matches Fit for anything at least screen size and Original
  * for anything smaller, so cycling through it looked like nothing happened.
@@ -134,6 +130,10 @@ export const DISPLAY_MODES = [
     { mode: 'fill', label: 'Stretch' },
     { mode: 'none', label: 'Original size' },
 ] as const;
+
+/** The mode after this one; anything not in the list (a stored 'stretch', say) goes to the first. */
+export const nextDisplayMode = (mode: string) =>
+    DISPLAY_MODES[(DISPLAY_MODES.findIndex(m => m.mode === mode) + 1) % DISPLAY_MODES.length].mode;
 
 /** Playback speed or zoom as the user reads it: 1.5 -> "1.5×", 2 -> "2×". */
 export const formatRate = (rate: number) => `${Number(rate.toFixed(2))}×`;

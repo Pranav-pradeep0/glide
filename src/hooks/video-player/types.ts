@@ -415,7 +415,6 @@ export interface UsePlayerSettingsReturn {
     toggleMute: () => void;
     toggleRepeat: () => void;
     setResizeMode: (mode: PlayerResizeMode) => void;
-    toggleResizeMode: () => void;
     setSleepTimer: (minutes: number | null) => void;
     clearSleepTimer: () => void;
     toggleBackgroundPlay: () => void;

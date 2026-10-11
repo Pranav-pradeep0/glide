@@ -50,7 +50,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Resume prompt** (`useResumePlayback.ts:47-77`) — the "paused 5 min" prompt shows the position from when the video opened, not now; dismissing ResumeModal starts playback despite the comment saying it doesn't — S *(the long-pause prompt and Recap now use where you paused; closing pauses)*
 - ✅ **External subtitle** (`usePlayerTracks.ts:214`) — saved as track `-999` with no file; reopening restores nothing and shows "Off" — S *(cues saved per video in `ExternalSubtitleStore`, swept at launch like stop frames)*
 - ✅ **Stale exit save** (`PlayerControls.tsx:628-650`) — memo skips handlers, so on-screen Back while paused can save an old audio track / delay — S *(controls get stable stand-ins that call the latest handler; the memo compares every other prop — Next carried stale settings too)*
-- **Resize pill** — cycles 6 modes incl. `scale-down`, Quick Settings knows 5; on `scale-down` nothing is ticked — S
+- ✅ **Resize pill** — cycles 6 modes incl. `scale-down`, Quick Settings knows 5; on `scale-down` nothing is ticked — S *(the pill steps through `DISPLAY_MODES` via `nextDisplayMode`; unused `toggleResizeMode` removed)*
 - ~~**Playlist pick** drops `playMode`~~ ✅; scrub to 0:00 then exit doesn't save — S
 - **SystemBars** (`VideoPlayerScreen.tsx:1062`) — cleanup un-hides bars on every controls toggle, likely a bar flash — S
 - **Subtitle failures** (`TrackSelector.tsx`) — pick/download/parse/search failures silent; one AbortController shared by search and download — S

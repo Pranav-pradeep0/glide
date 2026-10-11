@@ -14,7 +14,7 @@ import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SystemBars } from 'react-native-edge-to-edge';
-import type { PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
+import { nextDisplayMode } from '@/components/VideoPlayer/PlayerIcons';
 
 // Native Modules
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
@@ -739,11 +739,8 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     const handleToggleResizeMode = useCallback(() => {
-        // Calculate next mode directly here to sync with HUD
-        const modes: PlayerResizeMode[] = ['best-fit', 'contain', 'cover', 'fill', 'scale-down', 'none'];
-        const currentMode = settingsHook.settings.resizeMode;
-        const nextIndex = (modes.indexOf(currentMode) + 1) % modes.length;
-        const nextMode = modes[nextIndex];
+        // Same list as the Display page, so the pill and the panel always agree.
+        const nextMode = nextDisplayMode(settingsHook.settings.resizeMode);
 
         // Update settings and show HUD
         settingsHook.setResizeMode(nextMode);

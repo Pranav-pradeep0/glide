@@ -5,7 +5,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { DISPLAY_MODES } from '@/components/VideoPlayer/PlayerIcons';
 import type { PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
 import { PlayerSettings, UsePlayerSettingsReturn } from './types';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
@@ -143,14 +142,6 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
             ...prev,
             resizeMode: mode,
         }));
-    }, []);
-
-    const toggleResizeMode = useCallback(() => {
-        setSettings(prev => {
-            // Same list as the Display page, so the button and the panel always agree.
-            const nextIndex = (DISPLAY_MODES.findIndex(m => m.mode === prev.resizeMode) + 1) % DISPLAY_MODES.length;
-            return { ...prev, resizeMode: DISPLAY_MODES[nextIndex].mode };
-        });
     }, []);
 
     // ========================================================================
@@ -310,7 +301,6 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         toggleMute,
         toggleRepeat,
         setResizeMode,
-        toggleResizeMode,
         setSleepTimer,
         clearSleepTimer,
         toggleBackgroundPlay,
@@ -330,7 +320,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
     }), [
         settings,
         toggleMute, toggleRepeat,
-        setResizeMode, toggleResizeMode,
+        setResizeMode,
         setSleepTimer, clearSleepTimer,
         toggleBackgroundPlay, toggleVideoEnhancement, setVideoEnhancementStrength,
         toggleEqualizer, setEqualizerPreset, setCustomEqualizerBands, setSingleBand, audioEqualizer,
