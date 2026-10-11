@@ -18,7 +18,6 @@ import { nextDisplayMode } from '@/components/VideoPlayer/PlayerIcons';
 
 // Native Modules
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
-const UP_NEXT_COUNTDOWN_MS = 10_000;
 
 import { currentActivityName, finishCurrentActivity, usePipModeListener } from '@/native/PipModule';
 
@@ -29,7 +28,7 @@ import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
 import { SnackbarHost, showSnackbar } from '@/components/ui';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
-import { UpNextCard } from '@/components/VideoPlayer/UpNextCard';
+import { UpNextCard, UP_NEXT_COUNTDOWN_MS } from '@/components/VideoPlayer/UpNextCard';
 import UpdateModal from '@/components/UpdateModal';
 import { isEnhancementError } from '@/utils/playerErrors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
@@ -1340,6 +1339,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             {!pipPresentationActive && upNextShown && (
                 <UpNextCard
                     name={albumVideos[currentVideoIndex + 1].name}
+                    path={albumVideos[currentVideoIndex + 1].path}
                     endsAt={upNext.endsAt}
                     onPlay={ui.state.locked ? undefined : handleNext}
                     onDismiss={ui.state.locked ? undefined : () => setUpNext(null)}

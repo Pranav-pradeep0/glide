@@ -1,13 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Button } from '@/components/ui';
-import { prettyTitle } from '@/components/VideoRow';
-import { metrics, playerTheme, type } from '@/theme/theme';
+import React, { useEffect } from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import Animated, { Easing, FadeIn, FadeOut, useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
+import { Feather } from '@react-native-vector-icons/feather';
+import { IconButton, Touchable } from '@/components/ui';
+import { ProgressLine, prettyTitle, progressOf } from '@/components/VideoRow';
+import { useThumbnail } from '@/hooks/useThumbnails';
+import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { metrics, motion, playerTheme, type } from '@/theme/theme';
 
 const { colors } = playerTheme;
 
+/** How long autoplay waits before playing the next video. */
+export const UP_NEXT_COUNTDOWN_MS = 10_000;
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const RING = 44;
+const RADIUS = 20;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
 interface Props {
     name: string;
+    path: string;
     /** When autoplay will start it; null = no countdown (autoplay off). */
     endsAt: number | null;
     /** Both absent while the screen is locked: the card informs, it can't be acted on. */
@@ -18,44 +32,119 @@ interface Props {
     right: number;
 }
 
-/** Shown once a video ends and the folder has another. The screen owns the timer that plays it. */
-export function UpNextCard({ name, endsAt, onPlay, onDismiss, bottom, right }: Props) {
-    const [now, setNow] = useState(Date.now);
+/**
+ * Shown once a video ends and the folder has another. The screen owns the timer that plays
+ * it; the ring around Play drains with it on the UI thread, so nothing re-renders per second.
+ */
+export function UpNextCard({ name, path, endsAt, onPlay, onDismiss, bottom, right }: Props) {
+    const { thumbnail } = useThumbnail(path);
+    const progress = useVideoHistoryStore((s) => {
+        const entry = s.getVideoHistory(path);
+        return progressOf(entry?.duration, entry?.lastPausedPosition);
+    });
+    const { title, detail } = prettyTitle(name);
+
+    const left = useSharedValue(0);
     useEffect(() => {
         if (endsAt === null) { return; }
-        const id = setInterval(() => setNow(Date.now()), 1000);
-        return () => clearInterval(id);
-    }, [endsAt]);
+        const remaining = Math.max(0, endsAt - Date.now());
+        left.value = remaining / UP_NEXT_COUNTDOWN_MS;
+        left.value = withTiming(0, { duration: remaining, easing: Easing.linear });
+    }, [endsAt, left]);
+    const ringProps = useAnimatedProps(() => ({ strokeDashoffset: CIRCUMFERENCE * (1 - left.value) }));
 
-    const { title, detail } = prettyTitle(name);
-    const heading = endsAt === null ? 'Up next' : `Up next in ${Math.max(0, Math.ceil((endsAt - now) / 1000))}`;
-    return (
-        <View style={[styles.card, { bottom: bottom + metrics.space.lg, right: right + metrics.gutter }]}>
-            <Text style={[type.caption, styles.heading]}>{heading}</Text>
-            <Text style={[type.body, styles.title]} numberOfLines={2}>{title}</Text>
-            {detail ? <Text style={[type.caption, styles.detail]} numberOfLines={1}>{detail}</Text> : null}
-            {onPlay && onDismiss && (
-                <View style={styles.actions}>
-                    <Button label={endsAt === null ? 'Close' : 'Cancel'} onPress={onDismiss} onPlayer />
-                    <Button label="Play now" variant="primary" icon="play" onPress={onPlay} onPlayer />
+    // Follows the controls up and down instead of jumping.
+    const lift = useSharedValue(bottom);
+    useEffect(() => { lift.value = withTiming(bottom, { duration: motion.fadeIn }); }, [bottom, lift]);
+    const liftStyle = useAnimatedStyle(() => ({ bottom: lift.value + metrics.space.lg }));
+
+    const art = (
+        <View style={styles.thumb}>
+            {thumbnail
+                ? <Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                : <Feather name="video" size={22} color={colors.textTertiary} />}
+            {progress > 0 && <ProgressLine progress={progress} style={styles.progress} />}
+            {onPlay && (
+                <View style={styles.playDisc}>
+                    {endsAt !== null && (
+                        <Svg width={RING} height={RING} style={StyleSheet.absoluteFill}>
+                            <AnimatedCircle
+                                cx={RING / 2}
+                                cy={RING / 2}
+                                r={RADIUS}
+                                stroke={colors.text}
+                                strokeWidth={2.5}
+                                strokeLinecap="round"
+                                fill="none"
+                                strokeDasharray={CIRCUMFERENCE}
+                                animatedProps={ringProps}
+                                // Start at 12 o'clock and drain clockwise.
+                                transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+                            />
+                        </Svg>
+                    )}
+                    <Feather name="play" size={18} color={colors.text} style={styles.playGlyph} />
                 </View>
             )}
         </View>
+    );
+
+    return (
+        <Animated.View
+            entering={FadeIn.duration(motion.fadeIn)}
+            exiting={FadeOut.duration(motion.fadeOut)}
+            style={[styles.card, { right: right + metrics.gutter }, liftStyle]}
+        >
+            {onPlay
+                ? <Touchable onPress={onPlay} onPlayer scaleTo={0.96} accessibilityRole="button" accessibilityLabel={`Play ${title} now`}>{art}</Touchable>
+                : art}
+            <View style={styles.info}>
+                <Text style={[type.caption, styles.heading]}>Up next</Text>
+                <Text style={[type.body, styles.title]} numberOfLines={2}>{title}</Text>
+                {detail ? <Text style={[type.caption, styles.detail]} numberOfLines={1}>{detail}</Text> : null}
+            </View>
+            {onDismiss && (
+                <IconButton icon="x" iconSize={18} onPress={onDismiss} accessibilityLabel={endsAt === null ? 'Close' : 'Cancel autoplay'} onPlayer style={styles.dismiss} />
+            )}
+        </Animated.View>
     );
 }
 
 const styles = StyleSheet.create({
     card: {
         position: 'absolute',
-        width: 300,
-        maxWidth: '80%',
-        gap: metrics.space.xs,
-        padding: metrics.space.lg,
-        borderRadius: metrics.radius.card,
+        width: 340,
+        maxWidth: '90%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: metrics.space.md,
+        padding: metrics.space.sm,
+        borderRadius: metrics.radius.lg,
         backgroundColor: colors.cardElevated,
     },
-    heading: { color: colors.textSecondary },
+    thumb: {
+        width: 128,
+        height: 72,
+        borderRadius: metrics.radius.sm,
+        overflow: 'hidden',
+        backgroundColor: colors.surfaceVariant,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    progress: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+    playDisc: {
+        width: RING,
+        height: RING,
+        borderRadius: RING / 2,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    // The play triangle's visual centre sits left of its box.
+    playGlyph: { marginLeft: 2 },
+    info: { flex: 1, gap: 2 },
+    heading: { color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
     title: { color: colors.text },
     detail: { color: colors.textTertiary },
-    actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: metrics.space.sm, marginTop: metrics.space.sm },
+    dismiss: { alignSelf: 'flex-start' },
 });
