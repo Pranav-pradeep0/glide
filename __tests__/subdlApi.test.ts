@@ -109,9 +109,8 @@ describe('subdlApi', () => {
         expect(result.subtitles[1].sdhScore).toBe(0);
     });
 
-    it('handles error response safely', async () => {
+    it('rejects on a network failure instead of reporting no results', async () => {
         (network.fetchWithTimeout as jest.Mock<any>).mockRejectedValueOnce(new Error('Network failure'));
-        const result = await searchAllSubtitles('Test.Movie.mkv');
-        expect(result.subtitles).toEqual([]);
+        await expect(searchAllSubtitles('Test.Movie.mkv')).rejects.toThrow('Network failure');
     });
 });

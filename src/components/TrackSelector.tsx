@@ -170,6 +170,7 @@ const BandSlider = React.memo<{
 });
 
 const noop = () => {};
+const SEARCH_FAILED = 'Couldn’t reach the subtitle search. Check your connection and try again.';
 
 /** "English · Default"; undefined when there is nothing to say. */
 const joinCaption = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' · ') || undefined;
@@ -239,14 +240,19 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
     const [preferHI, setPreferHI] = useState(false);
 
     const searchTokenRef = useRef<number>(0);
-    const abortControllerRef = useRef<AbortController | null>(null);
+    // Separate, so starting a download doesn't cancel a search and vice versa.
+    const searchAbortRef = useRef<AbortController | null>(null);
+    const downloadAbortRef = useRef<AbortController | null>(null);
     const hasAutoSearchedRef = useRef(false);
+    /** Why the last pick, search or download failed; shown in the panel, which stays open. */
+    const [notice, setNotice] = useState<string | null>(null);
 
     // ---- Effects ----
     useEffect(() => {
         // Cleanup any pending requests when the component unmounts
         return () => {
-            abortControllerRef.current?.abort();
+            searchAbortRef.current?.abort();
+            downloadAbortRef.current?.abort();
         };
     }, []);
 
@@ -255,20 +261,24 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             setActiveTab(defaultTab);
             setAudioTab('tracks');
             setDownloadingId(null);
+            setNotice(null);
             hasAutoSearchedRef.current = false;
         } else {
             setSearchQuery('');
             setIsSearching(false);
             setDownloadingId(null);
             setOptionsOpen(false);
-            // Abort any ongoing search when the modal closes
-            abortControllerRef.current?.abort();
-            abortControllerRef.current = null;
+            // Abort anything still running when the modal closes
+            searchAbortRef.current?.abort();
+            searchAbortRef.current = null;
+            downloadAbortRef.current?.abort();
+            downloadAbortRef.current = null;
         }
     }, [visible, defaultTab]);
 
     useEffect(() => {
         setOptionsOpen(false);
+        setNotice(null);
     }, [activeTab]);
 
     // Auto-fetch subtitles when Online tab opens
@@ -285,12 +295,13 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             const autoSearch = async () => {
                 try {
                     setIsSearching(true);
+                    setNotice(null);
                     // Cancel previous
-                    abortControllerRef.current?.abort();
-                    abortControllerRef.current = new AbortController();
+                    searchAbortRef.current?.abort();
+                    searchAbortRef.current = new AbortController();
 
                     if (__DEV__) {console.log('[TrackSelector] autoSearch - videoName:', videoName, 'imdbId:', imdbId, 'language:', selectedLanguage, 'prioritizeSDH: false');}
-                    const result = await searchAllSubtitles(videoName, selectedLanguage, imdbId, false, abortControllerRef.current.signal);
+                    const result = await searchAllSubtitles(videoName, selectedLanguage, imdbId, false, searchAbortRef.current.signal);
                     const subs = result.subtitles || [];
                     if (__DEV__) {console.log('[TrackSelector] autoSearch - received', subs.length, 'subtitles');}
                     setSearchResults(subs);
@@ -299,6 +310,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                         return;
                     }
                     console.error('[TrackSelector] Auto-search error:', error);
+                    setNotice(SEARCH_FAILED);
                 } finally {
                     setIsSearching(false);
                 }
@@ -348,6 +360,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
 
         try {
             setLoading(true);
+            setNotice(null);
             const result = await SubtitlePickerService.pickFromStorage();
 
             if (result) {
@@ -362,6 +375,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             }
         } catch (error) {
             console.error('[TrackSelector] File pick error:', error);
+            setNotice('Couldn’t read that file. Pick an .srt, .vtt or .ass subtitle.');
         } finally {
             setLoading(false);
         }
@@ -376,6 +390,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
 
         try {
             setIsSearching(true);
+            setNotice(null);
             const s = manualSeason ? parseInt(manualSeason, 10) : undefined;
             const e = manualEpisode ? parseInt(manualEpisode, 10) : undefined;
             const y = manualYear ? parseInt(manualYear, 10) : undefined;
@@ -383,15 +398,15 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             if (__DEV__) {console.log('[TrackSelector] handleSearch - query:', query, 'language:', selectedLanguage, 'prioritizeSDH:', preferHI, 'S:', s, 'E:', e, 'Y:', y);}
 
             // Cancel previous
-            abortControllerRef.current?.abort();
-            abortControllerRef.current = new AbortController();
+            searchAbortRef.current?.abort();
+            searchAbortRef.current = new AbortController();
 
             const result = await searchAllSubtitles(
                 query,
                 selectedLanguage,
                 undefined,
                 preferHI,
-                abortControllerRef.current.signal,
+                searchAbortRef.current.signal,
                 s,
                 e,
                 y
@@ -408,6 +423,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             console.error('[TrackSelector] Search error:', error);
             if (searchTokenRef.current !== token) {return;}
             setSearchResults([]);
+            setNotice(SEARCH_FAILED);
         } finally {
             if (searchTokenRef.current === token) {
                 setIsSearching(false);
@@ -422,14 +438,16 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             const currentId = subtitle.id;
             try {
                 setDownloadingId(currentId);
-                abortControllerRef.current?.abort();
-                abortControllerRef.current = new AbortController();
-                const content = await downloadSubtitle(subtitle.downloadUrl, abortControllerRef.current.signal);
+                setNotice(null);
+                downloadAbortRef.current?.abort();
+                downloadAbortRef.current = new AbortController();
+                const content = await downloadSubtitle(subtitle.downloadUrl, downloadAbortRef.current.signal);
 
-                if (!content) {return;}
-
-                const cues = SubtitleParser.parse(content, 'srt');
-                if (cues.length === 0) {return;}
+                const cues = content ? SubtitleParser.parse(content, 'srt') : [];
+                if (cues.length === 0) {
+                    setNotice('That subtitle came through empty or unreadable. Try another one.');
+                    return;
+                }
 
                 const validation = SubtitleSelectionService.validateSDHContent(cues);
                 const name = subtitle.release || subtitle.name || 'Downloaded Subtitle';
@@ -446,6 +464,9 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                     return;
                 }
                 console.error('[TrackSelector] Download error:', error);
+                setNotice(error instanceof Error && error.message.includes('latest Glide update')
+                    ? error.message
+                    : 'Couldn’t download that subtitle. Check your connection and try again.');
             } finally {
                 setDownloadingId((prev) => (prev === currentId ? null : prev));
             }
@@ -777,6 +798,8 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         </ScrollView>
     );
 
+    const noticeText = notice ? <Text style={styles.notice} accessibilityLiveRegion="polite">{notice}</Text> : null;
+
     const renderContent = () => {
         if (type === 'audio') {
             if (audioTab === 'effects') {return renderEffects();}
@@ -797,6 +820,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                     <>
                         {offGroup}
                         {browseGroup}
+                        {noticeText}
                         {group(externalSubtitles.map(externalRow), 'No subtitle files loaded yet')}
                         {syncGroup}
                     </>,
@@ -807,7 +831,8 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                     <>
                         {offGroup}
                         {searchRow}
-                        {isSearching && searchResults.length === 0
+                        {noticeText}
+                        {(isSearching || notice) && searchResults.length === 0
                             ? null
                             : group(
                                 searchResults.map(onlineRow),
@@ -840,6 +865,12 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
 const styles = StyleSheet.create({
 tabBar: { marginTop: metrics.space.xs, marginBottom: metrics.space.xs },    content: { flex: 1 },    pad: { paddingBottom: metrics.space.xl },    group: { marginTop: metrics.space.md },    rowBody: { flex: 1, gap: 2 },
 
+    notice: {
+        ...typo.caption,
+        color: colors.text,
+        marginTop: metrics.space.md,
+        paddingHorizontal: metrics.space.xs,
+    },
     emptyText: {
         ...typo.body,
         color: colors.textSecondary,

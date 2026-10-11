@@ -132,19 +132,16 @@ export async function searchAllSubtitles(
         signal
     );
 
+    // A failure rejects rather than reading as "no results", so the caller can say so.
     try {
         return await requestFactory;
     } catch (error) {
-        if (isAbortError(error)) {
-            if (__DEV__) {console.log(`${LOG_PREFIX} Search aborted`);}
-            throw error;
-        }
         if (error instanceof NetworkTimeoutError) {
             console.warn(`${LOG_PREFIX} Search timed out after ${error.timeoutMs}ms`);
-            return { subtitles: [] };
+        } else if (!isAbortError(error)) {
+            console.error(`${LOG_PREFIX} Search error:`, error);
         }
-        console.error(`${LOG_PREFIX} Search error:`, error);
-        return { subtitles: [] };
+        throw error;
     }
 }
 
