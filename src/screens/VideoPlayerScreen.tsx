@@ -29,6 +29,7 @@ import { LockButton } from '@/components/VideoPlayer/LockButton';
 import { SnackbarHost, showSnackbar } from '@/components/ui';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
 import { isEnhancementError } from '@/utils/playerErrors';
+import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
 import { BookmarkPanel } from '@/components/VideoPlayer/BookmarkPanel';
 import { QuickSettingsPanel } from '@/components/VideoPlayer/QuickSettingsPanel';
 import { PlaylistPanel } from '@/components/VideoPlayer/PlaylistPanel';
@@ -643,6 +644,14 @@ export default function VideoPlayerScreen({ route }: Props) {
             right: insets.right,
         };
     }, [isLandscape, insets.bottom, insets.left, insets.right]);
+
+    // Where the camera cutout is, re-read when a rotation changes the window or its insets.
+    const [cutoutRects, setCutoutRects] = React.useState<CutoutRect[] | null>(null);
+    useEffect(() => {
+        let live = true;
+        VideoOrientationService.getCutoutRects().then(rects => { if (live) { setCutoutRects(rects); } });
+        return () => { live = false; };
+    }, [width, height, insets.left, insets.right]);
 
     const shouldShowBuffer = useMemo(() =>
         player.state.isVideoLoaded && player.state.isBuffering && !player.state.isSeeking,
@@ -1264,6 +1273,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     buffering={shouldShowBuffer}
                     isLandscape={isLandscape}
                     insets={effectiveInsets}
+                    cutouts={cutoutRects}
                     onOpenBookmarks={isNetworkStream ? undefined : handleToggleBookmarkPanel}
                     onOpenPlaylist={isNetworkStream ? undefined : handleTogglePlaylist}
                     onNext={!isNetworkStream && hasNext ? handleNext : undefined}
@@ -1290,7 +1300,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                     visible={ui.state.locked && ui.state.lockIconVisible}
                     onUnlock={ui.unlock}
                     top={effectiveInsets.top + 12}
-                    left={effectiveInsets.left + 16}
+                    left={16 + (isLandscape
+                        ? cutoutInset('left', insets.left, cutoutRects, width, effectiveInsets.top + 12, effectiveInsets.top + 60)
+                        : effectiveInsets.left)}
                 />
             )}
 

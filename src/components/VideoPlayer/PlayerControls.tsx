@@ -1,5 +1,5 @@
 import React, { FC, useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Feather } from '@react-native-vector-icons/feather';
 import { EdgeInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -24,6 +24,7 @@ import { Button, Gradient, IconButton, Touchable } from '@/components/ui';
 import { haptic } from '@/native/HapticModule';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { HUD_PILL } from '@/theme/colors';
+import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
 
 const { colors } = playerTheme;
 
@@ -376,6 +377,8 @@ interface PlayerControlsProps {
     buffering?: boolean;
     isLandscape: boolean;
     insets: EdgeInsets;
+    /** Camera cutout rects; null until measured (or on an APK before API 9). */
+    cutouts: CutoutRect[] | null;
     onOpenBookmarks?: () => void;
     onOpenPlaylist?: () => void;
     onNext?: () => void;
@@ -406,7 +409,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
     showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, onOpenPlayback, playbackRate,
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
-    onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, buffering = false, isLandscape, insets,
+    onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, buffering = false, isLandscape, insets, cutouts,
     onOpenBookmarks, onOpenPlaylist, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
     showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement,
@@ -449,6 +452,15 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
     const ResizeModeIcon = getResizeModeIcon(resizeMode);
     const bottomPad = Math.max(insets.bottom, metrics.space.sm);
+    // Each edge control clears the camera cutout only where it sits level with it, so beside
+    // a punch hole the bars use the full width and just the lock steps in.
+    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    const edge = (side: 'left' | 'right', top: number, bottom: number) => (
+        isLandscape ? cutoutInset(side, insets[side], cutouts, windowWidth, top, bottom) : insets[side]
+    );
+    const topBarBottom = insets.top + 56;
+    const bottomBarTop = windowHeight - 130 - bottomPad;
+    const railMiddle = windowHeight / 2;
 
     return (
         <Animated.View
@@ -462,7 +474,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
             {/* Top bar */}
             <Animated.View
-                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingLeft: metrics.space.sm + insets.left, paddingRight: metrics.space.sm + insets.right }, othersStyle]}
+                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingLeft: metrics.space.sm + edge('left', 0, topBarBottom), paddingRight: metrics.space.sm + edge('right', 0, topBarBottom) }, othersStyle]}
             >
                 <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" onPlayer />
                 <View style={styles.titleBlock}>
@@ -501,7 +513,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
             </Animated.View>
 
             {/* Lock, alone on the left edge (clear of a landscape camera cutout), vertically centred where the thumb rests */}
-            <Animated.View style={[styles.rail, { left: metrics.space.sm + insets.left }, othersStyle]} pointerEvents="box-none">
+            <Animated.View style={[styles.rail, { left: metrics.space.sm + edge('left', railMiddle - 24, railMiddle + 24) }, othersStyle]} pointerEvents="box-none">
                 {/* Small and bare, as it always was: an 18 px glyph about 20 dp from the edge. */}
                 <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
             </Animated.View>
@@ -526,7 +538,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
 
             {/* Bottom */}
             <View
-                style={[styles.bottom, { paddingBottom: bottomPad, paddingLeft: 20 + insets.left, paddingRight: 20 + insets.right }]}
+                style={[styles.bottom, { paddingBottom: bottomPad, paddingLeft: 20 + edge('left', bottomBarTop, windowHeight), paddingRight: 20 + edge('right', bottomBarTop, windowHeight) }]}
                 pointerEvents="box-none"
             >
                 <Animated.View style={[styles.timeRow, othersStyle]}>
@@ -622,6 +634,7 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
     prev.subtitle === next.subtitle &&
     prev.isLandscape === next.isLandscape &&
     prev.insets === next.insets &&
+    prev.cutouts === next.cutouts &&
     prev.orientationLocked === next.orientationLocked &&
     prev.resizeMode === next.resizeMode &&
     prev.playbackRate === next.playbackRate &&

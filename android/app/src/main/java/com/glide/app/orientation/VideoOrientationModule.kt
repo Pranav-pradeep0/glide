@@ -3,6 +3,7 @@ package com.glide.app.orientation
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.os.Build
 import com.facebook.react.bridge.*
 
 /**
@@ -26,6 +27,33 @@ class VideoOrientationModule(reactContext: ReactApplicationContext) : ReactConte
         val activity = reactApplicationContext.currentActivity ?: return
         activity.runOnUiThread {
             if (!activity.isFinishing) activity.requestedOrientation = orientation(activity)
+        }
+    }
+
+    /**
+     * Where the camera cutout sits, as rects in dp in window coordinates (empty: none, or
+     * Android 8). Insets only say how deep the cutout band is; the player needs the rects to
+     * move just the controls that would sit behind a punch hole, not the whole edge.
+     */
+    @ReactMethod
+    fun getCutoutRects(promise: Promise) {
+        val activity = reactApplicationContext.currentActivity
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            promise.resolve(Arguments.createArray())
+            return
+        }
+        activity.runOnUiThread {
+            val density = activity.resources.displayMetrics.density
+            val rects = Arguments.createArray()
+            activity.window.decorView.rootWindowInsets?.displayCutout?.boundingRects?.forEach { r ->
+                rects.pushMap(Arguments.createMap().apply {
+                    putDouble("left", (r.left / density).toDouble())
+                    putDouble("top", (r.top / density).toDouble())
+                    putDouble("right", (r.right / density).toDouble())
+                    putDouble("bottom", (r.bottom / density).toDouble())
+                })
+            }
+            promise.resolve(rects)
         }
     }
 

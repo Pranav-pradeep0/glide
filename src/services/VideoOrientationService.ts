@@ -1,4 +1,6 @@
 import { NativeModules } from 'react-native';
+import { hasNativeApi } from '@/native/GlideNative';
+import type { CutoutRect } from '@/utils/cutoutInset';
 
 const { VideoOrientation } = NativeModules;
 
@@ -39,6 +41,11 @@ export const VideoOrientationService = {
     disableAuto: () => {
         VideoOrientation.disableAuto();
     },
+
+    /** Camera cutout rects in dp, window coordinates; null on an APK before API 9. */
+    getCutoutRects: async (): Promise<CutoutRect[] | null> => (
+        hasNativeApi(9) ? VideoOrientation.getCutoutRects() : null
+    ),
 
     /**
      * Release control and return to system default behavior.

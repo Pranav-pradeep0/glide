@@ -33,6 +33,7 @@ import com.facebook.react.uimanager.ViewManager
  *    capped and never extracted to disk (replaces react-native-zip-archive).
  * 8: constant `env`, a JSON object of the build-time .env strings JS reads (API keys,
  *    endpoints; replaces react-native-config).
+ * 9: VideoOrientation.getCutoutRects() returns the camera cutout rects in dp.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -47,7 +48,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 8
+        const val API_LEVEL = 9
     }
 
     class Package : ReactPackage {
