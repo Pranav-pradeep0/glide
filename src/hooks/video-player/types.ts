@@ -261,6 +261,8 @@ export interface PlayerCarry {
     nightMode: boolean;
     hapticsEnabled: boolean;
     orientationLocked: boolean;
+    /** Autoplay into the next episode keeps a locked screen locked. */
+    screenLocked: boolean;
 }
 
 // ============================================================================

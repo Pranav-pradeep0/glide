@@ -55,14 +55,17 @@ export const anyPanelOpen = (s: UIState) =>
  * Controls auto-hide after 3 s of inactivity while playing; never while paused,
  * scrubbing (see setAutoHideBlocked), with a panel open or with a screen reader on.
  */
-export function usePlayerUI(orientationLocked: boolean): UsePlayerUIReturn {
-    const [state, setState] = useState<UIState>(initialUIState);
+/** `startLocked`: the screen lock carried from the previous video by Next / autoplay. */
+export function usePlayerUI(orientationLocked: boolean, startLocked = false): UsePlayerUIReturn {
+    const [state, setState] = useState<UIState>(
+        startLocked ? { ...initialUIState, locked: true, controlsVisible: false } : initialUIState,
+    );
     // Unlocking the screen gives rotation back only if the rotation-lock toggle is off.
     const orientationLockedRef = useRef(orientationLocked);
     orientationLockedRef.current = orientationLocked;
 
     // Shared value for gestures to check lock state in worklets
-    const isLockedShared = useSharedValue(false);
+    const isLockedShared = useSharedValue(startLocked);
 
     const autoHideTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lockIconTimerRef = useRef<NodeJS.Timeout | null>(null);

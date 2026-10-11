@@ -221,7 +221,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const [orientationLocked, setOrientationLocked] = React.useState(carry?.orientationLocked ?? false);
 
     // UI and HUD hooks (needed by handlers below)
-    const ui = usePlayerUI(orientationLocked);
+    const ui = usePlayerUI(orientationLocked, carry?.screenLocked);
     const hud = usePlayerHUD();
 
     // ========================================================================
@@ -679,6 +679,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         nightMode,
         hapticsEnabled,
         orientationLocked,
+        screenLocked: ui.state.locked,
     };
     const carryRef = useRef(carryNow);
     carryRef.current = carryNow;
@@ -1055,7 +1056,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // Set orientation immediately on mount (avoid waiting for nav transition). A rotation
     // lock carried from the previous video holds; the toggle handles changes after that.
     useEffect(() => {
-        if (orientationLocked) { VideoOrientationService.disableAuto(); } else { VideoOrientationService.enableAuto(); }
+        if (orientationLocked || ui.state.locked) { VideoOrientationService.disableAuto(); } else { VideoOrientationService.enableAuto(); }
         return () => {
             VideoOrientationService.release();
         };

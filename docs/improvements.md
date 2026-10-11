@@ -58,7 +58,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Subtitle size** — default 0.38 never applies (`?? 0.42`); pinch-resize not saved — S
 - **Snackbars under portrait panel Modals** — "Sleep timer set" etc. probably hidden by the scrim — S
 - **Perf** — HUD state in the 1400-line screen re-renders it on every gesture step; brightness "throttle" is `floor(y) % 5`; Quick Settings sliders send a native prop per step; landscape playlist mounts and queues thumbnails at open; hidden time labels still tick React state — S–M
-- **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
+- ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
 - **Small features** — no on-screen Previous button; autoplay-next has no "Up next" countdown/cancel; playlist doesn't scroll to current or show watched progress; no "Play from start" / "Mark as watched" in video options — S each
 
 ## UI / UX rough edges
