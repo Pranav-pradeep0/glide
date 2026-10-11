@@ -95,15 +95,26 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
         );
     }, [isSynced, activeLyricIndex, accentColor, colors.text, colors.textSecondary, seekTo, textStyle]);
 
+    const viewPosition = full ? 0.4 : 0.5;
+    const scrollRetries = useRef(0);
     useEffect(() => {
+        scrollRetries.current = 0;
         if (isSynced && activeLyricIndex >= 0 && lyricsListRef.current) {
-            lyricsListRef.current.scrollToIndex({
-                index: activeLyricIndex,
-                viewPosition: full ? 0.4 : 0.5,
-                animated: true,
-            });
+            lyricsListRef.current.scrollToIndex({ index: activeLyricIndex, viewPosition, animated: true });
         }
-    }, [activeLyricIndex, isSynced, full]);
+    }, [activeLyricIndex, isSynced, viewPosition]);
+
+    // Opened mid-song, the active line is not measured yet, so the first scroll fails (with an
+    // average row height of 0 before anything is laid out). Jump near it, which renders that
+    // stretch, then try again.
+    const onScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+        lyricsListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+        if (scrollRetries.current >= 3) { return; }
+        scrollRetries.current += 1;
+        setTimeout(() => {
+            lyricsListRef.current?.scrollToIndex({ index: info.index, viewPosition, animated: false });
+        }, 50);
+    }, [viewPosition]);
 
     return (
         <View style={full ? styles.fullBox : [styles.cardBox, { height, backgroundColor: colors.fill }]}>
@@ -122,12 +133,7 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
                         keyExtractor={(line, idx) => `${line.time}-${idx}`}
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={{ paddingVertical: isSynced ? edgePadding : metrics.space.lg }}
-                        onScrollToIndexFailed={(info) => {
-                            lyricsListRef.current?.scrollToOffset({
-                                offset: Math.max(0, info.averageItemLength * info.index),
-                                animated: true,
-                            });
-                        }}
+                        onScrollToIndexFailed={onScrollToIndexFailed}
                         renderItem={renderLine}
                         extraData={activeLyricIndex}
                     />

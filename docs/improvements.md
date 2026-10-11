@@ -40,6 +40,9 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Updates under "Open with"** — the check and the prompt lived only in `App.tsx`, so a video opened from another app never learned of an update; now a one-time snackbar and a row in ⋮ Playback — M
 - **Packages** — ~~`react-native-share` (1 call; its merged FileProvider is the `cache-path "/"` exposure)~~ ✅ native `shareVideo` (API 6), ~~`react-native-zip-archive` (1 call; no size cap / zip-bomb guard)~~ ✅ `SubtitleZip.kt` (API 7), ~~`react-native-linear-gradient` (5 uses; svg already installed)~~ ✅ `Gradient` in the ui kit, ~~`react-native-config` (9 build-time strings)~~ ✅ `.env` read in `app/build.gradle`, served as `GlideNative.env` (API 8) — M
 
+- ✅ **Now Playing › Lyrics** (`NowPlayingLyrics.tsx`) — opened mid-song, the first line sits in the middle instead of the current one: the first scroll runs before any row is measured and the fallback scrolls to 0 × average height; nothing retried until the next line — S
+- **Player, landscape** — a grey shade over ~45% of the screen; not found in code yet (bottom scrim is 130 dp + inset, unchanged since `e10f6e6`) — needs when / where it shows
+
 ### Video player
 
 - ✅ `e5bcff4` **Errors** (`PlayerControls.tsx:503`, `usePlayerCore.ts:522`) — the error banner lives inside the controls overlay and fades with it after 3 s, leaving a black screen; it shows raw `ERROR_CODE_*` names; no Retry / Next / Close, and Play does nothing (player is idle). Includes 8c: GL 7000-range errors should switch enhancement off and say so (toggling it off already reopens at the current position) — M *(verified)*
