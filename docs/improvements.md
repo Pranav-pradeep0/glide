@@ -48,7 +48,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Back** (`VideoPlayerScreen.tsx:1013`) — in landscape, Back with Quick Settings / Playlist / Bookmarks / sync panel open exits the video instead of closing the panel — S
 - ✅ **Lock / rotation** (`usePlayerUI.ts:159,172`) — unlocking re-enables auto-rotate even when the rotation-lock toggle is on — S
 - ✅ **Resume prompt** (`useResumePlayback.ts:47-77`) — the "paused 5 min" prompt shows the position from when the video opened, not now; dismissing ResumeModal starts playback despite the comment saying it doesn't — S *(the long-pause prompt and Recap now use where you paused; closing pauses)*
-- **External subtitle** (`usePlayerTracks.ts:214`) — saved as track `-999` with no file; reopening restores nothing and shows "Off" — S
+- ✅ **External subtitle** (`usePlayerTracks.ts:214`) — saved as track `-999` with no file; reopening restores nothing and shows "Off" — S *(cues saved per video in `ExternalSubtitleStore`, swept at launch like stop frames)*
 - **Stale exit save** (`PlayerControls.tsx:628-650`) — memo skips handlers, so on-screen Back while paused can save an old audio track / delay — S
 - **Resize pill** — cycles 6 modes incl. `scale-down`, Quick Settings knows 5; on `scale-down` nothing is ticked — S
 - ~~**Playlist pick** drops `playMode`~~ ✅; scrub to 0:00 then exit doesn't save — S

@@ -68,6 +68,7 @@ import { useAlbumVideos } from '@/hooks/useMediaService';
 // Services and stores
 import { VideoOrientationService } from '@/services/VideoOrientationService';
 import { NavigationService } from '@/services/NavigationService';
+import { EXTERNAL_SUBTITLE_INDEX } from '@/services/ExternalSubtitleStore';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useAppStore } from '@/store/appStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
@@ -433,7 +434,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const { runAutoSync, autoSyncRunning } = useSubtitleAutoSync({
         videoPath,
         cues: tracksHook.subtitleCues,
-        isExternal: tracksHook.selectedSubtitleTrackIndex === -999,
+        isExternal: tracksHook.selectedSubtitleTrackIndex === EXTERNAL_SUBTITLE_INDEX,
         enabled: !isNetworkStream,
         currentTimeRef: player.currentTimeRef,
         delayMs: settingsHook.settings.subtitleDelay,

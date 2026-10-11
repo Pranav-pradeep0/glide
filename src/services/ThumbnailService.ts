@@ -3,6 +3,7 @@ import * as RNFS from '@dr.pogodin/react-native-fs';
 import { FileService } from './FileService';
 import { MediaService } from './MediaService';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { hashPath } from '@/utils/hashPath';
 
 const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails`;
 /**
@@ -68,7 +69,7 @@ class ThumbnailServiceClass {
     }
 
     private fileName(videoPath: string, timeMs: number): string {
-        return `${this.hashPath(`${videoPath}::${timeMs}`)}.jpg`;
+        return `${hashPath(`${videoPath}::${timeMs}`)}.jpg`;
     }
 
     private outPath(videoPath: string, timeMs: number): string {
@@ -233,17 +234,6 @@ class ThumbnailServiceClass {
             this.processingKeys.delete(task.key);
             this.processNext();
         }
-    }
-
-    private hashPath(path: string): string {
-        let hash = 0;
-        for (let i = 0; i < path.length; i++) {
-            // eslint-disable-next-line no-bitwise
-            hash = (hash << 5) - hash + path.charCodeAt(i);
-            // eslint-disable-next-line no-bitwise
-            hash |= 0;
-        }
-        return Math.abs(hash).toString(36);
     }
 }
 

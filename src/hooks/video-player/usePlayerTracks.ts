@@ -16,6 +16,7 @@ import {
 import { findMatchingAudioTrack } from '@/utils/languages';
 import { SubtitleCueStore } from '@/services/SubtitleCueStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
+import { EXTERNAL_SUBTITLE_INDEX, loadExternalSubtitle, saveExternalSubtitle } from '@/services/ExternalSubtitleStore';
 
 // ============================================================================
 // TYPES
@@ -92,7 +93,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
      * path, which haptics and negative subtitle delay both depend on.
      */
     const nativeTextTrackOrdinal = useMemo(() => {
-        if (selectedSubtitleTrackIndex === null || selectedSubtitleTrackIndex === -999) {
+        if (selectedSubtitleTrackIndex === null || selectedSubtitleTrackIndex === EXTERNAL_SUBTITLE_INDEX) {
             return -1;
         }
         const ordinal = subtitleTracks.findIndex(t => t.index === selectedSubtitleTrackIndex);
@@ -210,8 +211,8 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
                 return;
             }
 
-            // External subtitle (special index -999)
-            if (selectedSubtitleTrackIndex === -999) {
+            // External subtitle
+            if (selectedSubtitleTrackIndex === EXTERNAL_SUBTITLE_INDEX) {
                 // Cues already set by loadExternalCues
                 return;
             }
@@ -266,7 +267,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
     const selectSubtitleTrack = useCallback((trackIndex: number | null) => {
         setSelectedSubtitleTrackIndex(trackIndex);
         // Clear external name if selecting embedded track
-        if (trackIndex !== -999) {
+        if (trackIndex !== EXTERNAL_SUBTITLE_INDEX) {
             setCurrentExternalName(null);
         }
         if (__DEV__) {
@@ -286,7 +287,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
 
         // Set as current display subtitle
         setSubtitleCues(cues);
-        setSelectedSubtitleTrackIndex(-999); // Special index for external
+        setSelectedSubtitleTrackIndex(EXTERNAL_SUBTITLE_INDEX);
         setCurrentExternalName(name);
 
         // Add to external subtitles list if not already there
@@ -296,10 +297,28 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
             return [...prev, { name, cues, isSDH, source: 'file' }];
         });
 
+        saveExternalSubtitle({ videoPath, name, isSDH, cues });
+
         if (__DEV__) {
             if (__DEV__) {console.log('[usePlayerTracks] Loaded external subtitle:', name, cues.length, 'cues', isSDH ? '(SDH)' : '');}
         }
-    }, []);
+    }, [videoPath]);
+
+    // History records "external" but not the cues: bring back the saved file, or fall back to Off.
+    useEffect(() => {
+        if (initialSubtitleTrackIndex !== EXTERNAL_SUBTITLE_INDEX) {return;}
+        let mounted = true;
+        loadExternalSubtitle(videoPath).then(saved => {
+            if (!mounted) {return;}
+            if (!saved) {
+                setSelectedSubtitleTrackIndex(null);
+                return;
+            }
+            loadExternalCues(saved.cues, saved.name, saved.isSDH);
+            if (saved.isSDH) {setHapticCues(saved.cues);}
+        });
+        return () => { mounted = false; };
+    }, [videoPath, initialSubtitleTrackIndex, loadExternalCues]);
 
     /**
      * Load SDH subtitle cues specifically for haptic feedback.
