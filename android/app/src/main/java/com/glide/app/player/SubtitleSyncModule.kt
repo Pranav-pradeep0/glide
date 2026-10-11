@@ -42,6 +42,42 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
             format.setInteger(MediaFormat.KEY_AAC_DRC_ATTENUATION_FACTOR, 0)
             format.setInteger(MediaFormat.KEY_AAC_DRC_TARGET_REFERENCE_LEVEL, -1)
         }
+
+        /**
+         * Decodes the first decodable audio track of [videoPath] from [startUs] into [sink]
+         * until the file ends or the sink is done. Returns what was used, for the log.
+         */
+        @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+        internal fun decodeAudio(
+            context: android.content.Context,
+            videoPath: String,
+            sink: PcmSink,
+            startUs: Long = 0L,
+            targetTrackIndex: Int = -1,
+        ): String {
+            val audio = AudioCollector(sink, startUs, targetTrackIndex)
+            try {
+                EmbeddedSubtitles.read(
+                    context,
+                    EmbeddedSubtitles.toUri(videoPath),
+                    audio,
+                    seekTo = audio::seekRequest,
+                ) { sink.done || audio.noDecoder }
+                if (!sink.done) audio.decoder?.finish()
+            } finally {
+                audio.decoder?.release()
+            }
+            return "tracks=${audio.trackMimes} targetTrack=$targetTrackIndex chosen=${audio.chosen} using=${audio.description}"
+        }
+    }
+
+    /** Where [decodeAudio] puts decoded PCM. */
+    internal interface PcmSink {
+        /** Stop decoding. */
+        val done: Boolean
+
+        /** [data] holds interleaved PCM from its position to its limit, starting at [ptsUs]. */
+        fun add(ptsUs: Long, data: java.nio.ByteBuffer, channels: Int, rate: Int, isFloat: Boolean)
     }
 
     override fun getName() = NAME
@@ -57,17 +93,16 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
      * source sample rate, using the dialogue (centre) channel of 5.1/7.1 and the average of
      * the channels otherwise. Holds no PCM. Shared by both decoders below.
      */
-    private class WindowMeter(private val startUs: Long, private val endUs: Long) {
+    private class WindowMeter(private val startUs: Long, private val endUs: Long) : PcmSink {
         private var meter: SubtitleAligner.SpeechMeter? = null
         private var meterRate = 0
         var actualStartUs: Long? = null
             private set
         /** The window is covered, or the stream changed rate; stop decoding. */
-        var done = false
+        override var done = false
             private set
 
-        /** [data] holds interleaved PCM from its position to its limit, starting at [ptsUs]. */
-        fun add(ptsUs: Long, data: java.nio.ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
+        override fun add(ptsUs: Long, data: java.nio.ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
             if (done || channels <= 0 || rate <= 0) return
             data.order(ByteOrder.LITTLE_ENDIAN)
             val frames = data.remaining() / (channels * if (isFloat) 4 else 2)
@@ -133,21 +168,10 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     ): DecodedLevels? {
         val startUs = (windowStartS * 1_000_000).toLong().coerceAtLeast(0L)
         val window = WindowMeter(startUs, startUs + (durationS * 1_000_000).toLong())
-        val audio = AudioCollector(window, startUs, targetTrackIndex)
-        try {
-            EmbeddedSubtitles.read(
-                reactApplicationContext,
-                EmbeddedSubtitles.toUri(videoPath),
-                audio,
-                seekTo = audio::seekRequest,
-            ) { window.done || audio.noDecoder }
-            if (!window.done) audio.decoder?.finish()
-        } finally {
-            audio.decoder?.release()
-        }
+        val using = decodeAudio(reactApplicationContext, videoPath, window, startUs, targetTrackIndex)
         val result = window.result(windowStartS)
         android.util.Log.i(
-            NAME, "auto-sync: tracks=${audio.trackMimes} targetTrack=$targetTrackIndex chosen=${audio.chosen} using=${audio.description} decoded " +
+            NAME, "auto-sync: $using decoded " +
                 "${"%.1f".format(Locale.US, (result?.levels?.size ?: 0) * SubtitleAligner.FRAME_S)} s"
         )
         return result
@@ -163,7 +187,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     /** Picks the first decodable audio track once the header is read, and feeds its samples to a decoder. */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private class AudioCollector(
-        private val window: WindowMeter,
+        private val window: PcmSink,
         private val startUs: Long,
         private val targetTrackIndex: Int = -1,
     ) : androidx.media3.extractor.ExtractorOutput {
@@ -277,7 +301,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
         }
     }
 
-    private class MediaCodecPcm(format: MediaFormat, name: String, private val window: WindowMeter) : PcmDecoder {
+    private class MediaCodecPcm(format: MediaFormat, name: String, private val window: PcmSink) : PcmDecoder {
         private val codec = MediaCodec.createByCodecName(name).also {
             // Released on failure: otherwise a hardware codec slot stays held until GC.
             try {
@@ -353,7 +377,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private class FfmpegPcm(format: androidx.media3.common.Format, private val window: WindowMeter) : PcmDecoder {
+    private class FfmpegPcm(format: androidx.media3.common.Format, private val window: PcmSink) : PcmDecoder {
         private val decoder = androidx.media3.decoder.ffmpeg.FfmpegAudioDecoder(
             format, 16, 16, format.maxInputSize.takeIf { it > 0 } ?: (64 * 1024), /* outputFloat = */ false
         )

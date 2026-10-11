@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Haptics Lab: the accelerometer above 200 Hz, to see the motor (~170 Hz). Normal
+         permission, granted at install. -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
     <!-- ExoPlayer wake mode: keeps background video playing with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- android.media.audiofx.Equalizer, attached to the player's own audio session. A

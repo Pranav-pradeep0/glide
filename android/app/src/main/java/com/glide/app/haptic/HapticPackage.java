@@ -14,6 +14,7 @@ public class HapticPackage implements ReactPackage {
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         List<NativeModule> modules = new ArrayList<>();
         modules.add(new HapticModule(reactContext));
+        modules.add(new HapticsLabModule(reactContext));
         return modules;
     }
 

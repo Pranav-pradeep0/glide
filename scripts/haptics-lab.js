@@ -1,0 +1,313 @@
+#!/usr/bin/env node
+/**
+ * PC side of the Haptics Lab (docs/haptics-engine-plan.md, Phase 0). The phone records, this scores.
+ *
+ *   node scripts/haptics-lab.js pull                       newest Lab CSVs -> $TMP/haptics-lab
+ *   node scripts/haptics-lab.js history <seconds> [out]    L6: poll what the system played
+ *   node scripts/haptics-lab.js seams <csv> [history.json] L1
+ *   node scripts/haptics-lab.js calib <csv>                L5
+ *   node scripts/haptics-lab.js tap <csv>                  L4
+ *   node scripts/haptics-lab.js motion <csv>               L3: did the motor move during playback
+ *
+ * CSV rows from HapticsLabModule.kt: `elapsedRealtimeNanos,kind,values...`.
+ */
+const { execFileSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const PKG = 'com.glide.app';
+const LOCAL = path.join(os.tmpdir(), 'haptics-lab');
+const adb = (...args) => execFileSync('adb', args, { encoding: 'utf8', maxBuffer: 64 << 20, env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+
+// ---------------------------------------------------------------------------- L6 history
+
+/**
+ * One `Recent vibrations` row:
+ * `10-11 22:30:07.245 | effect | finished | duration: 1730ms | start: 22:30:07.247 | end: ... |
+ *  ... | usage: MEDIA | com.glide.app (uid=..) | reason: null | played: Step=..., Step=... | original: ...`
+ */
+function parseHistoryLine(line) {
+    const f = line.trim().split('|').map(s => s.trim());
+    if (f.length < 8) return null;
+    const field = name => (f.find(x => x.startsWith(name + ':')) ?? '').slice(name.length + 1).trim();
+    const played = field('played');
+    return {
+        created: f[0],
+        type: f[1],
+        status: f[2],
+        durationMs: parseInt(field('duration'), 10),
+        start: field('start'),
+        end: field('end'),
+        usage: field('usage'),
+        played,
+        // Step=10ms(amplitude=0.50) -> [ms, amplitude]
+        steps: [...played.matchAll(/Step=(\d+)ms\(amplitude=(-?[\d.]+)/g)].map(m => [+m[1], +m[2]]),
+    };
+}
+
+/** Clock time `HH:MM:SS.mmm` -> ms of day. */
+const clockMs = s => {
+    const m = /(\d+):(\d+):(\d+)\.(\d+)/.exec(s);
+    return m ? ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + +m[4] : NaN;
+};
+
+/** Rows of ours in the `Recent vibrations` section (the ring is ~20 per usage, hence polling). */
+function readHistory() {
+    const dump = adb('shell', 'dumpsys', 'vibrator_manager');
+    const recent = dump.split('Recent vibrations:')[1]?.split('Aggregated vibration history:')[0] ?? '';
+    return recent.split('\n').filter(l => l.includes(PKG)).map(parseHistoryLine).filter(Boolean);
+}
+
+async function history(seconds, out) {
+    const seen = new Map();
+    const until = Date.now() + seconds * 1000;
+    while (Date.now() < until) {
+        for (const row of readHistory()) seen.set(row.created + row.start, row);
+        await new Promise(r => setTimeout(r, 300));
+    }
+    const rows = [...seen.values()].sort((a, b) => clockMs(a.created) - clockMs(b.created));
+    // External (audio-coupled) vibrations are listed by the vibrator service too; keep any mention.
+    const dump = adb('shell', 'dumpsys', 'vibrator_manager');
+    const external = dump.split('\n').filter(l => /external/i.test(l)).map(l => l.trim()).slice(0, 40);
+    const result = { rows, external };
+    if (out) fs.writeFileSync(out, JSON.stringify(result, null, 1));
+    console.log(`${rows.length} rows of ${PKG}; statuses:`, count(rows.map(r => r.status)));
+    return result;
+}
+
+const count = xs => xs.reduce((m, x) => ((m[x] = (m[x] ?? 0) + 1), m), {});
+
+// ---------------------------------------------------------------------------- CSV + accel
+
+function load(file) {
+    const acc = [];
+    const marks = [];
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+        if (!line) continue;
+        const [t, kind, ...v] = line.split(',');
+        const ms = Number(BigInt(t) / 1000n) / 1000; // ns -> ms, kept precise
+        if (kind === 'acc') acc.push([ms, +v[0], +v[1], +v[2]]);
+        else marks.push({ t: ms, kind, v });
+    }
+    return { acc, marks, t0: marks[0]?.t ?? acc[0]?.[0] ?? 0 };
+}
+
+/**
+ * Vibration energy over time: each axis minus its 40 ms moving mean (gravity and hand
+ * motion are far below the motor's ~170 Hz), then RMS of the vector over [winMs].
+ */
+function envelope(acc, winMs = 20) {
+    const n = acc.length;
+    const hp = new Float64Array(n);
+    for (let axis = 1; axis <= 3; axis++) {
+        let lo = 0, sum = 0;
+        for (let i = 0; i < n; i++) {
+            sum += acc[i][axis];
+            while (acc[i][0] - acc[lo][0] > 40) sum -= acc[lo++][axis];
+            const d = acc[i][axis] - sum / (i - lo + 1);
+            hp[i] += d * d;
+        }
+    }
+    const env = [];
+    let lo = 0, sum = 0;
+    for (let i = 0; i < n; i++) {
+        sum += hp[i];
+        while (acc[i][0] - acc[lo][0] > winMs) sum -= hp[lo++];
+        env.push([acc[i][0], Math.sqrt(sum / (i - lo + 1))]);
+    }
+    return env;
+}
+
+/** Envelope values with t in [a, b). */
+const between = (env, a, b) => env.filter(([t]) => t >= a && t < b).map(([, e]) => e);
+const pct = (xs, p) => {
+    if (!xs.length) return NaN;
+    const s = [...xs].sort((x, y) => x - y);
+    return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+};
+const median = xs => pct(xs, 0.5);
+const r = (x, d = 3) => +x.toFixed(d);
+
+function rate(acc) {
+    const dt = [];
+    for (let i = 1; i < acc.length; i++) dt.push(acc[i][0] - acc[i - 1][0]);
+    return r(1000 / median(dt), 1);
+}
+
+// ---------------------------------------------------------------------------- L1 seams
+
+function seams(file, historyFile) {
+    const { acc, marks } = load(file);
+    const env = envelope(acc);
+    const noise = median(between(env, acc[0][0], acc[0][0] + 900));
+    const beds = [];
+    let bed = null;
+    for (const m of marks) {
+        if (m.kind === 'note' && m.v[0].startsWith('bed')) beds.push((bed = { label: m.v[0], vibs: [] }));
+        else if (m.kind === 'vib' && bed) bed.vibs.push(m.t);
+        else if (m.kind === 'gap' && bed) (bed.end = m.t), (bed = null);
+    }
+    console.log(`accel ${rate(acc)} Hz, noise ${r(noise)} m/s²`);
+    const rows = beds.map(b => {
+        const start = b.vibs[0];
+        const window = +/window=(\d+)/.exec(b.label)[1];
+        const plateau = median(between(env, start + 300, b.end - 300));
+        // Deepest point within 60 ms after each boundary, relative to the plateau. Compared
+        // against the same measure at the midpoints between boundaries: the dip a seam adds.
+        const dipAt = t => Math.min(...between(env, t - 10, t + 60)) / plateau;
+        const inner = b.vibs.slice(1).filter(t => t > start + 300 && t < b.end - 300);
+        const seamsDip = inner.map(dipAt);
+        const mids = inner.map(t => t - window / 2).filter(t => t > start + 300).map(dipAt);
+        const late = b.vibs.map((t, i) => t - (start + i * window));
+        return {
+            bed: b.label,
+            calls: b.vibs.length,
+            plateau: r(plateau),
+            seamMinP50: r(median(seamsDip)),
+            seamMinWorst: r(Math.min(...seamsDip)),
+            midMinP50: r(median(mids)),
+            issueLateP95Ms: r(pct(late, 0.95), 2),
+        };
+    });
+    console.table(rows);
+    if (historyFile) {
+        const { rows: hist } = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+        const gaps = [];
+        for (let i = 1; i < hist.length; i++) {
+            const g = clockMs(hist[i].start) - clockMs(hist[i - 1].end);
+            if (g < 1000) gaps.push(g);
+        }
+        console.log('history: statuses', count(hist.map(h => h.status)), 'gap end->next start ms p50/p95/max',
+            median(gaps), pct(gaps, 0.95), Math.max(...gaps));
+    }
+    return rows;
+}
+
+// ---------------------------------------------------------------------------- L5 calibration
+
+function calib(file) {
+    const { acc, marks } = load(file);
+    const env = envelope(acc);
+    const quiet = between(env, acc[0][0], acc[0][0] + 900);
+    const noise = median(quiet);
+    const vibs = marks.filter(m => m.kind === 'vib').map(m => ({ t: m.t, amp: +m.v[0], ms: +m.v[1] }));
+    const holds = vibs.filter(v => v.ms === 500);
+    const byAmp = {};
+    for (const h of holds) (byAmp[h.amp] ??= []).push(median(between(env, h.t + 150, h.t + 450)));
+    const table = Object.entries(byAmp).map(([amp, xs]) => ({
+        amp: +amp,
+        pct: r((amp / 255) * 100, 1),
+        rms: r(median(xs)),
+        overNoise: r(median(xs) / noise, 2),
+        passA: r(xs[0]),
+        passB: r(xs[1] ?? NaN),
+    }));
+    console.log(`accel ${rate(acc)} Hz, noise ${r(noise)} m/s² (p95 ${r(pct(quiet, 0.95))})`);
+    console.table(table);
+    // Onset latency: from the call to the envelope first reaching half of its 500 ms peak.
+    const full = holds.filter(h => h.amp === 255);
+    const pulses = vibs.filter(v => v.ms !== 500).map(p => {
+        const seg = env.filter(([t]) => t >= p.t - 5 && t < p.t + 250);
+        const peak = Math.max(...seg.map(([, e]) => e));
+        const rise = seg.find(([, e]) => e >= Math.max(peak / 2, noise * 3));
+        const fall = [...seg].reverse().find(([, e]) => e >= Math.max(peak / 2, noise * 3));
+        return { ms: p.ms, peak: r(peak), overNoise: r(peak / noise, 1), onsetMs: rise ? r(rise[0] - p.t, 1) : null, feltForMs: rise && fall ? r(fall[0] - rise[0], 1) : null };
+    });
+    const holdOnset = full.map(h => {
+        const seg = env.filter(([t]) => t >= h.t - 5 && t < h.t + 300);
+        const plateau = median(between(env, h.t + 150, h.t + 450));
+        const reach = frac => seg.find(([, e]) => e >= plateau * frac)?.[0] - h.t;
+        return { onset10: r(reach(0.1), 1), onset50: r(reach(0.5), 1), onset90: r(reach(0.9), 1) };
+    });
+    console.log('255 hold rise (ms to 10/50/90% of plateau):', holdOnset);
+    console.table(pulses);
+    return { table, pulses, holdOnset, noise };
+}
+
+// ---------------------------------------------------------------------------- L4 tap timing
+
+function tap(file) {
+    const { marks } = load(file);
+    const pos = marks.filter(m => m.kind === 'pos').map(m => [m.t, +m.v[0]]);
+    const taps = marks.filter(m => m.kind === 'tap').map(m => [m.t, +m.v[0] / 1000]);
+    // Player position at wall time t, interpolated between polls in the same playing stretch.
+    const at = t => {
+        let i = pos.findIndex(([pt]) => pt >= t);
+        if (i <= 0) return NaN;
+        const [t0, p0] = pos[i - 1], [t1, p1] = pos[i];
+        return t1 - t0 > 50 ? NaN : p0 + ((p1 - p0) * (t - t0)) / (t1 - t0);
+    };
+    const leads = taps.map(([t, content]) => content - at(t)).filter(Number.isFinite);
+    // Skip the first second: the sink fills its buffer as fast as it can at the start.
+    const settled = taps.filter(([t]) => pos.length && t > pos[0][0] + 1000).map(([t, c]) => c - at(t)).filter(Number.isFinite);
+    const intervals = taps.slice(1).map(([t], i) => t - taps[i][0]);
+    const out = {
+        flushes: marks.filter(m => m.kind === 'note' && m.v[0].startsWith('flush')).map(m => m.v[0]),
+        taps: taps.length,
+        tapIntervalMsP50: r(median(intervals), 2),
+        leadMsAll: { p5: r(pct(leads, 0.05), 1), p50: r(median(leads), 1), p95: r(pct(leads, 0.95), 1) },
+        leadMsSettled: { min: r(Math.min(...settled), 1), p5: r(pct(settled, 0.05), 1), p50: r(median(settled), 1), p95: r(pct(settled, 0.95), 1), max: r(Math.max(...settled), 1) },
+    };
+    console.log(JSON.stringify(out, null, 1));
+    return out;
+}
+
+// ---------------------------------------------------------------------------- L3 motion
+
+function motion(file) {
+    const { acc, marks } = load(file);
+    const env = envelope(acc);
+    const playing = marks.filter(m => m.kind === 'pos');
+    const quiet = between(env, acc[0][0], acc[0][0] + 900);
+    const during = playing.length ? between(env, playing[0].t, playing.at(-1).t) : [];
+    const notes = marks.filter(m => m.kind === 'note').map(m => m.v.join(','));
+    const out = {
+        notes,
+        quiet: { p50: r(median(quiet)), p99: r(pct(quiet, 0.99)) },
+        playing: { p50: r(median(during)), p99: r(pct(during, 0.99)), max: r(Math.max(...during)) },
+        // Share of playback where the envelope clears the quiet p99 by 3x: motor activity.
+        activeShare: r(during.filter(e => e > 3 * pct(quiet, 0.99)).length / Math.max(1, during.length)),
+    };
+    console.log(JSON.stringify(out, null, 1));
+    return out;
+}
+
+// ---------------------------------------------------------------------------- pull
+
+function pull() {
+    fs.mkdirSync(LOCAL, { recursive: true });
+    adb('pull', `/sdcard/Android/data/${PKG}/files/haptics-lab/.`, LOCAL);
+    const files = fs.readdirSync(LOCAL).filter(f => f.endsWith('.csv')).sort((a, b) => +a.split('-').at(-1).slice(0, -4) - +b.split('-').at(-1).slice(0, -4));
+    for (const f of files.slice(-6)) console.log(path.join(LOCAL, f));
+}
+
+/** `node scripts/haptics-lab.js check`: the parser against a real row from the reference phone. */
+function check() {
+    const assert = require('assert');
+    const row = parseHistoryLine('      10-11 22:31:24.441 |   effect | cancelled_superseded | duration:  1542ms | start: 22:31:24.444 | end: 22:31:25.984 | scale:     NONE (adaptive=1.00) | flags:    0 | usage: MEDIA | com.glide.app (uid=10628, deviceId=0) | reason: null | played: Step=10ms(amplitude=0.50), Step=2000ms(amplitude=1.00) | original: Step=2000ms(amplitude=-1.00)');
+    assert.strictEqual(row.status, 'cancelled_superseded');
+    assert.strictEqual(row.durationMs, 1542);
+    assert.strictEqual(row.usage, 'MEDIA');
+    assert.deepStrictEqual(row.steps, [[10, 0.5], [2000, 1]]);
+    assert.strictEqual(clockMs(row.end) - clockMs(row.start), 1540);
+    console.log('ok');
+}
+
+const [cmd, ...args] = process.argv.slice(2);
+const commands = {
+    check,
+    pull,
+    history: () => history(+args[0] || 30, args[1]),
+    seams: () => seams(args[0], args[1]),
+    calib: () => calib(args[0]),
+    tap: () => tap(args[0]),
+    motion: () => motion(args[0]),
+};
+if (!commands[cmd]) {
+    console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
+    process.exit(1);
+}
+commands[cmd]();
+
+module.exports = { parseHistoryLine, envelope };

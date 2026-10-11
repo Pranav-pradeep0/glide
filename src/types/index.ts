@@ -174,6 +174,7 @@ export type RootStackParamList = {
         artistId: string;
         artistName: string;
     };
+    HapticsLab: undefined;
 };
 
 export interface AudioTrack {

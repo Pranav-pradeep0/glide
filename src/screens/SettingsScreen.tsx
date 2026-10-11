@@ -37,6 +37,9 @@ import {
 import { metrics, playerTheme, type } from '@/theme/theme';
 import { AppSettings, ShakeAction } from '../types';
 import pkg from '../../package.json';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types';
 
 const AnimatedText = Animated.createAnimatedComponent(Text);
 const noop = () => {};
@@ -168,6 +171,8 @@ export default function SettingsScreen() {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const { height: windowHeight } = useWindowDimensions();
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+    const versionTaps = useRef(0);
 
     const settings = useAppStore((state) => state.settings);
     const updateStatus = useAppStore((state) => state.updateStatus);
@@ -635,7 +640,13 @@ export default function SettingsScreen() {
 
                 <SectionLabel title="About" />
                 <ListGroup>
-                    <ListRow icon="info" title="Version" value={pkg.version} />
+                    {/* Seven taps open the Haptics Lab, a dev screen. */}
+                    <ListRow
+                        icon="info"
+                        title="Version"
+                        value={pkg.version}
+                        onPress={() => { if (++versionTaps.current % 7 === 0) navigation.navigate('HapticsLab'); }}
+                    />
                     <ListRow
                         icon="file-text"
                         title="Open source licences"
