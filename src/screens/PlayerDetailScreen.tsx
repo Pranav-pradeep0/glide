@@ -14,7 +14,7 @@ import {
     Easing,
     useWindowDimensions,
 } from 'react-native';
-import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
+import { RouteProp, useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -84,6 +84,8 @@ export default function PlayerDetailScreen() {
     const [showManualPicker, setShowManualPicker] = useState(false);
     const [localSubtitles, setLocalSubtitles] = useState<string[]>([]);
     const networkAbortRef = useRef<AbortController | null>(null);
+    const resumeOnFocus = useRef(false);
+    const imdbIdRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
         return () => {
@@ -97,20 +99,30 @@ export default function PlayerDetailScreen() {
         networkAbortRef.current?.abort();
         networkAbortRef.current = new AbortController();
         const signal = networkAbortRef.current.signal;
+        // Play aborts this so it doesn't compete with the player's start; nothing new starts
+        // after that (an extraction already running natively still finishes and is cached).
+        const stopIfAborted = () => {
+            if (signal.aborted) { throw Object.assign(new Error('Detection paused'), { name: 'AbortError' }); }
+        };
         setLoading(true);
 
         try {
             // Step 1: Get embedded subtitle tracks
             if (__DEV__) { console.log(`${LOG_PREFIX} Getting embedded tracks...`); }
             const tracks = await SubtitleCueStore.getTracks(videoPath);
+            stopIfAborted();
 
             // Step 2: Check for local subtitle files
             const locals = await SubtitlePickerService.findMatchingSubtitles(videoPath);
+            stopIfAborted();
             setLocalSubtitles(locals);
 
             // Step 3: Try to find SDH content in embedded tracks
             if (tracks.length > 0) {
-                const extractAndParse = async (index: number) => SubtitleCueStore.getCues(videoPath, index);
+                const extractAndParse = async (index: number) => {
+                    stopIfAborted();
+                    return SubtitleCueStore.getCues(videoPath, index);
+                };
                 const sdhResult = await SubtitleSelectionService.findBestSDHByContent(tracks, extractAndParse, 'en');
 
                 if (sdhResult) {
@@ -122,6 +134,7 @@ export default function PlayerDetailScreen() {
 
             // Step 4: Try local subtitle files
             for (const sPath of locals) {
+                stopIfAborted();
                 const picked = await SubtitlePickerService.loadFromPath(sPath);
                 if (picked && SubtitleSelectionService.validateSDHContent(picked.cues).isSDH) {
                     setHapticCues(picked.cues);
@@ -145,6 +158,7 @@ export default function PlayerDetailScreen() {
             setLoading(false);
         } catch (error) {
             if (isAbortError(error)) {
+                resumeOnFocus.current = true;
                 return;
             }
             console.error(`${LOG_PREFIX} Detection error:`, error);
@@ -168,17 +182,27 @@ export default function PlayerDetailScreen() {
             setDetailsLoading(false);
         }
 
+        imdbIdRef.current = imdbId;
         if (hapticsEnabled) {
-            runSDHDetection(imdbId);
+            // Details can arrive after Play was tapped; then detection waits for the return.
+            if (navigation.isFocused()) { runSDHDetection(imdbId); } else { resumeOnFocus.current = true; }
         }
-    }, [videoName, hapticsEnabled, runSDHDetection]);
+    }, [videoName, hapticsEnabled, runSDHDetection, navigation]);
 
     // Run detection on mount or when video changes
     useEffect(() => {
         initPage();
     }, [initPage]);
 
+    // Back from the player: finish the detection Play paused (finished steps are cached).
+    useFocusEffect(useCallback(() => {
+        if (!resumeOnFocus.current) { return; }
+        resumeOnFocus.current = false;
+        runSDHDetection(imdbIdRef.current);
+    }, [runSDHDetection]));
+
     function navigateToPlayer(cues?: SubtitleCue[] | null) {
+        networkAbortRef.current?.abort();
         navigation.navigate('VideoPlayer', {
             videoPath,
             videoName,
