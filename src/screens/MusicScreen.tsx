@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+    BackHandler,
     Image,
     RefreshControl,
     ScrollView,
@@ -9,7 +10,7 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
@@ -142,6 +143,18 @@ export default function MusicScreen() {
             loadData();
         }
     }, [audioAccess, loadData]);
+
+    // Back inside a folder returns to the folder list, like the header's back arrow.
+    useFocusEffect(
+        useCallback(() => {
+            if (!selectedFolder) return;
+            const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+                setSelectedFolder(null);
+                return true;
+            });
+            return () => sub.remove();
+        }, [selectedFolder])
+    );
 
     const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 

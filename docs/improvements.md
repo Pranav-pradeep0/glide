@@ -8,7 +8,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 
 - ✅ `4fc6516` **Now Playing › Sleep timer** (`NowPlayingScreen.tsx:70-102`) — the tick and "Xm left" match on `round(remaining/60) === 15`, so a 15-minute timer loses its tick after ~30 s, and a 30-minute timer shows "15 minutes" ticked halfway through — the sheet lies about what's set — S
 - ✅ **Music › Folders** (`MusicScreen.tsx:180-186`) — opening a folder shows the previous folder's songs until the new list loads, and a failed load leaves the spinner state wrong (no try/finally) — S *(no load any more: the folder's songs are filtered from the library already in memory, so they show at once)*
-- **Music › folder view** — hardware Back leaves the Music tab instead of returning to the folder list (no BackHandler while `selectedFolder` is set) — S
+- ✅ **Music › folder view** — hardware Back leaves the Music tab instead of returning to the folder list (no BackHandler while `selectedFolder` is set) — S
 - **Music › A–Z scroller** (`MusicScreen.tsx:282-298, 589`) — shown for every sort, but always jumps by title, so with "Artist" or "Recently added" it lands somewhere random — S
 - ✅ `d054578` **Lyrics** (`LyricsService.ts:193-202`) — a network failure caches "no lyrics" for the session (roadmap Phase 2, still open) — S
 - ~~**Lyrics** (`NowPlayingScreen.tsx:185`) — no `.catch`~~ not a bug: `getLyricsForTrack` catches every step and never rejects
