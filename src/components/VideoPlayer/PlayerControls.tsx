@@ -1,4 +1,4 @@
-import React, { FC, useCallback, useEffect, useState } from 'react';
+import React, { FC, useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Feather } from '@react-native-vector-icons/feather';
 import { EdgeInsets } from 'react-native-safe-area-context';
@@ -405,7 +405,32 @@ interface PlayerControlsProps {
 const NO_BOOKMARKS: number[] = [];
 const SEEK_ACTIONS = [{ name: 'increment' }, { name: 'decrement' }];
 
-export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
+type Handler = (...args: unknown[]) => unknown;
+
+/**
+ * The screen's handlers change identity with state the controls never show (the HUD on
+ * every gesture step, panels, delays), so the view below skips those renders. It gets
+ * stable stand-ins that call the latest handler instead: skipping used to leave it holding
+ * an old one, so Back saved an old audio track and Next carried old settings.
+ */
+export const PlayerControls: FC<PlayerControlsProps> = (props) => {
+    const latest = useRef(props);
+    latest.current = props;
+    const standIns = useRef<Record<string, Handler>>({}).current;
+
+    const forwarded: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(props)) {
+        if (typeof value === 'function') {
+            standIns[key] ??= (...args) => (latest.current as unknown as Record<string, Handler | undefined>)[key]?.(...args);
+            forwarded[key] = standIns[key];
+        } else {
+            forwarded[key] = value;
+        }
+    }
+    return <PlayerControlsView {...(forwarded as unknown as PlayerControlsProps)} />;
+};
+
+const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, onOpenPlayback, playbackRate,
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
@@ -627,31 +652,15 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
             </View>
         </Animated.View>
     );
-}, (prev, next) => (
-    prev.showControls === next.showControls &&
-    prev.paused === next.paused &&
-    prev.title === next.title &&
-    prev.subtitle === next.subtitle &&
-    prev.isLandscape === next.isLandscape &&
-    prev.insets === next.insets &&
-    prev.cutouts === next.cutouts &&
-    prev.orientationLocked === next.orientationLocked &&
-    prev.resizeMode === next.resizeMode &&
-    prev.playbackRate === next.playbackRate &&
-    prev.onNext === next.onNext &&
-    prev.onAddBookmark === next.onAddBookmark &&
-    prev.bookmarks === next.bookmarks &&
-    prev.buffering === next.buffering &&
-    prev.durationSeconds === next.durationSeconds &&
-    prev.showSeekButtons === next.showSeekButtons &&
-    prev.seekDuration === next.seekDuration &&
-    prev.videoEnhancement === next.videoEnhancement &&
-    prev.nightModeActive === next.nightModeActive &&
-    prev.muted === next.muted &&
-    prev.screenReaderEnabled === next.screenReaderEnabled
-));
+}, (prev, next) => {
+    // currentTimeSeconds is read from a ref on every screen render; the bar's clock runs on
+    // shared values, and the fallback label only needs it when something else re-renders.
+    const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+    keys.delete('currentTimeSeconds');
+    return [...keys].every(k => prev[k as keyof PlayerControlsProps] === next[k as keyof PlayerControlsProps]);
+});
 
-PlayerControls.displayName = 'PlayerControls';
+PlayerControlsView.displayName = 'PlayerControlsView';
 
 const styles = StyleSheet.create({
     overlay: { zIndex: 10 },
