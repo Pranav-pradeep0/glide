@@ -95,6 +95,8 @@ type RouteParams = {
     imdbId?: string;
     cleanTitle?: string;
     carry?: PlayerCarry;
+    /** Started from a folder's "Play all": plays through even with auto-play next off. */
+    playAll?: boolean;
 };
 
 type Props = {
@@ -119,6 +121,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         imdbId,
         cleanTitle,
         carry,
+        playAll,
     } = route.params;
 
     // "The.Boys.S05E04.1080p" → "The Boys" + "S5 E4", as in the library.
@@ -740,9 +743,10 @@ export default function VideoPlayerScreen({ route }: Props) {
             albumName: albumName || undefined,
             bucketId: routeBucketId || video.bucketId,
             playMode,
+            playAll,
             carry: carryRef.current,
         });
-    }, [navigation, ui, albumName, routeBucketId, playMode]);
+    }, [navigation, ui, albumName, routeBucketId, playMode, playAll]);
 
     // ========================================================================
     // CONTROL HANDLERS
@@ -926,10 +930,11 @@ export default function VideoPlayerScreen({ route }: Props) {
                 albumName: albumName || undefined,
                 bucketId: routeBucketId || prevVideo.bucketId,
                 playMode: playMode,
+                playAll,
                 carry: carryRef.current,
             });
         }
-    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode]);
+    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll]);
 
     const handleNext = useCallback(() => {
         if (!hasNext) {return;}
@@ -942,10 +947,11 @@ export default function VideoPlayerScreen({ route }: Props) {
                 albumName: albumName || undefined,
                 bucketId: routeBucketId || nextVideo.bucketId,
                 playMode: playMode,
+                playAll,
                 carry: carryRef.current,
             });
         }
-    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode]);
+    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll]);
 
     // ========================================================================
     // UPDATE
@@ -1023,8 +1029,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         player.handleEnd();
         // "End of video" sleep has already left the player.
         if (!hasNext || settingsHook.settings.sleepTimer === -1) { return; }
-        setUpNext({ endsAt: autoPlayNext ? Date.now() + UP_NEXT_COUNTDOWN_MS : null });
-    }, [player, autoPlayNext, hasNext, settingsHook.settings.sleepTimer]);
+        setUpNext({ endsAt: autoPlayNext || playAll ? Date.now() + UP_NEXT_COUNTDOWN_MS : null });
+    }, [player, autoPlayNext, playAll, hasNext, settingsHook.settings.sleepTimer]);
 
     // ========================================================================
     // LIFECYCLE EFFECTS

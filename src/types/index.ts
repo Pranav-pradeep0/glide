@@ -146,6 +146,8 @@ export type RootStackParamList = {
         apiSubtitles?: SubtitleResult[];
         // If true, exit app on back press instead of navigating back
         isExternalOpen?: boolean;
+        // Started from a folder's "Play all": plays through even with auto-play next off
+        playAll?: boolean;
     };
     AlbumVideos: {
         albumTitle: string;

@@ -48,6 +48,19 @@ export default function AlbumVideosScreen() {
         });
     }, [navigation, albumTitle, bucketId]);
 
+    // Straight into the player (no detail page) so the whole folder plays through.
+    const handlePlayAll = () => {
+        const first = videos[0];
+        navigation.navigate('VideoPlayer', {
+            videoPath: first.path,
+            videoName: first.name,
+            contentUri: first.uri,
+            albumName: albumTitle,
+            bucketId: first.bucketId || bucketId,
+            playAll: true,
+        });
+    };
+
     const handleOpenOptions = useCallback((video: VideoFile) => {
         setSelectedVideo(video);
         setOptionsVisible(true);
@@ -139,7 +152,7 @@ export default function AlbumVideosScreen() {
                                 label="Play all"
                                 icon="play"
                                 variant="primary"
-                                onPress={() => handleVideoPress(videos[0])}
+                                onPress={handlePlayAll}
                             />
                         </View>
                     )}
