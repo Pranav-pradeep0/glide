@@ -26,7 +26,8 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Update modal** — reappears every cold start (`updateStatus` memory-only; roadmap Phase 2) — S *(the announced version is now kept in update storage)*
 - **Subtitles** — SubDL `.ass`/`.ssa` are rejected by the `-->` check in `subdlApi.ts`, and downloads are always parsed as `'srt'` (`PlayerDetailScreen.tsx:143, 281`); `picked_subtitle_*` never cleaned (roadmap Phase 2) — S
 - **TrackOptionsSheet** (`TrackOptionsSheet.tsx:38-40`) — returns null as soon as `track` clears, so the close animation never plays; double horizontal inset — S
-- **Licences sheet** — hardware Back on a licence closes the whole sheet instead of returning to the list — S
+- ✅ **Licences sheet** — hardware Back on a licence closes the whole sheet instead of returning to the list — S *(root cause in `Sheet`: Android Back always closed; it now follows the header's back arrow, which also fixes portrait player panels on a sub-page or opened from ⋮ Playback)*
+- **Landscape player panels** (`VideoPlayerScreen.tsx:1114`) — Back on a sub-page (Quick Settings page, track options) or a panel opened from ⋮ Playback closes everything instead of going back a step; side panels are plain views and the screen's single Back listener calls `closeAllPanels`. A per-panel listener would race the screen's re-subscription and could take Back from the library during PiP — S
 - **Snackbar position** (`RootNavigator.tsx:361`) — offset ignores the mini player, so snackbars overlap it; 64 dp too high on stack screens — S
 
 

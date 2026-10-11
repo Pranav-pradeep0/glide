@@ -586,7 +586,7 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
     if (!mounted) { return null; }
 
     return (
-        <Modal transparent visible onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent animationType="none">
+        <Modal transparent visible onRequestClose={onBack ?? onClose} statusBarTranslucent navigationBarTranslucent animationType="none">
             <GestureHandlerRootView style={styles.flex}>
                 <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }, scrimStyle]}>
                     <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
