@@ -35,9 +35,3 @@
 # General
 -dontwarn com.facebook.react.**
 
-# React Native Config
--keep class com.lugg.RNCConfig.** { *; }
-
-# Keep BuildConfig
--keep class com.glide.app.BuildConfig { *; }
-

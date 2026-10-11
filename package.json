@@ -20,7 +20,6 @@
     "@shopify/flash-list": "^2.3.2",
     "react": "19.2.3",
     "react-native": "0.87.1",
-    "react-native-config": "^1.7.1",
     "react-native-edge-to-edge": "^1.8.1",
     "react-native-gesture-handler": "^3.2.1",
     "react-native-mmkv": "^4.3.2",

@@ -1,10 +1,23 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-// Apply react-native-config plugin
-apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
+import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.net.URL
+
+// .env at the repo root (CI writes it before building): KEY=value lines, # comments.
+def env = [:]
+def envFile = file("../../.env")
+if (envFile.exists()) {
+    envFile.eachLine { line ->
+        def m = line =~ /^\s*([A-Z0-9_]+)\s*=\s*['"]?(.*?)['"]?\s*$/
+        if (m.matches()) env[m.group(1)] = m.group(2)
+    }
+}
+// What JS reads (src/utils/constants.ts), via GlideNative's `env` constant.
+def jsEnvKeys = ["SUBDL_API_URL", "SUBDL_API_KEY", "SUBDL_DOWNLOAD_URL", "OMDB_API_KEY", "OMDB_API_URL",
+                 "AI_PROXY_URL", "GITHUB_OWNER", "GITHUB_REPO", "GITHUB_RELEASES_URL"]
+def jsEnvJson = JsonOutput.toJson(env.subMap(jsEnvKeys))
 
 def packageVersion = new JsonSlurper().parse(file("../../package.json")).version?.toString()
 def versionMatcher = packageVersion =~ /^(\d+)\.(\d+)\.(\d+)$/
@@ -124,8 +137,9 @@ android {
         versionName packageVersion
         
         // Inject Stallion keys from env
-        resValue "string", "StallionProjectId", project.env.get("STALLION_PROJECT_ID")
-        resValue "string", "StallionAppToken", project.env.get("STALLION_APP_TOKEN")
+        resValue "string", "StallionProjectId", env.get("STALLION_PROJECT_ID", "")
+        resValue "string", "StallionAppToken", env.get("STALLION_APP_TOKEN", "")
+        buildConfigField "String", "JS_ENV", '"' + jsEnvJson.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
     }
     splits {

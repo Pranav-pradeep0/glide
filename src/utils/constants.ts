@@ -1,4 +1,5 @@
 import * as RNFS from '@dr.pogodin/react-native-fs';
+import { BUILD_ENV } from '@/native/GlideNative';
 
 export const VIDEO_EXTENSIONS = [
     '.mp4', '.mkv', '.avi', '.mov', '.flv',
@@ -25,25 +26,22 @@ export const SUBTITLE_COLORS = [
 export const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
 // SubDL API
-import Config from 'react-native-config';
-
-// SubDL API
-export const SUBDL_API_URL = process.env.SUBDL_API_URL || Config.SUBDL_API_URL || 'https://api.subdl.com/api/v1/subtitles';
-export const SUBDL_API_KEY = process.env.SUBDL_API_KEY || Config.SUBDL_API_KEY || '';
-export const SUBDL_DOWNLOAD_URL = process.env.SUBDL_DOWNLOAD_URL || Config.SUBDL_DOWNLOAD_URL || 'https://dl.subdl.com';
+export const SUBDL_API_URL = BUILD_ENV.SUBDL_API_URL || 'https://api.subdl.com/api/v1/subtitles';
+export const SUBDL_API_KEY = BUILD_ENV.SUBDL_API_KEY || '';
+export const SUBDL_DOWNLOAD_URL = BUILD_ENV.SUBDL_DOWNLOAD_URL || 'https://dl.subdl.com';
 
 // OMDB API (1,000 free requests/day)
-export const OMDB_API_KEY = process.env.OMDB_API_KEY || Config.OMDB_API_KEY || '';
-export const OMDB_API_URL = process.env.OMDB_API_URL || Config.OMDB_API_URL || 'https://www.omdbapi.com';
+export const OMDB_API_KEY = BUILD_ENV.OMDB_API_KEY || '';
+export const OMDB_API_URL = BUILD_ENV.OMDB_API_URL || 'https://www.omdbapi.com';
 
-const configuredAiProxyUrl = (process.env.AI_PROXY_URL || Config.AI_PROXY_URL || '').trim().replace(/\/+$/, '');
+const configuredAiProxyUrl = (BUILD_ENV.AI_PROXY_URL || '').trim().replace(/\/+$/, '');
 export const AI_PROXY_URL = configuredAiProxyUrl.startsWith('https://') ? configuredAiProxyUrl : '';
 export const RECAP_AVAILABLE = AI_PROXY_URL.length > 0;
 
 // GitHub Releases (Update Check)
-export const GITHUB_OWNER = process.env.GITHUB_OWNER || Config.GITHUB_OWNER || '';
-export const GITHUB_REPO = process.env.GITHUB_REPO || Config.GITHUB_REPO || '';
-export const GITHUB_RELEASES_URL = process.env.GITHUB_RELEASES_URL || Config.GITHUB_RELEASES_URL || '';
+export const GITHUB_OWNER = BUILD_ENV.GITHUB_OWNER || '';
+export const GITHUB_REPO = BUILD_ENV.GITHUB_REPO || '';
+export const GITHUB_RELEASES_URL = BUILD_ENV.GITHUB_RELEASES_URL || '';
 
 // export const DEFAULT_STORAGE_PATH = '/storage/emulated/0/Movies';
 export const DEFAULT_STORAGE_PATH = RNFS.ExternalStorageDirectoryPath;

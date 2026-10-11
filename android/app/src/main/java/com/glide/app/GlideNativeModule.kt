@@ -31,6 +31,8 @@ import com.facebook.react.uimanager.ViewManager
  *    MediaStore link (replaces react-native-share and its FileProvider).
  * 7: SubtitleSyncModule.readSubtitleFromZip(zipPath) returns the subtitle text inside a zip,
  *    capped and never extracted to disk (replaces react-native-zip-archive).
+ * 8: constant `env`, a JSON object of the build-time .env strings JS reads (API keys,
+ *    endpoints; replaces react-native-config).
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -40,11 +42,12 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
         "apiLevel" to API_LEVEL,
         "versionName" to BuildConfig.VERSION_NAME,
         "versionCode" to BuildConfig.VERSION_CODE,
+        "env" to BuildConfig.JS_ENV,
     )
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 7
+        const val API_LEVEL = 8
     }
 
     class Package : ReactPackage {
