@@ -10,6 +10,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Button, Touchable, SnackbarHost } from '@/components/ui';
 import { ErrorBoundary } from '../../ErrorBoundary';
+import { SystemBars } from 'react-native-edge-to-edge';
 import { metrics, type } from '@/theme/theme';
 
 // The four tabs are what the first frame needs, so they are imported.
@@ -261,6 +262,8 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                 },
             }}
         >
+            {/* The base of the bars stack: the player pushes its own entry and this returns when it leaves. */}
+            <SystemBars style={theme.dark ? 'light' : 'dark'} hidden={false} />
             <Stack.Navigator
                 screenOptions={{
                     headerShown: false,

@@ -62,7 +62,6 @@ import {
     UsePlayerTracksReturn,
 } from '@/hooks/video-player';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
-import { useTheme } from '@/hooks/useTheme';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 
 // Services and stores
@@ -145,7 +144,6 @@ export default function VideoPlayerScreen({ route }: Props) {
     const isScreenFocused = useIsFocused();
     const { width, height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
-    const theme = useTheme();
 
     // Store actions
     const getVideoHistory = useVideoHistoryStore(state => state.getVideoHistory);
@@ -1154,16 +1152,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         useSubtitleCueStore.getState().clearCue();
     }, [player.currentTimeRef]);
 
-    // System bars
-    useEffect(() => {
-        SystemBars.setHidden(!ui.state.controlsVisible);
-        SystemBars.setStyle('auto');
-        return () => {
-            SystemBars.setHidden(false);
-            SystemBars.setStyle(theme.dark ? 'light' : 'dark');
-        };
-    }, [ui.state.controlsVisible, theme.dark]);
-
     // ========================================================================
     // RENDER
     // ========================================================================
@@ -1237,8 +1225,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                 />
             )}
 
-            {/* Status Bar for Edge-to-Edge */}
-            <SystemBars style="light" />
+            {/* Bars follow the controls. A stack entry, so leaving restores the app's own (RootNavigator). */}
+            <SystemBars style="light" hidden={!ui.state.controlsVisible} />
 
             {/* Night Mode Overlay - Sits between video and controls/HUD */}
             {!pipPresentationActive && nightMode && (
