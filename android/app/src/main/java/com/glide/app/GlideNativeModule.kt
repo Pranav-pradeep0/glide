@@ -27,6 +27,8 @@ import com.facebook.react.uimanager.ViewManager
  *    and sleepTimerEndsAt (epoch ms).
  * 5: GlideAudioPlayerModule.moveInShuffleOrder(index, toPosition) reorders the shuffled
  *    play order without touching the queue order.
+ * 6: MediaStoreVideoModule.shareVideo(pathOrUri) opens the share sheet with the video's
+ *    MediaStore link (replaces react-native-share and its FileProvider).
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -40,7 +42,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 5
+        const val API_LEVEL = 6
     }
 
     class Package : ReactPackage {

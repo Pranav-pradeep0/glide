@@ -73,6 +73,17 @@ class MediaServiceClass {
      * True when deleted, false when the user cancelled. Throws on failure, with
      * `code: 'E_PERMISSION'` when Android 9 or below was refused the storage permission.
      */
+    /**
+     * Open the share sheet for a video (path or content:// URI). Throws with
+     * `code: 'E_NOT_FOUND'` when MediaStore hasn't indexed the file.
+     */
+    async shareVideo(pathOrUri: string): Promise<void> {
+        if (!hasNativeApi(6)) {
+            throw Object.assign(new Error('Sharing needs the latest Glide update'), { code: 'E_OLD_APK' });
+        }
+        await this.module.shareVideo(pathOrUri);
+    }
+
     async deleteVideos(targets: string[]): Promise<boolean> {
         if (Platform.OS !== 'android' || !this.module?.deleteVideos) {
             return false;

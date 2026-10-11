@@ -9,14 +9,13 @@ import React, { useMemo } from 'react';
 import { Alert, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Feather from '@react-native-vector-icons/feather';
-import Share from 'react-native-share';
 import { useTheme } from '@/hooks/useTheme';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { playerColors } from '@/theme/colors';
 import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
-import { Button, IconButton, Touchable } from '@/components/ui';
+import { Button, IconButton, Touchable, showSnackbar } from '@/components/ui';
 import { MediaService } from '@/services/MediaService';
 
 // ============= HELPERS =============
@@ -65,11 +64,17 @@ export function prettyTitle(name: string): { title: string; detail?: string } {
     return result;
 }
 
-export async function shareVideo(path: string) {
+export async function shareVideo(pathOrUri: string) {
     try {
-        await Share.open({ url: `file://${path}`, type: 'video/*', failOnCancel: false });
-    } catch (error) {
-        if (__DEV__) {console.log('Share dismissed', error);}
+        await MediaService.shareVideo(pathOrUri);
+    } catch (error: any) {
+        showSnackbar({
+            text: error?.code === 'E_OLD_APK' ? error.message
+                : error?.code === 'E_NOT_FOUND' ? "This video isn't in your library yet, so it can't be shared"
+                : error?.code === 'E_NO_ACCESS' ? 'Glide can no longer read this video. Open it again to share it'
+                : "Couldn't open sharing",
+            tone: 'reject',
+        });
     }
 }
 

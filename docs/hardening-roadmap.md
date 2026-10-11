@@ -212,7 +212,8 @@ Activities, and Android Auto and a Bluetooth head unit still browse the music li
 2. **Confused deputy via `_data`.** `SimpleThumbnailModule.kt:191-204` trusts a
    provider-supplied `_data` column, so any app can send `content://evil/x` resolving to
    `/data/data/com.glide.app/...` and have Glide open it with its own permissions; the path
-   then flows into history, Recents and Share (whose FileProvider exposes `cache-path "/"`).
+   then flows into history and Recents. (Share no longer can: since 2026-10-11 it sends only
+   a MediaStore entry, and the FileProvider with `cache-path "/"` is gone.)
    Only trust `_data` when `uri.authority == "media"`; reject `file://` under `/data/`.
 3. **CI supply chain.** The release job holds the keystore and `contents: write` but pins
    actions by tag, not SHA; no wrapper validation, no `distributionSha256Sum` (the FFmpeg
@@ -378,8 +379,8 @@ commands (seek, PiP, stop) work on both an old and a new bundle.
 ### 8d. Dependencies and toolchain
 - **Replace `react-native-linear-gradient`** (stable from 2023, legacy interop, no
   namespace) with react-native-svg's `LinearGradient`.
-- Consider ~25 lines of Kotlin for `react-native-share` and `java.util.zip` (with a
-  zip-slip check) for `react-native-zip-archive`; both are single-call uses.
+- ✅ 2026-10-11 `react-native-share` → `MediaStoreVideoModule.shareVideo` (API 6).
+- `java.util.zip` (with a zip-slip check) for `react-native-zip-archive`; a single-call use.
 - Stallion #146: Android bundle download has no timeout and can hang. Take 2.4.3 if fixed.
 - Patch upgrades: fs 2.40.3, gesture-handler 3.3.0, safe-area 5.10.1, screens 4.29.0,
   zip-archive 9.5.3, edge-to-edge 1.8.2. Hold reanimated at 4.6.0 until RN 0.88 and

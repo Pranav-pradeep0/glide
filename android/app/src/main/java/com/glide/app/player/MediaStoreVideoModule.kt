@@ -1,6 +1,7 @@
 package com.glide.app.player
 
 import android.app.Activity
+import android.content.ClipData
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
@@ -580,6 +581,40 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
             } catch (e: Exception) {
                 promise.resolve(null)
             }
+        }
+    }
+
+    /**
+     * Opens the share sheet for one video, sent as its own MediaStore link with a read grant
+     * for the receiving app only. No FileProvider: nothing outside the media library is
+     * reachable. Rejects E_NOT_FOUND for a file MediaStore hasn't indexed, and E_NO_ACCESS
+     * for another app's link whose "Open with" grant has expired.
+     */
+    @ReactMethod
+    fun shareVideo(pathOrUri: String, promise: Promise) {
+        val resolver = reactContext.contentResolver
+        val uri = if (pathOrUri.startsWith("content://")) Uri.parse(pathOrUri) else resolveContentUri(resolver, pathOrUri)
+        if (uri == null) {
+            promise.reject("E_NOT_FOUND", "Video is not in the media library")
+            return
+        }
+        val activity = reactContext.currentActivity
+        if (activity == null) {
+            promise.reject("E_NO_ACTIVITY", "Cannot share without an active window")
+            return
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = resolver.getType(uri) ?: "video/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            // ClipData carries the grant through the chooser and gives the sheet its preview.
+            clipData = ClipData.newRawUri(null, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            activity.startActivity(Intent.createChooser(send, null))
+            promise.resolve(null)
+        } catch (e: SecurityException) {
+            promise.reject("E_NO_ACCESS", "No longer allowed to read this video", e)
         }
     }
 

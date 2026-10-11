@@ -36,7 +36,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ `e5bcff4` **Active state** (`PlayerControls.tsx:686`, `GlyphButton`) — "on" is a white icon on a 14% white circle vs a white icon with no circle: enhancement / night mode / mute / rotation lock barely change when switched on — S
 - ✅ `e5bcff4` **Lock button under the camera hole** (`PlayerControls.tsx:696`) — rail is `left: 8` with no side inset; `effectiveInsets` never passes the real landscape cutout inset, and the top bar / bottom bar ignore left/right too — S
 - ✅ `5821e85` **Mini player** (`MiniPlayer.tsx:105-121`) — no swipe-down to close; `clearQueue()` already stops and clears — S
-- **Packages** — `react-native-share` (1 call; its merged FileProvider is the `cache-path "/"` exposure), `react-native-zip-archive` (1 call; no size cap / zip-bomb guard), `react-native-linear-gradient` (5 uses; svg already installed), `react-native-config` (9 build-time strings) are all replaceable with a few lines of our own code — M
+- **Packages** — ~~`react-native-share` (1 call; its merged FileProvider is the `cache-path "/"` exposure)~~ ✅ native `shareVideo` (API 6), `react-native-zip-archive` (1 call; no size cap / zip-bomb guard), `react-native-linear-gradient` (5 uses; svg already installed), `react-native-config` (9 build-time strings) are all replaceable with a few lines of our own code — M
 
 ### Video player
 

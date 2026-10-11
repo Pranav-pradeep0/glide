@@ -231,7 +231,7 @@ export default function RecentsScreen() {
                 video={selectedVideo}
                 onClose={() => setOptionsVisible(false)}
                 onPlay={() => selectedVideo && handleVideoPress(selectedVideo)}
-                onShare={() => selectedVideo && shareVideo(selectedVideo.videoPath)}
+                onShare={() => selectedVideo && shareVideo(selectedVideo.contentUri ?? selectedVideo.videoPath)}
                 onDelete={handleDelete}
                 onClearHistory={handleClearHistoryItem}
             />
