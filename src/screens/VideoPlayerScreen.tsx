@@ -18,6 +18,7 @@ import { nextDisplayMode } from '@/components/VideoPlayer/PlayerIcons';
 
 // Native Modules
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
+const UP_NEXT_COUNTDOWN_MS = 10_000;
 
 import { currentActivityName, finishCurrentActivity, usePipModeListener } from '@/native/PipModule';
 
@@ -28,6 +29,7 @@ import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
 import { SnackbarHost, showSnackbar } from '@/components/ui';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
+import { UpNextCard } from '@/components/VideoPlayer/UpNextCard';
 import UpdateModal from '@/components/UpdateModal';
 import { isEnhancementError } from '@/utils/playerErrors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
@@ -998,27 +1000,28 @@ export default function VideoPlayerScreen({ route }: Props) {
         isNetworkStream,
     ]);
 
-    // Leaving the screen inside the autoplay delay must not navigate to the next video afterwards.
-    const autoPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    useEffect(() => () => {
-        if (autoPlayTimerRef.current) { clearTimeout(autoPlayTimerRef.current); }
-    }, []);
+    // "Up next" once a video ends: with autoplay, a countdown that plays it; without, just the
+    // name and a button. It belongs to that end only: anything that resumes this video
+    // (Play, a seek) drops it, so a later stop can't bring an old countdown back.
+    const [upNext, setUpNext] = React.useState<{ endsAt: number | null } | null>(null);
+    const upNextShown = upNext !== null && player.state.playerStopped && hasNext;
+    useEffect(() => {
+        if (!player.state.playerStopped) { setUpNext(null); }
+    }, [player.state.playerStopped]);
+    // Unmounting (Back, PiP closed) clears this, so leaving never plays the next video.
+    const upNextEndsAt = upNextShown ? upNext.endsAt : null;
+    useEffect(() => {
+        if (upNextEndsAt === null) { return; }
+        const timer = setTimeout(handleNext, upNextEndsAt - Date.now());
+        return () => clearTimeout(timer);
+    }, [upNextEndsAt, handleNext]);
 
     const handleVideoEnd = useCallback(() => {
-        // Always call default player end handler to ensure clean state
         player.handleEnd();
-
-        // Check for auto-play
-        // Delay slightly to let player state settle and ensure smooth transition
-        if (autoPlayTimerRef.current) { clearTimeout(autoPlayTimerRef.current); }
-        autoPlayTimerRef.current = setTimeout(() => {
-            autoPlayTimerRef.current = null;
-            // "End of video" sleep has already left the player.
-            if (autoPlayNext && hasNext && settingsHook.settings.sleepTimer !== -1) {
-                handleNext();
-            }
-        }, 500);
-    }, [player, autoPlayNext, hasNext, handleNext, settingsHook.settings.sleepTimer]);
+        // "End of video" sleep has already left the player.
+        if (!hasNext || settingsHook.settings.sleepTimer === -1) { return; }
+        setUpNext({ endsAt: autoPlayNext ? Date.now() + UP_NEXT_COUNTDOWN_MS : null });
+    }, [player, autoPlayNext, hasNext, settingsHook.settings.sleepTimer]);
 
     // ========================================================================
     // LIFECYCLE EFFECTS
@@ -1319,6 +1322,18 @@ export default function VideoPlayerScreen({ route }: Props) {
                     left={16 + (isLandscape
                         ? cutoutInset('left', insets.left, cutoutRects, width, effectiveInsets.top + 12, effectiveInsets.top + 60)
                         : effectiveInsets.left)}
+                />
+            )}
+
+            {/* Under the panels, which close themselves when the next video opens */}
+            {!pipPresentationActive && upNextShown && (
+                <UpNextCard
+                    name={albumVideos[currentVideoIndex + 1].name}
+                    endsAt={upNext.endsAt}
+                    onPlay={ui.state.locked ? undefined : handleNext}
+                    onDismiss={ui.state.locked ? undefined : () => setUpNext(null)}
+                    bottom={effectiveInsets.bottom + (controlsShown ? 96 : 0)}
+                    right={effectiveInsets.right}
                 />
             )}
 
