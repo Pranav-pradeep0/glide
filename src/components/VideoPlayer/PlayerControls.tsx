@@ -332,9 +332,11 @@ const GlyphButton: FC<{
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ selected: !!active }}
-        style={[styles.glyph, active && styles.glyphActive]}
+        style={styles.glyph}
     >
-        {children(active ? colors.onPrimary : colors.text)}
+        {/* On: the icon's filled form plus a dot under it. Quieter than a solid disc. */}
+        {children(colors.text)}
+        {active && <View style={styles.glyphDot} />}
     </Touchable>
 );
 
@@ -563,13 +565,9 @@ export const PlayerControls: FC<PlayerControlsProps> = React.memo(({
                         </GlyphButton>
                     )}
                     {onToggleMute && (
-                        <IconButton
-                            icon={muted ? 'volume-x' : 'volume-2'}
-                            active={muted}
-                            onPress={onToggleMute}
-                            accessibilityLabel={muted ? 'Unmute' : 'Mute'}
-                            onPlayer
-                        />
+                        <GlyphButton onPress={onToggleMute} label={muted ? 'Unmute' : 'Mute'} active={muted}>
+                            {c => <Feather name={muted ? 'volume-x' : 'volume-2'} size={22} color={c} />}
+                        </GlyphButton>
                     )}
                     {onOpenPlaylist && (
                         <IconButton icon="list" onPress={onOpenPlaylist} accessibilityLabel="Playlist" onPlayer />
@@ -674,7 +672,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    glyphActive: { backgroundColor: colors.primary },
+    glyphDot: {
+        position: 'absolute',
+        bottom: 1,
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: colors.text,
+    },
     rail: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center' },
     center: {
         ...StyleSheet.absoluteFill,
