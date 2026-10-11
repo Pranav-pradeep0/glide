@@ -29,6 +29,8 @@ import com.facebook.react.uimanager.ViewManager
  *    play order without touching the queue order.
  * 6: MediaStoreVideoModule.shareVideo(pathOrUri) opens the share sheet with the video's
  *    MediaStore link (replaces react-native-share and its FileProvider).
+ * 7: SubtitleSyncModule.readSubtitleFromZip(zipPath) returns the subtitle text inside a zip,
+ *    capped and never extracted to disk (replaces react-native-zip-archive).
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -42,7 +44,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 6
+        const val API_LEVEL = 7
     }
 
     class Package : ReactPackage {

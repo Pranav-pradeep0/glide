@@ -2,8 +2,9 @@
 
 import { SubtitleResult } from '../types';
 import { SUBDL_API_URL, SUBDL_API_KEY, SUBDL_DOWNLOAD_URL } from './constants';
+import { NativeModules } from 'react-native';
 import * as RNFS from '@dr.pogodin/react-native-fs';
-import { unzip } from 'react-native-zip-archive';
+import { hasNativeApi } from '@/native/GlideNative';
 import { FilenameParser } from './FilenameParser';
 import { createCoalescedRequest, fetchWithTimeout, InFlightRequest, isAbortError, NetworkTimeoutError } from './network';
 
@@ -306,13 +307,15 @@ async function executeSubtitleDownload(
 ): Promise<string | null> {
     const timestamp = Date.now();
     const zipPath = `${RNFS.CachesDirectoryPath}/subtitle_${timestamp}.zip`;
-    const extractDir = `${RNFS.CachesDirectoryPath}/subtitle_extract_${timestamp}`;
     let downloadJobId: number | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let abortHandler: (() => void) | null = null;
     let didTimeout = false;
 
     try {
+        if (!hasNativeApi(7)) {
+            throw new Error('Subtitle download needs the latest Glide update');
+        }
         const fullUrl = downloadUrl.startsWith('http')
             ? downloadUrl
             : `${SUBDL_DOWNLOAD_URL}${downloadUrl}`;
@@ -360,55 +363,12 @@ async function executeSubtitleDownload(
 
         if (__DEV__) {console.log(`${LOG_PREFIX} Downloaded ZIP (${downloadResult.bytesWritten} bytes)`);}
 
-        // Check if file exists and has content
-        const fileExists = await RNFS.exists(zipPath);
-        if (!fileExists) {
-            throw new Error('Downloaded file does not exist');
-        }
-
-        // Create extraction directory
-        await RNFS.mkdir(extractDir);
-
-        // Extract the ZIP file
-        if (__DEV__) {console.log(`${LOG_PREFIX} Extracting ZIP to:`, extractDir);}
-        await unzip(zipPath, extractDir);
-
-        // Find subtitle file in extracted contents
-        const files = await RNFS.readDir(extractDir);
-        if (__DEV__) {console.log(`${LOG_PREFIX} Extracted ${files.length} files`);}
-
-        // Look for .srt, .vtt, or .ass files (prefer .srt)
-        const subtitleExtensions = ['.srt', '.vtt', '.ass', '.ssa'];
-        let subtitleFile = null;
-
-        for (const ext of subtitleExtensions) {
-            subtitleFile = files.find(f => f.name.toLowerCase().endsWith(ext));
-            if (subtitleFile) {break;}
-        }
-
-        if (!subtitleFile) {
-            // Check subdirectories (some ZIPs have nested folders)
-            for (const file of files) {
-                if (file.isDirectory()) {
-                    const subFiles = await RNFS.readDir(file.path);
-                    for (const ext of subtitleExtensions) {
-                        subtitleFile = subFiles.find(f => f.name.toLowerCase().endsWith(ext));
-                        if (subtitleFile) {break;}
-                    }
-                    if (subtitleFile) {break;}
-                }
-            }
-        }
-
-        if (!subtitleFile) {
+        // Picked and read natively, capped, without extracting anything (SubtitleZip.kt).
+        const subtitleContent: string | null = await NativeModules.SubtitleSyncModule.readSubtitleFromZip(zipPath);
+        if (!subtitleContent) {
             console.error(`${LOG_PREFIX} No subtitle file found in ZIP`);
             return null;
         }
-
-        if (__DEV__) {console.log(`${LOG_PREFIX} Found subtitle:`, subtitleFile.name);}
-
-        // Read the subtitle content
-        const subtitleContent = await RNFS.readFile(subtitleFile.path, 'utf8');
 
         // Verify it's valid subtitle content
         if (!subtitleContent.includes('-->')) {
@@ -416,7 +376,7 @@ async function executeSubtitleDownload(
             return null;
         }
 
-        if (__DEV__) {console.log(`${LOG_PREFIX} Loaded ${subtitleContent.length} chars from ${subtitleFile.name}`);}
+        if (__DEV__) {console.log(`${LOG_PREFIX} Loaded ${subtitleContent.length} chars`);}
         return subtitleContent;
 
     } catch (error) {
@@ -440,9 +400,6 @@ async function executeSubtitleDownload(
         try {
             if (await RNFS.exists(zipPath)) {
                 await RNFS.unlink(zipPath);
-            }
-            if (await RNFS.exists(extractDir)) {
-                await RNFS.unlink(extractDir);
             }
         } catch (cleanupError) {
             console.warn(`${LOG_PREFIX} Cleanup error:`, cleanupError);

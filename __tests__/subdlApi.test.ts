@@ -13,10 +13,6 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
     unlink: jest.fn(),
 }));
 
-jest.mock('react-native-zip-archive', () => ({
-    unzip: jest.fn(),
-}));
-
 jest.mock('react-native-config', () => ({
     SUBDL_API_URL: 'https://api.subdl.com/api/v1/subtitles',
     SUBDL_API_KEY: 'test-key',

@@ -443,6 +443,14 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     /**
      * Extract stream and metadata information from [videoPath] using native MediaExtractor and MediaMetadataRetriever.
      */
+    /** The subtitle inside a downloaded SubDL zip, as text; null when it holds none. See [SubtitleZip]. */
+    @ReactMethod
+    fun readSubtitleFromZip(zipPath: String, promise: Promise) {
+        BackgroundWork.submit(promise) {
+            promise.resolve(SubtitleZip.read(File(zipPath)))
+        }
+    }
+
     @ReactMethod
     fun getVideoMetadata(videoPath: String, promise: Promise) {
         BackgroundWork.submit(promise) {

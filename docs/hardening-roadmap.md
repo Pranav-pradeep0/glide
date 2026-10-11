@@ -380,7 +380,8 @@ commands (seek, PiP, stop) work on both an old and a new bundle.
 - **Replace `react-native-linear-gradient`** (stable from 2023, legacy interop, no
   namespace) with react-native-svg's `LinearGradient`.
 - ✅ 2026-10-11 `react-native-share` → `MediaStoreVideoModule.shareVideo` (API 6).
-- `java.util.zip` (with a zip-slip check) for `react-native-zip-archive`; a single-call use.
+- ✅ 2026-10-11 `react-native-zip-archive` → `SubtitleZip.kt` (API 7): reads the chosen entry
+  in memory with a 10 MB / 1000-entry cap and never extracts, so zip-slip has nothing to hit.
 - Stallion #146: Android bundle download has no timeout and can hang. Take 2.4.3 if fixed.
 - Patch upgrades: fs 2.40.3, gesture-handler 3.3.0, safe-area 5.10.1, screens 4.29.0,
   zip-archive 9.5.3, edge-to-edge 1.8.2. Hold reanimated at 4.6.0 until RN 0.88 and
