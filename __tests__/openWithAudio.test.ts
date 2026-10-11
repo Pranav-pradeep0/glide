@@ -92,3 +92,20 @@ describe('DeepLinkService.isVideoUri', () => {
         expect(DeepLinkService.isVideoUri('content://media/external/audio/media/42')).toBe(false);
     });
 });
+
+// The player's subtitle line under "Open with": a file manager's own link arrives encoded.
+describe('DeepLinkService.getFolderNameFromUri', () => {
+    it('decodes the folder of a link', () => {
+        expect(DeepLinkService.getFolderNameFromUri('content://com.fm.provider/external_files/My%20Shows/ep.mkv')).toBe('My Shows');
+        expect(DeepLinkService.getFolderNameFromUri('content://com.android.externalstorage.documents/document/primary%3AMovies%2FShows%2Fep.mkv')).toBe('Shows');
+    });
+
+    it('leaves a plain path as it is', () => {
+        expect(DeepLinkService.getFolderNameFromUri('/storage/emulated/0/100%25 Done/ep.mkv')).toBe('100%25 Done');
+        expect(DeepLinkService.getFolderNameFromUri('ep.mkv')).toBeNull();
+    });
+
+    it('keeps a stray % in a link instead of failing', () => {
+        expect(DeepLinkService.getFolderNameFromUri('file:///sdcard/50%off/ep.mkv')).toBe('50%off');
+    });
+});

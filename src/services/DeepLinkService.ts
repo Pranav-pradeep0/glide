@@ -174,6 +174,25 @@ export class DeepLinkService {
     }
 
     /**
+     * The folder a video sits in, for the player's subtitle line. A link is decoded first
+     * (an "Open with" `content://…/My%20Shows/ep.mkv` → "My Shows"); a plain path, which can
+     * hold a literal "%" or "?", is used as it is.
+     */
+    static getFolderNameFromUri(path: string): string | null {
+        let clean = path.replace(/\\/g, '/');
+        if (clean.includes('://')) {
+            clean = clean.split('?')[0];
+            try {
+                clean = decodeURIComponent(clean);
+            } catch {
+                // A stray "%" that isn't an escape: show the segment as it is
+            }
+        }
+        const parts = clean.split('/');
+        return (parts.length >= 2 && parts[parts.length - 2]) || null;
+    }
+
+    /**
      * Resolve content:// URI to a real file:// path
      * Returns the original URI if resolution fails
      */

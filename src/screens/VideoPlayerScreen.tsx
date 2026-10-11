@@ -69,6 +69,7 @@ import { useAlbumVideos } from '@/hooks/useMediaService';
 // Services and stores
 import { VideoOrientationService } from '@/services/VideoOrientationService';
 import { NavigationService } from '@/services/NavigationService';
+import { DeepLinkService } from '@/services/DeepLinkService';
 import { EXTERNAL_SUBTITLE_INDEX } from '@/services/ExternalSubtitleStore';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useAppStore } from '@/store/appStore';
@@ -127,16 +128,11 @@ export default function VideoPlayerScreen({ route }: Props) {
     // "The.Boys.S05E04.1080p" → "The Boys" + "S5 E4", as in the library.
     const displayTitle = useMemo(() => prettyTitle(videoName), [videoName]);
 
-    // Derive album name from parent folder if not provided
-    const albumName = useMemo(() => {
-        if (routeAlbumName) {return routeAlbumName;}
-        // Extract parent folder name from video path
-        const parts = videoPath.replace(/\\/g, '/').split('/');
-        if (parts.length >= 2) {
-            return parts[parts.length - 2]; // Parent folder
-        }
-        return null;
-    }, [videoPath, routeAlbumName]);
+    // The parent folder when the caller didn't name one ("Open with")
+    const albumName = useMemo(
+        () => routeAlbumName || DeepLinkService.getFolderNameFromUri(videoPath),
+        [videoPath, routeAlbumName],
+    );
 
     // ========================================================================
 

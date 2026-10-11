@@ -47,6 +47,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 
 - ✅ **Next / Up next rotation** (`VideoPlayerScreen.tsx` `exitPlayer`) — `navigation.replace` unmounts the old player after the new one mounts, and its cleanup released orientation: a portrait flash, and controls left with frames from the other orientation (buttons overlapping, a frozen time label) — S *(a replaced player hands orientation over; only a real exit releases)*
 - ✅ **Titles** (`FilenameParser.ts`) — "The Boys (2026) S05E05" showed as "The Boys (2026": the edge trim took the ")" — S
+- ✅ **"Open with" folder name** (`VideoPlayerScreen.tsx` albumName) — the player's subtitle line showed "My%20Shows": a file manager's own `content://` link can't be resolved to a path, and the folder was cut from it undecoded — S *(`DeepLinkService.getFolderNameFromUri` decodes links, leaves plain paths alone)*
 
 ### Video player
 
