@@ -609,7 +609,10 @@ export default function VideoPlayerScreen({ route }: Props) {
      * once. Kept in a ref so the unmount path never holds a stale copy.
      */
     const exitedRef = useRef(false);
-    const exitPlayer = useCallback(() => {
+    // `handingOver`: Next / Previous / playlist / Up next replace this screen with another player,
+    // which sets its own orientation. Releasing here too came after that (unmount follows the new
+    // screen's mount), flashing portrait and leaving the new controls laid out for the wrong size.
+    const exitPlayer = useCallback((handingOver = false) => {
         if (exitedRef.current) {return;}
         exitedRef.current = true;
 
@@ -617,7 +620,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         savePlaybackProgress(true);
         persistNow();
         player.stop();
-        VideoOrientationService.release();
+        if (!handingOver) { VideoOrientationService.release(); }
     }, [savePlaybackProgress, persistNow, player]);
 
     const exitPlayerRef = useRef(exitPlayer);
@@ -1094,10 +1097,8 @@ export default function VideoPlayerScreen({ route }: Props) {
     // Set orientation immediately on mount (avoid waiting for nav transition). A rotation
     // lock carried from the previous video holds; the toggle handles changes after that.
     useEffect(() => {
+        // Released in exitPlayer, which knows whether another player is taking over.
         if (orientationLocked || ui.state.locked) { VideoOrientationService.disableAuto(); } else { VideoOrientationService.enableAuto(); }
-        return () => {
-            VideoOrientationService.release();
-        };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
     }, []);
 
@@ -1123,7 +1124,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // Navigation beforeRemove
     useEffect(() => {
-        const unsubscribe = navigation.addListener('beforeRemove', () => exitPlayer());
+        const unsubscribe = navigation.addListener('beforeRemove', e => exitPlayer(e.data.action.type === 'REPLACE'));
         return unsubscribe;
     }, [navigation, exitPlayer]);
 

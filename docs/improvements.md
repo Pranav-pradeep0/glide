@@ -45,6 +45,9 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 
 - ✅ **Update sheet, landscape** (`UpdateNotes.tsx`) — the notes block (200 dp) never shrank, so the sheet's 90% height cap pushed Download / Not now off the bottom — S *(notes now give way and scroll)*
 
+- ✅ **Next / Up next rotation** (`VideoPlayerScreen.tsx` `exitPlayer`) — `navigation.replace` unmounts the old player after the new one mounts, and its cleanup released orientation: a portrait flash, and controls left with frames from the other orientation (buttons overlapping, a frozen time label) — S *(a replaced player hands orientation over; only a real exit releases)*
+- ✅ **Titles** (`FilenameParser.ts`) — "The Boys (2026) S05E05" showed as "The Boys (2026": the edge trim took the ")" — S
+
 ### Video player
 
 - ✅ `e5bcff4` **Errors** (`PlayerControls.tsx:503`, `usePlayerCore.ts:522`) — the error banner lives inside the controls overlay and fades with it after 3 s, leaving a black screen; it shows raw `ERROR_CODE_*` names; no Retry / Next / Close, and Play does nothing (player is idle). Includes 8c: GL 7000-range errors should switch enhancement off and say so (toggling it off already reopens at the current position) — M *(verified)*
