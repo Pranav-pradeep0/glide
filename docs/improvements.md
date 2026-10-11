@@ -41,7 +41,7 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - **Packages** — ~~`react-native-share` (1 call; its merged FileProvider is the `cache-path "/"` exposure)~~ ✅ native `shareVideo` (API 6), ~~`react-native-zip-archive` (1 call; no size cap / zip-bomb guard)~~ ✅ `SubtitleZip.kt` (API 7), ~~`react-native-linear-gradient` (5 uses; svg already installed)~~ ✅ `Gradient` in the ui kit, ~~`react-native-config` (9 build-time strings)~~ ✅ `.env` read in `app/build.gradle`, served as `GlideNative.env` (API 8) — M
 
 - ✅ **Now Playing › Lyrics** (`NowPlayingLyrics.tsx`) — opened mid-song, the first line sits in the middle instead of the current one: the first scroll runs before any row is measured and the fallback scrolls to 0 × average height; nothing retried until the next line — S
-- **Player, landscape** — a grey shade over ~45% of the screen; not found in code yet (bottom scrim is 130 dp + inset, unchanged since `e10f6e6`) — needs when / where it shows
+- **Player, landscape** — a grey shade over ~45% of the screen; not found in code yet (bottom scrim is 130 dp + inset, unchanged since `e10f6e6`) — reported on the left side, probably while the controls show; ruled out: double-tap ripple (no fill, pulse fades), brightness HUD, state layers (panels only). Needs a screenshot
 
 ### Video player
 
