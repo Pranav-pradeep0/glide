@@ -80,6 +80,37 @@ export function isLyricsSynced(lyrics: LyricLine[] | null): boolean {
     return lyrics.some((l) => l.time > 0);
 }
 
+/** Shown for a stretch with no words. */
+export const INSTRUMENTAL = '♪';
+const INTRO_MIN_S = 5;
+// ponytail: LRC only says when a line starts, not when it ends. A gap this long nearly always
+// holds a break, and the ♪ comes in once the last line has likely been sung. Tune if it lies.
+const GAP_MIN_S = 15;
+const LINE_TAIL_S = 6;
+
+/**
+ * Synced lyrics with ♪ lines for instrumental stretches: blank LRC lines, an intro before
+ * the first line, and long gaps between lines. Unsynced lyrics come back unchanged.
+ */
+export function withInstrumentalBreaks(lyrics: LyricLine[]): LyricLine[] {
+    if (!isLyricsSynced(lyrics)) return lyrics;
+    const out: LyricLine[] = [];
+    const push = (line: LyricLine) => {
+        // Two breaks in a row read as one.
+        if (line.text === INSTRUMENTAL && out[out.length - 1]?.text === INSTRUMENTAL) return;
+        out.push(line);
+    };
+    if (lyrics[0].time >= INTRO_MIN_S) push({ time: 0, text: INSTRUMENTAL });
+    lyrics.forEach((line, i) => {
+        push(line.text ? line : { time: line.time, text: INSTRUMENTAL });
+        const next = lyrics[i + 1];
+        if (line.text && next && next.time - line.time >= GAP_MIN_S) {
+            push({ time: line.time + LINE_TAIL_S, text: INSTRUMENTAL });
+        }
+    });
+    return out;
+}
+
 export class LyricsServiceClass {
     private cache = new Map<string, LyricLine[] | null>();
 

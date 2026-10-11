@@ -1,24 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Feather from '@react-native-vector-icons/feather';
-import { Button, Touchable } from '@/components/ui';
+import { Button, IconButton, Touchable } from '@/components/ui';
 import { useTheme } from '@/hooks/useTheme';
+import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
-import { isLyricsSynced } from '@/services/LyricsService';
+import { INSTRUMENTAL, isLyricsSynced, withInstrumentalBreaks } from '@/services/LyricsService';
 import { LyricLine } from '@/types';
 import { metrics, type } from '@/theme/theme';
 
 interface NowPlayingLyricsProps {
     lyrics: LyricLine[] | null;
-    artSize: number;
     accentColor: string;
     isLoading?: boolean;
     onPickLyrics: () => void;
+    /** The card on Now Playing, sized to the artwork. Left out: fills its parent (full screen). */
+    height?: number;
+    /** Card only: opens the full-screen view. */
+    onExpand?: () => void;
 }
 
 /** Index of the line playing at `position`, or -1 if unsynced or before the first line. */
-function activeLineIndex(lyrics: LyricLine[] | null, position: number, isSynced: boolean): number {
-    if (!lyrics || !isSynced) { return -1; }
+function activeLineIndex(lyrics: LyricLine[], position: number, isSynced: boolean): number {
+    if (!isSynced) { return -1; }
     let active = -1;
     for (let i = 0; i < lyrics.length; i++) {
         if (lyrics[i].time >= 0 && lyrics[i].time <= position) {
@@ -29,77 +33,80 @@ function activeLineIndex(lyrics: LyricLine[] | null, position: number, isSynced:
 }
 
 /**
- * Isolated lyrics viewer for NowPlayingScreen.
+ * Lyrics for Now Playing, as the card in place of the artwork or full screen.
  *
  * Subscribes to the *active line index*, not to `position`: the store's position changes
  * twice a second, the line every few seconds, and only a line change needs a render.
+ * Every line has the same size, so the current one changes colour, never the layout.
  */
 export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
     lyrics,
-    artSize,
     accentColor,
     isLoading,
     onPickLyrics,
+    height,
+    onExpand,
 }) => {
     const { colors } = useTheme();
-    const isSynced = useMemo(() => isLyricsSynced(lyrics), [lyrics]);
+    const { height: windowHeight } = useWindowDimensions();
+    const full = height === undefined;
+    const lines = useMemo(() => (lyrics ? withInstrumentalBreaks(lyrics) : []), [lyrics]);
+    const isSynced = useMemo(() => isLyricsSynced(lines), [lines]);
+    const onlineLyricsEnabled = useAppStore((s) => s.settings.onlineLyricsEnabled);
+    const setOnlineLyricsEnabled = useAppStore((s) => s.setOnlineLyricsEnabled);
 
-    const activeLyricIndex = useAudioStore((s) => activeLineIndex(lyrics, s.position, isSynced));
+    const activeLyricIndex = useAudioStore((s) => activeLineIndex(lines, s.position, isSynced));
     const seekTo = useAudioStore((s) => s.seekTo);
     const lyricsListRef = useRef<FlatList<LyricLine>>(null);
+
+    const textStyle = full ? styles.fullText : styles.cardText;
+    // Room above the first line and below the last, so either can sit at the centre.
+    const edgePadding = (height ?? windowHeight) * 0.4;
 
     const renderLine = useCallback(({ item: line, index: idx }: { item: LyricLine; index: number }) => {
         if (!isSynced) {
             return (
                 <View style={styles.lyricRow}>
-                    <Text
-                        style={[
-                            type.body,
-                            styles.lyricText,
-                            { color: colors.text },
-                        ]}
-                    >
-                        {line.text}
-                    </Text>
+                    <Text style={[textStyle, { color: colors.text }]}>{line.text}</Text>
                 </View>
             );
         }
 
         const isActive = idx === activeLyricIndex;
+        const isBreak = line.text === INSTRUMENTAL;
         return (
             <Touchable
                 onPress={() => seekTo(line.time)}
                 style={styles.lyricRow}
                 scaleTo={0.98}
+                accessibilityLabel={isBreak ? 'Instrumental' : line.text}
             >
                 <Text
                     style={[
-                        type.body,
-                        styles.lyricText,
+                        textStyle,
                         isActive
-                            ? { color: accentColor, fontWeight: '700', fontSize: 18 }
-                            : { color: colors.textSecondary },
+                            ? { color: isBreak ? accentColor : colors.text }
+                            : { color: colors.textSecondary, opacity: 0.55 },
                     ]}
                 >
                     {line.text}
                 </Text>
             </Touchable>
         );
-    }, [isSynced, activeLyricIndex, accentColor, colors.text, colors.textSecondary, seekTo]);
+    }, [isSynced, activeLyricIndex, accentColor, colors.text, colors.textSecondary, seekTo, textStyle]);
 
-    // Auto-scroll lyrics cleanly centered (synced lyrics only)
     useEffect(() => {
         if (isSynced && activeLyricIndex >= 0 && lyricsListRef.current) {
             lyricsListRef.current.scrollToIndex({
                 index: activeLyricIndex,
-                viewPosition: 0.5,
+                viewPosition: full ? 0.4 : 0.5,
                 animated: true,
             });
         }
-    }, [activeLyricIndex, isSynced]);
+    }, [activeLyricIndex, isSynced, full]);
 
     return (
-        <View style={[styles.lyricsBox, { height: artSize, backgroundColor: colors.fill }]}>
+        <View style={full ? styles.fullBox : [styles.cardBox, { height, backgroundColor: colors.fill }]}>
             {isLoading ? (
                 <View style={styles.emptyLyricsWrap}>
                     <ActivityIndicator size="small" color={accentColor} />
@@ -107,28 +114,49 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
                         Looking for lyrics…
                     </Text>
                 </View>
-            ) : lyrics && lyrics.length > 0 ? (
-                <FlatList
-                    ref={lyricsListRef}
-                    data={lyrics}
-                    keyExtractor={(line, idx) => `${line.time}-${idx}`}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.lyricsContent}
-                    onScrollToIndexFailed={(info) => {
-                        lyricsListRef.current?.scrollToOffset({
-                            offset: Math.max(0, info.averageItemLength * info.index - artSize / 2),
-                            animated: true,
-                        });
-                    }}
-                    renderItem={renderLine}
-                    extraData={activeLyricIndex}
-                />
+            ) : lines.length > 0 ? (
+                <>
+                    <FlatList
+                        ref={lyricsListRef}
+                        data={lines}
+                        keyExtractor={(line, idx) => `${line.time}-${idx}`}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingVertical: isSynced ? edgePadding : metrics.space.lg }}
+                        onScrollToIndexFailed={(info) => {
+                            lyricsListRef.current?.scrollToOffset({
+                                offset: Math.max(0, info.averageItemLength * info.index),
+                                animated: true,
+                            });
+                        }}
+                        renderItem={renderLine}
+                        extraData={activeLyricIndex}
+                    />
+                    {onExpand && (
+                        <IconButton
+                            icon="maximize-2"
+                            iconSize={18}
+                            onPress={onExpand}
+                            accessibilityLabel="Full-screen lyrics"
+                            style={styles.expand}
+                        />
+                    )}
+                </>
             ) : (
                 <View style={styles.emptyLyricsWrap}>
                     <Feather name="file-text" size={32} color={colors.textTertiary} />
                     <Text style={[type.caption, { color: colors.textSecondary, textAlign: 'center' }]}>
-                        No lyrics found
+                        {onlineLyricsEnabled
+                            ? 'No lyrics found'
+                            : 'No lyrics on this device. Online lyrics are off, so Glide didn’t look them up.'}
                     </Text>
+                    {!onlineLyricsEnabled && (
+                        <Button
+                            label="Turn on online lyrics"
+                            icon="globe"
+                            size="md"
+                            onPress={() => setOnlineLyricsEnabled(true)}
+                        />
+                    )}
                     <Button
                         label="Load lyrics…"
                         icon="upload"
@@ -143,23 +171,36 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
 });
 
 const styles = StyleSheet.create({
-    lyricsBox: {
+    cardBox: {
         width: '100%',
         borderRadius: metrics.radius.card,
         overflow: 'hidden',
-        padding: metrics.space.md,
+        paddingHorizontal: metrics.space.md,
     },
-    lyricsContent: {
-        paddingVertical: metrics.space.lg,
+    fullBox: {
+        flex: 1,
+        paddingHorizontal: metrics.gutter,
     },
     lyricRow: {
         paddingVertical: metrics.space.sm,
         paddingHorizontal: metrics.space.sm,
         borderRadius: metrics.radius.sm,
     },
-    lyricText: {
+    cardText: {
         textAlign: 'center',
-        lineHeight: 26,
+        fontSize: 20,
+        lineHeight: 28,
+        fontWeight: '700',
+    },
+    fullText: {
+        fontSize: 28,
+        lineHeight: 38,
+        fontWeight: '700',
+    },
+    expand: {
+        position: 'absolute',
+        top: metrics.space.xs,
+        right: metrics.space.xs,
     },
     emptyLyricsWrap: {
         flex: 1,

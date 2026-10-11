@@ -4,6 +4,7 @@ import {
     BackHandler,
     type HostInstance,
     Image,
+    Modal,
     StyleSheet,
     Text,
     View,
@@ -32,6 +33,7 @@ import {
     playerExpansion,
 } from '@/components/MiniPlayer';
 import { useAudioStore } from '@/store/audioStore';
+import { useAppStore } from '@/store/appStore';
 import { useFavoritesStore } from '@/store/favoritesStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumPalette } from '@/hooks/useAlbumArt';
@@ -143,6 +145,9 @@ export default function NowPlayingScreen() {
     const [showEqualizer, setShowEqualizer] = useState(false);
     const [showSleepTimer, setShowSleepTimer] = useState(false);
     const [showLyrics, setShowLyrics] = useState(false);
+    const [lyricsFull, setLyricsFull] = useState(false);
+    // Turning online lyrics on (from the lyrics card's hint) looks the song up again.
+    const onlineLyricsEnabled = useAppStore((s) => s.settings.onlineLyricsEnabled);
 
     // Lyrics state
     const [lyrics, setLyrics] = useState<LyricLine[] | null>(null);
@@ -168,7 +173,7 @@ export default function NowPlayingScreen() {
         return () => {
             isMounted = false;
         };
-    }, [currentTrackId]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [currentTrackId, onlineLyricsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handlePickLyrics = useCallback(async () => {
         if (!currentTrack) return;
@@ -530,10 +535,11 @@ export default function NowPlayingScreen() {
                             {showLyrics ? (
                                 <NowPlayingLyrics
                                     lyrics={lyrics}
-                                    artSize={artSize}
+                                    height={artSize}
                                     accentColor={accentColor}
                                     isLoading={isLyricsLoading}
                                     onPickLyrics={handlePickLyrics}
+                                    onExpand={() => setLyricsFull(true)}
                                 />
                             ) : (
                                 // Holds the cover's place in the layout; the cover itself is the
@@ -687,6 +693,39 @@ export default function NowPlayingScreen() {
                         />
                     </Sheet>
 
+                    {/* Full-screen lyrics: bigger text, still synced and tappable to seek. */}
+                    <Modal
+                        visible={lyricsFull}
+                        animationType="slide"
+                        onRequestClose={() => setLyricsFull(false)}
+                        statusBarTranslucent
+                        navigationBarTranslucent
+                    >
+                        <View style={[styles.lyricsFull, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+                            <View style={styles.header}>
+                                <View style={styles.lyricsFullTitle}>
+                                    <Text style={[type.heading, { color: colors.text }]} numberOfLines={1}>
+                                        {currentTrack.title}
+                                    </Text>
+                                    <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                                        {currentTrack.artist}
+                                    </Text>
+                                </View>
+                                <IconButton
+                                    icon="chevron-down"
+                                    onPress={() => setLyricsFull(false)}
+                                    accessibilityLabel="Close lyrics"
+                                />
+                            </View>
+                            <NowPlayingLyrics
+                                lyrics={lyrics}
+                                accentColor={accentColor}
+                                isLoading={isLyricsLoading}
+                                onPickLyrics={handlePickLyrics}
+                            />
+                        </View>
+                    </Modal>
+
                     {/* Sleep Timer Bottom Sheet */}
                     <SleepTimerSheet
                         visible={showSleepTimer}
@@ -822,30 +861,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    lyricsBox: {
-        width: '100%',
-        borderRadius: metrics.radius.card,
-        overflow: 'hidden',
-        padding: metrics.space.md,
-    },
-    lyricsContent: {
-        paddingVertical: metrics.space.lg,
-    },
-    lyricRow: {
-        paddingVertical: metrics.space.sm,
-        paddingHorizontal: metrics.space.sm,
-        borderRadius: metrics.radius.sm,
-    },
-    lyricText: {
-        textAlign: 'center',
-        lineHeight: 26,
-    },
-    emptyLyricsWrap: {
+    lyricsFull: {
         flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: metrics.space.md,
-        paddingHorizontal: metrics.space.lg,
+    },
+    lyricsFullTitle: {
+        flex: 1,
+        gap: 2,
     },
     infoArea: {
         paddingVertical: metrics.space.xs,

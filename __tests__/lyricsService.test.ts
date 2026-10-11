@@ -29,7 +29,7 @@ jest.mock('../src/store/appStore', () => ({
 jest.mock('../src/services/AudioMediaService', () => ({
     AudioMediaService: { getEmbeddedLyrics: async () => null },
 }));
-import { LyricsServiceClass, isLyricsSynced, parseLrc, parsePlainLyrics } from '../src/services/LyricsService';
+import { INSTRUMENTAL, LyricsServiceClass, isLyricsSynced, parseLrc, parsePlainLyrics, withInstrumentalBreaks } from '../src/services/LyricsService';
 
 describe('LyricsService parser and sync tests', () => {
     it('parsePlainLyrics marks lines with time: -1', () => {
@@ -73,6 +73,34 @@ describe('LyricsService parser and sync tests', () => {
         expect(clean('عمرو دياب [Amr Diab]')).toContain('دياب');
         // Pure punctuation / spaces becomes empty
         expect(clean('--- ... !!!')).toBe('');
+    });
+});
+
+describe('withInstrumentalBreaks', () => {
+    it('marks the intro, blank lines and long gaps with one ♪ each', () => {
+        const lines = parseLrc([
+            '[00:12.00]First line',
+            '[00:15.00]',
+            '[00:16.00]',
+            '[00:20.00]Second line',
+            '[00:24.00]Third line',
+            '[00:50.00]After the solo',
+        ].join('\n'));
+        expect(withInstrumentalBreaks(lines)).toEqual([
+            { time: 0, text: INSTRUMENTAL },
+            { time: 12, text: 'First line' },
+            { time: 15, text: INSTRUMENTAL },
+            { time: 20, text: 'Second line' },
+            { time: 24, text: 'Third line' },
+            { time: 30, text: INSTRUMENTAL },
+            { time: 50, text: 'After the solo' },
+        ]);
+    });
+
+    it('leaves unsynced lyrics and a short intro alone', () => {
+        const plain = parsePlainLyrics('One\nTwo');
+        expect(withInstrumentalBreaks(plain)).toBe(plain);
+        expect(withInstrumentalBreaks(parseLrc('[00:02.00]Hi\n[00:05.00]There'))[0].text).toBe('Hi');
     });
 });
 
