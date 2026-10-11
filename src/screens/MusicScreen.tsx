@@ -15,7 +15,7 @@ import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { useAudioStore } from '@/store/audioStore';
 import { useFavoritesStore } from '@/store/favoritesStore';
-import { AudioMediaService } from '@/services/AudioMediaService';
+import { AudioMediaService, folderPathOf } from '@/services/AudioMediaService';
 import { usePermissionStore } from '@/store/permissionStore';
 import { PermissionGate } from '@/components/PermissionGate';
 import { useTheme } from '@/hooks/useTheme';
@@ -105,7 +105,6 @@ export default function MusicScreen() {
 
     // Selected folder view (for folders tab)
     const [selectedFolder, setSelectedFolder] = useState<AudioFolder | null>(null);
-    const [folderTracks, setFolderTracks] = useState<AudioTrack[]>([]);
 
     // Selected track for options sheet
     const [trackWithOptions, setTrackWithOptions] = useState<AudioTrack | null>(null);
@@ -144,21 +143,17 @@ export default function MusicScreen() {
         }
     }, [audioAccess, loadData]);
 
-    const handleSelectFolder = useCallback(async (folder: AudioFolder) => {
-        setSelectedFolder(folder);
-        setLoading(true);
-        const folderSongs = await AudioMediaService.getSongsByFolder(folder.path);
-        setFolderTracks(folderSongs);
-        setLoading(false);
-    }, []);
-
     const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
     // Pre-sort tracks once when library or sort option changes
     const sortedTracks = useMemo(() => sortTracks(tracks, sortBy), [tracks, sortBy]);
 
-    // Pre-sort folder tracks once when folder or sort option changes
-    const sortedFolderTracks = useMemo(() => sortTracks(folderTracks, sortBy), [folderTracks, sortBy]);
+    // The open folder's songs come straight from the loaded library, so they show at once
+    // and follow a refresh.
+    const sortedFolderTracks = useMemo(
+        () => (selectedFolder ? sortedTracks.filter((t) => folderPathOf(t) === selectedFolder.path) : []),
+        [sortedTracks, selectedFolder]
+    );
 
     // Fast linear filter without expensive re-sorting on every keystroke
     const displayedTracks = useMemo(() => {
@@ -354,7 +349,7 @@ export default function MusicScreen() {
     const renderFolderItem = useCallback(
         ({ item }: { item: AudioFolder }) => (
             <Touchable
-                onPress={() => handleSelectFolder(item)}
+                onPress={() => setSelectedFolder(item)}
                 scaleTo={0.98}
                 stateLayer
                 style={styles.folderRow}
@@ -375,7 +370,7 @@ export default function MusicScreen() {
                 <Feather name="chevron-right" size={18} color={colors.textTertiary} />
             </Touchable>
         ),
-        [colors, handleSelectFolder]
+        [colors]
     );
 
     if (audioAccess === 'denied') {
@@ -393,7 +388,11 @@ export default function MusicScreen() {
             <View style={{ paddingTop: insets.top }}>
                 <ListHeader
                     title={selectedFolder ? selectedFolder.name : 'Music'}
-                    subtitle={selectedFolder ? `${selectedFolder.numberOfSongs} songs` : undefined}
+                    subtitle={
+                        selectedFolder
+                            ? `${sortedFolderTracks.length} song${sortedFolderTracks.length !== 1 ? 's' : ''}`
+                            : undefined
+                    }
                     onBack={selectedFolder ? () => setSelectedFolder(null) : undefined}
                 />
             </View>

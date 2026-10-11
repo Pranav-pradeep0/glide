@@ -75,7 +75,7 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
 import { formatDuration } from '../src/utils/formatUtils';
 import { useAudioStore, flushPendingWrites } from '../src/store/audioStore';
 import { useFavoritesStore } from '../src/store/favoritesStore';
-import { AudioMediaService } from '../src/services/AudioMediaService';
+import { AudioMediaService, folderPathOf } from '../src/services/AudioMediaService';
 import { parseLrc } from '../src/services/LyricsService';
 import { AudioTrack } from '../src/types';
 
@@ -607,6 +607,14 @@ describe('Audio Player Utilities and Store', () => {
             const popFolder = folders.find((f) => f.name === 'pop');
             expect(popFolder?.numberOfSongs).toBe(1);
             expect(popFolder?.path).toBe('/music/pop');
+        });
+
+        it('opens a folder with exactly the songs it was grouped from', () => {
+            for (const folder of AudioMediaService.groupFolders(sampleSongs)) {
+                const songs = sampleSongs.filter((s) => folderPathOf(s) === folder.path);
+                expect(songs.length).toBe(folder.numberOfSongs);
+            }
+            expect(folderPathOf({ ...sampleSongs[0], path: 'song.mp3' })).toBe('/');
         });
     });
 });

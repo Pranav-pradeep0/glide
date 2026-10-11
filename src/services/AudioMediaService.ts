@@ -2,6 +2,13 @@ import { NativeModules, Platform } from 'react-native';
 import { AudioAlbum, AudioArtist, AudioFolder, AudioTrack } from '@/types';
 import { PermissionService } from './PermissionService';
 
+/** The directory a song lives in, which is how Music › Folders groups and opens songs. */
+export function folderPathOf(song: AudioTrack): string {
+    const rawPath = song.path || '';
+    const lastSlash = rawPath.lastIndexOf('/');
+    return lastSlash > 0 ? rawPath.substring(0, lastSlash) : '/';
+}
+
 class AudioMediaServiceClass {
     private songsCache: AudioTrack[] | null = null;
     /** The scan currently running, shared by everyone who asks while it is in flight. */
@@ -188,9 +195,7 @@ class AudioMediaServiceClass {
         const map = new Map<string, { folder: AudioFolder }>();
 
         for (const song of songs) {
-            const rawPath = song.path || '';
-            const lastSlash = rawPath.lastIndexOf('/');
-            const folderPath = lastSlash > 0 ? rawPath.substring(0, lastSlash) : '/';
+            const folderPath = folderPathOf(song);
             const folderName = folderPath.substring(folderPath.lastIndexOf('/') + 1) || 'Root';
 
             let entry = map.get(folderPath);
@@ -210,23 +215,6 @@ class AudioMediaServiceClass {
         const folders = Array.from(map.values()).map((e) => e.folder);
         folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
         return folders;
-    }
-
-    async getFolders(forceRefresh = false): Promise<AudioFolder[]> {
-        const songs = await this.getSongs(forceRefresh);
-        return this.groupFolders(songs);
-    }
-
-    async getSongsByFolder(folderPath: string): Promise<AudioTrack[]> {
-        const songs = await this.getSongs();
-        return songs
-            .filter((s) => {
-                const rawPath = s.path || '';
-                const lastSlash = rawPath.lastIndexOf('/');
-                const path = lastSlash > 0 ? rawPath.substring(0, lastSlash) : '/';
-                return path === folderPath;
-            })
-            .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
     }
 
     async getAlbumArt(albumId: string, songUri?: string): Promise<string | null> {
