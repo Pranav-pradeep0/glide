@@ -6,6 +6,7 @@ import { useAlbumVideos } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { ProgressLine, progressOf } from '@/components/VideoRow';
+import { formatDuration } from '@/utils/formatUtils';
 import { Touchable } from '@/components/ui';
 import { metrics, playerTheme, type } from '@/theme/theme';
 import { SidePanel } from './SidePanel';
@@ -22,19 +23,6 @@ interface PlaylistPanelProps {
     bucketId?: string;
     onBack?: () => void;
 }
-
-const formatDuration = (ms: number): string => {
-    if (!ms) {return '';}
-    const seconds = Math.floor(ms / 1000);
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-
-    if (h > 0) {
-        return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-    return `${m}:${s.toString().padStart(2, '0')}`;
-};
 
 const PlaylistItem = memo<{
     item: VideoFile;
