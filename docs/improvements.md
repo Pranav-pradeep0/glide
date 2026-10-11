@@ -66,7 +66,9 @@ Started 2026-10-11 from a walk of the main screens. ✅ marks done, with the com
 - ✅ **Screen lock across autoplay** — the next episode opens unlocked (lock isn't carried), so a pocketed phone is touchable again — S
 - ✅ **Episode order** (`useMediaService.ts` `sortVideosByName`) — name order puts `Show.2019.S01E02` before `Show.S01E01`, so Next skips around — S *(season/episode decide when every file in the folder has one; anime `Show - 12` and `Ep 9` aren't parsed and keep the name order)*
 - ✅ **Up next** — autoplay-next jumped after 500 ms with no warning or way out — S *(`UpNextCard`: 10 s countdown with Cancel / Play now; with autoplay off, the name and Play now; read-only while locked, hidden in PiP; dropped when the ended video is played again)*
-- **Small features** — no on-screen Previous button; playlist doesn't scroll to current or show watched progress; no "Play from start" / "Mark as watched" in video options — S each
+- ✅ **Previous button** — `handlePrevious` existed but no control called it — S *(landscape: a "Previous" pill at the left end of the bottom row, mirroring Next; portrait: Previous / Next flank Play, a missing one disabled so Play stays centred)*
+- **Portrait tools row overflow** (`PlayerControls.tsx` `tools`) — five 40 dp buttons plus the display-mode pill: "Original size" (~139 dp) makes it ~339 dp against 320 dp on a 360 dp phone, pushing PiP off the edge — S *(Next moved to the centre already freed 40 dp; check on device)*
+- **Small features** — playlist doesn't scroll to current or show watched progress; no "Play from start" / "Mark as watched" in video options — S each
 
 ## UI / UX rough edges
 

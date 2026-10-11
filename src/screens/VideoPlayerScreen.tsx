@@ -1295,6 +1295,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     cutouts={cutoutRects}
                     onOpenBookmarks={isNetworkStream ? undefined : handleToggleBookmarkPanel}
                     onOpenPlaylist={isNetworkStream ? undefined : handleTogglePlaylist}
+                    onPrevious={!isNetworkStream && hasPrevious ? handlePrevious : undefined}
                     onNext={!isNetworkStream && hasNext ? handleNext : undefined}
                     onJumpBackward={handleJumpBackward}
                     onJumpForward={handleJumpForward}

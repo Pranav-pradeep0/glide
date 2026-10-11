@@ -381,6 +381,7 @@ interface PlayerControlsProps {
     cutouts: CutoutRect[] | null;
     onOpenBookmarks?: () => void;
     onOpenPlaylist?: () => void;
+    onPrevious?: () => void;
     onNext?: () => void;
     onJumpBackward: () => void;
     onJumpForward: () => void;
@@ -403,6 +404,7 @@ interface PlayerControlsProps {
 }
 
 const NO_BOOKMARKS: number[] = [];
+const noop = () => {};
 const SEEK_ACTIONS = [{ name: 'increment' }, { name: 'decrement' }];
 
 type Handler = (...args: unknown[]) => unknown;
@@ -435,7 +437,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
     onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, buffering = false, isLandscape, insets, cutouts,
-    onOpenBookmarks, onOpenPlaylist, onNext, onJumpBackward, onJumpForward,
+    onOpenBookmarks, onOpenPlaylist, onPrevious, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
     showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement,
 }) => {
@@ -543,8 +545,12 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
             </Animated.View>
 
-            {/* Centre transport */}
-            <Animated.View style={[styles.center, othersStyle]} pointerEvents="box-none">
+            {/* Centre transport. Portrait's bottom row has no room, so Previous / Next sit here as a
+                pair: a missing one is shown disabled, which keeps Play in the middle. */}
+            <Animated.View style={[styles.center, !isLandscape && styles.centerPortrait, othersStyle]} pointerEvents="box-none">
+                {!isLandscape && (onPrevious || onNext) && (
+                    <IconButton icon="skip-back" iconSize={26} onPress={onPrevious ?? noop} disabled={!onPrevious} accessibilityLabel="Previous video" onPlayer />
+                )}
                 {showSeekButtons && (
                     <SkipButton seconds={seekDuration} onPress={onJumpBackward} />
                 )}
@@ -558,6 +564,9 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 </Touchable>
                 {showSeekButtons && (
                     <SkipButton forward seconds={seekDuration} onPress={onJumpForward} />
+                )}
+                {!isLandscape && (onPrevious || onNext) && (
+                    <IconButton icon="skip-forward" iconSize={26} onPress={onNext ?? noop} disabled={!onNext} accessibilityLabel="Next video" onPlayer />
                 )}
             </Animated.View>
 
@@ -596,6 +605,17 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 />
 
                 <Animated.View style={[styles.tools, othersStyle]}>
+                    {/* Landscape: Previous and Next bracket the row, one at each end. */}
+                    {onPrevious && isLandscape && (
+                        <Button
+                            label="Previous"
+                            icon="skip-back"
+                            variant="secondary"
+                            onPress={onPrevious}
+                            onPlayer
+                            style={styles.previous}
+                        />
+                    )}
                     {onToggleNightMode && (
                         <GlyphButton onPress={onToggleNightMode} label="Night mode" active={nightModeActive}>
                             {c => <NightModeIcon size={20} color={c} active={nightModeActive} />}
@@ -634,9 +654,6 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                         <GlyphButton onPress={onEnterPip} label="Picture in picture">
                             {c => <PipIcon size={20} color={c} />}
                         </GlyphButton>
-                    )}
-                    {onNext && !isLandscape && (
-                        <IconButton icon="skip-forward" onPress={onNext} accessibilityLabel="Next video" onPlayer />
                     )}
                     {onNext && isLandscape && (
                         <Button
@@ -710,6 +727,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: metrics.space.xxl,
     },
+    // Previous, both skips, Play and Next: 264 dp of buttons, which fits a 360 dp screen only at this gap.
+    centerPortrait: { gap: metrics.space.lg },
     jump: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
     jumpText: {
         position: 'absolute',
@@ -760,6 +779,7 @@ const styles = StyleSheet.create({
     bubbleDelta: { ...type.caption, color: colors.textSecondary },
     tools: { flexDirection: 'row', alignItems: 'center', minHeight: metrics.touch },
     next: { marginLeft: metrics.space.sm },
+    previous: { marginRight: metrics.space.sm },
     modePill: {
         flexDirection: 'row',
         alignItems: 'center',
