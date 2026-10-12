@@ -103,3 +103,6 @@ android/app/libs/*.aar
 
 # Stallion bundle-signing private key (npx stallion generate-key-pair writes it here)
 stallion/secret-keys/
+
+# generated haptics test clips (node scripts/haptics-fixtures.js)
+.haptics-fixtures/
