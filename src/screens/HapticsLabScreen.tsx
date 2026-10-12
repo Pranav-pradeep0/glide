@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import { NativeModules, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton, ListGroup, ListRow, SectionLabel } from '@/components/ui';
 import { useTheme } from '../hooks/useTheme';
 import { hasNativeApi } from '../native/GlideNative';
 import { metrics, type } from '@/theme/theme';
+import type { RootStackParamList } from '../types';
+import { useVideoHistoryStore } from '../store/videoHistoryStore';
 
 interface HapticsLab {
     runSeams(amplitude: number): Promise<string>;
     runCalibration(): Promise<string>;
     runDecode(path: string): Promise<Record<string, unknown>>;
     runPlayer(path: string, startMs: number, seconds: number): Promise<string>;
+    importTruth(mediaPath: string, truthPath: string): Promise<string>;
 }
 
 const lab: HapticsLab | undefined = hasNativeApi(10) ? NativeModules.HapticsLab : undefined;
+const performerTest = hasNativeApi(11);
 
 /**
  * Haptics Lab: the Phase 0 measurements of docs/haptics-engine-plan.md. Each test records on
@@ -24,7 +28,7 @@ const lab: HapticsLab | undefined = hasNativeApi(10) ? NativeModules.HapticsLab 
 export default function HapticsLabScreen() {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp<RootStackParamList>>();
     const [path, setPath] = useState('/sdcard/Download/1DMP/Videos/Blast.2026.1080p.NF.WEB-DL.DUAL.DDP5.1.H.265-ExtraFlix.P.mkv');
     const [startS, setStartS] = useState('600');
     const [busy, setBusy] = useState<string | null>(null);
@@ -49,7 +53,13 @@ export default function HapticsLabScreen() {
         ['L1 Seams', 'Back-to-back calls of 500/250/100 ms vs one call, ~30 s', () => lab.runSeams(128)],
         ['L2 Decode', 'Whole audio of the film below, background lane', () => lab.runDecode(path)],
         ['L4 Tap timing', 'Film through a pass-through tap, 20 s', () => lab.runPlayer(path, startMs, 20)],
-        ['L5 Calibration', 'Amplitude steps and pulse lengths, ~35 s; phone flat on a table', () => lab.runCalibration()],
+        ['L5 Calibration', 'Measures and saves this phone\'s calibration, ~35 s; phone flat on a table', () => lab.runCalibration()],
+        ...(performerTest ? [['Performer test', 'Path below is a fixture clip: plays it with its truth track', async () => {
+            const result = await lab.importTruth(path, path.replace(/\.\w+$/, '.truth.tsv'));
+            useVideoHistoryStore.getState().clearVideoHistory(path); // start at 0, not where the last run stopped
+            navigation.navigate('VideoPlayer', { videoPath: path, videoName: path.split('/').pop() ?? path, playMode: 'with-haptics' });
+            return result;
+        }] as [string, string, () => Promise<unknown>]] : []),
     ] : [];
 
     return (

@@ -53,6 +53,8 @@ interface AnimatedVideoViewProps {
     audioEqualizer?: number[];
     /** Milliseconds; positive plays the audio later. */
     audioDelay?: number;
+    /** Play the cached haptic track for this video in step with it. */
+    haptics?: boolean;
 
     /**
      * Where to begin playback on the first mount, in seconds, from watch history.
@@ -100,6 +102,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
             artist,
             audioEqualizer,
             audioDelay,
+            haptics,
             initialResumeSeconds,
             animatedStyle,
             onLoad,
@@ -159,6 +162,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
                     artist={artist}
                     audioEqualizer={audioEqualizer}
                     audioDelay={audioDelay}
+                    haptics={haptics}
                     videoEnhancement={videoEnhancement}
                     videoEnhancementStrength={videoEnhancementStrength}
                     onLoad={onLoad}
@@ -197,6 +201,7 @@ function areEqual(prevProps: AnimatedVideoViewProps, nextProps: AnimatedVideoVie
     if (prevProps.pipPresentationActive !== nextProps.pipPresentationActive) {return false;}
     if (prevProps.audioTrack !== nextProps.audioTrack) {return false;}
     if (prevProps.audioDelay !== nextProps.audioDelay) {return false;}
+    if (prevProps.haptics !== nextProps.haptics) {return false;}
     if (prevProps.textTrack !== nextProps.textTrack) {return false;}
     if (prevProps.title !== nextProps.title) {return false;}
     if (prevProps.artist !== nextProps.artist) {return false;}

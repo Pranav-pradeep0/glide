@@ -1,7 +1,7 @@
 # Haptics engine — audit and plan
 
 **Created:** 2026-10-11
-**Status:** Phase 0 done (2026-10-11), see `docs/haptics-decisions.md`. Phase 1 done (2026-10-12): format in `HapticTrack.kt`, clips from `scripts/haptics-fixtures.js`, harness in `HapticHarness.kt`. Phase 2 not started.
+**Status:** Phase 0 done (2026-10-11), see `docs/haptics-decisions.md`. Phase 1 done (2026-10-12): format in `HapticTrack.kt`, clips from `scripts/haptics-fixtures.js`, harness in `HapticHarness.kt`. Phase 2 done (2026-10-12): `HapticPerformer.kt`, results in the decisions file. Phase 3 not started.
 
 This is the working document for rebuilding "Play with haptics" from scratch. It is written to
 be picked up cold, in a new session, without the conversation that produced it. Results of

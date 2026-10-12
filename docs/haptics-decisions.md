@@ -214,3 +214,39 @@ keep rows for `com.glide.app` from *Recent vibrations*, drop duplicates and pars
   is a `PcmSink`.
 - Manifest: `HIGH_SAMPLING_RATE_SENSORS` (normal permission, no prompt) for 426 Hz accelerometer
   readings.
+
+---
+
+## Phase 2 — Performer (2026-10-12)
+
+**Exit test.** `node scripts/haptics-lab.js perform mix1` with the Lab open. It plays the scripted mix
+`mix1.mkv` in the real player with the track its truth file describes (Lab › Performer test). It pauses,
+resumes and swipe-seeks, then compares the Performer's log with the system vibration history.
+
+| Check | Target | Measured |
+|---|---|---|
+| Call time vs the settled player clock, p95 | ≤ 10 ms | **5 ms** (max 5) |
+| Every call in the history, steps and amplitudes as intended | all | 11 of 11 |
+| Vibrations nobody called | 0 | 0 |
+| Haptics while paused | 0 | 0 over 18 pauses |
+| Stale haptics after a seek | 0 | 0 over 9 seeks |
+
+**Findings.**
+- **The clock settles before it can be trusted.** Right after a start, resume or seek, ExoPlayer's
+  position runs 100–230 ms off until the audio system reports timestamps. The Performer schedules
+  nothing until three clock samples in a row agree within 20 ms. With video that takes under a
+  second. Audio-only output stays coarse (250 ms steps) for ~3 s, so the phone test uses a clip
+  with a video track.
+- Each clock sample jitters by a few ms. Once settled, small differences nudge the anchor a
+  quarter of the way instead of replacing it.
+- **Bluetooth.** The Performer follows the player's position, the clock video is lip-synced to,
+  so output latency is already in it. No offset table by device type. To confirm by feel with
+  Bluetooth headphones; a fine-tune slider stays a Phase 6 item.
+- A call can be refused by the system for a more important vibration (a notification). It shows as
+  `ignored_for_higher_importance`; correct behaviour, counted separately by the script.
+- Calibration (Lab › L5) now saves this phone's curve, floor and latency. On the Phase 0 recording it
+  reproduces the L5 table exactly; measured waveform latency is **62 ms**, the default for
+  uncalibrated phones.
+
+**Until Phase 3**, real films have no track, so "Play with haptics" is silent on them. The strength
+slider in Settings changes nothing until the Phase 6 presets.

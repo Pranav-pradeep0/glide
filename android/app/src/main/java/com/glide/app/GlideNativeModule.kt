@@ -36,6 +36,8 @@ import com.facebook.react.uimanager.ViewManager
  * 9: VideoOrientation.getCutoutRects() returns the camera cutout rects in dp.
  * 10: HapticsLab module (runSeams, runCalibration, runDecode, runPlayer), the dev screen
  *     behind Settings > Version.
+ * 11: GlidePlayer prop `haptics` (HapticPerformer plays the cached track); HapticsLab.importTruth;
+ *     HapticModule drops vibrateWaveform, cancel and hasAmplitudeControl.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -50,7 +52,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 10
+        const val API_LEVEL = 11
     }
 
     class Package : ReactPackage {

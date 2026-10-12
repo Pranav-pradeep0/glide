@@ -17,6 +17,7 @@ import android.view.SurfaceView
 import android.widget.FrameLayout
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import com.glide.app.haptic.HapticPerformer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -110,6 +111,21 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var outputWatcherRegistered = false
     private var audioDelayMs = 0
     private var audioDelayProcessor: AudioDelayProcessor? = null
+    private var haptics: HapticPerformer? = null
+
+    /**
+     * Re-anchors the haptics clock while playing; a seek or pause re-anchors at once. The
+     * position settles for a moment after playback starts (measured: 118 ms off at 1 s), so
+     * anchors come every 150 ms for the first 3 s (the Performer waits for it to settle).
+     */
+    private val hapticAnchor = object : Runnable {
+        var count = 0
+        override fun run() {
+            if (player?.isPlaying != true) return
+            syncHaptics(hard = false)
+            progressHandler.postDelayed(this, if (++count < 20) 150L else 1000L)
+        }
+    }
 
     // The one thing ExoPlayer will not answer: whether onVideoLoad has already gone out for
     // this media. Duration is unknown until READY, and JS must see exactly one load.
@@ -571,9 +587,26 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     }
 
     /** Milliseconds; positive plays the audio later. Live, no re-open. */
+    fun setHaptics(enabled: Boolean) {
+        if (enabled == (haptics != null)) return
+        if (!enabled) {
+            haptics?.release()
+            haptics = null
+            return
+        }
+        haptics = HapticPerformer(context).also { h -> sourceUri?.takeIf { player != null }?.let { h.open(it) } }
+        syncHaptics(hard = true)
+    }
+
+    private fun syncHaptics(hard: Boolean) {
+        val p = player ?: return
+        haptics?.sync(p.isPlaying, p.currentPosition, p.playbackParameters.speed, delayInContentMs(), hard)
+    }
+
     fun setAudioDelay(ms: Int) {
         audioDelayMs = ms
         audioDelayProcessor?.delayMs = delayInContentMs()
+        syncHaptics(hard = true)
     }
 
     private fun applyEqualizer() {
@@ -807,6 +840,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             "enhancement=$enhancementEnabled")
         // Resume is an argument, not a seek: no start-time resolver, no correction pass.
         p.setMediaItem(buildMediaItem(uri), startPositionMs)
+        haptics?.open(uri)
         p.prepare()
 
         // The session describes this player directly -- no adapter mirroring its state.
@@ -825,6 +859,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         loudnessEnhancer?.release()
         loudnessEnhancer = null
         audioDelayProcessor = null
+        haptics?.close()
         player?.let {
             // Before release, never after: the session must not be left holding a released
             // player. That is the defect class the VLC adapter kept producing.
@@ -843,6 +878,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             outputWatcherRegistered = false
         }
         pipController.detach()
+        haptics?.release()
+        haptics = null
         releasePlayer()
     }
 
@@ -877,6 +914,10 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            syncHaptics(hard = true)
+            progressHandler.removeCallbacks(hapticAnchor)
+            hapticAnchor.count = 0
+            if (isPlaying && haptics != null) progressHandler.postDelayed(hapticAnchor, 100)
             // Scrubbing mode suppresses playback while the thumb is dragged, which reads as
             // isPlaying=false. It is not a pause: reporting one dropped keepScreenOn, told
             // PiP the video had stopped, and a Paused event landing after the drag ended
@@ -1022,11 +1063,14 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             maybeEmitLoad()
         }
 
+        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) = syncHaptics(hard = true)
+
         override fun onPositionDiscontinuity(
             oldPosition: Player.PositionInfo,
             newPosition: Player.PositionInfo,
             reason: Int
         ) {
+            syncHaptics(hard = true)
             if (reason != Player.DISCONTINUITY_REASON_SEEK) return
             Log.d(TAG, "seek landed at ${newPosition.positionMs}ms")
             emit(EVENT_SEEK, eventMap().apply { putString("type", "TimeChanged") })

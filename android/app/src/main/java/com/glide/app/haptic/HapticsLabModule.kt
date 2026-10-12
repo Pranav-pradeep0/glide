@@ -77,6 +77,8 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
             }
         }
 
+        fun text() = synchronized(rows) { rows.toString() }
+
         fun save(): String {
             val dir = File(reactApplicationContext.getExternalFilesDir(null), "haptics-lab").apply { mkdirs() }
             val file = File(dir, "$name-${System.currentTimeMillis()}.csv")
@@ -106,8 +108,8 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
     }
 
-    /** Runs [block] on its own thread with the accelerometer recording, then saves. */
-    private fun record(name: String, promise: Promise, block: (Run) -> Unit) {
+    /** Runs [block] on its own thread with the accelerometer recording, saves, then resolves with [analyse] or the path. */
+    private fun record(name: String, promise: Promise, analyse: ((Run) -> String)? = null, block: (Run) -> Unit) {
         Thread({
             val run = Run(name)
             val accel = Accel(run)
@@ -122,7 +124,8 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
                 accel.stop()
                 vibrator.cancel()
             }
-            promise.resolve(run.save())
+            val saved = run.save()
+            promise.resolve(analyse?.let { runCatching { it(run) }.getOrElse { e -> "analysis failed: ${e.message}" } } ?: saved)
         }, "haptics-lab").apply { priority = Thread.MAX_PRIORITY }.start()
     }
 
@@ -170,11 +173,16 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
     }
 
     /**
-     * L5 self-calibration. 500 ms holds over a range of amplitudes, twice, then single
+     * L5 self-calibration, and the calibration the Performer uses: measured and saved for this
+     * phone. 500 ms holds over a range of amplitudes, twice, then single
      * full-strength pulses of rising length (what a "hit" costs to start the motor).
      */
     @ReactMethod
-    fun runCalibration(promise: Promise) = record("calibration", promise) { run ->
+    fun runCalibration(promise: Promise) = record("calibration", promise, { run ->
+        val cal = HapticCalibration.measure(run.text())
+        HapticPerformer.saveCalibration(reactApplicationContext, cal)
+        "saved: floor amp ${cal.floorAmp}, latency ${cal.latencyMs} ms, curve ${cal.encode()}"
+    }) { run ->
         val levels = intArrayOf(3, 8, 15, 23, 31, 46, 64, 96, 128, 160, 192, 224, 255)
         repeat(2) {
             for (a in levels) {
@@ -336,6 +344,25 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
             frames = 0
             run.mark("note", "flush offsetUs=$offsetUs")
         }
+    }
+
+    /**
+     * Phase 2 exit: caches, for the clip at [mediaPath], the track its truth file describes
+     * (`scripts/haptics-fixtures.js`), so the real player plays exactly the intended hits and beds.
+     */
+    @ReactMethod
+    fun importTruth(mediaPath: String, truthPath: String, promise: Promise) = BackgroundWork.submitLong(promise) {
+        val rows = File(truthPath).readLines().map { it.trim().split(Regex("\\s+")) }
+        val onsets = rows.filter { it[0] == "onset" }.map { it[1].toInt() }
+        val beds = rows.filter { it[0] == "bed" }.map { it[1].toInt() until it[2].toInt() }
+        val frames = (beds.maxOfOrNull { it.last + 1 } ?: 0) / HapticTrack.BED_FRAME_MS
+        val bed = FloatArray(frames) { i -> if (beds.any { i * HapticTrack.BED_FRAME_MS in it }) 0.5f else 0f }
+        val track = HapticTrack(
+            0, HapticPerformer.fingerprint(reactApplicationContext, mediaPath), bed, FloatArray(frames),
+            onsets.sorted().map { HapticTrack.Event(it, 1f, 0.5f, 70, 30, HapticTrack.SOURCE_AUDIO) }
+        )
+        HapticPerformer.saveTrack(reactApplicationContext, track)
+        promise.resolve("${onsets.size} hits, ${beds.size} beds")
     }
 
     private companion object {

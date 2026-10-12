@@ -62,7 +62,7 @@ import {
     UsePlayerCoreReturn,
     UsePlayerTracksReturn,
 } from '@/hooks/video-player';
-import { useHapticFeedback } from '@/hooks/useHapticFeedback';
+import { useSubtitleDisplay } from '@/hooks/useSubtitleDisplay';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 
 // Services and stores
@@ -628,14 +628,12 @@ export default function VideoPlayerScreen({ route }: Props) {
     exitPlayerRef.current = exitPlayer;
 
     // ========================================================================
-    // HAPTIC FEEDBACK & SUBTITLE SYNC (UNIFIED TIMER)
+    // SUBTITLE DISPLAY
     // ========================================================================
 
-    useHapticFeedback({
-        enabled: playMode === 'with-haptics' && hapticsEnabled,
+    useSubtitleDisplay({
         currentTimeRef: player.currentTimeRef,
         subtitleCues: tracksHook.subtitleCues,
-        hapticCues: tracksHook.hapticCues,
         isPlaying: player.state.isPlaying,
         subtitleDelay: settingsHook.settings.subtitleDelay,
         playbackRate: effectivePlaybackRate,
@@ -1193,6 +1191,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         animatedStyle={gestures.videoAnimatedStyle}
                         audioEqualizer={settingsHook.audioEqualizer}
                         audioDelay={settingsHook.settings.audioDelay}
+                        haptics={playMode === 'with-haptics' && hapticsEnabled}
                         initialResumeSeconds={resumePosition ?? undefined}
                         onLoad={player.handleLoad}
                         onProgress={player.handleProgress}

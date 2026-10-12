@@ -10,7 +10,6 @@ import android.view.HapticFeedbackConstants;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.ReadableArray;
 
 public class HapticModule extends ReactContextBaseJavaModule {
     private final Vibrator vibrator;
@@ -51,71 +50,6 @@ public class HapticModule extends ReactContextBaseJavaModule {
             // Fallback for older Android versions
             vibrator.vibrate(duration);
         }
-    }
-
-    /**
-     * Vibrates with a waveform pattern
-     * 
-     * @param timings    Array of timing values [delay, duration, delay, duration,
-     *                   ...]
-     * @param amplitudes Array of amplitude values (0-255) corresponding to timings
-     */
-    @ReactMethod
-    public void vibrateWaveform(ReadableArray timings, ReadableArray amplitudes) {
-        if (vibrator == null || !vibrator.hasVibrator()) {
-            return;
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Convert ReadableArray to primitive arrays
-            long[] timingsArray = new long[timings.size()];
-            int[] amplitudesArray = new int[amplitudes.size()];
-
-            for (int i = 0; i < timings.size(); i++) {
-                timingsArray[i] = (long) timings.getDouble(i);
-            }
-
-            for (int i = 0; i < amplitudes.size(); i++) {
-                int amp = amplitudes.getInt(i);
-                amplitudesArray[i] = Math.max(0, Math.min(255, amp));
-            }
-
-            // Throws for empty, mismatched or all-zero arrays; see vibrate().
-            try {
-                vibrator.vibrate(VibrationEffect.createWaveform(timingsArray, amplitudesArray, -1));
-            } catch (RuntimeException ignored) {
-            }
-        } else {
-            // Fallback for older versions - just use timings
-            long[] timingsArray = new long[timings.size()];
-            for (int i = 0; i < timings.size(); i++) {
-                timingsArray[i] = (long) timings.getDouble(i);
-            }
-            vibrator.vibrate(timingsArray, -1);
-        }
-    }
-
-    /**
-     * Cancels all ongoing vibrations
-     */
-    @ReactMethod
-    public void cancel() {
-        if (vibrator != null) {
-            vibrator.cancel();
-        }
-    }
-
-    /**
-     * Checks if device supports amplitude control
-     * 
-     * @return whether the vibrator can vary strength. Without it every light tap is a full
-     *         buzz, so JS needs the real answer, not just "has a vibrator".
-     */
-    @ReactMethod(isBlockingSynchronousMethod = true)
-    public boolean hasAmplitudeControl() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                vibrator != null &&
-                vibrator.hasAmplitudeControl();
     }
 
     /**

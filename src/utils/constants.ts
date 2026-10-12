@@ -46,23 +46,4 @@ export const GITHUB_RELEASES_URL = BUILD_ENV.GITHUB_RELEASES_URL || '';
 // export const DEFAULT_STORAGE_PATH = '/storage/emulated/0/Movies';
 export const DEFAULT_STORAGE_PATH = RNFS.ExternalStorageDirectoryPath;
 
-// Haptic Configuration
-export const MAX_HAPTICS_PER_SECOND = 3;
-export const MIN_HAPTIC_DURATION_MS = 50;
-export const MAX_HAPTIC_DURATION_MS = 5000;
-export const AMPLITUDE_RANGE = { MIN: 0, MAX: 255 };
 
-// Haptic Intensity Multipliers for low/medium/high
-export const HAPTIC_INTENSITY_MULTIPLIERS: Record<'low' | 'medium' | 'high', number> = {
-    low: 0.5,
-    medium: 1.0,
-    high: 1.5,
-};
-
-// Base intensities for each haptic category (extracted from HapticPatternGenerator)
-export const BASE_HAPTIC_INTENSITIES = {
-    oscillating: 8,
-    textured: 20,
-    rhythmic: 12,
-    impact: 30,
-};

@@ -13,23 +13,6 @@ interface HapticModuleInterface {
      */
     vibrate(duration: number, amplitude: number): void;
 
-    /**
-     * Vibrates with a waveform pattern
-     * @param timings Array of timing values [delay, duration, delay, duration, ...]
-     * @param amplitudes Array of amplitude values (0-255) corresponding to timings
-     */
-    vibrateWaveform(timings: number[], amplitudes: number[]): void;
-
-    /**
-     * Cancels all ongoing vibrations
-     */
-    cancel(): void;
-
-    /**
-     * Checks if device supports amplitude control
-     */
-    hasAmplitudeControl(): boolean;
-
     /** System UI haptic; respects the user's touch-feedback setting. */
     perform(type: UiHaptic): void;
 }

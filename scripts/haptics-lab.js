@@ -8,6 +8,7 @@
  *   node scripts/haptics-lab.js calib <csv>                L5
  *   node scripts/haptics-lab.js tap <csv>                  L4
  *   node scripts/haptics-lab.js motion <csv>               L3: did the motor move during playback
+ *   node scripts/haptics-lab.js perform [mix1]             Phase 2 exit: the Performer in the real player (Lab open)
  *
  * CSV rows from HapticsLabModule.kt: `elapsedRealtimeNanos,kind,values...`.
  */
@@ -273,6 +274,213 @@ function motion(file) {
     return out;
 }
 
+// ---------------------------------------------------------------------------- Phase 2 Performer
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const key = code => adb('shell', 'input', 'keyevent', String(code));
+
+/** Center of the on-screen node whose text or description is [label], from a UI dump. */
+function nodeCenter(label) {
+    try { adb('shell', 'uiautomator', 'dump', '/sdcard/glide-ui.xml'); } catch { adb('shell', 'uiautomator', 'dump', '/sdcard/glide-ui.xml'); }
+    const xml = adb('shell', 'cat', '/sdcard/glide-ui.xml');
+    const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp(`(?:text|content-desc)="${esc}"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`).exec(xml);
+    if (!m) return null;
+    return [(+m[1] + +m[3]) >> 1, (+m[2] + +m[4]) >> 1];
+}
+
+/**
+ * A horizontal drag across the middle of the player: the swipe-seek gesture. No UI dump (it
+ * cannot settle while video plays); the screen size and rotation come from the window manager.
+ */
+function swipeSeek() {
+    const [w, h] = /(\d+)x(\d+)/.exec(adb('shell', 'wm', 'size')).slice(1).map(Number);
+    const rotated = /mCurrentRotation=ROTATION_(90|270)/.test(adb('shell', 'dumpsys', 'window', 'displays'));
+    const [W, H] = rotated ? [h, w] : [w, h];
+    adb('shell', 'input', 'swipe', String(Math.round(W * 0.3)), String(Math.round(H * 0.5)), String(Math.round(W * 0.7)), String(Math.round(H * 0.5)), '600');
+}
+
+/** Launches Glide and opens the Lab (Settings > Version x7). Resolves with the film path field. */
+async function openLab() {
+    adb('shell', 'monkey', '-p', PKG, '-c', 'android.intent.category.LAUNCHER', '1');
+    for (let i = 0; i < 20 && !nodeCenter('Settings'); i++) await sleep(500);
+    // Taps land before the app is ready to take them; keep at it until Settings shows.
+    for (let i = 0; i < 10 && !nodeCenter('Subtitle appearance') && !nodeCenter('Version'); i++) {
+        tapNode('Settings');
+        await sleep(1000);
+    }
+    let version;
+    for (let i = 0; i < 8 && !(version = nodeCenter('Version')); i++) {
+        adb('shell', 'input', 'swipe', '50', '1800', '50', '600', '300'); // the left margin: mid-screen swipes land on sliders
+        await sleep(600);
+    }
+    if (!version) throw new Error('Version row not found in Settings');
+    for (let i = 0; i < 7; i++) adb('shell', 'input', 'tap', String(version[0]), String(version[1]));
+    for (let i = 0; i < 10; i++) { await sleep(500); const f = nodeCenter('Film path'); if (f) return f; }
+    throw new Error('Haptics Lab did not open');
+}
+
+function tapNode(label) {
+    const at = nodeCenter(label);
+    if (!at) throw new Error(`"${label}" not on screen. Open the Haptics Lab (Settings > Version x7) and run again.`);
+    adb('shell', 'input', 'tap', String(at[0]), String(at[1]));
+}
+
+/** `GlideHaptics` lines as {kind, wall, ...fields}. */
+function performerLog() {
+    return adb('logcat', '-d', '-v', 'raw', '-s', 'GlideHaptics:W').split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+        const [kind, ...rest] = line.split(' ');
+        const f = { kind, line };
+        for (const w of rest) {
+            const i = w.indexOf('=');
+            if (i > 0) f[w.slice(0, i)] = isNaN(+w.slice(i + 1)) ? w.slice(i + 1) : +w.slice(i + 1);
+            else if (/^\d+:/.test(w)) {
+                f.media = +w.split(':')[0];
+                f.steps = w.split(':')[1].split(',').map(s => s.split('x').map(Number));
+            } else f.why = w;
+        }
+        return f;
+    });
+}
+
+/**
+ * Phase 2 exit, on the phone: plays a scripted mix in the real player with its truth track,
+ * pauses, resumes and seeks with media keys, and checks the system's vibration history against
+ * what the Performer meant to play. The Lab must be open on screen.
+ */
+async function perform(name = 'mix1') {
+    const fixtures = path.join(__dirname, '..', '.haptics-fixtures');
+    const remote = `/sdcard/Android/data/${PKG}/files/haptics-lab`; // the app may read its own folder, not Download
+    adb('shell', 'mkdir', '-p', remote);
+    for (const ext of ['.mkv', '.truth.tsv']) adb('push', path.join(fixtures, name + ext), `${remote}/${name}${ext}`);
+
+    key(224); // wake the screen: taps on a sleeping screen go nowhere
+    await sleep(500);
+    const field = nodeCenter('Film path') ?? await openLab();
+    adb('shell', 'input', 'tap', String(field[0]), String(field[1]));
+    adb('shell', 'input', 'keycombination', '113', '29'); // ctrl+a
+    adb('shell', 'input', 'keyevent', '67');
+    adb('shell', 'input', 'text', `${remote}/${name}.mkv`);
+    await sleep(300);
+    if (/mInputShown=true/.test(adb('shell', 'dumpsys', 'input_method'))) key(4); // close the keyboard, never the Lab
+    await sleep(500);
+    adb('logcat', '-c');
+
+    const rows = new Map();
+    const poll = () => { for (const r of readHistory()) rows.set(r.created + r.start, r); };
+    const t0 = +adb('shell', 'date', '+%s%3N').trim(); // phone clock, as the history uses
+    const today = adb('shell', 'date', '+%m-%d').trim();
+    tapNode('Performer test');
+    const started = Date.now();
+    while (!performerLog().some(l => l.kind === 'open') && Date.now() - started < 15000) await sleep(300);
+    const run = async ms => { const until = Date.now() + ms; while (Date.now() < until) { poll(); await sleep(300); } };
+    await run(15000);
+    key(127); await run(3000);   // pause
+    key(126); await run(5000);   // play
+    swipeSeek(); await run(10000); // drag across the player, as a person would
+    key(127); await run(1500);
+    key(4); // leave the player
+
+    const tz = /([+-])(\d\d)(\d\d)/.exec(adb('shell', 'date', '+%z'));
+    const tzMs = (tz[1] === '-' ? -1 : 1) * (+tz[2] * 60 + +tz[3]) * 60000;
+    const dayMs = wall => (wall + tzMs) % 86400000;
+    const log = performerLog();
+    const calls = log.filter(l => l.kind === 'call');
+    // A call the system drops for a more important vibration (a notification) has no start time.
+    const history = [...rows.values()].filter(r => r.usage === 'MEDIA').map(r => ({ ...r, startMs: clockMs(r.start) || clockMs(r.created), endMs: clockMs(r.end) }));
+    const first = dayMs(t0);
+    const ours = history.filter(r => r.created.startsWith(today) && r.startMs >= first);
+
+    // Each call against the history row that started with it.
+    const used = new Set();
+    const mismatches = [];
+    for (const c of calls) {
+        const t = dayMs(c.wall);
+        const row = ours.filter(r => !used.has(r) && Math.abs(r.startMs - t) <= 50).sort((a, b) => Math.abs(a.startMs - t) - Math.abs(b.startMs - t))[0];
+        if (!row) { mismatches.push(`call at media ${c.media} ms: not in history`); continue; }
+        if (row.status === 'ignored_for_higher_importance') { used.add(row); c.blocked = true; continue; }
+        used.add(row);
+        c.row = row;
+        const want = c.steps.map(([ms, amp]) => [Math.max(1, Math.round(ms / c.rate)), +(amp / 255).toFixed(2)]);
+        const got = row.steps;
+        const finished = row.status === 'finished';
+        const n = finished ? want.length : got.length;
+        const ok = got.length === n && got.every(([ms, amp], i) =>
+            Math.abs(amp - want[i][1]) <= 0.006 && (ms === want[i][0] || (!finished && i === n - 1 && ms <= want[i][0])));
+        if (!ok) mismatches.push(`call at media ${c.media} ms (${row.status}): wanted ${JSON.stringify(want)} played ${JSON.stringify(got)}`);
+    }
+    const extra = ours.filter(r => !used.has(r));
+
+    // Paused windows: from each sync playing=false to the next playing=true.
+    const syncs = log.filter(l => l.kind === 'sync');
+    const pausedLeaks = [];
+    syncs.forEach((s, i) => {
+        if (s.playing !== 'false') return;
+        const resume = syncs.slice(i + 1).find(x => x.playing === 'true');
+        const [a, b] = [dayMs(s.wall) + 20, resume ? dayMs(resume.wall) : Infinity];
+        for (const r of ours) if (r.startMs > a && r.startMs < b) pausedLeaks.push(`vibration started ${r.startMs - a + 20} ms into a pause`);
+        for (const r of ours) if (r.startMs < a && r.status === 'finished' && r.endMs - 100 > a + 30) pausedLeaks.push(`vibration ran on through a pause (${r.status})`);
+    });
+
+    // After a seek: nothing from before the new position.
+    // A seek is any logged position more than a second away from where the clock had it.
+    const seekLeaks = [];
+    const timeline = log.filter(l => l.kind === 'sync' || l.kind === 'anchor');
+    const jumps = timeline.filter((s, i) => {
+        const p = timeline[i - 1];
+        if (!p) return false;
+        const expected = p.playing === 'false' ? p.pos : p.pos + (s.wall - p.wall) * (p.rate ?? 1);
+        return Math.abs(s.pos - expected) > 1000;
+    });
+    for (const c of calls) {
+        const j = jumps.filter(x => x.wall < c.wall).at(-1);
+        if (j && c.media < j.pos - 20) seekLeaks.push(`call at media ${c.media} ms after seeking to ${j.pos} ms`);
+    }
+    for (const j of jumps) for (const r of ours) {
+        const t = dayMs(j.wall);
+        if (r.startMs < t && r.status === 'finished' && r.endMs - 100 > t + 30) seekLeaks.push(`vibration ran on through a seek`);
+    }
+    const seeks = jumps.length;
+
+    const late = calls.map(c => Math.abs(c.late));
+    // True timing: each call against the settled clock, the first anchor after it (no jump between).
+    const latency = log.find(l => l.kind === 'open')?.latency ?? 0;
+    const anchors = log.filter(l => l.kind === 'anchor');
+    const timing = calls.map(c => {
+        const jump = syncs.find(s => s.wall > c.wall);
+        // Median of the settled samples over the next 5 s: one sample jitters by a few ms.
+        const near = anchors.filter(x => x.wall > c.wall && x.wall < c.wall + 5000 && Math.abs(x.err) <= 20 && (!jump || x.wall < jump.wall));
+        const offset = median(near.map(a => a.wall - a.pos / c.rate)); // wall clock of media 0
+        return near.length ? Math.abs(c.wall - (offset + c.media / c.rate - latency)) : NaN;
+    }).filter(x => !isNaN(x));
+    const anchor = log.filter(l => l.kind === 'anchor').map(l => Math.abs(l.err));
+    const report = {
+        calls: calls.length,
+        historyRows: ours.length,
+        statuses: count(ours.map(r => r.status)),
+        schedulerLateP50: pct(late, 0.5), schedulerLateP95: pct(late, 0.95), schedulerLateMax: Math.max(...late),
+        timingErrP50: pct(timing, 0.5), timingErrP95: pct(timing, 0.95), timingErrMax: Math.max(...timing), timed: timing.length,
+        blockedBySystem: calls.filter(c => c.blocked).length,
+        anchorErrP50: pct(anchor, 0.5), anchorErrP95: pct(anchor, 0.95),
+        pauses: syncs.filter(s => s.playing === 'false').length, seeks,
+    };
+    console.log(report);
+    const checks = [
+        ['scheduler error p95 <= 10 ms (vs the settled player clock)', report.timingErrP95 <= 10],
+        ['every call is in the history, as intended', calls.length > 0 && mismatches.length === 0],
+        ['nothing in the history we did not call', extra.length === 0],
+        ['zero haptics while paused', report.pauses > 0 && pausedLeaks.length === 0],
+        ['zero stale haptics after seek', seeks > 0 && seekLeaks.length === 0],
+    ];
+    for (const [what, ok] of checks) console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`);
+    for (const m of [...mismatches, ...extra.map(r => `unexpected ${r.status} at ${r.start}: ${r.played}`), ...pausedLeaks, ...seekLeaks].slice(0, 20)) console.log('  ', m);
+    const out = path.join(LOCAL, `perform-${name}-${Date.now()}.json`);
+    fs.mkdirSync(LOCAL, { recursive: true });
+    fs.writeFileSync(out, JSON.stringify({ report, log, history: ours }, null, 1));
+    console.log(out);
+    process.exitCode = checks.every(([, ok]) => ok) ? 0 : 1;
+}
+
 // ---------------------------------------------------------------------------- pull
 
 function pull() {
@@ -303,6 +511,7 @@ const commands = {
     calib: () => calib(args[0]),
     tap: () => tap(args[0]),
     motion: () => motion(args[0]),
+    perform: () => perform(args[0]),
 };
 if (!commands[cmd]) {
     console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);

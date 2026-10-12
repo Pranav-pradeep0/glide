@@ -305,6 +305,10 @@ function scriptedMix(out, k, talk, seed) { // 60 s of alternating speech and mus
   }
   const truth = mixInto(x, spans, seed);
   writeWav(path.join(out, `mix${k}.wav`), [x, x]);
+  // The phone test plays this one: with a video track the player's clock settles in under a
+  // second; audio-only output stays coarse for ~3 s (Phase 2).
+  ffmpeg(['-f', 'lavfi', '-i', 'color=black:s=320x180:r=24', '-i', path.join(out, `mix${k}.wav`), '-shortest',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'pcm_s16le', path.join(out, `mix${k}.mkv`)]);
   writeTruth(path.join(out, `mix${k}.truth.tsv`), truth);
 }
 

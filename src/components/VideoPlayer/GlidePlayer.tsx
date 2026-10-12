@@ -71,6 +71,8 @@ export interface GlidePlayerProps extends ViewProps {
     audioEqualizer?: number[];
     /** Milliseconds; positive plays the audio later. */
     audioDelay?: number;
+    /** Play the cached haptic track for this video in step with it. */
+    haptics?: boolean;
     videoEnhancement?: boolean;
     /** 0..1.5, 1 = the tuned look. Live; only the toggle re-opens the media. */
     videoEnhancementStrength?: number;

@@ -45,6 +45,9 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
     @ReactProp(name = "rate", defaultFloat = 1f)
     fun setRate(view: GlidePlayerView, rate: Float) = view.setRate(rate)
 
+    @ReactProp(name = "haptics", defaultBoolean = false)
+    fun setHaptics(view: GlidePlayerView, enabled: Boolean) = view.setHaptics(enabled)
+
     @ReactProp(name = "muted", defaultBoolean = false)
     fun setMuted(view: GlidePlayerView, muted: Boolean) = view.setMuted(muted)
 
