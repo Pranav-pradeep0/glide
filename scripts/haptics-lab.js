@@ -294,10 +294,20 @@ function nodeCenter(label) {
  * A horizontal drag across the middle of the player: the swipe-seek gesture. No UI dump (it
  * cannot settle while video plays); the screen size and rotation come from the window manager.
  */
-function swipeSeek() {
+function screen() {
     const [w, h] = /(\d+)x(\d+)/.exec(adb('shell', 'wm', 'size')).slice(1).map(Number);
     const rotated = /mCurrentRotation=ROTATION_(90|270)/.test(adb('shell', 'dumpsys', 'window', 'displays'));
-    const [W, H] = rotated ? [h, w] : [w, h];
+    return rotated ? [h, w] : [w, h];
+}
+
+/** Scrolls the Lab down a little, in the left margin: mid-screen swipes land on sliders. */
+function scrollDown() {
+    const [, H] = screen();
+    adb('shell', 'input', 'swipe', '50', String(Math.round(H * 0.7)), '50', String(Math.round(H * 0.4)), '300');
+}
+
+function swipeSeek() {
+    const [W, H] = screen();
     adb('shell', 'input', 'swipe', String(Math.round(W * 0.3)), String(Math.round(H * 0.5)), String(Math.round(W * 0.7)), String(Math.round(H * 0.5)), '600');
 }
 
@@ -330,9 +340,13 @@ async function enterPath(file) {
     // ctrl+a isn't reliable here (it once left the old path in place): jump to the end, delete back
     adb('shell', 'input', 'keyevent', '123', ...Array(300).fill('67'));
     adb('shell', 'input', 'text', file);
-    await sleep(300);
-    if (/mInputShown=true/.test(adb('shell', 'dumpsys', 'input_method'))) key(4); // close the keyboard, never the Lab
-    await sleep(500);
+    // Enter leaves the field: the keyboard goes, and so does the blinking cursor, which keeps the
+    // screen from ever settling for a UI dump. In landscape the keyboard also covers the buttons.
+    key(66);
+    for (let i = 0; i < 4; i++) {
+        await sleep(500);
+        if (/mInputShown=true/.test(adb('shell', 'dumpsys', 'input_method'))) key(4); // never the Lab: only while it shows
+    }
 }
 
 function tapNode(label) {
@@ -533,13 +547,16 @@ async function listen(target = 'mix1', seconds = 40) {
     const passes = [];
     for (const pass of ['analysing', 'cached']) {
         adb('logcat', '-c');
-        for (let i = 0; i < 10 && !nodeCenter('Listener test'); i++) await sleep(500); // the keyboard may still cover it
+        for (let i = 0; i < 10 && !nodeCenter('Listener test'); i++) { // the keyboard may cover it, or the Lab sits scrolled up
+            if (i >= 2) scrollDown();
+            await sleep(500);
+        }
         tapNode('Listener test');
         let threads = '';
         for (const until = Date.now() + seconds * 1000; Date.now() < until;) {
             await sleep(2000);
             const log = listenLog();
-            if (!threads && log.some(l => l.sub === 'progress')) threads = threadNice(); // while analysing
+            if (!threads && log.some(l => l.kind === 'listen' && l.sub === 'progress')) threads = threadNice(); // while analysing
         }
         key(4); // leave the player: it logs its dropped frames
         await sleep(2000);
@@ -548,9 +565,9 @@ async function listen(target = 'mix1', seconds = 40) {
 
     const checks = [];
     for (const { pass, threads, log } of passes) {
-        const done = log.find(l => l.sub === 'done');
-        const cached = log.find(l => l.sub === 'cached');
-        const progress = log.filter(l => l.sub === 'progress');
+        const done = log.find(l => l.kind === 'listen' && l.sub === 'done');
+        const cached = log.find(l => l.kind === 'listen' && l.sub === 'cached');
+        const progress = log.filter(l => l.kind === 'listen' && l.sub === 'progress');
         const covered = wall => (cached || (done && wall >= done.wall)) ? Infinity
             : Math.max(0, ...progress.filter(p => p.wall <= wall).map(p => p.analysed));
         const heads = log.filter(l => (l.kind === 'anchor' || (l.kind === 'sync' && l.playing === 'true')) && l.wall);

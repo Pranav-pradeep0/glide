@@ -13,7 +13,9 @@ import kotlin.math.tan
  * The Listener (docs/haptics-engine-plan.md 3.2, Phase 3): turns a film's decoded audio into a raw
  * [HapticTrack]. Pure Kotlin, so `HapticListenerTest` scores it on the generated clips.
  *
- * - Bed: level of the mix below [BED_HZ], every 10 ms frame.
+ * - Bed: level of the mix below [BED_HZ], every 10 ms frame, faded by how much of the sound is down
+ *   there over the last 200 ms. Voices and music have some energy below 100 Hz but little of it
+ *   (under 12% in the clips); rumble and engines have 25-90%.
  * - Hits: onsets in 1 ms blocks of the mix. A hit is a jump in energy over both the moment just
  *   before and the scene's recent level, so an impact over dialogue counts but a sentence starting
  *   after a pause doesn't. Its time is the first block of the rise.
@@ -39,6 +41,10 @@ class HapticListener {
     private var inFrame = 0
     private var frameE = 0.0
     private var lastFrameE = 0.0
+    private var frameAll = 0.0
+    private val shareLow = DoubleArray(SHARE_FRAMES)
+    private val shareAll = DoubleArray(SHARE_FRAMES)
+    private var frames = 0
 
     // Block energies (mean square) and of the first difference, by block index.
     private val energy = DoubleArray(RING)
@@ -107,11 +113,17 @@ class HapticListener {
         val low = lowB.run(lowA.run(x.toDouble()))
         frameE += low * low
         blockL += low * low
+        frameAll += x * x
         if (++inFrame == frame) {
             val e = frameE / frame
-            pushBed(bedLevel(sqrt((e + lastFrameE) / 2))) // 20 ms window: a 50 Hz cycle reads steady
+            shareLow[frames % SHARE_FRAMES] = frameE
+            shareAll[frames++ % SHARE_FRAMES] = frameAll
+            val share = shareLow.sum() / (shareAll.sum() + 1e-12)
+            val weight = ((share - SHARE_FROM) / (SHARE_FULL - SHARE_FROM)).coerceIn(0.0, 1.0).toFloat()
+            pushBed(weight * bedLevel(sqrt((e + lastFrameE) / 2))) // 20 ms window: a 50 Hz cycle reads steady
             lastFrameE = e
             frameE = 0.0
+            frameAll = 0.0
             inFrame = 0
         }
         val d = x - prev
@@ -220,7 +232,7 @@ class HapticListener {
     }
 
     /** RBJ low-pass, doubles: at 100 Hz of 48 kHz the poles sit too near 1 for floats. */
-    private class Biquad(rate: Int, hz: Double, q: Double) {
+    internal class Biquad(rate: Int, hz: Double, q: Double) {
         private val b0: Double
         private val b1: Double
         private val a1: Double
@@ -251,10 +263,13 @@ class HapticListener {
 
     companion object {
         /** Bump when the output changes: cached tracks are rebuilt. */
-        const val VERSION = 1
+        const val VERSION = 2
 
         const val BED_HZ = 100.0
         private const val BED_FLOOR_DB = -45.0
+        private const val SHARE_FRAMES = 20 // 200 ms
+        private const val SHARE_FROM = 0.15 // no bed at or below this share of the sound
+        private const val SHARE_FULL = 0.3 // full bed from here
 
         // Onsets, in 1 ms blocks.
         private const val AFTER = 10 // the window judged as the hit

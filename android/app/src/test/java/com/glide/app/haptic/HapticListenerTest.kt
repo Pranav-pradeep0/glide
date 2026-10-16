@@ -44,6 +44,16 @@ class HapticListenerTest {
         assertTrue(onsets.filter { !it.passed }.joinToString("\n"), onsets.all { it.passed })
     }
 
+    /** Phase 4: what the Performer gets (Listener, then Director) passes every check on the clips. */
+    @Test
+    fun directedPassesTheClips() {
+        val dir = HapticHarness.fixturesDir()
+        assumeTrue("no clips in ${dir.absolutePath}: run node scripts/haptics-fixtures.js", dir.isDirectory)
+        val report = HapticHarness.run(HapticHarness.load(dir)) { HapticDirector.direct(listen(it).track(fp)) }
+        println(report)
+        assertTrue(report.toString(), report.passed)
+    }
+
     /** What the Performer gets mid-analysis is a prefix of the finished track. */
     @Test
     fun snapshotsArePrefixes() {

@@ -83,9 +83,10 @@ export default function HapticsLabScreen() {
                 <View style={styles.pad}>
                     <TextInput
                         value={path}
-                        onChangeText={setPath}
+                        onChangeText={t => setPath(t.replace(/\n/g, ''))}
                         style={[type.caption, styles.input, { color: colors.text, backgroundColor: colors.fill }]}
-                        multiline
+                        multiline // long paths wrap; Enter still ends editing
+                        submitBehavior="blurAndSubmit"
                         accessibilityLabel="Film path"
                     />
                     <TextInput

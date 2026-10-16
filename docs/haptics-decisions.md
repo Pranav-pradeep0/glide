@@ -291,3 +291,49 @@ Still failing: haptics during speech from the bed. That is Phase 4.
   `analyzerVersion 0` marks tracks imported from Lab truth; the Listener never overwrites them.
 - Hit rate differs a lot by film: Us 5.7 per minute, Blast 1.5 per minute. To check by feel in the
   Phase 4 A/B.
+
+## Phase 4 — Director (2026-10-16)
+
+**Exit test.** JVM, no phone: `HapticFilmTest` decodes each film in `.haptics-fixtures/films/`
+(audio and subtitles taken from the phone's copies; not in git) with ffmpeg, as the phone hands it
+over, and scores Listener → Director. `HapticListenerTest.directedPassesTheClips` runs the same
+pipeline on every generated clip. Us and Blast were tuned on; Frankenstein and Together were held
+out until the numbers were set.
+
+| Check | Target | Us | Blast | Frankenstein | Together |
+|---|---|---|---|---|---|
+| Share of the runtime with anything felt | ≤ 15% | 5.7% | 13.6% | 6.0% | 6.1% |
+| Hits during plain dialogue (subtitle lines with no sound tag) | ≤ 1/min | 0.61 | 0.96 | 0.42 | 0.43 |
+| Bed vs what a 5.1 subwoofer plays (Pearson, 100 ms) | ≥ 0.5 | 0.78 | 0.74 | 0.76 | 0.73 |
+| Bed vs the LFE channel alone (for reference) | — | 0.62 | 0.68 | 0.62 | 0.45 |
+| Every generated clip, full pipeline | all pass | | | | |
+
+Phone: `listen mix1` hits still match the PC (F1 0.947, p50 1 ms). Us re-analysed with 0 dropped
+frames; the Director takes ≤ 51 ms per update on a whole 2 h film, on the analysis thread.
+
+**Findings.**
+- **The bed was mostly faint bass, not rumble.** Before the Director it ran 24–33% of a film. Two
+  fixes. The Listener now fades the bed by the share of the sound that is below 100 Hz over 200 ms
+  (none at ≤ 15%, full from 30%). Speech and music carry under 12% there, rumble and engines 25–90%,
+  so a loud scene with dialogue no longer reads as bass. Listener VERSION 2.
+- **Restraint is relative to the film.** The bed plays only within 10 dB of the film's own loud bass
+  (99th percentile), hits only within 9 dB of its loud hits (95th); both are rescaled so the
+  film's loud moments are full strength. Dialogue hits are the quiet ones (median 0.09–0.15 vs
+  0.19–0.30), so the same gate quiets dialogue.
+- **Gate on 100 ms of power, not 10 ms frames.** Low tones beat 10–20 times a second, so a frame-by-
+  frame gate chopped rumbles into pieces (lfe51 coverage fell to 64%). A gate that holds open
+  stretched every bass blip instead (Blast 22%). Judging the gate and the reference on power
+  averaged over 100 ms fixed both. An open bed follows down to 6 dB below the gate.
+- **The LFE alone is the wrong yardstick.** Together's mixer kept its bass in the front channels:
+  60% of its bed time had a silent LFE, with the same spectrum as its LFE moments, during intense
+  scenes. On a real system that bass goes to the subwoofer (bass management: every channel below
+  ~100 Hz, plus the LFE at +10 dB). Scored against that, all four films agree (0.73–0.78).
+- **The cache holds the raw track.** The Director runs on every publish, so tuning it never
+  re-analyses a film. While a film is being analysed, its levels come from the part heard so far.
+- **Known gap, for Phase 5.** Non-dialogue voice sounds with bass in the centre channel (grunts,
+  heavy breathing) can drive the bed: ~35 s of 152 min in Frankenstein, the worst case. SDH tags
+  them ("[grunting]"), which is where Phase 5 can quiet them.
+- **No ducking needed.** The renderer plays the louder of bed and hit, so a hit no stronger than the
+  bed under it would be lost. Measured: 0–2 hits per film (≤ 1.3%), printed by `HapticFilmTest`.
+  Comfort limits weren't needed to meet the targets either; left for the Phase 6 presets if long
+  scenes feel tiring.

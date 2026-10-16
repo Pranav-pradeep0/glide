@@ -61,7 +61,12 @@ class HapticPerformer(private val context: Context) {
         track = null
         analysis?.detach()
         val opening = ++opened
-        analysis = HapticAnalysis.start(context, uri) { t -> handler.post { if (opening == opened) update(t) } }
+        analysis = HapticAnalysis.start(context, uri) { raw ->
+            val t0 = SystemClock.elapsedRealtime()
+            val t = HapticDirector.direct(raw) // on the analysis thread
+            Log.w(TAG, "direct took=${SystemClock.elapsedRealtime() - t0} frames=${raw.bedIntensity.size} events=${t.events.size}/${raw.events.size}")
+            handler.post { if (opening == opened) update(t) }
+        }
         Log.w(TAG, "open latency=${cal.latencyMs}")
     }
 
