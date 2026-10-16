@@ -337,3 +337,55 @@ frames; the Director takes ≤ 51 ms per update on a whole 2 h film, on the anal
   bed under it would be lost. Measured: 0–2 hits per film (≤ 1.3%), printed by `HapticFilmTest`.
   Comfort limits weren't needed to meet the targets either; left for the Phase 6 presets if long
   scenes feel tiring.
+
+## Phase 5 — Meaning (2026-10-16)
+
+**Exit test.** JVM: `HapticFilmTest` scores each film twice, audio only and with its SDH tags, and
+every score with tags must beat or match audio only and still meet the Phase 4 targets.
+`HapticMeaningTest` checks the tag rules on their own. Each film's raw track is cached beside it
+(`<name>.raw`), so a Director change reruns in ~15 s. Us and Frankenstein were tuned on, Together
+held out; Blast's subtitles have no tags, so it is the no-subtitle check.
+
+| Score (audio only → with tags) | Us | Frankenstein | Together | Blast |
+|---|---|---|---|---|
+| Tagged hits felt (a hit within ±1 s of a hit tag) | 0.32 → **0.54** | 0.25 → **0.48** | 0.44 → **0.50** | no tags |
+| Untagged hits per minute under ♪ | 3.8 → **0** | 5.2 → **0** | 3.0 → **0** | |
+| Bed under ♪ (mean strength) | 0.13 → **0.07** | 0.05 → **0.03** | 0.04 → **0.02** | |
+| Loud LFE under ♪ / voice tags still felt | same | same | same | |
+| Hits during plain dialogue, per minute (≤ 1) | 0.61 = | 0.42 = | 0.43 = | 0.999 = |
+| Subwoofer correlation outside ♪ (≥ 0.5) | 0.755 = | 0.758 = | 0.734 = | 0.740 = |
+| Share of the runtime felt (≤ 15%) | 5.7% = | 6.0% = | 6.0% = | 13.6% = |
+
+Phone: `listen mix1` still matches the PC (F1 0.947, p50 1 ms). Frankenstein from its detail page:
+504 tags reach the Director, ≤ 37 ms per update on the whole film. Blast with no subtitles: 0 tags,
+the same 160 hits as audio only.
+
+**Findings.**
+- **Tags as data.** `HapticMeaning` reads tags by keyword: sharp hits ([gunshot], [knock]), heavy
+  hits ([explosion], [thud], [thunder]), music (♪, [tense music playing]), voice ([grunting]).
+  Anything else in brackets is dropped, which removes speaker names ([VICTOR]) without a list. The
+  cues come from the SDH subtitle the detail page already finds (`hapticCues`, the old engine's
+  detection), sent to native as a player prop; only cues with a bracket or ♪ cross the bridge.
+- **Most tagged sounds had no hit to snap to.** Only 26–83% of hit tags had a Listener onset within
+  ±1 s: the weight rule (Phase 3) drops bright sounds to keep speech out. The Listener now keeps
+  those as **light** onsets (`HapticTrack.LIGHT`, VERSION 3); the Director plays one only where a
+  hit tag names it. Untagged films get exactly the Phase 4 track.
+- **A tag keeps the loudest onset near it** (the Director's, or one below its gate, or a light one)
+  and sets its character: sharp 0.8 (40 ms, short tail), heavy 0.1 (75 ms, long tail). A light
+  onset more than 200 ms before its cue is the line before: every rescue that landed in dialogue
+  was one (−250 to −830 ms).
+- **Music: the bed is halved, not gated.** The bed under ♪ follows the LFE (93% of loud-LFE moments
+  in Us are felt): the mixer sent that bass to the subwoofer. A stricter gate removed 15–50% of
+  them. Halving keeps every one, lighter. Hits under ♪ are dropped unless a tag names them.
+- **The subwoofer yardstick is wrong under ♪,** as the LFE alone was in Phase 4: it counts a song's
+  bass as wanted. Its correlation is now judged outside ♪ spans; under them the check is that
+  loud-LFE moments are still felt (decided with the user).
+- **Voice tags change nothing.** Under them, bass with a quiet LFE (centre-channel grunts, Phase 4's
+  gap) is felt 1–6% of the time; bass with a loud LFE (effects under a scream) 80–86%. Both sit
+  at similar levels, so every rule tried took more effect bass than grunts: a 5 dB stricter gate
+  under voice cut loud-LFE moments by 30–70%. A bed without the centre channel halved Frankenstein's
+  grunts (~10 s) but raised Blast's active share to 19%. Left as is.
+- **Not done:** subtitle delay isn't applied to the tags (the ±1 s snap absorbs small offsets), and
+  embedded SDH tracks only reach haptics if the detail page's detection extracts them, as before.
+- **A/B baseline:** HapticGenerator was dropped in L3 (the motor doesn't respond), so the optional
+  blind A/B is audio only vs with tags.

@@ -418,6 +418,12 @@ export default function VideoPlayerScreen({ route }: Props) {
         defaultAudioLanguage: defaultAudioLanguage,
     });
 
+    // Only cues that can carry a sound tag cross the bridge; native reads the tags (HapticMeaning).
+    const hapticCues = useMemo(() => tracksHook.hapticCues
+        .filter(c => /[[(♪♫]/.test(c.text))
+        .map(c => ({ startMs: Math.round(c.startTime * 1000), endMs: Math.round(c.endTime * 1000), text: c.text })),
+    [tracksHook.hapticCues]);
+
     playerRef.current = player;
     tracksRef.current = tracksHook;
 
@@ -1230,6 +1236,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         audioEqualizer={settingsHook.audioEqualizer}
                         audioDelay={settingsHook.settings.audioDelay}
                         haptics={playMode === 'with-haptics' && hapticsEnabled}
+                        hapticCues={hapticCues}
                         initialResumeSeconds={resumePosition ?? undefined}
                         onLoad={player.handleLoad}
                         onProgress={handleProgress}

@@ -14,6 +14,7 @@ import java.io.DataOutputStream
 import java.io.File
 import java.security.MessageDigest
 import kotlin.math.abs
+import kotlin.concurrent.thread
 import kotlin.math.roundToLong
 
 /**
@@ -44,7 +45,15 @@ class HapticPerformer(private val context: Context) {
     private var buzzing = false
     private var playedTo = -1 // media end of the last call, until a stop
     private var analysis: HapticAnalysis? = null
+    @Volatile
     private var opened = 0 // which open() a track belongs to
+
+    // Any thread: the last raw track published, and the tags it is directed with.
+    @Volatile
+    private var raw: HapticTrack? = null
+
+    @Volatile
+    private var tags: List<HapticMeaning.Tag> = emptyList()
 
     /**
      * After a start, resume or jump the position creeps for ~0.5 s before it runs true (measured:
@@ -59,15 +68,34 @@ class HapticPerformer(private val context: Context) {
         stop("open")
         cal = loadCalibration(context)
         track = null
+        raw = null
         analysis?.detach()
         val opening = ++opened
-        analysis = HapticAnalysis.start(context, uri) { raw ->
-            val t0 = SystemClock.elapsedRealtime()
-            val t = HapticDirector.direct(raw) // on the analysis thread
-            Log.w(TAG, "direct took=${SystemClock.elapsedRealtime() - t0} frames=${raw.bedIntensity.size} events=${t.events.size}/${raw.events.size}")
-            handler.post { if (opening == opened) update(t) }
+        analysis = HapticAnalysis.start(context, uri) { r ->
+            raw = r
+            direct(r, opening) // on the analysis thread
         }
         Log.w(TAG, "open latency=${cal.latencyMs}")
+    }
+
+    /**
+     * The film's subtitle tags (Phase 5, [HapticMeaning]), at any time: a cached track is published
+     * only once, so the one already here is directed again, off the haptics thread.
+     */
+    fun setTags(tags: List<HapticMeaning.Tag>) {
+        this.tags = tags
+        val r = raw ?: return
+        val opening = opened
+        thread(name = "haptics-direct", priority = Thread.MIN_PRIORITY) { direct(r, opening) }
+    }
+
+    private fun direct(r: HapticTrack, opening: Int) {
+        val t0 = SystemClock.elapsedRealtime()
+        val tg = tags
+        val t = HapticDirector.direct(r, tg)
+        Log.w(TAG, "direct took=${SystemClock.elapsedRealtime() - t0} frames=${r.bedIntensity.size} events=${t.events.size}/${r.events.size} tags=${tg.size}")
+        // A newer snapshot or newer tags may have been directed meanwhile: only the latest plays.
+        handler.post { if (opening == opened && r === raw && tg === tags) update(t) }
     }
 
     /** A longer track: carries on from the call playing, or from the playhead. */
@@ -113,6 +141,7 @@ class HapticPerformer(private val context: Context) {
     fun close() = handler.post {
         stop("close")
         track = null
+        raw = null
         analysis?.detach()
         analysis = null
         opened++

@@ -10,6 +10,7 @@ import { StyleSheet } from 'react-native';
 import Animated, { AnimatedStyle } from 'react-native-reanimated';
 import GlidePlayer, {
     GlidePlayerRef,
+    HapticCue,
     PlayerResizeMode,
     PlayerSource,
 } from '@/components/VideoPlayer/GlidePlayer';
@@ -55,6 +56,8 @@ interface AnimatedVideoViewProps {
     audioDelay?: number;
     /** Play the cached haptic track for this video in step with it. */
     haptics?: boolean;
+    /** The SDH subtitle's tagged cues ([explosion], ♪): the Director reads them as sound labels. */
+    hapticCues?: HapticCue[];
 
     /**
      * Where to begin playback on the first mount, in seconds, from watch history.
@@ -104,6 +107,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
             audioEqualizer,
             audioDelay,
             haptics,
+            hapticCues,
             initialResumeSeconds,
             animatedStyle,
             onLoad,
@@ -165,6 +169,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
                     audioEqualizer={audioEqualizer}
                     audioDelay={audioDelay}
                     haptics={haptics}
+                    hapticCues={hapticCues}
                     videoEnhancement={videoEnhancement}
                     videoEnhancementStrength={videoEnhancementStrength}
                     onLoad={onLoad}
@@ -205,6 +210,7 @@ function areEqual(prevProps: AnimatedVideoViewProps, nextProps: AnimatedVideoVie
     if (prevProps.audioTrack !== nextProps.audioTrack) {return false;}
     if (prevProps.audioDelay !== nextProps.audioDelay) {return false;}
     if (prevProps.haptics !== nextProps.haptics) {return false;}
+    if (prevProps.hapticCues !== nextProps.hapticCues) {return false;}
     if (prevProps.textTrack !== nextProps.textTrack) {return false;}
     if (prevProps.title !== nextProps.title) {return false;}
     if (prevProps.artist !== nextProps.artist) {return false;}

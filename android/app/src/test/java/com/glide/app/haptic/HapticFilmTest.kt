@@ -1,5 +1,8 @@
 package com.glide.app.haptic
 
+import com.glide.app.haptic.HapticMeaning.Kind
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -9,12 +12,13 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * Phase 4 exit on real films (docs/haptics-engine-plan.md Part 4): restraint, quiet dialogue and
+ * Phase 4 and 5 exits on real films (docs/haptics-engine-plan.md Part 4): restraint, quiet dialogue and
  * the bed following what a 5.1 subwoofer plays (LFE plus the other channels' bass: mixers split
  * bass between them differently, so the LFE alone undercounts some films). Each `<name>.mka` in `.haptics-fixtures/films/` is decoded by ffmpeg
  * (first audio track, all channels, as the phone's decoder hands it over) and fed to the Listener
  * and the Director.
- * A `<name>.srt` beside it gives dialogue: lines with no sound tag should be felt as nothing.
+ * A `<name>.srt` beside it gives dialogue (lines with no sound tag should be felt as nothing) and the
+ * tags Phase 5 fuses in: each film is scored audio only and with tags.
  *
  * Skipped without films. They aren't in git: `ffmpeg -i film.mkv -map 0:a:0 -c copy name.mka` and
  * `ffmpeg -i film.mkv -map 0:s:0 name.srt`.
@@ -30,7 +34,39 @@ class HapticFilmTest {
         assertTrue(fails.joinToString("\n"), fails.isEmpty())
     }
 
-    private fun score(file: File): List<String> {
+    /** The raw track, the LFE and the subwoofer feed (RMS per 100 ms), and the length in ms. */
+    private class Decoded(val raw: HapticTrack, val lfe: List<Double>, val sub: List<Double>, val ms: Int)
+
+    /**
+     * Decoding is most of the run (~3 min for the four films), so the result is kept beside the
+     * film as `<name>.raw` until the Listener's VERSION or the film changes. The track goes
+     * through the cache's 8-bit format, as a cached film does on the phone.
+     */
+    private fun load(file: File): Decoded {
+        val cache = File(file.parentFile, file.nameWithoutExtension + ".raw")
+        val cached = runCatching {
+            DataInputStream(cache.inputStream().buffered()).use { d ->
+                check(d.readInt() == HapticListener.VERSION && d.readLong() == file.length())
+                val raw = HapticTrack.read(d)
+                val lfe = List(d.readInt()) { d.readDouble() }
+                Decoded(raw, lfe, List(lfe.size) { d.readDouble() }, d.readInt())
+            }
+        }.getOrNull()
+        if (cached != null) return cached
+        val decoded = decode(file)
+        DataOutputStream(cache.outputStream().buffered()).use { d ->
+            d.writeInt(HapticListener.VERSION)
+            d.writeLong(file.length())
+            decoded.raw.write(d)
+            d.writeInt(decoded.lfe.size)
+            decoded.lfe.forEach { d.writeDouble(it) }
+            decoded.sub.forEach { d.writeDouble(it) }
+            d.writeInt(decoded.ms)
+        }
+        return load(file)
+    }
+
+    private fun decode(file: File): Decoded {
         val (channels, rate) = ffprobe(file)
         val listener = HapticListener()
         val lfe = mutableListOf<Double>() // RMS per 100 ms
@@ -75,45 +111,95 @@ class HapticFilmTest {
         }
         ff.waitFor()
         listener.finish()
-        val track = HapticDirector.direct(listener.track(fp))
-        val ms = (frames * 1000 / rate).toInt()
+        return Decoded(listener.track(fp), lfe, sub, (frames * 1000 / rate).toInt())
+    }
 
+    /**
+     * Phase 5: every score with the film's subtitle tags must beat (or match) the audio-only
+     * Director's, and still meet the Phase 4 targets. Lower is better except where [HIGHER].
+     */
+    private fun score(file: File): List<String> {
+        val decoded = load(file)
         val name = file.nameWithoutExtension
+        val srt = File(file.parentFile, "$name.srt")
+        val cues = if (srt.isFile) cues(srt.readText()) else emptyList()
+        val tags = HapticMeaning.tags(cues)
+        val audio = metrics(decoded, HapticDirector.direct(decoded.raw), cues, tags)
+        val fused = metrics(decoded, HapticDirector.direct(decoded.raw, tags), cues, tags)
         val fails = mutableListOf<String>()
-        fun check(what: String, v: Double, ok: Boolean, target: String) {
-            println("%-4s %-28s %-24s %8.3f  %s".format(if (ok) "ok" else "FAIL", name.take(28), what, v, target))
-            if (!ok) fails += "$name $what $v $target"
+        println("     %-14s %-26s %8s %8s".format(name.take(14), "", "audio", "fused"))
+        for ((what, f) in fused) {
+            val a = audio.getValue(what)
+            val target = TARGETS[what]
+            val better = if (what in HIGHER) f >= a - 1e-9 else f <= a + 1e-9
+            val meets = target?.let { (min, max) -> f >= min && f <= max } ?: true
+            val scored = what !in INFO
+            val ok = (!scored || better) && meets
+            println("%-4s %-14s %-26s %8.3f %8.3f  %s".format(if (!scored && target == null) "" else if (ok) "ok" else "FAIL", name.take(14), what, a, f, target?.let { "${it.first}..${it.second}" } ?: ""))
+            if (!ok) fails += "$name $what audio=$a fused=$f"
         }
-        val active = BooleanArray(ms / HapticTrack.BED_FRAME_MS)
+        return fails
+    }
+
+    private fun metrics(d: Decoded, track: HapticTrack, cues: List<HapticMeaning.Cue>, tags: List<HapticMeaning.Tag>): Map<String, Double> {
+        val m = linkedMapOf<String, Double>()
+        val active = BooleanArray(d.ms / HapticTrack.BED_FRAME_MS)
         for (i in active.indices) active[i] = track.bedIntensity.getOrElse(i) { 0f } > 0f
         for (e in track.events) for (t in e.timeMs until e.timeMs + e.lengthMs + e.decayMs step HapticTrack.BED_FRAME_MS) {
             if (t / HapticTrack.BED_FRAME_MS < active.size) active[t / HapticTrack.BED_FRAME_MS] = true
         }
-        check("active share", active.count { it }.toDouble() / active.size, active.count { it } <= MAX_ACTIVE * active.size, "<= $MAX_ACTIVE")
-        println("     %-28s %-24s %8d  %.1f min".format(name.take(28), "hits", track.events.size, ms / 60_000.0))
+        m["active share"] = active.count { it }.toDouble() / active.size
+        m["hits"] = track.events.size.toDouble()
         // The renderer plays the louder of bed and hit: a hit no stronger than the bed under it is lost.
-        val lost = track.events.count { e -> (0 until e.lengthMs step HapticTrack.BED_FRAME_MS).all { track.bedAt(e.timeMs + it) >= e.intensity } }
-        println("     %-28s %-24s %8.3f  %d hits".format(name.take(28), "hits lost under the bed", lost.toDouble() / track.events.size.coerceAtLeast(1), lost))
-
-        val srt = File(file.parentFile, "$name.srt")
-        if (srt.isFile) {
-            val lines = dialogue(srt.readText())
+        m["hits lost under the bed"] = track.events.count { e -> (0 until e.lengthMs step HapticTrack.BED_FRAME_MS).all { track.bedAt(e.timeMs + it) >= e.intensity } }.toDouble()
+        val lines = dialogue(cues)
+        if (lines.isNotEmpty()) {
             val minutes = lines.sumOf { it.last - it.first } / 60_000.0
-            val fp = track.events.count { e -> lines.any { e.timeMs in it } }
-            var bed = 0
-            var all = 0
-            for (r in lines) for (t in r step HapticTrack.BED_FRAME_MS) { all++; if (track.bedAt(t) > 0f) bed++ }
-            check("dialogue FP/min", fp / minutes, fp / minutes <= HapticHarness.MAX_QUIET_FP_PER_MIN, "<= ${HapticHarness.MAX_QUIET_FP_PER_MIN}")
-            println("     %-28s %-24s %8.3f  %.1f min of dialogue".format(name.take(28), "dialogue bed share", bed.toDouble() / all, minutes))
+            m["dialogue FP/min"] = track.events.count { e -> lines.any { e.timeMs in it } } / minutes
+            m["dialogue bed share"] = bedShare(track, lines)
         }
-        if (lfe.isNotEmpty()) {
-            val bed = lfe.indices.map { w -> (0 until 100 step HapticTrack.BED_FRAME_MS).map { track.bedAt(w * 100 + it).toDouble() }.average() }
-            val r = HapticHarness.pearson(lfe, bed)
-            println("     %-28s %-24s %8.3f  for reference: mixers split bass differently".format(name.take(28), "LFE-only correlation", r))
-            val s = HapticHarness.pearson(sub, bed)
-            check("subwoofer correlation", s, s >= HapticHarness.MIN_LFE_CORRELATION, ">= ${HapticHarness.MIN_LFE_CORRELATION}")
+        val hits = tags.filter { it.kind == Kind.SHARP || it.kind == Kind.HEAVY }
+        if (hits.isNotEmpty()) {
+            val near = hits.map { it.startMs - HapticDirector.SNAP_MS..it.startMs + HapticDirector.SNAP_MS }
+            m["tagged hits felt"] = near.count { w -> track.events.any { it.timeMs in w } }.toDouble() / hits.size
+            m["tagged hits, raw onset"] = near.count { w -> d.raw.events.any { it.timeMs in w } }.toDouble() / hits.size
         }
-        return fails
+        for (kind in listOf(Kind.MUSIC, Kind.VOICE)) {
+            val spans = tags.filter { it.kind == kind }.map { it.startMs until it.endMs }
+            if (spans.isEmpty()) continue
+            val min = spans.sumOf { it.last - it.first } / 60_000.0
+            m["$kind bed"] = spans.sumOf { r -> (r step HapticTrack.BED_FRAME_MS).sumOf { track.bedAt(it).toDouble() } } / spans.sumOf { r -> (r step HapticTrack.BED_FRAME_MS).count() }
+            // A hit its own tag names isn't a false one; dialogue lines have no tags, so stay strict.
+            m["$kind untagged hits/min"] = track.events.count { e -> e.sources and HapticTrack.SOURCE_SUBTITLE == 0 && spans.any { e.timeMs in it } } / min
+        }
+        if (d.lfe.isNotEmpty()) {
+            val bed = d.lfe.indices.map { w -> (0 until 100 step HapticTrack.BED_FRAME_MS).map { track.bedAt(w * 100 + it).toDouble() }.average() }
+            m["LFE-only correlation"] = HapticHarness.pearson(d.lfe, bed)
+            m["subwoofer, whole film"] = HapticHarness.pearson(d.sub, bed)
+            // A song's bass is felt lighter under music tags, which the subwoofer doesn't know: there
+            // the yardstick is whether loud LFE still plays, and the correlation is judged elsewhere.
+            val tagged = BooleanArray(d.sub.size)
+            for (t in tags) if (t.kind == Kind.MUSIC) for (w in t.startMs / 100..minOf(d.sub.size - 1, t.endMs / 100)) tagged[w] = true
+            val free = d.sub.indices.filter { !tagged[it] }
+            m["subwoofer correlation"] = HapticHarness.pearson(free.map { d.sub[it] }, free.map { bed[it] })
+            // The LFE tells them apart: mixers put explosions there, voices in the centre.
+            val lfeTop = d.lfe.sorted()[(d.lfe.size - 1) * 99 / 100]
+            for (kind in listOf(Kind.MUSIC, Kind.VOICE)) {
+                val under = tags.filter { it.kind == kind }.flatMap { t -> t.startMs / 100..minOf(d.lfe.size - 1, t.endMs / 100) }.distinct()
+                val effect = under.filter { d.lfe[it] >= lfeTop / LOUD_BASS }
+                val other = under.filter { d.lfe[it] < lfeTop / QUIET_LFE }
+                if (effect.isNotEmpty()) m["$kind, loud LFE felt"] = effect.count { bed[it] > 0 }.toDouble() / effect.size
+                if (other.isNotEmpty()) m["$kind, quiet LFE felt"] = other.count { bed[it] > 0 }.toDouble() / other.size
+            }
+        }
+        return m
+    }
+
+    private fun bedShare(track: HapticTrack, spans: List<IntRange>): Double {
+        var bed = 0
+        var all = 0
+        for (r in spans) for (t in r step HapticTrack.BED_FRAME_MS) { all++; if (track.bedAt(t) > 0f) bed++ }
+        return bed.toDouble() / all.coerceAtLeast(1)
     }
 
     private fun ffprobe(file: File): Pair<Int, Int> {
@@ -126,19 +212,36 @@ class HapticFilmTest {
     companion object {
         /** Share of the runtime with anything felt (Phase 4 exit, tunable). */
         const val MAX_ACTIVE = 0.15
+        /** Within 6 dB of the film's loud level (99th percentile, RMS) is loud. */
+        private const val LOUD_BASS = 2.0
+        /** An LFE 40 dB under its loud level is silent. */
+        private const val QUIET_LFE = 100.0
+
+        /** Phase 4 targets the fused track must still meet: (min, max). */
+        private val TARGETS = mapOf(
+            "active share" to (0.0 to MAX_ACTIVE),
+            "dialogue FP/min" to (0.0 to HapticHarness.MAX_QUIET_FP_PER_MIN),
+            "subwoofer correlation" to (HapticHarness.MIN_LFE_CORRELATION to 1.0)
+        )
+        private val HIGHER = setOf("subwoofer correlation", "tagged hits felt", "MUSIC, loud LFE felt", "VOICE, loud LFE felt")
+        /** Shown, not scored: more hits and active time are the point of a rescued hit. */
+        private val INFO = setOf("active share", "hits", "hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
 
         private val TIME = Regex("""(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)""")
         private val TAG = Regex("""[\[(♪#*]""")
 
-        /** Time ranges of subtitle cues that are plain speech: no [sound], (effect) or ♪. */
-        fun dialogue(srt: String): List<IntRange> = srt.replace("\r", "").split(Regex("\n\n+")).mapNotNull { cue ->
+        /** An SRT file's cues, markup stripped. */
+        fun cues(srt: String): List<HapticMeaning.Cue> = srt.replace("\r", "").split(Regex("\n\n+")).mapNotNull { cue ->
             val lines = cue.trim().lines()
             val i = lines.indexOfFirst { TIME.containsMatchIn(it) }
             if (i < 0) return@mapNotNull null
             val text = lines.drop(i + 1).joinToString(" ").replace(Regex("<[^>]*>|\\{[^}]*\\}"), "").trim()
-            if (text.isEmpty() || TAG.containsMatchIn(text)) return@mapNotNull null
             val g = TIME.find(lines[i])!!.groupValues.drop(1).map { it.toInt() }
-            ((g[0] * 60 + g[1]) * 60 + g[2]) * 1000 + g[3] until ((g[4] * 60 + g[5]) * 60 + g[6]) * 1000 + g[7]
+            HapticMeaning.Cue(((g[0] * 60 + g[1]) * 60 + g[2]) * 1000 + g[3], ((g[4] * 60 + g[5]) * 60 + g[6]) * 1000 + g[7], text)
         }
+
+        /** Time ranges of subtitle cues that are plain speech: no [sound], (effect) or ♪. */
+        fun dialogue(cues: List<HapticMeaning.Cue>): List<IntRange> =
+            cues.filter { it.text.isNotEmpty() && !TAG.containsMatchIn(it.text) }.map { it.startMs until it.endMs }
     }
 }

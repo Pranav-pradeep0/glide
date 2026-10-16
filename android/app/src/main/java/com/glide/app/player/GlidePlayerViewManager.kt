@@ -7,6 +7,7 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
+import com.glide.app.haptic.HapticMeaning
 
 /**
  * Only the props that are actually implemented are declared. A prop that is absent here is
@@ -47,6 +48,14 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
 
     @ReactProp(name = "haptics", defaultBoolean = false)
     fun setHaptics(view: GlidePlayerView, enabled: Boolean) = view.setHaptics(enabled)
+
+    /** [{startMs, endMs, text}] of the SDH subtitle's tagged cues; empty or null for none. */
+    @ReactProp(name = "hapticCues")
+    fun setHapticCues(view: GlidePlayerView, cues: ReadableArray?) = view.setHapticCues(
+        (0 until (cues?.size() ?: 0)).mapNotNull { i ->
+            cues!!.getMap(i)?.let { HapticMeaning.Cue(it.getInt("startMs"), it.getInt("endMs"), it.getString("text") ?: "") }
+        }
+    )
 
     @ReactProp(name = "muted", defaultBoolean = false)
     fun setMuted(view: GlidePlayerView, muted: Boolean) = view.setMuted(muted)

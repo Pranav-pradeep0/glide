@@ -35,7 +35,7 @@ class HapticTrack(
         val sharpness: Float,
         val lengthMs: Int,
         val decayMs: Int,
-        /** [SOURCE_AUDIO] and/or [SOURCE_SUBTITLE]. */
+        /** [SOURCE_AUDIO] and/or [SOURCE_SUBTITLE], plus [LIGHT] in a raw track. */
         val sources: Int
     )
 
@@ -82,6 +82,12 @@ class HapticTrack(
         const val BED_FRAME_MS = 10
         const val SOURCE_AUDIO = 1
         const val SOURCE_SUBTITLE = 2
+
+        /**
+         * In [Event.sources] of a raw track: a sudden jump with no weight, which the Director plays
+         * only where a subtitle names a sound there ("[gunshot]", "[knock on door]").
+         */
+        const val LIGHT = 4
         private const val MAGIC = 0x47485431 // "GHT1"
         private const val MAX_FRAMES = 24 * 3600 * 1000 / BED_FRAME_MS // a day of bed; guards corrupt counts
 

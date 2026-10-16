@@ -83,7 +83,7 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
         Log.w(TAG, "listen done analysed=${listener.analysedMs} took=${SystemClock.elapsedRealtime() - t0} " +
             "events=${track.events.size} cached=$complete error=${error?.message?.replace(' ', '_')} wall=${System.currentTimeMillis()}")
         // Hit times for the script to score against a fixture's truth.
-        track.events.chunked(200).forEach { c -> Log.w(TAG, "listen events " + c.joinToString(",") { "${it.timeMs}" }) }
+        track.events.filter { it.sources and HapticTrack.LIGHT == 0 }.chunked(200).forEach { c -> Log.w(TAG, "listen events " + c.joinToString(",") { "${it.timeMs}" }) }
     }
 
     private fun durationMs(): Long {

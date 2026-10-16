@@ -190,7 +190,8 @@ class HapticListener {
         riseAt = -1
         quietUntil = at + REFRACTORY
 
-        // A hit has weight, or is far above a scene we have heard. Dialogue and these mixes'
+        // A hit has weight, or is far above a scene we have heard: the rest are kept as light, for a
+        // subtitle to confirm. Dialogue and these mixes'
         // music have almost nothing below 100 Hz; impacts, explosions and sub hits do.
         var low = 0.0
         var all = 0.0
@@ -200,7 +201,7 @@ class HapticListener {
         }
         val weighty = low >= WEIGHT_SHARE * all
         val standsOut = j >= CONTEXT && riseLoud >= ALONE * riseCtx
-        if (!weighty && !standsOut) return
+        val light = !weighty && !standsOut
 
         var es = 0.0
         var ds = 0.0
@@ -215,9 +216,9 @@ class HapticListener {
             timeMs = startMs + ((at.toLong() * block * 1000) / rate).toInt(),
             intensity = ((loudness + 40) / 40).toFloat().coerceIn(0f, 1f),
             sharpness = sharpness,
-            lengthMs = (80 - 50 * sharpness).roundToInt(),
-            decayMs = (150 * (1 - sharpness)).roundToInt(),
-            sources = HapticTrack.SOURCE_AUDIO
+            lengthMs = lengthMs(sharpness),
+            decayMs = decayMs(sharpness),
+            sources = HapticTrack.SOURCE_AUDIO or if (light) HapticTrack.LIGHT else 0
         )
     }
 
@@ -263,7 +264,11 @@ class HapticListener {
 
     companion object {
         /** Bump when the output changes: cached tracks are rebuilt. */
-        const val VERSION = 2
+        const val VERSION = 3
+
+        /** A hit's pulse and tail from its sharpness: bright and short, dull and long (decision L5). */
+        fun lengthMs(sharpness: Float) = (80 - 50 * sharpness).roundToInt()
+        fun decayMs(sharpness: Float) = (150 * (1 - sharpness)).roundToInt()
 
         const val BED_HZ = 100.0
         private const val BED_FLOOR_DB = -45.0

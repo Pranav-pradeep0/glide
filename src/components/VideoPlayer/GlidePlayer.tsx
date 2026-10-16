@@ -29,6 +29,9 @@ interface NativeProps {
     [key: string]: any;
 }
 
+/** A subtitle cue for haptics, in milliseconds. */
+export type HapticCue = { startMs: number; endMs: number; text: string };
+
 const RCTGlidePlayer = requireNativeComponent<NativeProps>(
     NATIVE_NAME,
 ) as unknown as React.ComponentType<NativeProps>;
@@ -73,6 +76,8 @@ export interface GlidePlayerProps extends ViewProps {
     audioDelay?: number;
     /** Play the cached haptic track for this video in step with it. */
     haptics?: boolean;
+    /** The SDH subtitle's tagged cues ([explosion], ♪): the Director reads them as sound labels. */
+    hapticCues?: HapticCue[];
     videoEnhancement?: boolean;
     /** 0..1.5, 1 = the tuned look. Live; only the toggle re-opens the media. */
     videoEnhancementStrength?: number;

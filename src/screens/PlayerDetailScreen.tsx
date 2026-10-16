@@ -201,7 +201,7 @@ export default function PlayerDetailScreen() {
         runSDHDetection(imdbIdRef.current);
     }, [runSDHDetection]));
 
-    function navigateToPlayer(cues?: SubtitleCue[] | null) {
+    function navigateToPlayer(cues: SubtitleCue[] | null, withHaptics = true) {
         networkAbortRef.current?.abort();
         navigation.navigate('VideoPlayer', {
             videoPath,
@@ -211,7 +211,7 @@ export default function PlayerDetailScreen() {
             bucketId,
             videoSort,
             imdbId: movieDetails?.imdbID,
-            playMode: cues && cues.length > 0 ? 'with-haptics' : 'normal',
+            playMode: withHaptics ? 'with-haptics' : 'normal',
             hapticCues: cues || undefined,
             apiSubtitles: apiSubtitles.length > 0 ? apiSubtitles : undefined,
         });
@@ -357,7 +357,7 @@ export default function PlayerDetailScreen() {
 
     const actions = (
         <View style={styles.actions}>
-            <Button label="Play" icon="play" variant="primary" size="lg" onPress={() => navigateToPlayer(null)} />
+            <Button label="Play" icon="play" variant="primary" size="lg" onPress={() => navigateToPlayer(null, false)} />
             {hapticsEnabled && (
                 <>
                     <Button label="Play with haptics" size="lg" loading={loading} onPress={handlePlayWithHaptics} />
@@ -534,6 +534,9 @@ export default function PlayerDetailScreen() {
                             No subtitles found nearby or online
                         </Text>
                     )}
+
+                    {/* Without sound descriptions, haptics follow the sound alone. */}
+                    <Button label="Play without them" size="lg" onPress={() => navigateToPlayer(null)} />
                 </ScrollView>
             </Sheet>
         </View>

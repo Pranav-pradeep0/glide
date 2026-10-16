@@ -37,7 +37,10 @@ class HapticListenerTest {
     fun onsetsOnTheClips() {
         val dir = HapticHarness.fixturesDir()
         assumeTrue("no clips in ${dir.absolutePath}: run node scripts/haptics-fixtures.js", dir.isDirectory)
-        val report = HapticHarness.run(HapticHarness.load(dir)) { listen(it).track(fp) }
+        // Light onsets are candidates for a subtitle to confirm, not hits.
+        val report = HapticHarness.run(HapticHarness.load(dir)) { c ->
+            listen(c).track(fp).let { HapticTrack(it.analyzerVersion, it.fingerprint, it.bedIntensity, it.bedSharpness, it.events.filter { e -> e.sources and HapticTrack.LIGHT == 0 }) }
+        }
         println(report)
         val onsets = report.checks.filter { "onset" in it.name }
         assertTrue("no onset checks ran", onsets.isNotEmpty())
