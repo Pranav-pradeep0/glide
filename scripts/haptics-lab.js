@@ -9,6 +9,7 @@
  *   node scripts/haptics-lab.js tap <csv>                  L4
  *   node scripts/haptics-lab.js motion <csv>               L3: did the motor move during playback
  *   node scripts/haptics-lab.js perform [mix1]             Phase 2 exit: the Performer in the real player (Lab open)
+ *   node scripts/haptics-lab.js listen [mix1|/phone/film] [s]  Phase 3 exit: the Listener on the phone (Lab open)
  *
  * CSV rows from HapticsLabModule.kt: `elapsedRealtimeNanos,kind,values...`.
  */
@@ -320,6 +321,20 @@ async function openLab() {
     throw new Error('Haptics Lab did not open');
 }
 
+/** Types [file] into the open Lab's film path field. */
+async function enterPath(file) {
+    key(224); // wake the screen: taps on a sleeping screen go nowhere
+    await sleep(500);
+    const field = nodeCenter('Film path') ?? await openLab();
+    adb('shell', 'input', 'tap', String(field[0]), String(field[1]));
+    // ctrl+a isn't reliable here (it once left the old path in place): jump to the end, delete back
+    adb('shell', 'input', 'keyevent', '123', ...Array(300).fill('67'));
+    adb('shell', 'input', 'text', file);
+    await sleep(300);
+    if (/mInputShown=true/.test(adb('shell', 'dumpsys', 'input_method'))) key(4); // close the keyboard, never the Lab
+    await sleep(500);
+}
+
 function tapNode(label) {
     const at = nodeCenter(label);
     if (!at) throw new Error(`"${label}" not on screen. Open the Haptics Lab (Settings > Version x7) and run again.`);
@@ -354,16 +369,7 @@ async function perform(name = 'mix1') {
     adb('shell', 'mkdir', '-p', remote);
     for (const ext of ['.mkv', '.truth.tsv']) adb('push', path.join(fixtures, name + ext), `${remote}/${name}${ext}`);
 
-    key(224); // wake the screen: taps on a sleeping screen go nowhere
-    await sleep(500);
-    const field = nodeCenter('Film path') ?? await openLab();
-    adb('shell', 'input', 'tap', String(field[0]), String(field[1]));
-    adb('shell', 'input', 'keycombination', '113', '29'); // ctrl+a
-    adb('shell', 'input', 'keyevent', '67');
-    adb('shell', 'input', 'text', `${remote}/${name}.mkv`);
-    await sleep(300);
-    if (/mInputShown=true/.test(adb('shell', 'dumpsys', 'input_method'))) key(4); // close the keyboard, never the Lab
-    await sleep(500);
+    await enterPath(`${remote}/${name}.mkv`);
     adb('logcat', '-c');
 
     const rows = new Map();
@@ -481,6 +487,118 @@ async function perform(name = 'mix1') {
     process.exitCode = checks.every(([, ok]) => ok) ? 0 : 1;
 }
 
+/** `GlideHaptics` and `GlidePlayer` lines as {kind, sub, ...key=value fields}. */
+function listenLog() {
+    return adb('logcat', '-d', '-v', 'raw', '-s', 'GlideHaptics:W', 'GlidePlayer:W').split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+        const [kind, sub, ...rest] = line.split(' ');
+        const f = { kind, sub, line };
+        for (const w of [sub, ...rest]) {
+            const i = w.indexOf('=');
+            if (i > 0) f[w.slice(0, i)] = isNaN(+w.slice(i + 1)) ? w.slice(i + 1) : +w.slice(i + 1);
+        }
+        return f;
+    });
+}
+
+/** Priority (nice) of the decoder and analysis threads, as `ps` shows them. */
+function threadNice() {
+    const pid = adb('shell', 'pidof', PKG).trim();
+    if (!pid) return '';
+    return adb('shell', 'ps', '-T', '-p', pid, '-o', 'NI,CMD').split('\n')
+        .filter(l => /haptics-listen|SimpleDecoder|ExoPlayer:Simpl|CCodec|c2\./.test(l)).map(l => l.trim().replace(/\s+/, ' nice=')).join('; ');
+}
+
+/**
+ * Phase 3 exit, on the phone: plays a file with the Listener's haptics (Lab > Listener test), twice:
+ * first while it is analysed, then from the cache. A fixture name is pushed under a fresh mtime so it
+ * is analysed again, and its hits are scored against the truth; a path on the phone is a film.
+ * Checks that analysis stays ahead of the playhead, and reports decoder priority and dropped frames
+ * with and without analysis running. The Lab must be open on screen.
+ */
+async function listen(target = 'mix1', seconds = 40) {
+    let file = target;
+    let truth = null;
+    if (!target.startsWith('/')) {
+        const fixtures = path.join(__dirname, '..', '.haptics-fixtures');
+        const remote = `/sdcard/Android/data/${PKG}/files/haptics-lab`;
+        adb('shell', 'mkdir', '-p', remote);
+        file = `${remote}/listen-${target}.mkv`;
+        adb('push', path.join(fixtures, `${target}.mkv`), file);
+        adb('shell', 'touch', file); // a new fingerprint: analysed, not read from the cache
+        truth = fs.readFileSync(path.join(fixtures, `${target}.truth.tsv`), 'utf8').split('\n')
+            .map(l => l.trim().split(/\s+/)).filter(w => w[0] === 'onset').map(w => +w[1]);
+    }
+    await enterPath(file);
+
+    const passes = [];
+    for (const pass of ['analysing', 'cached']) {
+        adb('logcat', '-c');
+        for (let i = 0; i < 10 && !nodeCenter('Listener test'); i++) await sleep(500); // the keyboard may still cover it
+        tapNode('Listener test');
+        let threads = '';
+        for (const until = Date.now() + seconds * 1000; Date.now() < until;) {
+            await sleep(2000);
+            const log = listenLog();
+            if (!threads && log.some(l => l.sub === 'progress')) threads = threadNice(); // while analysing
+        }
+        key(4); // leave the player: it logs its dropped frames
+        await sleep(2000);
+        passes.push({ pass, threads, log: listenLog() });
+    }
+
+    const checks = [];
+    for (const { pass, threads, log } of passes) {
+        const done = log.find(l => l.sub === 'done');
+        const cached = log.find(l => l.sub === 'cached');
+        const progress = log.filter(l => l.sub === 'progress');
+        const covered = wall => (cached || (done && wall >= done.wall)) ? Infinity
+            : Math.max(0, ...progress.filter(p => p.wall <= wall).map(p => p.analysed));
+        const heads = log.filter(l => (l.kind === 'anchor' || (l.kind === 'sync' && l.playing === 'true')) && l.wall);
+        // After each start or jump: how long until analysis passes the playhead. Once past, it
+        // must stay past while playing (falling behind = an anchor not covered after one that was).
+        const waits = [];
+        let fellBehind = 0, jumpWall = null, ahead = false;
+        for (const h of heads) {
+            if (h.kind === 'sync') { jumpWall = h.wall; ahead = false; }
+            const ok = covered(h.wall) > h.pos;
+            if (ok && !ahead && jumpWall !== null) { waits.push(`${h.wall - jumpWall} ms at ${Math.round(h.pos / 1000)} s`); jumpWall = null; }
+            if (!ok && ahead && h.kind === 'anchor') fellBehind++;
+            ahead = ok;
+        }
+        const dropped = log.find(l => l.sub?.startsWith('dropped'));
+        console.log(`\n${pass}: ${cached ? `cached track, ${cached.events} hits` : done
+            ? `analysed ${(done.analysed / 60000).toFixed(1)} min in ${(done.took / 1000).toFixed(1)} s (${Math.round(done.analysed / done.took)}x realtime), ${done.events} hits${done.error && done.error !== 'null' ? `, error ${done.error}` : ''}`
+            : `not finished, analysed ${(covered(Date.now() * 2) / 1000).toFixed(0)} s`}`);
+        console.log(`   analysis passed the playhead, after each start or jump: ${waits.join(', ') || 'never'}`);
+        if (threads) console.log(`   threads: ${threads}`);
+        if (dropped) console.log(`   ${dropped.line}`);
+        checks.push([`${pass}: analysis stays ahead of the playhead (${heads.length} samples)`, waits.length > 0 && fellBehind === 0]);
+
+        if (truth && done) {
+            const events = log.filter(l => l.sub === 'events').flatMap(l => l.line.split(' ').pop().split(',').map(Number));
+            const used = new Set();
+            const errors = [];
+            for (const t of truth) {
+                const i = events.map((e, k) => k).filter(k => !used.has(k) && Math.abs(events[k] - t) <= 50)
+                    .sort((a, b) => Math.abs(events[a] - t) - Math.abs(events[b] - t))[0];
+                if (i !== undefined) { used.add(i); errors.push(Math.abs(events[i] - t)); }
+            }
+            const recall = errors.length / truth.length, precision = events.length ? errors.length / events.length : 0;
+            const f1 = errors.length ? 2 * precision * recall / (precision + recall) : 0;
+            const p50 = errors.sort((a, b) => a - b)[Math.max(0, Math.ceil(errors.length / 2) - 1)];
+            checks.push([`hit F1 on the phone ${f1.toFixed(3)} >= 0.9`, f1 >= 0.9]);
+            checks.push([`hit timing p50 on the phone ${p50} ms <= 10`, p50 <= 10]);
+        }
+    }
+    console.log('');
+    for (const [what, ok] of checks) console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`);
+    const out = path.join(LOCAL, `listen-${path.basename(file)}-${Date.now()}.json`);
+    fs.mkdirSync(LOCAL, { recursive: true });
+    fs.writeFileSync(out, JSON.stringify(passes, null, 1));
+    console.log(out);
+    process.exitCode = checks.every(([, ok]) => ok) ? 0 : 1;
+}
+
 // ---------------------------------------------------------------------------- pull
 
 function pull() {
@@ -512,6 +630,7 @@ const commands = {
     tap: () => tap(args[0]),
     motion: () => motion(args[0]),
     perform: () => perform(args[0]),
+    listen: () => listen(args[0], +args[1] || undefined),
 };
 if (!commands[cmd]) {
     console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);

@@ -19,6 +19,7 @@ interface HapticsLab {
 
 const lab: HapticsLab | undefined = hasNativeApi(10) ? NativeModules.HapticsLab : undefined;
 const performerTest = hasNativeApi(11);
+const listenerTest = hasNativeApi(12);
 
 /**
  * Haptics Lab: the Phase 0 measurements of docs/haptics-engine-plan.md. Each test records on
@@ -59,6 +60,10 @@ export default function HapticsLabScreen() {
             useVideoHistoryStore.getState().clearVideoHistory(path); // start at 0, not where the last run stopped
             navigation.navigate('VideoPlayer', { videoPath: path, videoName: path.split('/').pop() ?? path, playMode: 'with-haptics' });
             return result;
+        }] as [string, string, () => Promise<unknown>]] : []),
+        ...(listenerTest ? [['Listener test', 'Plays the path below with haptics the Listener makes from its audio', async () => {
+            useVideoHistoryStore.getState().clearVideoHistory(path);
+            navigation.navigate('VideoPlayer', { videoPath: path, videoName: path.split('/').pop() ?? path, playMode: 'with-haptics' });
         }] as [string, string, () => Promise<unknown>]] : []),
     ] : [];
 

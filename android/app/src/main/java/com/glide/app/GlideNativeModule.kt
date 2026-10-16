@@ -38,6 +38,7 @@ import com.facebook.react.uimanager.ViewManager
  *     behind Settings > Version.
  * 11: GlidePlayer prop `haptics` (HapticPerformer plays the cached track); HapticsLab.importTruth;
  *     HapticModule drops vibrateWaveform, cancel and hasAmplitudeControl.
+ * 12: GlidePlayer prop `haptics` analyses the film's audio itself (HapticListener) and caches the track.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -52,7 +53,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 11
+        const val API_LEVEL = 12
     }
 
     class Package : ReactPackage {

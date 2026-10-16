@@ -250,3 +250,44 @@ resumes and swipe-seeks, then compares the Performer's log with the system vibra
 
 **Until Phase 3**, real films have no track, so "Play with haptics" is silent on them. The strength
 slider in Settings changes nothing until the Phase 6 presets.
+
+## Phase 3 — Listener (2026-10-16)
+
+**Exit test.** JVM: `HapticListenerTest` scores the Listener against the scripted fixtures' truth.
+Phone: `node scripts/haptics-lab.js listen <mix1|path> <seconds>` with the Lab open (Lab › Listener
+test). It plays the file twice, first while it is analysed, then from the cache, and reads the log.
+
+| Check | Target | Measured |
+|---|---|---|
+| Hit F1, clicks / subbass (JVM) | ≥ 0.9 | **0.964 / 1.000** |
+| Hit F1, mix1 / mix2 / mix3 (JVM) | ≥ 0.9 | **0.947 / 0.970 / 0.978** |
+| Hit timing p50 (JVM) | ≤ 10 ms | 0–2 ms |
+| False hits per minute, speech / music (JVM) | 0 | 0 / 0 |
+| Hits on the phone match the PC (mix1) | same | F1 0.947, p50 1 ms |
+| Analysis passes the playhead after play starts | ≤ 1 s | 0.57–0.71 s |
+| Analysis stays ahead of the playhead | always | mix1, Us, Blast: all samples |
+| Dropped video frames while analysing | 0 | 0 (mix1, Us, Blast) |
+| Whole film analysed and cached | yes | Us 116.5 min in 126 s; Blast 141.6 min in 31 s |
+| Second play uses the cache | yes | mix1, Us, Blast |
+
+Still failing: haptics during speech from the bed. That is Phase 4.
+
+**Findings.**
+- **Weight rule.** A sudden loud jump only counts as a hit if it has weight: ≥ 15% of the attack's
+  energy below 100 Hz, or it stands 25 dB over a scene heard for ≥ 1.5 s. This keeps sharp
+  speech and music sounds out: 0 false hits per minute on both.
+- **Priority is inherited.** The analysis thread runs at `Thread.MIN_PRIORITY` (nice 19). FFmpeg's
+  decode thread is started from it and inherits that, so Dolby audio (Blast, 275x realtime) decodes
+  at the lowest priority with no extra code.
+- **AAC decodes outside the app.** Android decodes AAC in its own codec process (Us, 55–70x
+  realtime), so our priority doesn't reach it. Playback still dropped no frames.
+- **Leaving the player no longer cancels the analysis.** It keeps going and caches. Reopening the
+  same file picks up the running analysis (Us: play 2 joined it and finished it). Opening another
+  file cancels it. One analysis runs app-wide.
+- **Catching up after a jump.** After a resume or a seek inside the analysed part, the wait is
+  0 ms. A jump past it waits until the decode gets there (Us: 14 s for a jump to 21:22 early in the
+  analysis). Hits start there; nothing goes wrong before.
+- An extractor error in the last 1% (Blast) counts as done, and the track is cached.
+  `analyzerVersion 0` marks tracks imported from Lab truth; the Listener never overwrites them.
+- Hit rate differs a lot by film: Us 5.7 per minute, Blast 1.5 per minute. To check by feel in the
+  Phase 4 A/B.

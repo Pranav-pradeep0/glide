@@ -10,7 +10,6 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
-import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.security.MessageDigest
@@ -43,6 +42,9 @@ class HapticPerformer(private val context: Context) {
     private var rate = 1f
     private var pending: HapticRenderer.Call? = null
     private var buzzing = false
+    private var playedTo = -1 // media end of the last call, until a stop
+    private var analysis: HapticAnalysis? = null
+    private var opened = 0 // which open() a track belongs to
 
     /**
      * After a start, resume or jump the position creeps for ~0.5 s before it runs true (measured:
@@ -52,16 +54,21 @@ class HapticPerformer(private val context: Context) {
     private var settled = false
     private var agreeing = 0
 
-    /** Loads the cached track for [uri], or plays nothing if there is none. */
+    /** Plays [uri]'s track as [HapticAnalysis] makes it: only what is analysed, nothing before. */
     fun open(uri: String) = handler.post {
         stop("open")
         cal = loadCalibration(context)
-        val file = cacheFile(context, fingerprint(context, uri))
-        track = runCatching { DataInputStream(file.inputStream().buffered()).use { HapticTrack.read(it) } }
-            .onFailure { if (file.exists()) Log.w(TAG, "unreadable track ${file.name}: ${it.message}") }
-            .getOrNull()
-        Log.w(TAG, "open track=${track != null} events=${track?.events?.size} latency=${cal.latencyMs} ${file.name}")
-        replan()
+        track = null
+        analysis?.detach()
+        val opening = ++opened
+        analysis = HapticAnalysis.start(context, uri) { t -> handler.post { if (opening == opened) update(t) } }
+        Log.w(TAG, "open latency=${cal.latencyMs}")
+    }
+
+    /** A longer track: carries on from the call playing, or from the playhead. */
+    private fun update(t: HapticTrack) {
+        track = t
+        if (pending == null) replan(playedTo.takeIf { it >= 0 })
     }
 
     /**
@@ -98,7 +105,13 @@ class HapticPerformer(private val context: Context) {
         }
     }
 
-    fun close() = handler.post { stop("close"); track = null }
+    fun close() = handler.post {
+        stop("close")
+        track = null
+        analysis?.detach()
+        analysis = null
+        opened++
+    }
 
     fun release() {
         close()
@@ -112,6 +125,7 @@ class HapticPerformer(private val context: Context) {
     private fun stop(why: String) {
         handler.removeCallbacksAndMessages(FIRE)
         pending = null
+        playedTo = -1
         if (buzzing) {
             vibrator.cancel()
             buzzing = false
@@ -140,6 +154,7 @@ class HapticPerformer(private val context: Context) {
         buzzing = true
         Log.w(TAG, "call late=${actual - target} wall=${System.currentTimeMillis()} rate=$rate $call")
         pending = null
+        playedTo = call.endMs
         replan(call.endMs)
     }
 

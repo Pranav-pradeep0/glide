@@ -861,6 +861,11 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         audioDelayProcessor = null
         haptics?.close()
         player?.let {
+            // The cost of background work to playback, for scripts/haptics-lab.js listen.
+            it.videoDecoderCounters?.let { c ->
+                c.ensureUpdated()
+                Log.w(TAG, "playback dropped=${c.droppedBufferCount} rendered=${c.renderedOutputBufferCount}")
+            }
             // Before release, never after: the session must not be left holding a released
             // player. That is the defect class the VLC adapter kept producing.
             GlidePlayerHolder.clear(context, it)
