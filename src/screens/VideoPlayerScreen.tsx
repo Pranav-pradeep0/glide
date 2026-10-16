@@ -76,7 +76,7 @@ import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 
 // Types
 import { SubtitleCue, VideoFile, VideoSort } from '@/types';
-import type { PlayerCarry } from '@/hooks/video-player';
+import type { PlayerCarry, PlayerProgressData } from '@/hooks/video-player';
 
 // ============================================================================
 // TYPES
@@ -538,6 +538,11 @@ export default function VideoPlayerScreen({ route }: Props) {
         handleResumeModalAction,
     } = resume;
 
+    // Where the end credits start, in seconds, once native has found them (a chapter or the
+    // frames). Up next shows from there, and stopping in the credits counts as watched.
+    const [creditsAt, setCreditsAt] = React.useState<number | null>(null);
+    const handleCredits = useCallback((e: { start: number }) => setCreditsAt(e.start / 1000), []);
+
     // ========================================================================
     // SAVING LOGIC (Defined after hooks to avoid circular dependencies)
     // ========================================================================
@@ -552,7 +557,9 @@ export default function VideoPlayerScreen({ route }: Props) {
             // Guard: If we have a resume position but the player is still at 0 (or near 0),
             // and we haven't played past it, assume the resume seek hasn't happened yet.
             // This prevents overwriting deep history with 0 on immediate exit.
-            const currentTime = player.currentTimeRef.current;
+            // In the credits is finished: no resume prompt, and Recents moves on.
+            const inCredits = creditsAt !== null && player.currentTimeRef.current >= creditsAt;
+            const currentTime = inCredits ? player.state.duration : player.currentTimeRef.current;
             if (resumePosition && resumePosition > 10 && currentTime < 2) {
                 if (__DEV__) {console.log('[VideoPlayer] Skipping save: Player at start but resume expected at', resumePosition);}
                 return;
@@ -590,6 +597,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         settingsHook.settings.subtitleDelay,
         brightnessMode,
         resumePosition,
+        creditsAt,
     ]);
 
     // Keep ref updated for usePlayerCore
@@ -1008,16 +1016,45 @@ export default function VideoPlayerScreen({ route }: Props) {
         isNetworkStream,
     ]);
 
-    // "Up next" once a video ends: with autoplay, a countdown that plays it; without, just the
-    // name and a button. It belongs to that end only: anything that resumes this video
-    // (Play, a seek) drops it, so a later stop can't bring an old countdown back.
-    const [upNext, setUpNext] = React.useState<{ endsAt: number | null } | null>(null);
-    const upNextShown = upNext !== null && player.state.playerStopped && hasNext;
+    // "Up next" once the credits start, or the video ends: with autoplay, a countdown that plays
+    // it; without, just the name and a button. It belongs to that end only: anything that takes
+    // this video back out of it (Play after the end, a seek before the credits) drops it, so a
+    // later end can't bring an old countdown back. ✕ in the credits watches them; the end
+    // offers it again.
+    const [upNext, setUpNext] = React.useState<{ autoplay: boolean } | null>(null);
+    const [inCredits, setInCredits] = React.useState(false);
+    const atEnd = player.state.playerStopped || inCredits;
+    const upNextShown = upNext !== null && atEnd && hasNext;
+    // "End of video" sleep stops at the end, and Repeat plays this one again (native loops, so
+    // only the credits could get here): neither hands over to the next.
+    const offerUpNext = hasNext && settingsHook.settings.sleepTimer !== -1 && !settingsHook.settings.repeat;
+    const upNextAutoplay = Boolean(autoPlayNext || playAll);
     useEffect(() => {
-        if (!player.state.playerStopped) { setUpNext(null); }
-    }, [player.state.playerStopped]);
-    // Unmounting (Back, PiP closed) clears this, so leaving never plays the next video.
-    const upNextEndsAt = upNextShown ? upNext.endsAt : null;
+        if (!atEnd) { setUpNext(null); }
+    }, [atEnd]);
+    useEffect(() => {
+        if (inCredits && offerUpNext) { setUpNext({ autoplay: upNextAutoplay }); }
+        // Only on reaching the credits, not when a setting changes in them.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inCredits]);
+    // Stable: the video view keeps its first onProgress (it doesn't re-render for handlers).
+    const creditsAtRef = useRef(creditsAt);
+    creditsAtRef.current = creditsAt;
+    const handlePlayerProgress = player.handleProgress;
+    const handleProgress = useCallback((data: PlayerProgressData) => {
+        handlePlayerProgress(data);
+        const at = creditsAtRef.current;
+        setInCredits(at !== null && (data.currentTime ?? 0) / 1000 >= at);
+    }, [handlePlayerProgress]);
+
+    // Paused in the credits holds the countdown; Play starts it over. Unmounting (Back, PiP
+    // closed) clears it, so leaving never plays the next video.
+    const held = inCredits && !player.state.playerStopped && player.state.paused;
+    const countdown = upNextShown && upNext.autoplay && !held;
+    const [upNextEndsAt, setUpNextEndsAt] = React.useState<number | null>(null);
+    useEffect(() => {
+        setUpNextEndsAt(countdown ? Date.now() + UP_NEXT_COUNTDOWN_MS : null);
+    }, [countdown]);
     useEffect(() => {
         if (upNextEndsAt === null) { return; }
         const timer = setTimeout(handleNext, upNextEndsAt - Date.now());
@@ -1027,9 +1064,10 @@ export default function VideoPlayerScreen({ route }: Props) {
     const handleVideoEnd = useCallback(() => {
         player.handleEnd();
         // "End of video" sleep has already left the player.
-        if (!hasNext || settingsHook.settings.sleepTimer === -1) { return; }
-        setUpNext({ endsAt: autoPlayNext || playAll ? Date.now() + UP_NEXT_COUNTDOWN_MS : null });
-    }, [player, autoPlayNext, playAll, hasNext, settingsHook.settings.sleepTimer]);
+        if (!offerUpNext) { return; }
+        // Already counting down from the credits: the end doesn't restart it.
+        setUpNext((current) => current ?? { autoplay: upNextAutoplay });
+    }, [player, offerUpNext, upNextAutoplay]);
 
     // ========================================================================
     // LIFECYCLE EFFECTS
@@ -1194,7 +1232,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         haptics={playMode === 'with-haptics' && hapticsEnabled}
                         initialResumeSeconds={resumePosition ?? undefined}
                         onLoad={player.handleLoad}
-                        onProgress={player.handleProgress}
+                        onProgress={handleProgress}
                         onEnd={handleVideoEnd}
                         onError={handlePlayerError}
                         onBuffering={player.handleBuffering}
@@ -1203,6 +1241,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         onStopped={player.handleStopped}
                         onSeek={player.handleSeek}
                         onCues={handleCues}
+                        onCredits={handleCredits}
                     />
                 </View>
             </GestureDetector>
@@ -1339,7 +1378,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                 <UpNextCard
                     name={albumVideos[currentVideoIndex + 1].name}
                     path={albumVideos[currentVideoIndex + 1].path}
-                    endsAt={upNext.endsAt}
+                    endsAt={upNextEndsAt}
+                    inCredits={!player.state.playerStopped}
                     onPlay={ui.state.locked ? undefined : handleNext}
                     onDismiss={ui.state.locked ? undefined : () => setUpNext(null)}
                     bottom={effectiveInsets.bottom + (controlsShown ? 96 : 0)}

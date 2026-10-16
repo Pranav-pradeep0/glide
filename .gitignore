@@ -106,3 +106,4 @@ stallion/secret-keys/
 
 # generated haptics test clips (node scripts/haptics-fixtures.js)
 .haptics-fixtures/
+.credits-fixtures/

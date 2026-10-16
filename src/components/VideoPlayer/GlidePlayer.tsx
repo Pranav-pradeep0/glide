@@ -89,6 +89,8 @@ export interface GlidePlayerProps extends ViewProps {
     onSeek?: (event: any) => void;
     onLoadStart?: (event: any) => void;
     onCues?: (event: any) => void;
+    /** Where the end credits start, { start } in ms: from a chapter or the frames. */
+    onCredits?: (event: { start: number }) => void;
 }
 
 const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) => {
@@ -132,7 +134,7 @@ const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) =>
 
     const {
         onLoad, onProgress, onEnd, onError, onBuffering, onPlaying, onPaused, onStopped,
-        onSeek, onLoadStart, onCues, source: _source, ...forwarded
+        onSeek, onLoadStart, onCues, onCredits, source: _source, ...forwarded
     } = props;
 
     return (
@@ -153,6 +155,7 @@ const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) =>
             onVideoStopped={unwrap(onStopped)}
             onVideoSeek={unwrap(onSeek)}
             onCues={unwrap(onCues)}
+            onCredits={unwrap(onCredits)}
         />
     );
 });

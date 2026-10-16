@@ -76,6 +76,7 @@ interface AnimatedVideoViewProps {
     onStopped: () => void;
     onSeek: (data: PlayerSeekEvent) => void;
     onCues?: (event: any) => void;
+    onCredits?: (event: { start: number }) => void;
 }
 
 // ============================================================================
@@ -115,6 +116,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
             onStopped,
             onSeek,
             onCues,
+            onCredits,
         } = props;
 
         /**
@@ -175,6 +177,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
                     onStopped={onStopped}
                     onSeek={onSeek}
                     onCues={onCues}
+                    onCredits={onCredits}
                     playInBackground={playInBackground}
                     pipEnabled={pipEnabled}
                 />

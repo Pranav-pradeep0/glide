@@ -36,6 +36,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.extractor.metadata.Chapter
 import androidx.media3.ui.SubtitleView
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReadableArray
@@ -112,6 +113,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var audioDelayMs = 0
     private var audioDelayProcessor: AudioDelayProcessor? = null
     private var haptics: HapticPerformer? = null
+    /** Container chapters (title, start ms): a credits one says where Up next goes. */
+    private var chapters: List<Pair<String, Long>> = emptyList()
+    private var credits: CreditsAnalysis? = null
 
     /**
      * Re-anchors the haptics clock while playing; a seek or pause re-anchors at once. The
@@ -860,6 +864,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         loudnessEnhancer = null
         audioDelayProcessor = null
         haptics?.close()
+        credits?.cancel()
+        credits = null
         player?.let {
             // The cost of background work to playback, for scripts/haptics-lab.js listen.
             it.videoDecoderCounters?.let { c ->
@@ -1002,6 +1008,13 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                     textTracks.add(group.mediaTrackGroup to i)
                 }
             }
+
+            chapters = tracks.groups.flatMap { g ->
+                (0 until g.length).flatMap { i ->
+                    val m = g.getTrackFormat(i).metadata
+                    (0 until (m?.length() ?: 0)).mapNotNull { k -> m?.get(k) as? Chapter }
+                }
+            }.map { (it.title?.value ?: "") to it.startTimeMs }.distinct()
 
             tracksKnown = true
             pendingAudioTrack?.let { setAudioTrack(it) }
@@ -1181,6 +1194,25 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
         Log.d(TAG, "load duration=${duration}ms audioTracks=${audioTracks.size}")
         emit(EVENT_LOAD, info)
+        findCredits(duration)
+    }
+
+    private fun findCredits(durationMs: Long) {
+        val uri = sourceUri ?: return
+        CreditsDetector.fromChapters(chapters, durationMs)?.let {
+            Log.w(TAG, "credits chapter start=$it")
+            emitCredits(it)
+            return
+        }
+        // Frames over the network would download the film's end.
+        if (!isLocalUri(uri)) return
+        credits = CreditsAnalysis.start(context, uri, durationMs) { start ->
+            progressHandler.post { if (sourceUri == uri && player != null) emitCredits(start) }
+        }
+    }
+
+    private fun emitCredits(startMs: Long) {
+        emit(EVENT_CREDITS, Arguments.createMap().apply { putDouble("start", startMs.toDouble()) })
     }
 
     /**
@@ -1274,11 +1306,12 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         const val EVENT_BUFFERING = "onVideoBuffering"
         const val EVENT_ERROR = "onVideoError"
         const val EVENT_CUES = "onCues"
+        const val EVENT_CREDITS = "onCredits"
 
         val EVENTS = arrayOf(
             EVENT_LOAD_START, EVENT_LOAD, EVENT_PROGRESS, EVENT_SEEK, EVENT_END,
             EVENT_PLAYING, EVENT_PAUSED, EVENT_STOPPED, EVENT_BUFFERING, EVENT_ERROR,
-            EVENT_CUES
+            EVENT_CUES, EVENT_CREDITS
         )
     }
 }

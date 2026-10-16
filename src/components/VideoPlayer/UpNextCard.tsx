@@ -24,6 +24,8 @@ interface Props {
     path: string;
     /** When autoplay will start it; null = no countdown (autoplay off). */
     endsAt: number | null;
+    /** Shown in the credits, not at the end: ✕ means "keep watching them". */
+    inCredits?: boolean;
     /** Both absent while the screen is locked: the card informs, it can't be acted on. */
     onPlay?: () => void;
     onDismiss?: () => void;
@@ -33,10 +35,11 @@ interface Props {
 }
 
 /**
- * Shown once a video ends and the folder has another. The screen owns the timer that plays
- * it; the ring around Play drains with it on the UI thread, so nothing re-renders per second.
+ * Shown once a video's credits start (or it ends) and the folder has another. The screen owns
+ * the timer that plays it; the ring around Play drains with it on the UI thread, so nothing
+ * re-renders per second.
  */
-export function UpNextCard({ name, path, endsAt, onPlay, onDismiss, bottom, right }: Props) {
+export function UpNextCard({ name, path, endsAt, inCredits, onPlay, onDismiss, bottom, right }: Props) {
     const { thumbnail } = useThumbnail(path);
     const progress = useVideoHistoryStore((s) => {
         const entry = s.getVideoHistory(path);
@@ -104,7 +107,7 @@ export function UpNextCard({ name, path, endsAt, onPlay, onDismiss, bottom, righ
                 {detail ? <Text style={[type.caption, styles.detail]} numberOfLines={1}>{detail}</Text> : null}
             </View>
             {onDismiss && (
-                <IconButton icon="x" iconSize={18} onPress={onDismiss} accessibilityLabel={endsAt === null ? 'Close' : 'Cancel autoplay'} onPlayer style={styles.dismiss} />
+                <IconButton icon="x" iconSize={18} onPress={onDismiss} accessibilityLabel={inCredits ? 'Watch credits' : endsAt === null ? 'Close' : 'Cancel autoplay'} onPlayer style={styles.dismiss} />
             )}
         </Animated.View>
     );
