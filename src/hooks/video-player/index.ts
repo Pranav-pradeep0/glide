@@ -20,7 +20,7 @@ export { useZoomGesture } from './useZoomGesture';
 export { useTapGestures } from './useTapGestures';
 
 // Feature hooks
-export { usePlayerTracks } from './usePlayerTracks';
+export { usePlayerTracks, hasSoundTag } from './usePlayerTracks';
 export { usePlayerBookmarks } from './usePlayerBookmarks';
 export { usePlayerSettings } from './usePlayerSettings';
 export { useShakeControl, ShakeDetector } from './useShakeControl';

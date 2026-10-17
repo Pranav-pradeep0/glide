@@ -76,7 +76,7 @@ export interface GlidePlayerProps extends ViewProps {
     audioDelay?: number;
     /** Play the cached haptic track for this video in step with it. */
     haptics?: boolean;
-    /** The SDH subtitle's tagged cues ([explosion], ♪): the Director reads them as sound labels. */
+    /** A subtitle's tagged cues ([explosion], ♪), if it has any: the Director reads them as sound labels. */
     hapticCues?: HapticCue[];
     videoEnhancement?: boolean;
     /** 0..1.5, 1 = the tuned look. Live; only the toggle re-opens the media. */

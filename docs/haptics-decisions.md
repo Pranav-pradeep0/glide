@@ -389,3 +389,19 @@ the same 160 hits as audio only.
   embedded SDH tracks only reach haptics if the detail page's detection extracts them, as before.
 - **A/B baseline:** HapticGenerator was dropped in L3 (the motor doesn't respond), so the optional
   blind A/B is audio only vs with tags.
+
+## Sound first, SDH as an enhancer (2026-10-17)
+
+"Play with haptics" starts at once. The SDH search (embedded tracks, files beside the video, then
+online) moved from the detail page into the player (`usePlayerTracks`) and runs in the background;
+its cues reach native whenever it finishes, and the performer re-directs the track already playing.
+The picker sheet, the "Looking for subtitles" caption and "Play without them" are gone.
+
+- **Which subtitle shapes haptics.** Found automatically (background search, an embedded track
+  loaded at start), the one with more tagged cues wins, so a plain track with a few
+  [speaking Spanish] lines can't push out the SDH. A subtitle the user picks wins if it has any tag
+  (decided with the user; HapticMeaning ignores the rest).
+- **Remembered** in memory for the last 10 videos, so a second play directs with the tags at once.
+- **Phone:** Frankenstein `direct tags=0` at open, `tags=504` 8 s later, sync error within ±10 ms
+  meanwhile; played again, `tags=504` on the first direct. Blast: no sheet, `tags=0` throughout (its
+  `varint` error is the known junk after the last cluster, L2).

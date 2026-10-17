@@ -17,6 +17,43 @@ import { findMatchingAudioTrack } from '@/utils/languages';
 import { SubtitleCueStore } from '@/services/SubtitleCueStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 import { EXTERNAL_SUBTITLE_INDEX, loadExternalSubtitle, saveExternalSubtitle } from '@/services/ExternalSubtitleStore';
+import { SubtitleSelectionService } from '@/services/SubtitleSelectionService';
+import { SubtitlePickerService } from '@/services/SubtitlePickerService';
+import { searchSDHSubtitles, downloadSubtitle } from '@/utils/subdlApi';
+import { isAbortError } from '@/utils/network';
+
+/** A cue that can carry a sound tag ([explosion], (footsteps), ♪); native reads the tags (HapticMeaning). */
+export const hasSoundTag = (text: string) => /[[(♪♫]/.test(text);
+const tagCount = (cues: SubtitleCue[]) => cues.reduce((n, c) => n + (hasSoundTag(c.text) ? 1 : 0), 0);
+
+// The SDH subtitle found for each video (null: none), so playing it again has the tags at once.
+// ponytail: in memory, last 10 videos; persist it if a cold start should skip the search too.
+const sdhFound = new Map<string, SubtitleCue[] | null>();
+
+/** Embedded tracks, then subtitle files beside the video, then online. Null when none is SDH. */
+async function findSDHCues(videoPath: string, videoName: string, imdbId: string | undefined, signal: AbortSignal) {
+    const stopIfAborted = () => {
+        if (signal.aborted) { throw Object.assign(new Error('SDH search stopped'), { name: 'AbortError' }); }
+    };
+    const tracks = await SubtitleCueStore.getTracks(videoPath);
+    stopIfAborted();
+    if (tracks.length > 0) {
+        const found = await SubtitleSelectionService.findBestSDHByContent(tracks, async (index) => {
+            stopIfAborted();
+            return SubtitleCueStore.getCues(videoPath, index);
+        }, 'en');
+        if (found) { return found.cues; }
+    }
+    for (const path of await SubtitlePickerService.findMatchingSubtitles(videoPath)) {
+        stopIfAborted();
+        const picked = await SubtitlePickerService.loadFromPath(path);
+        if (picked && SubtitleSelectionService.validateSDHContent(picked.cues).isSDH) { return picked.cues; }
+    }
+    stopIfAborted();
+    const { subtitles } = await searchSDHSubtitles(videoName, 'en', imdbId, signal);
+    const best = subtitles.find(s => s.hearingImpaired || (s.sdhScore ?? 0) > 5);
+    return best ? downloadSubtitle(best.downloadUrl, signal) : null;
+}
 
 // ============================================================================
 // TYPES
@@ -26,7 +63,10 @@ interface UsePlayerTracksOptions {
     videoPath: string;
     currentTimeRef: React.MutableRefObject<number>;
 
-    routeHapticCues?: SubtitleCue[];
+    /** Look for an SDH subtitle in the background and hand its tags to haptics. */
+    findHapticCues?: boolean;
+    videoName?: string;
+    imdbId?: string;
     initialAudioTrackId?: number;
     initialSubtitleTrackIndex?: number;
 
@@ -50,7 +90,7 @@ interface UsePlayerTracksOptions {
  * - SDH cues for haptic feedback
  */
 export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTracksReturn {
-    const { videoPath, currentTimeRef, routeHapticCues, initialAudioTrackId, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage } = options;
+    const { videoPath, currentTimeRef, findHapticCues, videoName, imdbId, initialAudioTrackId, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage } = options;
 
     // ========================================================================
     // STATE
@@ -110,8 +150,25 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
     const [externalSubtitles, setExternalSubtitles] = useState<ExternalSubtitle[]>([]);
     const [currentExternalName, setCurrentExternalName] = useState<string | null>(null);
 
-    // Haptic cues
-    const [hapticCues, setHapticCues] = useState<SubtitleCue[]>(routeHapticCues || []);
+    // Haptic cues: sound alone drives haptics; a subtitle's sound tags only shape them.
+    // Found automatically (background search, an embedded track), the one with more tags wins.
+    const [hapticCues, setHapticCues] = useState<SubtitleCue[]>(() => sdhFound.get(videoPath) ?? []);
+    const offerHapticCues = useCallback((cues: SubtitleCue[]) => {
+        setHapticCues(prev => (tagCount(cues) > tagCount(prev) ? cues : prev));
+    }, []);
+
+    useEffect(() => {
+        if (!findHapticCues || !videoName || sdhFound.has(videoPath)) {return;}
+        const abort = new AbortController();
+        findSDHCues(videoPath, videoName, imdbId, abort.signal).then(cues => {
+            sdhFound.set(videoPath, cues);
+            if (sdhFound.size > 10) {sdhFound.delete(sdhFound.keys().next().value!);}
+            if (cues && !abort.signal.aborted) {offerHapticCues(cues);}
+        }).catch(error => {
+            if (!isAbortError(error)) {console.warn('[usePlayerTracks] SDH search failed:', error);}
+        });
+        return () => abort.abort();
+    }, [findHapticCues, videoPath, videoName, imdbId, offerHapticCues]);
 
     // Refs
     const extractedSubtitlePathRef = useRef<string | null>(null);
@@ -234,6 +291,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
 
                 if (cues && cues.length > 0) {
                     setSubtitleCues(cues);
+                    offerHapticCues(cues);
                     if (__DEV__) {
                         if (__DEV__) {console.log(`[usePlayerTracks] Subtitle loaded: ${cues.length} cues`);}
                     }
@@ -258,7 +316,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
             mounted = false;
             setSubtitleCuesLoading(false);
         };
-    }, [selectedSubtitleTrackIndex, videoPath, subtitleTracks]);
+    }, [selectedSubtitleTrackIndex, videoPath, subtitleTracks, offerHapticCues]);
 
     // Nothing is evicted on unmount. SubtitleCueStore is an LRU of five videos, and that
     // is the memory bound; evicting here threw away the very entry it exists to keep, so
@@ -285,8 +343,9 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
     const loadExternalCues = useCallback((cues: SubtitleCue[], name: string, isSDH: boolean) => {
         if (!cues || cues.length === 0) {return;}
 
-        // Set as current display subtitle
+        // Set as current display subtitle; one you pick with sound tags also shapes haptics.
         setSubtitleCues(cues);
+        if (tagCount(cues) > 0) {setHapticCues(cues);}
         setSelectedSubtitleTrackIndex(EXTERNAL_SUBTITLE_INDEX);
         setCurrentExternalName(name);
 
@@ -315,20 +374,9 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
                 return;
             }
             loadExternalCues(saved.cues, saved.name, saved.isSDH);
-            if (saved.isSDH) {setHapticCues(saved.cues);}
         });
         return () => { mounted = false; };
     }, [videoPath, initialSubtitleTrackIndex, loadExternalCues]);
-
-    /**
-     * Load SDH subtitle cues specifically for haptic feedback.
-     */
-    const loadSDHForHaptics = useCallback((cues: SubtitleCue[], name: string) => {
-        setHapticCues(cues);
-        if (__DEV__) {
-            if (__DEV__) {console.log('[usePlayerTracks] Updated haptic cues from SDH:', name, cues.length, 'cues');}
-        }
-    }, []);
 
     // ========================================================================
     // SELECTORS FOR COMPONENT PROPS
@@ -382,7 +430,6 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         externalSubtitles,
         currentExternalName,
         loadExternalCues,
-        loadSDHForHaptics,
 
         // Haptic
         hapticCues,
@@ -399,7 +446,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
     }), [
         audioTracks, selectedAudioTrackId, selectAudioTrack,
         subtitleTracks, subtitleTracksReady, subtitleCuesLoading, selectedSubtitleTrackIndex, subtitleCues, selectSubtitleTrack,
-        externalSubtitles, currentExternalName, loadExternalCues, loadSDHForHaptics,
+        externalSubtitles, currentExternalName, loadExternalCues,
         hapticCues,
         audioTracksForSelector, subtitleTracksForSelector,
         setAudioTracksFromNative,

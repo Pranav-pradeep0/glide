@@ -120,8 +120,6 @@ interface TrackSelectorProps {
     onSelectTrack: (trackIndex: number | null) => void;
     type: 'audio' | 'subtitle';
     onLoadExternalCues?: (cues: SubtitleCue[], name: string, isSDH: boolean) => void;
-    onLoadSDHForHaptics?: (cues: SubtitleCue[], name: string) => void;
-    apiSubtitles?: SubtitleResult[];
     externalSubtitles?: ExternalSubtitle[];
     currentExternalName?: string;
     videoName?: string;
@@ -186,8 +184,6 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         onSelectTrack,
         type,
         onLoadExternalCues,
-        onLoadSDHForHaptics,
-        apiSubtitles: initialApiSubtitles,
         externalSubtitles = [],
         currentExternalName,
         videoName = '',
@@ -213,11 +209,9 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         if (currentExternalName) {return 'external';}
         if (selectedTrackIndex !== null && embeddedTracks.length > 0) {return 'embedded';}
         if (embeddedTracks.length === 0 && externalSubtitles.length > 0) {return 'external';}
-        if (embeddedTracks.length === 0 && initialApiSubtitles && initialApiSubtitles.length > 0)
-            {return 'online';}
 
         return 'embedded';
-    }, [type, currentExternalName, selectedTrackIndex, tracks, externalSubtitles, initialApiSubtitles]);
+    }, [type, currentExternalName, selectedTrackIndex, tracks, externalSubtitles]);
 
     // ---- State ----
     const [activeTab, setActiveTab] = useState<SubtitleTab>(defaultTab);
@@ -319,12 +313,6 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         }
     }, [visible, activeTab, videoName, imdbId, isSearching, selectedLanguage]);
 
-    // Load initial API subtitles
-    useEffect(() => {
-        if (visible && initialApiSubtitles && initialApiSubtitles.length > 0 && !searchQuery.trim()) {
-            setSearchResults(initialApiSubtitles);
-        }
-    }, [visible, initialApiSubtitles, searchQuery]);
 
     // Parse filename for defaults when videoName changes
     useEffect(() => {
@@ -365,11 +353,6 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             if (result) {
                 const validation = SubtitleSelectionService.validateSDHContent(result.cues);
                 onLoadExternalCues(result.cues, result.name, validation.isSDH);
-
-                if (validation.isSDH && onLoadSDHForHaptics) {
-                    onLoadSDHForHaptics(result.cues, result.name);
-                }
-
                 onClose();
             }
         } catch (error) {
@@ -378,7 +361,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         } finally {
             setLoading(false);
         }
-    }, [onLoadExternalCues, onLoadSDHForHaptics, onClose]);
+    }, [onLoadExternalCues, onClose]);
 
     const handleSearch = useCallback(async () => {
         const query = searchQuery.trim();
@@ -450,11 +433,6 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                 const name = subtitle.release || subtitle.name || 'Downloaded Subtitle';
 
                 onLoadExternalCues(cues, name, validation.isSDH);
-
-                if (validation.isSDH && onLoadSDHForHaptics) {
-                    onLoadSDHForHaptics(cues, name);
-                }
-
                 onClose();
             } catch (error) {
                 if (isAbortError(error)) {
@@ -468,7 +446,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                 setDownloadingId((prev) => (prev === currentId ? null : prev));
             }
         },
-        [onLoadExternalCues, onLoadSDHForHaptics, onClose],
+        [onLoadExternalCues, onClose],
     );
 
     const handleLanguageChange = useCallback((langCode: string) => {
@@ -512,9 +490,6 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
             onPress={() => {
                 if (!onLoadExternalCues) {return;}
                 onLoadExternalCues(item.cues, item.name, item.isSDH);
-                if (item.isSDH && onLoadSDHForHaptics) {
-                    onLoadSDHForHaptics(item.cues, item.name);
-                }
                 onClose();
             }}
             onPlayer

@@ -379,7 +379,6 @@ export interface UsePlayerTracksReturn {
     externalSubtitles: ExternalSubtitle[];
     currentExternalName: string | null;
     loadExternalCues: (cues: SubtitleCue[], name: string, isSDH: boolean) => void;
-    loadSDHForHaptics: (cues: SubtitleCue[], name: string) => void;
 
     // Haptic cues
     hapticCues: SubtitleCue[];
@@ -433,25 +432,6 @@ export interface UsePlayerSettingsReturn {
 
     // Computed for Player
     audioEqualizer: number[] | undefined;
-}
-
-// ============================================================================
-// UTILITY TYPES
-// ============================================================================
-
-/** Route params for VideoPlayerScreen */
-export interface VideoPlayerRouteParams {
-    videoPath: string;
-    videoName?: string;
-    playMode?: string;
-    albumName?: string;
-    hapticCues?: SubtitleCue[];
-    apiSubtitles?: any[];
-    isExternalOpen?: boolean;
-}
-
-export interface VideoPlayerProps {
-    route: { params: VideoPlayerRouteParams };
 }
 
 // ============================================================================

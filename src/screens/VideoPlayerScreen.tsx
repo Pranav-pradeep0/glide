@@ -52,6 +52,7 @@ import {
     usePlayerHUD,
     usePlayerGestures,
     usePlayerTracks,
+    hasSoundTag,
     usePlayerBookmarks,
     usePlayerSettings,
     usePlayerRecap,
@@ -75,7 +76,7 @@ import { useAppStore } from '@/store/appStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 
 // Types
-import { SubtitleCue, VideoFile, VideoSort } from '@/types';
+import { VideoFile, VideoSort } from '@/types';
 import type { PlayerCarry, PlayerProgressData } from '@/hooks/video-player';
 
 // ============================================================================
@@ -89,8 +90,6 @@ type RouteParams = {
     playMode?: string;
     albumName?: string;
     bucketId?: string;
-    hapticCues?: SubtitleCue[];
-    apiSubtitles?: any[];
     isExternalOpen?: boolean;
     imdbId?: string;
     cleanTitle?: string;
@@ -114,8 +113,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         videoPath,
         videoName = 'Video',
         contentUri, // Original content:// URI for history storage
-        hapticCues: routeHapticCues,
-        apiSubtitles,
         isExternalOpen,
         playMode,
         albumName: routeAlbumName,
@@ -411,7 +408,9 @@ export default function VideoPlayerScreen({ route }: Props) {
     const tracksHook = usePlayerTracks({
         videoPath,
         currentTimeRef: player.currentTimeRef,
-        routeHapticCues,
+        findHapticCues: playMode === 'with-haptics',
+        videoName,
+        imdbId,
         initialAudioTrackId: initialAudioTrackId,
         initialSubtitleTrackIndex: initialSubtitleTrackIndex,
         subtitleDelay: settingsHook.settings.subtitleDelay,
@@ -420,7 +419,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // Only cues that can carry a sound tag cross the bridge; native reads the tags (HapticMeaning).
     const hapticCues = useMemo(() => tracksHook.hapticCues
-        .filter(c => /[[(♪♫]/.test(c.text))
+        .filter(c => hasSoundTag(c.text))
         .map(c => ({ startMs: Math.round(c.startTime * 1000), endMs: Math.round(c.endTime * 1000), text: c.text })),
     [tracksHook.hapticCues]);
 
@@ -1491,11 +1490,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                         onSelectTrack={tracksHook.selectSubtitleTrack}
                         type="subtitle"
                         onLoadExternalCues={tracksHook.loadExternalCues}
-                        onLoadSDHForHaptics={tracksHook.loadSDHForHaptics}
                         externalSubtitles={tracksHook.externalSubtitles}
                         currentExternalName={tracksHook.currentExternalName || undefined}
                         videoName={videoName}
-                        apiSubtitles={apiSubtitles}
                         imdbId={imdbId}
                         onOpenSyncPanel={(type) => {
                             setSyncPanelType(type);

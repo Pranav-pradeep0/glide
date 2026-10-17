@@ -145,10 +145,6 @@ export type RootStackParamList = {
         imdbId?: string;
         playMode?: PlayMode;
         subtitlePath?: string;
-        // Pre-loaded haptic cues (independent of display subtitles)
-        hapticCues?: SubtitleCue[];
-        // API subtitles for user selection
-        apiSubtitles?: SubtitleResult[];
         // If true, exit app on back press instead of navigating back
         isExternalOpen?: boolean;
         // Started from a folder's "Play all": plays through even with auto-play next off
