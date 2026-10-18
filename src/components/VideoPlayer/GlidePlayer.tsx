@@ -67,6 +67,9 @@ export interface GlidePlayerProps extends ViewProps {
     resizeMode?: PlayerResizeMode;
     playInBackground?: boolean;
     pipEnabled?: boolean;
+    /** Enables the PiP window's previous/next buttons. Level 13+; older APKs ignore them. */
+    pipHasPrevious?: boolean;
+    pipHasNext?: boolean;
     audioTrack?: number;
     /** Language code tried first when the media opens (the previous episode's). */
     preferredAudioLanguage?: string;
@@ -103,6 +106,9 @@ export interface GlidePlayerProps extends ViewProps {
     onCues?: (event: any) => void;
     /** Where the end credits start, { start } in ms: from a chapter or the frames. */
     onCredits?: (event: { start: number }) => void;
+    /** The PiP window's previous/next buttons. */
+    onPipPrevious?: () => void;
+    onPipNext?: () => void;
 }
 
 const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) => {
@@ -146,7 +152,7 @@ const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) =>
 
     const {
         onLoad, onProgress, onEnd, onError, onBuffering, onPlaying, onPaused, onStopped,
-        onSeek, onLoadStart, onCues, onCredits, source: _source, ...forwarded
+        onSeek, onLoadStart, onCues, onCredits, onPipPrevious, onPipNext, source: _source, ...forwarded
     } = props;
 
     return (
@@ -168,6 +174,8 @@ const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) =>
             onVideoSeek={unwrap(onSeek)}
             onCues={unwrap(onCues)}
             onCredits={unwrap(onCredits)}
+            onPipPrevious={unwrap(onPipPrevious)}
+            onPipNext={unwrap(onPipNext)}
         />
     );
 });

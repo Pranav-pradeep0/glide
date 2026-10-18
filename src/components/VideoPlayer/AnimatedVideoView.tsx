@@ -41,6 +41,9 @@ interface AnimatedVideoViewProps {
     playInBackground: boolean;
     pipEnabled: boolean;
     pipPresentationActive: boolean;
+    /** PiP window buttons; the handler is undefined when there is no previous/next video. */
+    onPipPrevious?: () => void;
+    onPipNext?: () => void;
 
     // Tracks
     audioTrack?: number;
@@ -107,6 +110,8 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
             playInBackground,
             pipEnabled,
             pipPresentationActive,
+            onPipPrevious,
+            onPipNext,
             audioTrack,
             preferredAudioLanguage,
             textTrack,
@@ -198,6 +203,10 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
                     onCredits={onCredits}
                     playInBackground={playInBackground}
                     pipEnabled={pipEnabled}
+                    pipHasPrevious={!!onPipPrevious}
+                    pipHasNext={!!onPipNext}
+                    onPipPrevious={onPipPrevious}
+                    onPipNext={onPipNext}
                 />
             </Animated.View>
         );
@@ -233,6 +242,9 @@ function areEqual(prevProps: AnimatedVideoViewProps, nextProps: AnimatedVideoVie
     if (prevProps.playInBackground !== nextProps.playInBackground) {return false;}
     // Important: the auto-play-next closure lives in onEnd.
     if (prevProps.onEnd !== nextProps.onEnd) {return false;}
+    // Their closures hold the playlist position, and their presence enables the PiP buttons.
+    if (prevProps.onPipPrevious !== nextProps.onPipPrevious) {return false;}
+    if (prevProps.onPipNext !== nextProps.onPipNext) {return false;}
 
     // Position and duration are deliberately not props: neither changes what the native
     // view renders, and taking them would re-render this on every progress tick.

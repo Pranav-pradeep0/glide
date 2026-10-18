@@ -1,8 +1,15 @@
 package com.glide.app.player;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
+import android.app.RemoteAction;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Rect;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Looper;
 import android.util.Log;
@@ -12,10 +19,12 @@ import android.view.ViewGroup;
 
 import androidx.activity.ComponentActivity;
 import androidx.core.app.PictureInPictureModeChangedInfo;
+import androidx.core.content.ContextCompat;
 import androidx.core.util.Consumer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.WeakHashMap;
 
 /**
  * Owns Picture-in-Picture for a single video view.
@@ -43,6 +52,20 @@ final class GlidePipController {
     private static final float MIN_ASPECT_RATIO = 0.42f;
     private static final float MAX_ASPECT_RATIO = 2.38f;
 
+    private static final String ACTION_CONTROL = "com.glide.app.PIP_CONTROL";
+    private static final String EXTRA_CONTROL = "control";
+    private static final int CONTROL_PREVIOUS = 1;
+    private static final int CONTROL_PLAY_PAUSE = 2;
+    private static final int CONTROL_NEXT = 3;
+
+    /**
+     * The controller whose state an Activity's PiP params reflect: the player attached most
+     * recently. Next/previous replaces the screen, so for a moment two players share one
+     * Activity, and the outgoing one's detach used to write its own params (aspect ratio,
+     * and now buttons) over the incoming one's. Main thread only.
+     */
+    private static final WeakHashMap<Activity, GlidePipController> OWNERS = new WeakHashMap<>();
+
     private final GlidePlayerView videoView;
 
     /** Views hidden for the PiP presentation, in the order they were hidden. */
@@ -58,6 +81,35 @@ final class GlidePipController {
     private boolean enabled = false;
     private boolean playing = false;
     private boolean inPipMode = false;
+    private boolean showPlay = true;
+    private boolean hasPrevious = false;
+    private boolean hasNext = false;
+
+    /**
+     * PiP buttons are app-supplied RemoteActions. Without them only stock Android 13+ derives
+     * buttons from the media session; Android 12 and below, and skins like One UI, MIUI and
+     * ColorOS, showed a PiP window with no controls at all.
+     */
+    private final BroadcastReceiver controlReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            // Every live player's receiver hears the broadcast; only one Activity is in PiP.
+            if (!inPipMode || !isOwner()) {
+                return;
+            }
+            switch (intent.getIntExtra(EXTRA_CONTROL, 0)) {
+                case CONTROL_PLAY_PAUSE:
+                    videoView.togglePlayPauseFromPip();
+                    break;
+                case CONTROL_PREVIOUS:
+                    if (hasPrevious) videoView.onPipSkip(false);
+                    break;
+                case CONTROL_NEXT:
+                    if (hasNext) videoView.onPipSkip(true);
+                    break;
+            }
+        }
+    };
 
     private int videoWidth = 0;
     private int videoHeight = 0;
@@ -123,6 +175,9 @@ final class GlidePipController {
         modeChangedListener = info -> handleModeChanged(info.isInPictureInPictureMode());
         activity.addOnPictureInPictureModeChangedListener(modeChangedListener);
         listeningActivity = activity;
+        OWNERS.put(activity, this);
+        ContextCompat.registerReceiver(activity, controlReceiver,
+                new IntentFilter(ACTION_CONTROL), ContextCompat.RECEIVER_NOT_EXPORTED);
         videoView.addOnLayoutChangeListener(layoutChangeListener);
         Log.d(TAG, "attached to " + activity.getClass().getSimpleName());
     }
@@ -134,14 +189,29 @@ final class GlidePipController {
         if (listeningActivity != null && modeChangedListener != null) {
             listeningActivity.removeOnPictureInPictureModeChangedListener(modeChangedListener);
         }
+        if (listeningActivity != null) {
+            listeningActivity.unregisterReceiver(controlReceiver);
+        }
+
+        // Disarm auto-enter and drop the buttons before going away, otherwise the Activity
+        // keeps entering PiP on whatever screen replaced the player. Skipped when a newer
+        // player already owns the Activity: those params are its, not ours.
+        if (isOwner()) {
+            enabled = false;
+            playing = false;
+            OWNERS.remove(listeningActivity);
+            Activity activity = currentActivity();
+            if (activity != null) {
+                try {
+                    // No actions hands PiP back to the session's buttons, where there are any.
+                    activity.setPictureInPictureParams(buildParams(false));
+                } catch (Exception e) {
+                    Log.w(TAG, "setPictureInPictureParams failed: " + e.getMessage());
+                }
+            }
+        }
         listeningActivity = null;
         modeChangedListener = null;
-
-        // Disarm auto-enter before going away, otherwise the Activity keeps entering
-        // PiP on whatever screen replaced the player.
-        enabled = false;
-        playing = false;
-        applyParams();
 
         restorePresentation();
         inPipMode = false;
@@ -167,6 +237,36 @@ final class GlidePipController {
         }
         this.playing = playing;
         applyParams();
+    }
+
+    /** Whether the PiP button offers play (paused, ended, idle) rather than pause. */
+    void setShowPlay(boolean showPlay) {
+        if (this.showPlay == showPlay) {
+            return;
+        }
+        this.showPlay = showPlay;
+        applyParams();
+    }
+
+    void setSkipAvailable(boolean hasPrevious, boolean hasNext) {
+        if (this.hasPrevious == hasPrevious && this.hasNext == hasNext) {
+            return;
+        }
+        this.hasPrevious = hasPrevious;
+        this.hasNext = hasNext;
+        applyParams();
+    }
+
+    /**
+     * Next/previous mounts a new player while the Activity is already in PiP, so its
+     * mode-change listener never fires. Adopt the mode here, once the view has parents to
+     * walk; at attach() it has none.
+     */
+    void onAttachedToWindow() {
+        Activity activity = currentActivity();
+        if (activity != null && activity.isInPictureInPictureMode()) {
+            handleModeChanged(true);
+        }
     }
 
     void setVideoGeometry(int width, int height, int sarNum, int sarDen) {
@@ -200,7 +300,7 @@ final class GlidePipController {
         }
 
         try {
-            return activity.enterPictureInPictureMode(buildParams());
+            return activity.enterPictureInPictureMode(buildParams(true));
         } catch (Exception e) {
             Log.w(TAG, "enterPictureInPictureMode failed: " + e.getMessage());
             return false;
@@ -233,18 +333,18 @@ final class GlidePipController {
         }
 
         Activity activity = currentActivity();
-        if (activity == null) {
+        if (activity == null || !isOwner()) {
             return;
         }
 
         try {
-            activity.setPictureInPictureParams(buildParams());
+            activity.setPictureInPictureParams(buildParams(true));
         } catch (Exception e) {
             Log.w(TAG, "setPictureInPictureParams failed: " + e.getMessage());
         }
     }
 
-    private PictureInPictureParams buildParams() {
+    private PictureInPictureParams buildParams(boolean withActions) {
         PictureInPictureParams.Builder builder = new PictureInPictureParams.Builder();
 
         Rational aspectRatio = videoAspectRatio();
@@ -263,7 +363,45 @@ final class GlidePipController {
             builder.setSeamlessResizeEnabled(true);
         }
 
+        Activity activity = currentActivity();
+        if (activity != null) {
+            builder.setActions(withActions ? buildActions(activity) : new ArrayList<>());
+        }
+
         return builder.build();
+    }
+
+    /** Previous, play/pause, next: three is what every device allows. */
+    private List<RemoteAction> buildActions(Activity activity) {
+        List<RemoteAction> actions = new ArrayList<>();
+        actions.add(action(activity, CONTROL_PREVIOUS, "Previous",
+                androidx.media3.session.R.drawable.media3_icon_previous, hasPrevious));
+        actions.add(showPlay
+                ? action(activity, CONTROL_PLAY_PAUSE, "Play",
+                        androidx.media3.session.R.drawable.media3_icon_play, true)
+                : action(activity, CONTROL_PLAY_PAUSE, "Pause",
+                        androidx.media3.session.R.drawable.media3_icon_pause, true));
+        actions.add(action(activity, CONTROL_NEXT, "Next",
+                androidx.media3.session.R.drawable.media3_icon_next, hasNext));
+        return actions;
+    }
+
+    private static RemoteAction action(Activity activity, int control, String title, int icon,
+                                       boolean enabled) {
+        Intent intent = new Intent(ACTION_CONTROL)
+                .setPackage(activity.getPackageName())
+                .putExtra(EXTRA_CONTROL, control);
+        // Request code per control: PendingIntents differing only in extras are one intent.
+        PendingIntent pending = PendingIntent.getBroadcast(activity, control, intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        RemoteAction action = new RemoteAction(
+                Icon.createWithResource(activity, icon), title, title, pending);
+        action.setEnabled(enabled);
+        return action;
+    }
+
+    private boolean isOwner() {
+        return listeningActivity != null && OWNERS.get(listeningActivity) == this;
     }
 
     /**

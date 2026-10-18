@@ -90,6 +90,12 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
     @ReactProp(name = "pipEnabled", defaultBoolean = false)
     fun setPipEnabled(view: GlidePlayerView, enabled: Boolean) = view.setPipEnabled(enabled)
 
+    @ReactProp(name = "pipHasPrevious", defaultBoolean = false)
+    fun setPipHasPrevious(view: GlidePlayerView, value: Boolean) = view.setPipHasPrevious(value)
+
+    @ReactProp(name = "pipHasNext", defaultBoolean = false)
+    fun setPipHasNext(view: GlidePlayerView, value: Boolean) = view.setPipHasNext(value)
+
     @ReactProp(name = "title")
     fun setTitle(view: GlidePlayerView, title: String?) = view.setVideoTitle(title)
 

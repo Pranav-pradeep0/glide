@@ -1267,6 +1267,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                         playInBackground={settingsHook.settings.backgroundPlayEnabled}
                         pipEnabled={pipEnabled}
                         pipPresentationActive={pipPresentationActive}
+                        onPipPrevious={!isNetworkStream && hasPrevious ? handlePrevious : undefined}
+                        onPipNext={!isNetworkStream && hasNext ? handleNext : undefined}
                         videoEnhancement={settingsHook.settings.videoEnhancement}
                         videoEnhancementStrength={settingsHook.settings.videoEnhancementStrength}
                         audioTrack={tracksHook.selectedAudioTrackId}

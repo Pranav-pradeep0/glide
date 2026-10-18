@@ -34,6 +34,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.Effect
 import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -186,6 +187,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var bestFitUsingCover: Boolean? = null
     private var lastLayoutSignature: String? = null
     private val pipController = GlidePipController(this)
+    private var pipHasPrevious = false
+    private var pipHasNext = false
     private var hostActivity: Activity? = null
 
     /** A prop asked for the media to be (re)opened; see [applyPendingOpen]. */
@@ -475,6 +478,33 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     fun enterPictureInPicture() {
         pipController.enter()
+    }
+
+    /** Whether next/previous exist, so the PiP window can grey out the ones that don't. */
+    fun setPipHasPrevious(value: Boolean) {
+        pipHasPrevious = value
+        pipController.setSkipAvailable(pipHasPrevious, pipHasNext)
+    }
+
+    fun setPipHasNext(value: Boolean) {
+        pipHasNext = value
+        pipController.setSkipAvailable(pipHasPrevious, pipHasNext)
+    }
+
+    /** The PiP window's play/pause: the same decision as Media3's own play button. */
+    fun togglePlayPauseFromPip() {
+        val p = player ?: return
+        setPaused(!Util.shouldShowPlayButton(p))
+    }
+
+    /** Next/previous live in JS, which owns the playlist; the player only ever holds one item. */
+    fun onPipSkip(next: Boolean) {
+        emit(if (next) EVENT_PIP_NEXT else EVENT_PIP_PREVIOUS, Arguments.createMap())
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        pipController.onAttachedToWindow()
     }
 
 
@@ -941,6 +971,12 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     // -- Events --------------------------------------------------------------------------
 
     private val listener = object : Player.Listener {
+        // After every batch, not just isPlaying: a pause while buffering changes the button
+        // without changing isPlaying.
+        override fun onEvents(player: Player, events: Player.Events) {
+            pipController.setShowPlay(Util.shouldShowPlayButton(player))
+        }
+
         override fun onPlaybackStateChanged(state: Int) {
             val p = player ?: return
             Log.d(TAG, "state=${stateName(state)} duration=${p.duration}")
@@ -1394,11 +1430,13 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         const val EVENT_ERROR = "onVideoError"
         const val EVENT_CUES = "onCues"
         const val EVENT_CREDITS = "onCredits"
+        const val EVENT_PIP_PREVIOUS = "onPipPrevious"
+        const val EVENT_PIP_NEXT = "onPipNext"
 
         val EVENTS = arrayOf(
             EVENT_LOAD_START, EVENT_LOAD, EVENT_PROGRESS, EVENT_SEEK, EVENT_END,
             EVENT_PLAYING, EVENT_PAUSED, EVENT_STOPPED, EVENT_BUFFERING, EVENT_ERROR,
-            EVENT_CUES, EVENT_CREDITS
+            EVENT_CUES, EVENT_CREDITS, EVENT_PIP_PREVIOUS, EVENT_PIP_NEXT
         )
     }
 }
