@@ -32,10 +32,13 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.text.Cue
 import androidx.media3.common.VideoSize
 import androidx.media3.common.Effect
+import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.extractor.metadata.Chapter
@@ -94,6 +97,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var playInBackground = false
     private var progressIntervalMs: Long = 0
     private var enhancementEnabled = false
+    /** The live player was prepared with setVideoEffects; its VideoSize is not the video's. */
+    private var effectsArmed = false
     private var videoTitle: String? = null
     private var videoArtist: String? = null
     private var equalizerBands: FloatArray? = null
@@ -841,6 +846,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         pendingTextTrack = pendingTextTrack ?: chosenTextTrack
         p.setVideoSurfaceView(surfaceView)
         p.addListener(listener)
+        p.addAnalyticsListener(formatListener)
         p.playbackParameters = PlaybackParameters(rateProp)
         p.volume = if (mutedProp) 0f else 1f
         p.repeatMode = if (repeatProp) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
@@ -859,7 +865,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         // HDR content only -- i.e. it silently undid the entire reason for this migration.
         // Arming it lazily is not an option either: the effects pipeline is a prepare-time
         // decision, which is why toggling enhancement re-opens the media.
-        if (enhancementEnabled) {
+        effectsArmed = enhancementEnabled
+        if (effectsArmed) {
             p.setVideoEffects(buildEffects())
         }
 
@@ -1067,41 +1074,15 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
-            if (videoSize.width == videoWidth &&
-                videoSize.height == videoHeight &&
-                videoSize.pixelWidthHeightRatio == videoSar
-            ) {
-                return
-            }
-            videoWidth = videoSize.width
-            videoHeight = videoSize.height
+            // With effects armed this is the GL graph's output size, which is the surface's
+            // size -- full screen on a fresh view, then pinned there by setFixedSize below.
+            // Every resize mode then computed "fill". Measured 2026-10-16: a player opened
+            // with enhancement on stayed at displayFrame 0..2412 through every mode tap.
+            // The source format below is the truth in both paths.
+            if (effectsArmed) return
             // Anamorphic sources report a non-1 ratio here. Rotation needs no handling:
             // media3 applies it internally and width/height already account for it.
-            videoSar = videoSize.pixelWidthHeightRatio.takeIf { it > 0f } ?: 1f
-            Log.d(TAG, "video ${videoWidth}x$videoHeight sar=$videoSar")
-
-            // Pin the surface buffer to the video's own dimensions.
-            //
-            // By default a SurfaceView sizes its buffer from its layout, and a SurfaceView
-            // owns a separate compositor layer -- so every resize-mode change reallocated
-            // the buffer queue, and the gap between releasing the old buffer and filling
-            // the new one is the flash seen when switching modes.
-            //
-            // With a fixed size, changing the mode only moves and scales the *view*; the
-            // buffer never changes, so there is nothing to reallocate. The decoder was
-            // already producing frames at exactly this size, so nothing is resampled that
-            // was not being resampled before.
-            if (videoWidth > 0 && videoHeight > 0) {
-                surfaceView.holder.setFixedSize(videoWidth, videoHeight)
-            }
-            // PiP wants the pixel ratio as a rational; media3 reports it as a float.
-            pipController.setVideoGeometry(
-                videoWidth, videoHeight, (videoSar * SAR_DENOMINATOR).roundToLong().toInt(),
-                SAR_DENOMINATOR
-            )
-            requestLayout()
-            relayoutSurface()
-            maybeEmitLoad()
+            applyVideoGeometry(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
         }
 
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) = syncHaptics(hard = true)
@@ -1156,6 +1137,56 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 putString("error", error.errorCodeName)
             })
         }
+    }
+
+    /** The decoder's input format: the video's real geometry, effects or not. */
+    private val formatListener = object : AnalyticsListener {
+        override fun onVideoInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: DecoderReuseEvaluation?,
+        ) {
+            if (format.width <= 0 || format.height <= 0) return
+            val sar = format.pixelWidthHeightRatio.takeIf { it > 0f } ?: 1f
+            // Format is pre-rotation, VideoSize post: swap to match what VideoSize reports.
+            if (format.rotationDegrees % 180 == 90) {
+                applyVideoGeometry(format.height, format.width, 1f / sar)
+            } else {
+                applyVideoGeometry(format.width, format.height, sar)
+            }
+        }
+    }
+
+    private fun applyVideoGeometry(width: Int, height: Int, pixelRatio: Float) {
+        val sar = pixelRatio.takeIf { it > 0f } ?: 1f
+        if (width == videoWidth && height == videoHeight && sar == videoSar) return
+        videoWidth = width
+        videoHeight = height
+        videoSar = sar
+        Log.d(TAG, "video ${videoWidth}x$videoHeight sar=$videoSar")
+
+        // Pin the surface buffer to the video's own dimensions.
+        //
+        // By default a SurfaceView sizes its buffer from its layout, and a SurfaceView
+        // owns a separate compositor layer -- so every resize-mode change reallocated
+        // the buffer queue, and the gap between releasing the old buffer and filling
+        // the new one is the flash seen when switching modes.
+        //
+        // With a fixed size, changing the mode only moves and scales the *view*; the
+        // buffer never changes, so there is nothing to reallocate. The decoder was
+        // already producing frames at exactly this size, so nothing is resampled that
+        // was not being resampled before.
+        if (videoWidth > 0 && videoHeight > 0) {
+            surfaceView.holder.setFixedSize(videoWidth, videoHeight)
+        }
+        // PiP wants the pixel ratio as a rational; media3 reports it as a float.
+        pipController.setVideoGeometry(
+            videoWidth, videoHeight, (videoSar * SAR_DENOMINATOR).roundToLong().toInt(),
+            SAR_DENOMINATOR
+        )
+        requestLayout()
+        relayoutSurface()
+        maybeEmitLoad()
     }
 
     private fun maybeEmitLoad() {
