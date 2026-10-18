@@ -29,6 +29,8 @@ import { LockButton } from '@/components/VideoPlayer/LockButton';
 import { SnackbarHost, showSnackbar } from '@/components/ui';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
 import { UpNextCard, UP_NEXT_COUNTDOWN_MS } from '@/components/VideoPlayer/UpNextCard';
+import { SkipChapterButton } from '@/components/VideoPlayer/SkipChapterButton';
+import { findSkips, skipIndexAt } from '@/utils/skipChapters';
 import UpdateModal from '@/components/UpdateModal';
 import { isEnhancementError } from '@/utils/playerErrors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
@@ -105,6 +107,9 @@ type RouteParams = {
 type Props = {
     route: { params: RouteParams };
 };
+
+/** How long Skip intro / Skip recap shows on its own once the chapter starts. */
+const SKIP_PROMPT_SECONDS = 8;
 
 // ============================================================================
 // COMPONENT
@@ -1069,11 +1074,24 @@ export default function VideoPlayerScreen({ route }: Props) {
     // Stable: the video view keeps its first onProgress (it doesn't re-render for handlers).
     const creditsAtRef = useRef(creditsAt);
     creditsAtRef.current = creditsAt;
+
+    // "Skip intro" / "Skip recap" while a chapter named for one plays: on its own for the
+    // first seconds, then only with the controls, so it doesn't sit over an opening.
+    const skips = useMemo(() => findSkips(chapters, player.state.duration), [chapters, player.state.duration]);
+    const skipsRef = useRef(skips);
+    skipsRef.current = skips;
+    const [skipIndex, setSkipIndex] = React.useState(-1);
+    const [skipEarly, setSkipEarly] = React.useState(false);
+
     const handlePlayerProgress = player.handleProgress;
     const handleProgress = useCallback((data: PlayerProgressData) => {
         handlePlayerProgress(data);
+        const t = (data.currentTime ?? 0) / 1000;
         const at = creditsAtRef.current;
-        setInCredits(at !== null && (data.currentTime ?? 0) / 1000 >= at);
+        setInCredits(at !== null && t >= at);
+        const i = skipIndexAt(skipsRef.current, t);
+        setSkipIndex(i);
+        setSkipEarly(i >= 0 && t < skipsRef.current[i].start + SKIP_PROMPT_SECONDS);
     }, [handlePlayerProgress]);
 
     // Paused in the credits holds the countdown; Play starts it over. Unmounting (Back, PiP
@@ -1404,6 +1422,15 @@ export default function VideoPlayerScreen({ route }: Props) {
                     left={16 + (isLandscape
                         ? cutoutInset('left', insets.left, cutoutRects, width, effectiveInsets.top + 12, effectiveInsets.top + 60)
                         : effectiveInsets.left)}
+                />
+            )}
+
+            {!pipPresentationActive && skipIndex >= 0 && !ui.state.locked && !upNextShown && (controlsShown || skipEarly) && (
+                <SkipChapterButton
+                    kind={skips[skipIndex].kind}
+                    onSkip={() => { player.commitSeek(skips[skipIndex].end); }}
+                    bottom={effectiveInsets.bottom + (controlsShown ? 96 : 0)}
+                    right={effectiveInsets.right}
                 />
             )}
 
