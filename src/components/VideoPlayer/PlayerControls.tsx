@@ -1,4 +1,4 @@
-import React, { FC, useCallback, useEffect, useRef, useState } from 'react';
+import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Feather } from '@react-native-vector-icons/feather';
 import { EdgeInsets } from 'react-native-safe-area-context';
@@ -25,12 +25,17 @@ import { haptic } from '@/native/HapticModule';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { HUD_PILL } from '@/theme/colors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
+import { crossesMark, nearestMark } from '@/utils/seekMarks';
 
 const { colors } = playerTheme;
 
 const TOP_SCRIM = ['rgba(0,0,0,0.62)', 'rgba(0,0,0,0)'];
 const BOTTOM_SCRIM = ['rgba(0,0,0,0)', 'rgba(0,0,0,0.72)'];
 const BUBBLE_WIDTH = 96;
+/** Room for a chapter name under the time. */
+const CHAPTER_BUBBLE_WIDTH = 168;
+
+export interface SeekChapter { title: string; start: number }
 
 /** "1:02:03" / "02:03"; -1 is the "no duration yet" sentinel. */
 const formatClock = (val: number) => {
@@ -67,9 +72,10 @@ interface ReanimatedTextProps {
     fallbackText?: string;
     /** False while the label can't be seen: no updates then, and the current text on return. */
     live?: SharedValue<boolean>;
+    numberOfLines?: number;
 }
 
-const ReanimatedText: React.FC<ReanimatedTextProps> = ({ value, formatter, style, fallbackText, live }) => {
+const ReanimatedText: React.FC<ReanimatedTextProps> = ({ value, formatter, style, fallbackText, live, numberOfLines }) => {
     const [text, setText] = useState(fallbackText ?? '');
     const updateText = useCallback((next: string) => setText(prev => prev === next ? prev : next), []);
 
@@ -83,12 +89,68 @@ const ReanimatedText: React.FC<ReanimatedTextProps> = ({ value, formatter, style
             if (next !== null && next !== prev) {runOnJS(updateText)(next);}
         });
 
-    return <Text style={[styles.time, style]}>{text}</Text>;
+    return <Text style={[styles.time, style]} numberOfLines={numberOfLines}>{text}</Text>;
 };
 
 // ============================================================================
 // SEEK BAR
 // ============================================================================
+
+/**
+ * How close a release has to be to a bookmark or chapter start to land on it: 1.5× the
+ * finger's own scatter in 1D touch, σa = 0.94 mm (Bi, Li & Zhai, FFitts law, CHI 2013).
+ * That catches 87% of releases aimed at a mark (1σ caught 68% and felt like missing), and
+ * stays about Android's touch slop (8 dp), the travel it counts as a finger holding still.
+ * Only on release: while dragging the thumb stays under the finger and marks just tick.
+ */
+const SNAP_PX = 1.5 * 0.94 * (160 / 25.4); // ≈ 8.9 dp
+/**
+ * Lifting faster than this (dp/s) is a fling, not aiming: the finger is through the snap zone
+ * before sight could correct it (~140 ms, Elliott & Allard 1985).
+ */
+const SNAP_MAX_VELOCITY = (2 * SNAP_PX) / 0.14; // ≈ 127 dp/s
+/** Half the gap between chapter segments. */
+const SEGMENT_INSET = 1.5;
+
+/**
+ * One chapter's stretch of the track, from..to as fractions of the duration, with its own
+ * rounded ends. Placed by time, not flexed, so the gaps never push the fill off the thumb.
+ */
+const TrackSegment: FC<{
+    from: number;
+    to: number;
+    progress: SharedValue<number>;
+    grow: SharedValue<number>;
+    loading: SharedValue<number>;
+    buffering: boolean;
+}> = ({ from, to, progress, grow, loading, buffering }) => {
+    const len = to - from;
+    const shapeStyle = useAnimatedStyle(() => ({ borderRadius: (4 + 4 * grow.value) / 2 }));
+    // Scaled, not shifted by the measured width: trackWidth only updates in onLayout, a
+    // frame after a rotation resizes the bar, and a shift by the old width showed the
+    // difference as a white block.
+    const fillStyle = useAnimatedStyle(() => ({
+        transform: [{ scaleX: Math.max(0, Math.min(1, (progress.value - from) / len)) }],
+    }));
+    // The one sweep across the whole bar, seen through this segment.
+    const loadingStyle = useAnimatedStyle(() => ({
+        opacity: buffering ? 1 : 0,
+        left: `${((loading.value * 1.3 - 0.3 - from) / len) * 100}%`,
+        width: `${(0.3 / len) * 100}%`,
+    }));
+    const placement = {
+        left: `${from * 100}%` as const,
+        right: `${(1 - to) * 100}%` as const,
+        marginLeft: from > 0 ? SEGMENT_INSET : 0,
+        marginRight: to < 1 ? SEGMENT_INSET : 0,
+    };
+    return (
+        <Animated.View style={[styles.track, placement, shapeStyle]}>
+            <Animated.View style={[styles.fill, fillStyle]} />
+            {buffering && <Animated.View style={[styles.loading, loadingStyle]} />}
+        </Animated.View>
+    );
+};
 
 interface SeekBarProps {
     currentTime: SharedValue<number>;
@@ -105,6 +167,8 @@ interface SeekBarProps {
     onStepBackward: () => void;
     onStepForward: () => void;
     bookmarks: number[];
+    /** By start, in seconds: a gap in the track at each, and the name while scrubbing. */
+    chapters: SeekChapter[];
     durationSeconds: number;
     buffering: boolean;
     onSeekStart: () => void;
@@ -115,8 +179,11 @@ interface SeekBarProps {
 const SeekBar: React.FC<SeekBarProps> = ({
     currentTime, duration, isScrubbing, seekPreviewTime, grow, dragging, swipeSeeking, swipeSeekStart,
     screenReader, onStepBackward, onStepForward,
-    bookmarks, durationSeconds, buffering, onSeekStart, onSeek, onSeekComplete,
+    bookmarks, chapters, durationSeconds, buffering, onSeekStart, onSeek, onSeekComplete,
 }) => {
+    // Dragging over a bookmark or a chapter start ticks the same way.
+    const marks = useMemo(() => [...bookmarks, ...chapters.map(c => c.start)], [bookmarks, chapters]);
+    const bubbleWidth = chapters.length > 0 ? CHAPTER_BUBBLE_WIDTH : BUBBLE_WIDTH;
     const trackWidth = useSharedValue(0);
     const scrubStart = useSharedValue(0);
     const lastSeekDispatchAt = useSharedValue(0);
@@ -139,16 +206,14 @@ const SeekBar: React.FC<SeekBarProps> = ({
         return Math.max(0, Math.min(1, time / d));
     });
 
-    const trackStyle = useAnimatedStyle(() => {
-        const h = 4 + 4 * grow.value;
-        return { height: h, borderRadius: h / 2 };
-    });
-    // Scaled, not shifted by the measured width: trackWidth only updates in onLayout, a
-    // frame after a rotation resizes the bar, and a shift by the old width showed the
-    // difference as a white block.
-    const fillStyle = useAnimatedStyle(() => ({
-        transform: [{ scaleX: progress.value }],
-    }));
+    const trackStyle = useAnimatedStyle(() => ({ height: 4 + 4 * grow.value }));
+    // Fractions of the duration where each segment ends; no chapters is one segment.
+    const edges = useMemo(() => {
+        const cuts = durationSeconds > 0
+            ? chapters.map(c => c.start / durationSeconds).filter(f => f > 0 && f < 1)
+            : [];
+        return [0, ...cuts, 1];
+    }, [chapters, durationSeconds]);
     const thumbStyle = useAnimatedStyle(() => {
         const size = 14 + 6 * grow.value;
         return {
@@ -160,7 +225,7 @@ const SeekBar: React.FC<SeekBarProps> = ({
         };
     });
     const bubbleStyle = useAnimatedStyle(() => {
-        const half = BUBBLE_WIDTH / 2;
+        const half = bubbleWidth / 2;
         let offset = -half;
         if (trackWidth.value > 0) {
             const x = progress.value * trackWidth.value;
@@ -171,15 +236,12 @@ const SeekBar: React.FC<SeekBarProps> = ({
             }
         }
         return {
+            width: bubbleWidth,
             opacity: grow.value,
             left: `${progress.value * 100}%`,
             transform: [{ translateX: offset }],
         };
     });
-    const loadingStyle = useAnimatedStyle(() => ({
-        opacity: buffering ? 1 : 0,
-        left: `${(loading.value * 1.3 - 0.3) * 100}%`,
-    }));
     const readinessStyle = useAnimatedStyle(() => ({
         // Dimmed, not hidden, until a duration exists: the bar can't seek yet.
         opacity: withTiming(duration.value > 0 ? 1 : 0.35, { duration: motion.fadeIn }),
@@ -209,14 +271,11 @@ const SeekBar: React.FC<SeekBarProps> = ({
         return Math.max(0, Math.min(1, x / trackWidth.value)) * duration.value;
     };
 
-    const crossesBookmark = (from: number, to: number) => {
+    const chapterAt = (t: number) => {
         'worklet';
-        const lo = Math.min(from, to);
-        const hi = Math.max(from, to);
-        for (let i = 0; i < bookmarks.length; i++) {
-            if (bookmarks[i] > lo && bookmarks[i] <= hi) {return true;}
-        }
-        return false;
+        let title = '';
+        for (let i = 0; i < chapters.length && chapters[i].start <= t; i++) {title = chapters[i].title;}
+        return title;
     };
 
     const pan = Gesture.Pan()
@@ -238,17 +297,21 @@ const SeekBar: React.FC<SeekBarProps> = ({
             const prev = seekPreviewTime.value;
             const next = toTime(e.x);
             seekPreviewTime.value = next;
-            if (crossesBookmark(prev, next)) {runOnJS(haptic)('segmentTick');}
+            if (crossesMark(marks, prev, next)) {runOnJS(haptic)('segmentTick');}
             const now = Date.now();
             if (now - lastSeekDispatchAt.value >= 33) {
                 lastSeekDispatchAt.value = now;
                 runOnJS(onSeek)(next);
             }
         })
-        .onFinalize(() => {
+        .onFinalize((e) => {
             'worklet';
             if (!dragging.value) {return;}
             dragging.value = false;
+            if (Math.abs(e.velocityX) < SNAP_MAX_VELOCITY) {
+                const mark = nearestMark(marks, seekPreviewTime.value, (SNAP_PX / trackWidth.value) * duration.value);
+                if (mark >= 0) {seekPreviewTime.value = mark;}
+            }
             // isScrubbing stays true until the seek lands, so the bar does not snap back.
             runOnJS(onSeekComplete)(seekPreviewTime.value);
         });
@@ -272,10 +335,22 @@ const SeekBar: React.FC<SeekBarProps> = ({
                 <Animated.View style={[styles.bubble, bubbleStyle]} pointerEvents="none">
                     <ReanimatedText value={seekPreviewTime} formatter={formatClock} style={styles.bubbleTime} />
                     <ReanimatedText value={delta} formatter={formatDelta} style={styles.bubbleDelta} />
+                    {chapters.length > 0 && (
+                        <ReanimatedText value={seekPreviewTime} formatter={chapterAt} style={styles.bubbleChapter} numberOfLines={1} />
+                    )}
                 </Animated.View>
-                <Animated.View style={[styles.track, trackStyle]}>
-                    <Animated.View style={[styles.fill, fillStyle]} />
-                    {buffering && <Animated.View style={[styles.loading, loadingStyle]} />}
+                <Animated.View style={trackStyle}>
+                    {edges.slice(1).map((to, i) => (
+                        <TrackSegment
+                            key={edges[i]}
+                            from={edges[i]}
+                            to={to}
+                            progress={progress}
+                            grow={grow}
+                            loading={loading}
+                            buffering={buffering}
+                        />
+                    ))}
                 </Animated.View>
                 {durationSeconds > 0 && bookmarks.map(t => (
                     <View
@@ -378,6 +453,7 @@ interface PlayerControlsProps {
     onSeek: (val: number) => void;
     onSeekComplete: (val: number) => void;
     bookmarks?: number[];
+    chapters?: SeekChapter[];
     buffering?: boolean;
     isLandscape: boolean;
     insets: EdgeInsets;
@@ -408,6 +484,7 @@ interface PlayerControlsProps {
 }
 
 const NO_BOOKMARKS: number[] = [];
+const NO_CHAPTERS: SeekChapter[] = [];
 const SEEK_ACTIONS = [{ name: 'increment' }, { name: 'decrement' }];
 
 type Handler = (...args: unknown[]) => unknown;
@@ -439,7 +516,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, onOpenPlayback, updatePending = false, playbackRate,
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
-    onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, buffering = false, isLandscape, insets, cutouts,
+    onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, chapters = NO_CHAPTERS, buffering = false, isLandscape, insets, cutouts,
     onOpenBookmarks, onOpenPlaylist, onPrevious, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
     showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement,
@@ -612,6 +689,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                     onStepBackward={onJumpBackward}
                     onStepForward={onJumpForward}
                     bookmarks={bookmarks}
+                    chapters={chapters}
                     durationSeconds={durationSeconds}
                     buffering={buffering}
                     onSeekStart={onSeekStart}
@@ -768,7 +846,7 @@ const styles = StyleSheet.create({
     timeMuted: { color: colors.textSecondary },
     endGroup: { flexDirection: 'row', alignItems: 'center' },
     seekBar: { height: 28, justifyContent: 'center' },
-    track: { backgroundColor: 'rgba(255,255,255,0.28)', overflow: 'hidden' },
+    track: { position: 'absolute', top: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.28)', overflow: 'hidden' },
     fill: { ...StyleSheet.absoluteFill, backgroundColor: colors.primary, transformOrigin: 'left' },
     loading: { position: 'absolute', top: 0, bottom: 0, width: '30%', backgroundColor: colors.primary },
     // A tick taller than the track, outlined so it reads on both the played and unplayed parts.
@@ -788,7 +866,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         left: 0,
         bottom: 36,
-        width: BUBBLE_WIDTH,
         paddingVertical: metrics.space.sm,
         borderRadius: metrics.radius.md,
         backgroundColor: colors.cardElevated,
@@ -796,7 +873,7 @@ const styles = StyleSheet.create({
     },
     bubbleTime: { ...type.row, color: colors.text },
     bubbleDelta: { ...type.caption, color: colors.textSecondary },
-    tools: { flexDirection: 'row', alignItems: 'center', minHeight: metrics.touch },
+    bubbleChapter: { ...type.caption, color: colors.text, paddingHorizontal: metrics.space.sm },    tools: { flexDirection: 'row', alignItems: 'center', minHeight: metrics.touch },
     next: { marginLeft: metrics.space.sm },
     previous: { marginRight: metrics.space.sm },
     modePillIcon: { width: 40, paddingHorizontal: 0, justifyContent: 'center' },

@@ -1233,6 +1233,14 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             })
         }
         info.putArray("audioTracks", trackArray)
+        info.putArray("chapters", Arguments.createArray().apply {
+            chapters.sortedBy { it.second }.forEach { (title, start) ->
+                pushMap(Arguments.createMap().apply {
+                    putString("title", title)
+                    putDouble("start", start.toDouble())
+                })
+            }
+        })
         val subTrackArray = Arguments.createArray()
         textTracks.forEachIndexed { id, (group, index) ->
             val format = group.getFormat(index)

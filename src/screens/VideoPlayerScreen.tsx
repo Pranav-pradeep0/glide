@@ -63,6 +63,7 @@ import {
     UsePlayerCoreReturn,
     UsePlayerTracksReturn,
 } from '@/hooks/video-player';
+import type { PlayerLoadData } from '@/hooks/video-player/types';
 import { useSubtitleDisplay } from '@/hooks/useSubtitleDisplay';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 
@@ -555,6 +556,17 @@ export default function VideoPlayerScreen({ route }: Props) {
     // frames). Up next shows from there, and stopping in the credits counts as watched.
     const [creditsAt, setCreditsAt] = React.useState<number | null>(null);
     const handleCredits = useCallback((e: { start: number }) => setCreditsAt(e.start / 1000), []);
+
+    // The file's chapters, in seconds, for the seek bar. One chapter marks nothing, so none.
+    const [chapters, setChapters] = React.useState<{ title: string; start: number }[]>([]);
+    const coreHandleLoad = player.handleLoad;
+    const handleLoad = useCallback((data: PlayerLoadData) => {
+        const list = data.chapters ?? [];
+        setChapters(list.length > 1
+            ? list.map((c, i) => ({ title: c.title || `Chapter ${i + 1}`, start: c.start / 1000 }))
+            : []);
+        coreHandleLoad(data);
+    }, [coreHandleLoad]);
 
     // ========================================================================
     // SAVING LOGIC (Defined after hooks to avoid circular dependencies)
@@ -1252,7 +1264,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         hapticPreset={hapticPreset}
                         hapticStrength={hapticStrength}
                         initialResumeSeconds={resumePosition ?? undefined}
-                        onLoad={player.handleLoad}
+                        onLoad={handleLoad}
                         onProgress={handleProgress}
                         onEnd={handleVideoEnd}
                         onError={handlePlayerError}
@@ -1357,6 +1369,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onSeek={handleSliderChange}
                     onSeekComplete={handleSliderChangeComplete}
                     bookmarks={isNetworkStream ? undefined : bookmarkTimes}
+                    chapters={chapters}
                     buffering={shouldShowBuffer}
                     isLandscape={isLandscape}
                     insets={effectiveInsets}
