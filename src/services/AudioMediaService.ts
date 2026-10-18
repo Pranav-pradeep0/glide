@@ -24,6 +24,11 @@ class AudioMediaServiceClass {
         this.inflightSongs = null;
     }
 
+    /** The last scan, for drawing straight away instead of a spinner. */
+    get cachedSongs(): AudioTrack[] | null {
+        return this.songsCache;
+    }
+
     getCachedSongById(trackId: string): AudioTrack | undefined {
         return this.songsCache?.find((s) => String(s.id) === String(trackId));
     }

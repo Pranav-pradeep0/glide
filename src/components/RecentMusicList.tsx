@@ -29,7 +29,7 @@ export function RecentMusicList() {
     const isPlaying = useAudioStore((s) => s.isPlaying);
     const playTrack = useAudioStore((s) => s.playTrack);
 
-    const [library, setLibrary] = useState<AudioTrack[] | null>(null);
+    const [library, setLibrary] = useState<AudioTrack[] | null>(() => AudioMediaService.cachedSongs);
     const [selected, setSelected] = useState<AudioTrack | null>(null);
 
     // Loads once access is there, and again when it is granted.
@@ -95,7 +95,7 @@ export function RecentMusicList() {
                         onMore={setSelected}
                     />
                 )}
-                contentContainerStyle={{ paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl * 2 }}
+                contentContainerStyle={{ paddingHorizontal: metrics.gutter - metrics.space.sm, paddingBottom: metrics.space.xxl * 2 }}
                 showsVerticalScrollIndicator={false}
             />
 

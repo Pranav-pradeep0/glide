@@ -496,7 +496,8 @@ const styles = StyleSheet.create({
     appBarTitle: { fontSize: 18, lineHeight: 24, fontWeight: '600' },
     back: { marginLeft: -metrics.space.sm },
     headerText: { flex: 1 },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs },
+    // Holds the IconButton height even when empty, so a header doesn't jump as its buttons come and go.
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs, minHeight: 40 },
     empty: {
         flex: 1,
         alignItems: 'center',
