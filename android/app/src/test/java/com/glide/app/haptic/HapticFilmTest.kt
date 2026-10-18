@@ -1,5 +1,6 @@
 package com.glide.app.haptic
 
+import com.glide.app.haptic.HapticDirector.Preset
 import com.glide.app.haptic.HapticMeaning.Kind
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -138,6 +139,20 @@ class HapticFilmTest {
             println("%-4s %-14s %-26s %8.3f %8.3f  %s".format(if (!scored && target == null) "" else if (ok) "ok" else "FAIL", name.take(14), what, a, f, target?.let { "${it.first}..${it.second}" } ?: ""))
             if (!ok) fails += "$name $what audio=$a fused=$f"
         }
+        // Phase 6: Subtle feels less of the film and fewer hits, Intense more. A Phase 4 target a
+        // preset misses is shown ("over"), not failed: the user chose the preset.
+        val presets = Preset.entries.associateWith { metrics(decoded, HapticDirector.direct(decoded.raw, tags, it), cues, tags) }
+        println("     %-14s %-26s %8s %8s %8s".format(name.take(14), "", "subtle", "cinema", "intense"))
+        for (what in PRESET_ROWS) {
+            val v = Preset.entries.mapNotNull { presets.getValue(it)[what] }
+            if (v.size < 3) continue
+            val over = TARGETS[what]?.let { (min, max) -> v.any { it < min || it > max } } == true
+            println("%-4s %-14s %-26s %8.3f %8.3f %8.3f".format(if (over) "over" else "", name.take(14), what, v[0], v[1], v[2]))
+        }
+        for (what in listOf("active share", "hits")) {
+            val (s, c, i) = Preset.entries.map { presets.getValue(it).getValue(what) }
+            if (!(s < c && c < i)) fails += "$name $what not ordered by preset: $s $c $i"
+        }
         return fails
     }
 
@@ -150,6 +165,11 @@ class HapticFilmTest {
         }
         m["active share"] = active.count { it }.toDouble() / active.size
         m["hits"] = track.events.size.toDouble()
+        m["mean hit strength"] = track.events.map { it.intensity.toDouble() }.average()
+        var run = 0
+        var longest = 0
+        for (a in active) { run = if (a) run + 1 else 0; longest = maxOf(longest, run) }
+        m["longest felt run, s"] = longest * HapticTrack.BED_FRAME_MS / 1000.0
         // The renderer plays the louder of bed and hit: a hit no stronger than the bed under it is lost.
         m["hits lost under the bed"] = track.events.count { e -> (0 until e.lengthMs step HapticTrack.BED_FRAME_MS).all { track.bedAt(e.timeMs + it) >= e.intensity } }.toDouble()
         val lines = dialogue(cues)
@@ -223,9 +243,10 @@ class HapticFilmTest {
             "dialogue FP/min" to (0.0 to HapticHarness.MAX_QUIET_FP_PER_MIN),
             "subwoofer correlation" to (HapticHarness.MIN_LFE_CORRELATION to 1.0)
         )
+        private val PRESET_ROWS = listOf("active share", "hits", "mean hit strength", "longest felt run, s", "dialogue FP/min", "subwoofer correlation", "tagged hits felt")
         private val HIGHER = setOf("subwoofer correlation", "tagged hits felt", "MUSIC, loud LFE felt", "VOICE, loud LFE felt")
         /** Shown, not scored: more hits and active time are the point of a rescued hit. */
-        private val INFO = setOf("active share", "hits", "hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
+        private val INFO = setOf("active share", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
 
         private val TIME = Regex("""(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)""")
         private val TAG = Regex("""[\[(♪#*]""")

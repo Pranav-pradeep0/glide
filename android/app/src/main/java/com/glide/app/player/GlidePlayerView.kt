@@ -17,6 +17,7 @@ import android.view.SurfaceView
 import android.widget.FrameLayout
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import com.glide.app.haptic.HapticDirector
 import com.glide.app.haptic.HapticMeaning
 import com.glide.app.haptic.HapticPerformer
 import androidx.media3.common.MediaItem
@@ -115,6 +116,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var audioDelayProcessor: AudioDelayProcessor? = null
     private var haptics: HapticPerformer? = null
     private var hapticTags: List<HapticMeaning.Tag> = emptyList()
+    private var hapticPreset = HapticDirector.Preset.CINEMATIC
+    private var hapticStrength = 1f
     /** Container chapters (title, start ms): a credits one says where Up next goes. */
     private var chapters: List<Pair<String, Long>> = emptyList()
     private var credits: CreditsAnalysis? = null
@@ -600,7 +603,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             haptics = null
             return
         }
-        haptics = HapticPerformer(context).also { h -> h.setTags(hapticTags); sourceUri?.takeIf { player != null }?.let { h.open(it) } }
+        haptics = HapticPerformer(context).also { h -> h.setTags(hapticTags); h.setPreset(hapticPreset); h.setStrength(hapticStrength); sourceUri?.takeIf { player != null }?.let { h.open(it) } }
         syncHaptics(hard = true)
     }
 
@@ -608,6 +611,18 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     fun setHapticCues(cues: List<HapticMeaning.Cue>) {
         hapticTags = HapticMeaning.tags(cues)
         haptics?.setTags(hapticTags)
+    }
+
+    /** Subtle / Cinematic / Intense (haptics Phase 6), live. */
+    fun setHapticPreset(preset: HapticDirector.Preset) {
+        hapticPreset = preset
+        haptics?.setPreset(preset)
+    }
+
+    /** Haptic strength 0..1 (Phase 6), live. */
+    fun setHapticStrength(strength: Float) {
+        hapticStrength = strength
+        haptics?.setStrength(strength)
     }
 
     private fun syncHaptics(hard: Boolean) {

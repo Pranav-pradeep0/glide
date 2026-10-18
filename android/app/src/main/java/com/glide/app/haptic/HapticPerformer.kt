@@ -55,6 +55,12 @@ class HapticPerformer(private val context: Context) {
     @Volatile
     private var tags: List<HapticMeaning.Tag> = emptyList()
 
+    @Volatile
+    private var preset = HapticDirector.Preset.CINEMATIC
+
+    @Volatile
+    private var strength = 1f
+
     /**
      * After a start, resume or jump the position creeps for ~0.5 s before it runs true (measured:
      * a first hit 229 ms early), first in 250 ms steps that two samples can agree on by chance.
@@ -84,6 +90,24 @@ class HapticPerformer(private val context: Context) {
      */
     fun setTags(tags: List<HapticMeaning.Tag>) {
         this.tags = tags
+        redirect()
+    }
+
+    /** Subtle / Cinematic / Intense (Phase 6), at any time: the track playing is directed again. */
+    fun setPreset(preset: HapticDirector.Preset) {
+        if (preset == this.preset) return
+        this.preset = preset
+        redirect()
+    }
+
+    /** The user's strength 0..1 (Phase 6), live like [setPreset]; it reaches the next call. */
+    fun setStrength(strength: Float) {
+        if (strength == this.strength) return
+        this.strength = strength
+        redirect()
+    }
+
+    private fun redirect() {
         val r = raw ?: return
         val opening = opened
         thread(name = "haptics-direct", priority = Thread.MIN_PRIORITY) { direct(r, opening) }
@@ -92,10 +116,12 @@ class HapticPerformer(private val context: Context) {
     private fun direct(r: HapticTrack, opening: Int) {
         val t0 = SystemClock.elapsedRealtime()
         val tg = tags
-        val t = HapticDirector.direct(r, tg)
-        Log.w(TAG, "direct took=${SystemClock.elapsedRealtime() - t0} frames=${r.bedIntensity.size} events=${t.events.size}/${r.events.size} tags=${tg.size}")
-        // A newer snapshot or newer tags may have been directed meanwhile: only the latest plays.
-        handler.post { if (opening == opened && r === raw && tg === tags) update(t) }
+        val p = preset
+        val s = strength
+        val t = HapticDirector.direct(r, tg, p, s)
+        Log.w(TAG, "direct took=${SystemClock.elapsedRealtime() - t0} frames=${r.bedIntensity.size} events=${t.events.size}/${r.events.size} tags=${tg.size} preset=$p strength=$s")
+        // A newer snapshot, tags, preset or strength may have been directed meanwhile: only the latest plays.
+        handler.post { if (opening == opened && r === raw && tg === tags && p == preset && s == strength) update(t) }
     }
 
     /** A longer track: carries on from the call playing, or from the playhead. */

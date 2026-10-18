@@ -405,3 +405,60 @@ The picker sheet, the "Looking for subtitles" caption and "Play without them" ar
 - **Phone:** Frankenstein `direct tags=0` at open, `tags=504` 8 s later, sync error within ±10 ms
   meanwhile; played again, `tags=504` on the first direct. Blast: no sheet, `tags=0` throughout (its
   `varint` error is the known junk after the last cluster, L2).
+
+## Phase 6 — Presets (2026-10-17)
+
+**Presets** (`HapticDirector.Preset`). Restraint is how close to the film's own loud moments a
+sound must be to be felt (the bed and hit ranges); contrast is how soft the softest felt hit may be
+and how heavy the bed is under the hits. The old 1-255 strength (ignored by native since Phase 2)
+is gone, with its slider, chips and test buzz; strength is now its own setting (below).
+
+| | bed range | hit range | softest hit | bed |
+|---|---|---|---|---|
+| Subtle | 7 dB | 6 dB | 0.25 | × 0.6 |
+| Cinematic (= Phases 4-5) | 10 dB | 9 dB | 0.25 | × 1 |
+| Intense | 13 dB | 12 dB | 0.40 | × 1 |
+
+**Exit test.** `HapticFilmTest` scores each preset with the film's tags; Cinematic's column is the
+Phase 5 "fused" column unchanged, and active share and hits must rise Subtle < Cinematic < Intense.
+
+| Subtle / Cinematic / Intense | Us | Frankenstein | Together | Blast |
+|---|---|---|---|---|
+| Share of the runtime felt (≤ 15%) | 3.3 / 5.7 / 9.0% | 3.1 / 6.0 / 9.2% | 3.0 / 6.0 / 9.9% | 6.6 / 13.6 / **21.4%** |
+| Hits | 182 / 275 / 347 | 173 / 228 / 311 | 54 / 73 / 100 | 104 / 160 / 179 |
+| Mean hit strength | 0.67 / 0.63 / 0.72 | 0.65 / 0.65 / 0.70 | 0.68 / 0.67 / 0.71 | 0.68 / 0.64 / 0.75 |
+| Hits during plain dialogue, per min (≤ 1) | 0.20 / 0.61 / 0.89 | 0.13 / 0.42 / **1.03** | 0.36 / 0.43 / 0.53 | 0.31 / 1.00 / **1.11** |
+| Subwoofer correlation (≥ 0.5) | 0.71 / 0.76 / 0.78 | 0.72 / 0.76 / 0.77 | 0.66 / 0.73 / 0.77 | 0.60 / 0.74 / 0.82 |
+| Longest unbroken felt run | 7 / 33 / 33 s | 3 / 6 / 16 s | 13 / 16 / 34 s | 5 / 6 / 11 s |
+
+**Strength.** On the phone every preset felt far too strong: the Director rescales each film's
+loud moments to full motor motion, and no preset lowered that. A per-preset ceiling was tried
+first (55 / 80 / 100% of motion): Cinematic and Intense felt the same, since this motor's motion
+flattens at the top (amplitude 160 → 255 adds ~20% motion, ~2 dB). So strength became one
+slider, like volume:
+- **dB scale.** `HapticDirector.strength()` maps slider 0..1 onto 30 dB of motion, applied by
+  the Director after everything else, so felt share and hits don't change with it. A linear
+  scale left the bottom stop (10%) peaking near amplitude 47, well above the felt floor (15).
+- **Presets are stops on it:** Subtle 35%, Cinematic 60% (default, ~25% motion), Intense 100%.
+  Only the slider position is saved; the preset played is the nearest stop (`hapticPresetAt`),
+  so chips and slider can't disagree. Tapping a chip moves the slider there.
+- **Floor 10%, no 0%:** off is the Haptics toggle. 10% peaks just over the felt floor.
+- **Live,** like a preset: each change re-directs (~50 ms, off the haptics thread) and reaches
+  the next vibration call; a long unbroken rumble keeps the old strength until it ends.
+
+The film test runs at strength 1, so its tables above are unchanged.
+
+**Findings.**
+- **Intense breaks two Phase 4 targets, left as is:** Blast is felt 21% of its runtime, and Blast
+  and Frankenstein get just over 1 dialogue hit a minute. Those targets define Cinematic; Intense is
+  the user asking for more. Shown as `over` by the test, not failed.
+- **Tagged hits felt is the same in every preset:** a tag keeps its onset whatever the gate.
+- **Comfort limits not added.** Long unbroken runs already exist in Cinematic (Us 33 s); Intense
+  doubles Together's to 34 s. A cap waits for a report that long scenes tire.
+- **A preset change re-directs the track playing,** like new tags: the cache holds the raw track,
+  so it costs one Director pass. The player prop `hapticPreset` reaches `HapticPerformer.setPreset`.
+- **Copy.** Settings › Haptic feedback reads "Rumbles with loud scenes and deep sounds"; the
+  presets say "Fewer, lighter / Default / More, stronger". A one-time note on the first play
+  (and a "Feel what you hear" line) was tried and dropped: plain words for what the user feels
+  beat explaining the engine. The native Alert dialogs were replaced by the app's own
+  (`showDialog`, `DialogHost`) on the way.

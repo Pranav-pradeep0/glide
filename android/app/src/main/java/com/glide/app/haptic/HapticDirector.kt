@@ -5,8 +5,8 @@ import kotlin.math.log10
 
 /**
  * The Director (docs/haptics-engine-plan.md Phase 4): decides what of the Listener's raw track is
- * felt, relative to the film itself. The bed plays only within [BED_RANGE_DB] of the film's loud
- * bass (its 99th percentile), hits only within [HIT_RANGE_DB] of its loud hits (95th); both are
+ * felt, relative to the film itself. The bed plays only within [Preset.bedRangeDb] of the film's
+ * loud bass (its 99th percentile), hits only within [Preset.hitRangeDb] of its loud hits (95th); both are
  * rescaled so the film's loud moments are full strength. Real films have faint bass under a
  * quarter of their runtime and quiet hits under dialogue; this keeps the bed to 5-11% of Us and
  * Blast and dialogue to under 1 hit a minute (docs/haptics-decisions.md, Phase 4).
@@ -21,12 +21,27 @@ import kotlin.math.log10
  * While a film is still being analysed the levels come from the part heard so far.
  */
 object HapticDirector {
-    const val BED_RANGE_DB = 10f
-    const val HIT_RANGE_DB = 9f
+    /**
+     * Phase 6. Restraint: how close to the film's loud moments a sound must be to be felt.
+     * Contrast: how soft the softest felt hit may be ([hitMin]) and how heavy the bed is under
+     * the hits ([bedGain]). Cinematic is the Phase 4-5 track. How strong it all is, is the
+     * user's separate strength setting ([direct]).
+     */
+    enum class Preset(val bedRangeDb: Float, val hitRangeDb: Float, val hitMin: Float, val bedGain: Float) {
+        SUBTLE(7f, 6f, 0.25f, 0.6f),
+        CINEMATIC(10f, 9f, 0.25f, 1f),
+        INTENSE(13f, 12f, 0.4f, 1f),
+    }
+
+    /** The strength slider spans this many dB of motion, like a volume control. */
+    const val STRENGTH_RANGE_DB = 30f
+
+    /** Slider position 0..1 to the [direct] strength: 0 is ~3% of full motion (near the felt floor), 1 is full. */
+    fun strength(level: Float) = Math.pow(10.0, ((level.coerceIn(0f, 1f) - 1) * STRENGTH_RANGE_DB / 20).toDouble()).toFloat()
+
     const val SNAP_MS = 1000
     private const val SMOOTH_FRAMES = 10 // 100 ms
     private const val FOLLOW_DB = 6f // how far under the gate an open bed follows
-    private const val HIT_MIN = 0.25f // a hit at the edge of the range is still felt
     private const val MUSIC_BED = 0.5f
     private const val SHARP = 0.8f
     private const val HEAVY = 0.1f
@@ -36,7 +51,12 @@ object HapticDirector {
     private const val BED_DB = 45f
     private const val HIT_DB = 40f
 
-    fun direct(raw: HapticTrack, tags: List<HapticMeaning.Tag> = emptyList()): HapticTrack {
+    /**
+     * [strength] 0..1 is the user's volume: the film's loud moments play at that share of full
+     * motor motion (intensity is a share of motion, see [HapticCalibration]). Full strength felt
+     * too strong on the Nothing Phone 2 in every preset (docs/haptics-decisions.md, Phase 6).
+     */
+    fun direct(raw: HapticTrack, tags: List<HapticMeaning.Tag> = emptyList(), preset: Preset = Preset.CINEMATIC, strength: Float = 1f): HapticTrack {
         if (raw.analyzerVersion == 0) return raw // a fixture's truth, imported by the Lab
         // Levels are judged on power averaged over [SMOOTH_FRAMES]: low tones beat 10-20 times a
         // second, and judged frame by frame their dips would chop a rumble into pieces.
@@ -53,10 +73,10 @@ object HapticDirector {
         var k = 0
         for (i in v.indices) if (v[i] > 0f) heard[k++] = level[i]
         val bedRef = percentile(heard, 0.99f)
-        val bedGate = bedRef - BED_RANGE_DB / BED_DB
+        val bedGate = bedRef - preset.bedRangeDb / BED_DB
         val bedLow = bedGate - FOLLOW_DB / BED_DB
         val bed = FloatArray(v.size) { i ->
-            if (v[i] <= 0f || level[i] <= bedGate) 0f else ((v[i] - bedLow) / (bedRef - bedLow)).coerceIn(0f, 1f)
+            if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * ((v[i] - bedLow) / (bedRef - bedLow)).coerceIn(0f, 1f)
         }
         // Under music the bed is lighter but still there: what a mixer sends to the LFE in a song
         // scene is meant to be heavy. Gating it out lost 15-50% of loud-LFE moments.
@@ -65,9 +85,9 @@ object HapticDirector {
 
         val weighty = raw.events.filter { it.sources and HapticTrack.LIGHT == 0 }
         val hitRef = percentile(FloatArray(weighty.size) { weighty[it].intensity }, 0.95f)
-        val hitGate = hitRef - HIT_RANGE_DB / HIT_DB
+        val hitGate = hitRef - preset.hitRangeDb / HIT_DB
         fun scaled(e: HapticTrack.Event) = e.copy(
-            intensity = (HIT_MIN + (1 - HIT_MIN) * (e.intensity - hitGate) / (hitRef - hitGate)).coerceIn(HIT_MIN, 1f),
+            intensity = (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (hitRef - hitGate)).coerceIn(preset.hitMin, 1f),
             sources = e.sources and HapticTrack.LIGHT.inv()
         )
         // Music has no hits of its own: one there is kept only if a tag names it (below).
@@ -88,7 +108,8 @@ object HapticDirector {
             )
         }
         events.sortBy { it.timeMs }
-        return HapticTrack(raw.analyzerVersion, raw.fingerprint, bed, raw.bedSharpness, events)
+        for (i in bed.indices) bed[i] *= strength
+        return HapticTrack(raw.analyzerVersion, raw.fingerprint, bed, raw.bedSharpness, events.map { it.copy(intensity = it.intensity * strength) })
     }
 
     // ponytail: sorts the whole lane per publish (~1/s, 0.7M floats for a 2 h film); a 256-bin

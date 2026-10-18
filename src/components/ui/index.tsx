@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import Animated, {
+    FadeIn,
     makeMutable,
     runOnJS,
     useAnimatedStyle,
@@ -845,9 +846,90 @@ export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffse
 }
 
 // ---------------------------------------------------------------------------
+// Dialog
+
+interface DialogAction {
+    text: string;
+    style?: 'default' | 'cancel' | 'destructive';
+    onPress?: () => void;
+}
+
+interface DialogMessage {
+    title: string;
+    message?: string;
+    actions: DialogAction[];
+}
+
+let showDialogListener: ((d: DialogMessage) => void) | undefined;
+
+/** The app's Alert.alert: same arguments, drawn in the app's style by the root's DialogHost. */
+export function showDialog(title: string, message?: string, actions: DialogAction[] = [{ text: 'OK' }]) {
+    showDialogListener?.({ title, message, actions });
+}
+
+/**
+ * Mount once, at the app root. Its own Modal window, so it shows above open sheets. Tapping
+ * outside or back is the cancel action, or the only action; otherwise it waits for a choice.
+ */
+export function DialogHost() {
+    const { colors } = useUiTheme();
+    const [dialog, setDialog] = useState<DialogMessage | null>(null);
+    useEffect(() => {
+        showDialogListener = setDialog;
+        return () => { showDialogListener = undefined; };
+    }, []);
+    if (!dialog) { return null; }
+
+    const press = (a: DialogAction) => {
+        setDialog(null);
+        a.onPress?.();
+    };
+    const dismiss = dialog.actions.find(a => a.style === 'cancel') ?? (dialog.actions.length === 1 ? dialog.actions[0] : undefined);
+    const close = () => dismiss && press(dismiss);
+    return (
+        <Modal transparent visible onRequestClose={close} statusBarTranslucent navigationBarTranslucent animationType="none">
+            <View style={[styles.dialogScrim, { backgroundColor: colors.scrim }]}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close" />
+                <Animated.View
+                    entering={FadeIn.duration(motion.fadeIn)}
+                    accessibilityViewIsModal
+                    style={[styles.dialog, { backgroundColor: colors.cardElevated }]}
+                >
+                    <SheetHeader title={dialog.title} onClose={dismiss && close} />
+                    {!!dialog.message && <Text style={[type.body, { color: colors.textSecondary }]}>{dialog.message}</Text>}
+                    <View style={styles.dialogActions}>
+                        {dialog.actions.map(a => (
+                            <Button
+                                key={a.text}
+                                label={a.text}
+                                size="lg"
+                                variant={a.style === 'cancel' ? 'secondary' : a.style === 'destructive' ? 'destructive' : 'primary'}
+                                onPress={() => press(a)}
+                                style={styles.flex}
+                            />
+                        ))}
+                    </View>
+                </Animated.View>
+            </View>
+        </Modal>
+    );
+}
+
+// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
     flex: { flex: 1 },
+    dialogScrim: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: metrics.gutter },
+    dialog: {
+        width: '100%',
+        maxWidth: 420,
+        borderRadius: metrics.radius.card,
+        paddingHorizontal: metrics.space.lg,
+        paddingTop: metrics.space.md,
+        paddingBottom: metrics.space.lg,
+        gap: metrics.space.lg,
+    },
+    dialogActions: { flexDirection: 'row', gap: metrics.space.sm },
     disabled: { opacity: 0.38 },
     layer: { borderRadius: 4 },
     block: { alignSelf: 'stretch' },

@@ -57,10 +57,16 @@ export interface SubtitleSettings {
     delay: number;
 }
 
-// Simplified Haptic-specific settings - single intensity value controls everything
+/** How few moments are felt and how far they stand out (native HapticDirector.Preset). */
+export type HapticPreset = 'subtle' | 'cinematic' | 'intense';
+
 export interface HapticSettings {
     enabled: boolean;
-    intensity: number; // 1-255, controls all haptic strength (default: 128)
+    /**
+     * Slider position 0..1 on a dB scale, like volume (native HapticDirector.strength). The
+     * preset is the nearest stop on it (hapticPresetAt).
+     */
+    strength: number;
 }
 
 export interface AppSettings {

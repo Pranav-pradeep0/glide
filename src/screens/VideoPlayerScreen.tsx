@@ -72,7 +72,7 @@ import { NavigationService } from '@/services/NavigationService';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { EXTERNAL_SUBTITLE_INDEX } from '@/services/ExternalSubtitleStore';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
-import { useAppStore } from '@/store/appStore';
+import { hapticPresetAt, useAppStore } from '@/store/appStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 
 // Types
@@ -156,6 +156,8 @@ export default function VideoPlayerScreen({ route }: Props) {
     const brightnessMode = useAppStore(state => state.settings.brightnessMode);
     const globalBrightness = useAppStore(state => state.settings.globalBrightness);
     const pipBrightnessMode = useAppStore(state => state.settings.pipBrightnessMode);
+    const hapticStrength = useAppStore(state => state.settings.hapticSettings.strength);
+    const hapticPreset = hapticPresetAt(hapticStrength).key;
     const defaultAudioLanguage = useAppStore(state => state.settings.defaultAudioLanguage);
     const seekDuration = useAppStore(state => state.settings.seekDuration);
     const autoPlayNext = useAppStore(state => state.settings.autoPlayNext);
@@ -1236,6 +1238,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                         audioDelay={settingsHook.settings.audioDelay}
                         haptics={playMode === 'with-haptics' && hapticsEnabled}
                         hapticCues={hapticCues}
+                        hapticPreset={hapticPreset}
+                        hapticStrength={hapticStrength}
                         initialResumeSeconds={resumePosition ?? undefined}
                         onLoad={player.handleLoad}
                         onProgress={handleProgress}

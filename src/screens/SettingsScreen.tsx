@@ -4,13 +4,12 @@ import {
     Text,
     StyleSheet,
     ScrollView,
-    Alert,
     FlatList,
     TextInput,
     useWindowDimensions,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { DEFAULT_APP_SETTINGS, SUBTITLE_FONT_FAMILY, useAppStore } from '../store/appStore';
+import { DEFAULT_APP_SETTINGS, HAPTIC_PRESETS, HAPTIC_STRENGTH_MIN, hapticPresetAt, SUBTITLE_FONT_FAMILY, useAppStore } from '../store/appStore';
 import { useVideoHistoryStore } from '../store/videoHistoryStore';
 import { useTheme } from '../hooks/useTheme';
 import { SUBTITLE_COLORS } from '../utils/constants';
@@ -32,6 +31,8 @@ import {
     ListRow,
     SectionLabel,
     Sheet,
+    showDialog,
+    showSnackbar,
     Touchable,
 } from '@/components/ui';
 import { metrics, playerTheme, type } from '@/theme/theme';
@@ -45,12 +46,6 @@ const AnimatedText = Animated.createAnimatedComponent(Text);
 const noop = () => {};
 
 const RESET_LABEL = 'Reset to default';
-
-const INTENSITY_PRESETS = [
-    { label: 'Light', value: 50 },
-    { label: 'Medium', value: 100 },
-    { label: 'Strong', value: 180 },
-];
 
 const SUBTITLE_STYLES = [
     { key: 'none', label: 'None' },
@@ -180,8 +175,7 @@ export default function SettingsScreen() {
     const toggleHaptics = useAppStore((state) => state.toggleHaptics);
     const setSubtitleFontSize = useAppStore((state) => state.setSubtitleFontSize);
     const setSubtitleColor = useAppStore((state) => state.setSubtitleColor);
-    const setHapticIntensity = useAppStore((state) => state.setHapticIntensity);
-    const resetHapticSettings = useAppStore((state) => state.resetHapticSettings);
+    const setHapticStrength = useAppStore((state) => state.setHapticStrength);
     const setBrightnessMode = useAppStore((state) => state.setBrightnessMode);
     const setPipBrightnessMode = useAppStore((state) => state.setPipBrightnessMode);
     const setSubtitleFontWeight = useAppStore((state) => state.setSubtitleFontWeight);
@@ -225,24 +219,6 @@ export default function SettingsScreen() {
     }, [searchQuery]);
 
     const { hapticSettings } = settings;
-    const lastPreviewTime = useRef(0);
-
-    const handleIntensityChange = useCallback((value: number) => {
-        setHapticIntensity(value);
-        // Throttled so dragging doesn't overwhelm the motor.
-        const now = Date.now();
-        if (now - lastPreviewTime.current > 200 && HapticModule) {
-            lastPreviewTime.current = now;
-            HapticModule.vibrate(80, Math.round(value));
-        }
-    }, [setHapticIntensity]);
-
-    const handlePresetSelect = useCallback((value: number) => {
-        setHapticIntensity(value);
-        if (HapticModule) {
-            HapticModule.vibrate(100, value);
-        }
-    }, [setHapticIntensity]);
 
     const handleShakeTestHit = useCallback(() => {
         if (HapticModule) {
@@ -251,7 +227,7 @@ export default function SettingsScreen() {
     }, []);
 
     function handleClearCache() {
-        Alert.alert(
+        showDialog(
             'Clear subtitle cache',
             'This will delete all cached subtitles. Continue?',
             [
@@ -261,26 +237,15 @@ export default function SettingsScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         await FileService.cleanSubtitleCache();
-                        Alert.alert('Done', 'Cache cleared');
+                        showSnackbar({ text: 'Subtitle cache cleared', tone: 'confirm' });
                     },
                 },
             ]
         );
     }
 
-    function handleResetHaptics() {
-        Alert.alert(
-            'Reset haptic feedback',
-            'This will reset vibration strength to default. Continue?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Reset', style: 'destructive', onPress: resetHapticSettings },
-            ]
-        );
-    }
-
     function handleResetShakeIntensity() {
-        Alert.alert(
+        showDialog(
             'Reset shake strength',
             'This will reset shake strength to default. Continue?',
             [
@@ -295,7 +260,7 @@ export default function SettingsScreen() {
     }
 
     function handleClearHistory() {
-        Alert.alert(
+        showDialog(
             'Clear watch history',
             'This will delete all playback progress and bookmarks. Continue?',
             [
@@ -305,7 +270,7 @@ export default function SettingsScreen() {
                     style: 'destructive',
                     onPress: () => {
                         clearAllHistory();
-                        Alert.alert('Done', 'Watch history cleared');
+                        showSnackbar({ text: 'Watch history cleared', tone: 'confirm' });
                     },
                 },
             ]
@@ -345,7 +310,6 @@ export default function SettingsScreen() {
     });
 
     const showUpdate = updateStatus.available && updateStatus.latestVersion && (updateStatus.releaseUrl || updateStatus.apkUrl);
-    const strengthLabel = INTENSITY_PRESETS.find(p => Math.abs(hapticSettings.intensity - p.value) < 20)?.label ?? '';
 
     function closeLanguages() {
         setLanguageModalVisible(false);
@@ -512,40 +476,35 @@ export default function SettingsScreen() {
                     <ListRow
                         icon="activity"
                         title="Haptic feedback"
+                        caption="Rumbles with loud scenes and deep sounds"
                         toggle={{ value: hapticSettings.enabled, onChange: toggleHaptics }}
                     />
                     {hapticSettings.enabled && (
-                        <ChipRow title="Strength">
+                        <ChipRow title="Style">
                             <View style={styles.chips}>
-                                {INTENSITY_PRESETS.map(p => (
+                                {HAPTIC_PRESETS.map(p => (
                                     <Chip
-                                        key={p.label}
+                                        key={p.key}
                                         label={p.label}
-                                        selected={strengthLabel === p.label}
-                                        onPress={() => handlePresetSelect(p.value)}
+                                        selected={hapticPresetAt(hapticSettings.strength).key === p.key}
+                                        onPress={() => setHapticStrength(p.strength)}
                                     />
                                 ))}
                             </View>
-                            <Slider
-                                style={styles.slider}
-                                accessibilityLabel="Fine-tune strength"
-                                minimumValue={1}
-                                maximumValue={255}
-                                step={1}
-                                value={hapticSettings.intensity}
-                                onValueChange={handleIntensityChange}
-                                minimumTrackTintColor={colors.primary}
-                                maximumTrackTintColor={colors.fillStrong}
-                                thumbTintColor={colors.primary}
-                            />
+                            <Text style={[type.caption, { color: colors.textSecondary }]}>
+                                {hapticPresetAt(hapticSettings.strength).caption}
+                            </Text>
                         </ChipRow>
                     )}
                     {hapticSettings.enabled && (
-                        <ListRow
-                            icon="rotate-ccw"
-                            title={RESET_LABEL}
-                            caption="Haptic strength"
-                            onPress={handleResetHaptics}
+                        <SliderRow
+                            title="Strength"
+                            valueText={`${Math.round(hapticSettings.strength * 100)}%`}
+                            minimumValue={HAPTIC_STRENGTH_MIN}
+                            maximumValue={1}
+                            step={0.05}
+                            value={hapticSettings.strength}
+                            onValueChange={setHapticStrength}
                         />
                     )}
                 </ListGroup>

@@ -22,6 +22,7 @@ import {
     StyleProp,
 } from 'react-native';
 import { hasNativeApi } from '@/native/GlideNative';
+import type { HapticPreset } from '@/types';
 
 const NATIVE_NAME = 'RCTGlidePlayer';
 
@@ -78,6 +79,10 @@ export interface GlidePlayerProps extends ViewProps {
     haptics?: boolean;
     /** A subtitle's tagged cues ([explosion], ♪), if it has any: the Director reads them as sound labels. */
     hapticCues?: HapticCue[];
+    /** How few moments are felt and how far they stand out; live. */
+    hapticPreset?: HapticPreset;
+    /** 0..1, how strong the loud moments are; live. */
+    hapticStrength?: number;
     videoEnhancement?: boolean;
     /** 0..1.5, 1 = the tuned look. Live; only the toggle re-opens the media. */
     videoEnhancementStrength?: number;

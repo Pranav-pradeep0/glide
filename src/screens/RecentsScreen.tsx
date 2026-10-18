@@ -1,6 +1,6 @@
 // src/screens/RecentsScreen.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { View, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
@@ -11,7 +11,7 @@ import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useTheme } from '@/hooks/useTheme';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
-import { IconButton, Segmented, SortButton } from '@/components/ui';
+import { IconButton, Segmented, showDialog, SortButton } from '@/components/ui';
 import { RecentMusicList } from '@/components/RecentMusicList';
 import {
     AmbientBackdrop, ContinueCard, EmptyState, ListHeader, SectionTitle, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
@@ -107,7 +107,7 @@ export default function RecentsScreen() {
     const handleClearHistoryItem = () => {
         const video = selectedVideo;
         if (!video) {return;}
-        Alert.alert(`Remove "${video.videoName}" from Recents?`, undefined, [
+        showDialog(`Remove "${video.videoName}" from Recents?`, undefined, [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Remove', style: 'destructive', onPress: () => clearVideoHistory(video.videoPath) },
         ]);

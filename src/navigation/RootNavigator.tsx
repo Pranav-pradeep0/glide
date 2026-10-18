@@ -8,7 +8,7 @@ import { Feather } from '@react-native-vector-icons/feather';
 import { DeepLinkService } from '../services/DeepLinkService';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { Button, Touchable, SnackbarHost, useSnackbarClearance } from '@/components/ui';
+import { Button, DialogHost, Touchable, SnackbarHost, useSnackbarClearance } from '@/components/ui';
 import { ErrorBoundary } from '../../ErrorBoundary';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { metrics, type } from '@/theme/theme';
@@ -367,6 +367,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                 )}
             </Stack.Navigator>
             <SnackbarHost aboveBottomBar />
+            <DialogHost />
         </NavigationContainer>
     );
 }

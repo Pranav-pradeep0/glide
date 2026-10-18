@@ -9,8 +9,7 @@ import { haptic } from '@/native/HapticModule';
 import { DISPLAY_MODES, formatRate } from './PlayerIcons';
 import { SidePanel } from './SidePanel';
 import { throttle } from '../../hooks/video-player/types';
-import { useAppStore } from '../../store/appStore';
-import HapticModule from '../../native/HapticModule';
+import { HAPTIC_PRESETS, HAPTIC_STRENGTH_MIN, hapticPresetAt, useAppStore } from '../../store/appStore';
 
 const { colors } = playerTheme;
 
@@ -31,11 +30,6 @@ const ENHANCEMENT_PRESETS = [
     { label: 'Vivid', value: 1.5 },
 ];
 
-const HAPTIC_PRESETS = [
-    { label: 'Light', value: 50 },
-    { label: 'Medium', value: 120 },
-    { label: 'Strong', value: 200 },
-];
 
 // Sub-pages slide in on the same spring as the panel.
 const spring = <T extends { springify: () => any }>(b: T) =>
@@ -126,12 +120,8 @@ const roundRate = (v: number) => Math.round(v * 100) / 100;
 
 export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props) => {
     const hapticSettings = useAppStore((state) => state.settings.hapticSettings);
-    const setHapticIntensity = useAppStore((state) => state.setHapticIntensity);
+    const setHapticStrength = useAppStore((state) => state.setHapticStrength);
     const toggleHaptics = useAppStore((state) => state.toggleHaptics);
-    // Older builds stored any value from a 1-255 slider; show the nearest preset.
-    const hapticPreset = HAPTIC_PRESETS.reduce((best, p) =>
-        Math.abs(p.value - hapticSettings.intensity) < Math.abs(best.value - hapticSettings.intensity) ? p : best,
-    ).value;
 
     const [shown, setShown] = useState(false);
     const [page, setPage] = useState<Page>('main');
@@ -165,6 +155,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
         if (fromSlider) { speed.onValueChange(rate); } else { props.onPlaybackRateChange(rate); }
     };
     const enhancement = useCappedSlider(props.videoEnhancementStrength ?? 1, v => props.onSetVideoEnhancementStrength?.(v));
+    const hapticStrength = useCappedSlider(hapticSettings.strength, setHapticStrength);
 
     // `stretch` renders exactly like `fill`, which is the option shown for it.
     const displayMode = props.resizeMode === 'stretch' ? 'fill' : props.resizeMode;
@@ -285,7 +276,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                 )}
                 {props.onToggleVideoEnhancement && props.videoEnhancement && (
                     <View style={styles.subOptions}>
-                        <View style={styles.chips}>
+                        <View style={[styles.chips, styles.centered]}>
                             {ENHANCEMENT_PRESETS.map(({ label, value }) => (
                                 <Chip
                                     key={label}
@@ -298,7 +289,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                         </View>
                         <View style={styles.sliderRow}>
                             <Slider
-                                style={[styles.slider, styles.sliderFlex]}
+                                style={[styles.slider, styles.sliderFlex, styles.sliderInset]}
                                 minimumValue={0}
                                 maximumValue={1.5}
                                 step={0.05}
@@ -324,20 +315,36 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                     />
                 )}
                 {toggleHapticsRow && hapticsOn && (
-                    <View style={[styles.chips, styles.subOptions]}>
-                        {HAPTIC_PRESETS.map(p => (
-                            <Chip
-                                key={p.value}
-                                label={p.label}
-                                selected={hapticPreset === p.value}
-                                onPress={() => {
-                                    setHapticIntensity(p.value);
-                                    HapticModule?.vibrate(80, p.value);
-                                }}
-                                accessibilityLabel={`${p.label} haptics`}
-                                onPlayer
+                    <View style={styles.subOptions}>
+                        <View style={[styles.chips, styles.centered]}>
+                            {HAPTIC_PRESETS.map(p => (
+                                <Chip
+                                    key={p.key}
+                                    label={p.label}
+                                    selected={hapticPresetAt(hapticStrength.shown).key === p.key}
+                                    onPress={() => setHapticStrength(p.strength)}
+                                    accessibilityLabel={`${p.label} haptics`}
+                                    onPlayer
+                                />
+                            ))}
+                        </View>
+                        <View style={styles.sliderRow}>
+                            <Slider
+                                style={[styles.slider, styles.sliderFlex, styles.sliderInset]}
+                                minimumValue={HAPTIC_STRENGTH_MIN}
+                                maximumValue={1}
+                                step={0.05}
+                                value={hapticStrength.value}
+                                onSlidingStart={hapticStrength.onSlidingStart}
+                                onValueChange={hapticStrength.onValueChange}
+                                onSlidingComplete={hapticStrength.onSlidingComplete}
+                                minimumTrackTintColor={colors.primary}
+                                maximumTrackTintColor={colors.fillStrong}
+                                thumbTintColor={colors.primary}
+                                accessibilityLabel="Haptic strength"
                             />
-                        ))}
+                            <Text style={[type.body, styles.valueText]}>{Math.round(hapticStrength.shown * 100)}%</Text>
+                        </View>
                     </View>
                 )}
                 {props.onToggleShake && (
@@ -454,7 +461,10 @@ const styles = StyleSheet.create({
     sliderFlex: { flex: 1 },
     group: { marginTop: metrics.space.lg },
     updateGroup: { marginBottom: metrics.space.lg },
-    subOptions: { padding: metrics.space.lg, paddingTop: metrics.space.xs, gap: metrics.space.sm },
+    subOptions: { paddingHorizontal: metrics.space.lg, paddingVertical: metrics.space.md, gap: metrics.space.sm },
+    centered: { justifyContent: 'center' },
+    // Android's slider insets its track by the thumb's radius; this lines the track up with the chips.
+    sliderInset: { marginTop: 0, marginHorizontal: -metrics.space.lg },
     sliderRow: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm },
     valueText: { color: colors.text, fontVariant: ['tabular-nums'], minWidth: 44, textAlign: 'right' },
 });

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Appearance } from 'react-native';
-import { AppSettings, HapticSettings, ShakeAction } from '../types';
+import { AppSettings, HapticPreset, HapticSettings, ShakeAction } from '../types';
 import type { UpdateError } from '../hooks/useUpdateInstaller';
 import { updateStorage, type UpdateApkCache } from '../storage/updateStorage';
 import { storage } from '../storage/storage';
@@ -27,10 +27,26 @@ const INITIAL_UPDATE_INSTALL: UpdateInstallState = {
 // Registered in MainApplication from res/font/atkinson_hyperlegible_next.xml.
 export const SUBTITLE_FONT_FAMILY = 'AtkinsonHyperlegibleNext';
 
-// Default haptic settings
+/**
+ * The presets are stops on the one strength slider (slider positions, dB scale: Subtle ~9%,
+ * Cinematic ~25%, Intense full motion); the slider plays the preset of the nearest stop. Full
+ * strength felt too strong on the Nothing Phone 2 (docs/haptics-decisions.md, Phase 6).
+ */
+export const HAPTIC_PRESETS: { key: HapticPreset; label: string; caption: string; strength: number }[] = [
+    { key: 'subtle', label: 'Subtle', caption: 'Fewer, lighter', strength: 0.35 },
+    { key: 'cinematic', label: 'Cinematic', caption: 'Default', strength: 0.6 },
+    { key: 'intense', label: 'Intense', caption: 'More, stronger', strength: 1 },
+];
+
+/** Lowest slider stop: its loud moments sit just over the motor's felt floor. Off is the toggle. */
+export const HAPTIC_STRENGTH_MIN = 0.1;
+
+export const hapticPresetAt = (strength: number) =>
+    HAPTIC_PRESETS.reduce((a, b) => (Math.abs(b.strength - strength) < Math.abs(a.strength - strength) ? b : a));
+
 export const DEFAULT_HAPTIC_SETTINGS: HapticSettings = {
     enabled: true,
-    intensity: 128, // Middle value (1-255)
+    strength: 0.6,
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -65,9 +81,10 @@ export function migrateSettings(settings: AppSettings): AppSettings {
     const merged = {
         ...DEFAULT_APP_SETTINGS,
         ...settings,
+        // Older builds stored a 1-255 `intensity`, which the presets replaced.
         hapticSettings: {
-            ...DEFAULT_HAPTIC_SETTINGS,
-            ...(settings?.hapticSettings ?? {}),
+            enabled: settings?.hapticSettings?.enabled ?? DEFAULT_HAPTIC_SETTINGS.enabled,
+            strength: Math.max(HAPTIC_STRENGTH_MIN, settings?.hapticSettings?.strength ?? DEFAULT_HAPTIC_SETTINGS.strength),
         },
     };
 
@@ -133,8 +150,7 @@ interface AppStore {
     setSubtitlePosition: (orientation: 'portrait' | 'landscape', offsetRatio: number) => void;
     resetSubtitleSettings: () => void;
     completeOnboarding: () => void;
-    setHapticIntensity: (intensity: number) => void;
-    resetHapticSettings: () => void;
+    setHapticStrength: (strength: number) => void;
 
     // Brightness settings
     setBrightnessMode: (mode: 'global' | 'video') => void;
@@ -270,22 +286,11 @@ export const useAppStore = create<AppStore>((set) => ({
         set((state) => ({
             settings: { ...state.settings, hasCompletedOnboarding: true },
         })),
-    // Simplified haptic intensity setter
-    setHapticIntensity: (intensity: number) =>
+    setHapticStrength: (strength) =>
         set((state) => ({
             settings: {
                 ...state.settings,
-                hapticSettings: {
-                    ...state.settings.hapticSettings,
-                    intensity: Math.max(1, Math.min(255, intensity)),
-                },
-            },
-        })),
-    resetHapticSettings: () =>
-        set((state) => ({
-            settings: {
-                ...state.settings,
-                hapticSettings: DEFAULT_HAPTIC_SETTINGS,
+                hapticSettings: { ...state.settings.hapticSettings, strength },
             },
         })),
 

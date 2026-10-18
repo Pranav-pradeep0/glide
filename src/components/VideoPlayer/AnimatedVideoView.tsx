@@ -8,6 +8,7 @@
 import React, { memo, forwardRef, useMemo, useCallback } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, { AnimatedStyle } from 'react-native-reanimated';
+import type { HapticPreset } from '@/types';
 import GlidePlayer, {
     GlidePlayerRef,
     HapticCue,
@@ -58,6 +59,10 @@ interface AnimatedVideoViewProps {
     haptics?: boolean;
     /** A subtitle's tagged cues ([explosion], ♪), if it has any: the Director reads them as sound labels. */
     hapticCues?: HapticCue[];
+    /** How few moments are felt and how far they stand out; live. */
+    hapticPreset?: HapticPreset;
+    /** 0..1, how strong the loud moments are; live. */
+    hapticStrength?: number;
 
     /**
      * Where to begin playback on the first mount, in seconds, from watch history.
@@ -108,6 +113,8 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
             audioDelay,
             haptics,
             hapticCues,
+            hapticPreset,
+            hapticStrength,
             initialResumeSeconds,
             animatedStyle,
             onLoad,
@@ -170,6 +177,8 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
                     audioDelay={audioDelay}
                     haptics={haptics}
                     hapticCues={hapticCues}
+                    hapticPreset={hapticPreset}
+                    hapticStrength={hapticStrength}
                     videoEnhancement={videoEnhancement}
                     videoEnhancementStrength={videoEnhancementStrength}
                     onLoad={onLoad}
@@ -211,6 +220,8 @@ function areEqual(prevProps: AnimatedVideoViewProps, nextProps: AnimatedVideoVie
     if (prevProps.audioDelay !== nextProps.audioDelay) {return false;}
     if (prevProps.haptics !== nextProps.haptics) {return false;}
     if (prevProps.hapticCues !== nextProps.hapticCues) {return false;}
+    if (prevProps.hapticPreset !== nextProps.hapticPreset) {return false;}
+    if (prevProps.hapticStrength !== nextProps.hapticStrength) {return false;}
     if (prevProps.textTrack !== nextProps.textTrack) {return false;}
     if (prevProps.title !== nextProps.title) {return false;}
     if (prevProps.artist !== nextProps.artist) {return false;}

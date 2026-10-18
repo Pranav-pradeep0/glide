@@ -6,7 +6,7 @@
  * title is the parsed name ("The Boys", "S5 E4"), never the raw release filename.
  */
 import React, { useMemo } from 'react';
-import { Alert, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, StyleSheet, Text, View } from 'react-native';
 import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { useThumbnail } from '@/hooks/useThumbnails';
@@ -14,7 +14,7 @@ import { playerColors } from '@/theme/colors';
 import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
-import { Button, Gradient, IconButton, IconName, showSnackbar, Touchable } from '@/components/ui';
+import { Button, Gradient, IconButton, IconName, showDialog, showSnackbar, Touchable } from '@/components/ui';
 import { MediaService } from '@/services/MediaService';
 
 // ============= HELPERS =============
@@ -90,7 +90,7 @@ export function deleteVideo(name: string, target: string): Promise<boolean> {
             return await MediaService.deleteVideos([target]);
         } catch (error: any) {
             console.error('[deleteVideo] Delete failed:', error);
-            Alert.alert(
+            showDialog(
                 'Delete failed',
                 error?.code === 'E_PERMISSION'
                     ? 'Glide needs storage access to delete videos on this version of Android.'
@@ -103,10 +103,10 @@ export function deleteVideo(name: string, target: string): Promise<boolean> {
         return run();
     }
     return new Promise((resolve) => {
-        Alert.alert(`Delete "${name}"?`, undefined, [
+        showDialog(`Delete "${name}"?`, undefined, [
             { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
             { text: 'Delete', style: 'destructive', onPress: () => { run().then(resolve); } },
-        ], { cancelable: true, onDismiss: () => resolve(false) });
+        ]);
     });
 }
 

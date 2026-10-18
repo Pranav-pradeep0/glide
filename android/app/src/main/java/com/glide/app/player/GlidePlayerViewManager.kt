@@ -7,6 +7,7 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
+import com.glide.app.haptic.HapticDirector
 import com.glide.app.haptic.HapticMeaning
 
 /**
@@ -56,6 +57,16 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
             cues!!.getMap(i)?.let { HapticMeaning.Cue(it.getInt("startMs"), it.getInt("endMs"), it.getString("text") ?: "") }
         }
     )
+
+    /** "subtle", "cinematic" or "intense". */
+    @ReactProp(name = "hapticPreset")
+    fun setHapticPreset(view: GlidePlayerView, preset: String?) = view.setHapticPreset(
+        HapticDirector.Preset.entries.firstOrNull { it.name.equals(preset, ignoreCase = true) } ?: HapticDirector.Preset.CINEMATIC
+    )
+
+    /** Slider position 0..1, on a dB scale ([HapticDirector.strength]). */
+    @ReactProp(name = "hapticStrength", defaultFloat = 1f)
+    fun setHapticStrength(view: GlidePlayerView, level: Float) = view.setHapticStrength(HapticDirector.strength(level))
 
     @ReactProp(name = "muted", defaultBoolean = false)
     fun setMuted(view: GlidePlayerView, muted: Boolean) = view.setMuted(muted)
