@@ -149,6 +149,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     /** Consecutive recoverable IO failures; reset once playback is healthy again. */
     private var ioRetries = 0
 
+    /** Opened at a resume point that has not played yet; see shouldRestartFromBeginning. */
+    private var openingAtResumePoint = false
+
     /**
      * Audio tracks in enumeration order. The index *is* the id JS sees, because the JS layer
      * treats track ids as opaque tokens it round-trips back to us -- it only ever displays
@@ -848,6 +851,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         loadEmitted = false
         lastBuffering = null
         ioRetries = 0
+        openingAtResumePoint = startPositionMs != C.TIME_UNSET
         tracksKnown = false
         audioTracks.clear()
         textTracks.clear()
@@ -946,6 +950,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                     // Healthy again: forgive earlier network failures so a long session
                     // is not killed by three unrelated hiccups hours apart.
                     ioRetries = 0
+                    openingAtResumePoint = false
                     emitBuffering(false)
                     maybeEmitLoad()
                 }
@@ -1123,6 +1128,15 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             // ExoPlayer's own DefaultLoadErrorHandlingPolicy has already retried the load
             // before this fires, so retry a bounded number of times and slowly, then give
             // up and tell JS. Position is preserved: prepare() resumes where it stopped.
+            if (PlayerErrorPolicy.shouldRestartFromBeginning(error.errorCode, openingAtResumePoint)) {
+                Log.w(TAG, "resume point ${startPositionMs}ms is past the end of the file, playing from the start")
+                openingAtResumePoint = false
+                startPositionMs = C.TIME_UNSET
+                player?.seekTo(0)
+                player?.prepare()
+                return
+            }
+
             if (PlayerErrorPolicy.shouldRetry(error.errorCode, ioRetries)) {
                 ioRetries++
                 Log.w(TAG, "recoverable IO error, retry $ioRetries/${PlayerErrorPolicy.MAX_IO_RETRIES}")

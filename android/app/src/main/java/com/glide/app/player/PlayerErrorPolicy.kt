@@ -28,6 +28,7 @@ object PlayerErrorPolicy {
         PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,           // 2005
         PlaybackException.ERROR_CODE_IO_NO_PERMISSION,            // 2006
         PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,  // 2007
+        PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE, // 2008
     )
 
     /**
@@ -40,6 +41,17 @@ object PlayerErrorPolicy {
         errorCode in IO_ERROR_CODES &&
             errorCode !in PERMANENT &&
             retriesSoFar < MAX_IO_RETRIES
+
+    /**
+     * A resume point the file cannot reach: the container's index maps that time to a byte
+     * past the end of the file -- a truncated download, or a different file now at a path
+     * whose history belongs to the old one. Played from zero the same file is fine, so
+     * starting over beats an error card the user can never get past.
+     */
+    @JvmStatic
+    fun shouldRestartFromBeginning(errorCode: Int, openingAtResumePoint: Boolean): Boolean =
+        openingAtResumePoint &&
+            errorCode == PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE
 
     /**
      * A live stream that fell behind its window is not broken; it must rejoin the edge.
