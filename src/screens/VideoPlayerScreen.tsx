@@ -78,6 +78,7 @@ import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 // Types
 import { VideoFile, VideoSort } from '@/types';
 import type { PlayerCarry, PlayerProgressData } from '@/hooks/video-player';
+import { carriedAudio, carriedSubtitle } from '@/hooks/video-player/types';
 
 // ============================================================================
 // TYPES
@@ -314,8 +315,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         if (brightnessMode === 'global') {
             return globalBrightness;
         }
-        return initialVideoBrightness;
-    }, [brightnessMode, globalBrightness, initialVideoBrightness]);
+        // Next / Previous keep the level you are watching at over this episode's old one.
+        return carry?.brightness ?? initialVideoBrightness;
+    }, [brightnessMode, globalBrightness, initialVideoBrightness, carry]);
 
     // ========================================================================
     // PLAYER HOOKS (ORDER MATTERS - dependencies flow down)
@@ -400,6 +402,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         basePlaybackRate,
         onTemporarySpeedChange: setTemporaryHoldRate,
         initialBrightness: startBrightness,
+        carriedVolume: carry?.volume,
         onBrightnessChange: handleBrightnessChange,
         onBrightnessSave: handleBrightnessSave,
         resizeMode: settingsHook.settings.resizeMode,
@@ -414,7 +417,10 @@ export default function VideoPlayerScreen({ route }: Props) {
         videoName,
         imdbId,
         initialAudioTrackId: initialAudioTrackId,
-        initialSubtitleTrackIndex: initialSubtitleTrackIndex,
+        // A carried subtitle choice (including Off) replaces this episode's history.
+        initialSubtitleTrackIndex: carry?.subtitleTrack !== undefined ? undefined : initialSubtitleTrackIndex,
+        carriedAudioTrack: carry?.audioTrack,
+        carriedSubtitleTrack: carry?.subtitleTrack,
         subtitleDelay: settingsHook.settings.subtitleDelay,
         defaultAudioLanguage: defaultAudioLanguage,
     });
@@ -721,6 +727,10 @@ export default function VideoPlayerScreen({ route }: Props) {
         hapticsEnabled,
         orientationLocked,
         screenLocked: ui.state.locked,
+        brightness: brightnessMode === 'video' ? brightnessRef.current : undefined,
+        volume: gestures.volume,
+        audioTrack: carriedAudio(tracksHook.audioTracks, tracksHook.selectedAudioTrackId),
+        subtitleTrack: carriedSubtitle(tracksHook.subtitleTracks, tracksHook.selectedSubtitleTrackIndex),
     };
     const carryRef = useRef(carryNow);
     carryRef.current = carryNow;
@@ -1230,6 +1240,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         videoEnhancement={settingsHook.settings.videoEnhancement}
                         videoEnhancementStrength={settingsHook.settings.videoEnhancementStrength}
                         audioTrack={tracksHook.selectedAudioTrackId}
+                        preferredAudioLanguage={carry?.audioTrack?.language}
                         textTrack={tracksHook.nativeTextTrackOrdinal}
                         title={videoName}
                         artist={albumName || 'Glide'}

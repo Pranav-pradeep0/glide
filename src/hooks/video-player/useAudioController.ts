@@ -52,7 +52,9 @@ interface UseAudioControllerReturn {
 export function useAudioController(
     playerRef: React.RefObject<GlidePlayerRef | null>,
     initialVolume: number = 100,
-    onHardwareVolumeChange?: (volume: number) => void
+    onHardwareVolumeChange?: (volume: number) => void,
+    /** The previous episode's 101-200% boost, kept only while it is still allowed here. */
+    carriedBoost?: number,
 ): UseAudioControllerReturn {
     const [audioRoute, setAudioRoute] = useState<AudioRoute>({
         type: 'speaker',
@@ -101,15 +103,18 @@ export function useAudioController(
             return;
         }
 
-        AudioModule.getCurrentRoute().then((result: any) => {
+        Promise.all([AudioModule.getCurrentRoute(), AudioModule.getVolume()]).then(([route, current]: any[]) => {
             setAudioRoute({
-                type: result.route as AudioRouteType,
-                maxVolume: result.maxVolume,
+                type: route.route as AudioRouteType,
+                maxVolume: route.maxVolume,
             });
-        });
-
-        AudioModule.getVolume().then((result: any) => {
-            const percentage = result.volume;
+            // A boost sits on a maxed system stream, never on the speaker -- the same rules
+            // the gesture follows, re-checked because the output may have changed since.
+            let percentage = current.volume;
+            if (carriedBoost && carriedBoost > 100 && percentage >= 100 && route.route !== 'speaker') {
+                percentage = Math.min(carriedBoost, route.maxVolume);
+                setBoost(percentage);
+            }
             currentVolumeShared.value = percentage / 100;
             setVolumeState(percentage);
             lastSetVolumeRef.current = percentage;
@@ -120,7 +125,7 @@ export function useAudioController(
         return () => {
             AudioModule.stopListening();
         };
-    }, [currentVolumeShared]);
+    }, [currentVolumeShared, carriedBoost, setBoost]);
 
     // Listen for hardware volume changes (from physical buttons)
     useEffect(() => {

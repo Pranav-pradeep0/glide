@@ -9,9 +9,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubtitleExtractor, SubtitleTrack } from '@/utils/SubtitleExtractor';
 import { SubtitleCue } from '@/types';
 import {
+    CarriedTrack,
     NativeAudioTrack,
     ExternalSubtitle,
     UsePlayerTracksReturn,
+    matchCarriedTrack,
 } from './types';
 import { findMatchingAudioTrack } from '@/utils/languages';
 import { SubtitleCueStore } from '@/services/SubtitleCueStore';
@@ -72,6 +74,11 @@ interface UsePlayerTracksOptions {
 
     subtitleDelay?: number; // in milliseconds
     defaultAudioLanguage?: string | null;
+
+    /** The previous episode's choices (Next / Previous / autoplay); they beat this video's history. */
+    carriedAudioTrack?: CarriedTrack;
+    /** null: subtitles were off. The caller drops history's subtitle when this is set. */
+    carriedSubtitleTrack?: CarriedTrack | null;
 }
 
 // ============================================================================
@@ -90,7 +97,7 @@ interface UsePlayerTracksOptions {
  * - SDH cues for haptic feedback
  */
 export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTracksReturn {
-    const { videoPath, currentTimeRef, findHapticCues, videoName, imdbId, initialAudioTrackId, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage } = options;
+    const { videoPath, currentTimeRef, findHapticCues, videoName, imdbId, initialAudioTrackId, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage, carriedAudioTrack, carriedSubtitleTrack } = options;
 
     // ========================================================================
     // STATE
@@ -98,14 +105,18 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
 
     // Audio
     const [audioTracks, setAudioTracks] = useState<NativeAudioTrack[]>([]);
-    const [selectedAudioTrackId, setSelectedAudioTrackId] = useState<number | undefined>(initialAudioTrackId);
+    // A carried choice waits for the track list; history is its fallback there.
+    const [selectedAudioTrackId, setSelectedAudioTrackId] = useState<number | undefined>(
+        carriedAudioTrack ? undefined : initialAudioTrackId,
+    );
 
     // Sync initial audio track when it becomes available (hydration)
     useEffect(() => {
+        if (carriedAudioTrack) {return;}
         if (initialAudioTrackId !== undefined && selectedAudioTrackId === undefined) {
             setSelectedAudioTrackId(initialAudioTrackId);
         }
-    }, [initialAudioTrackId]);
+    }, [initialAudioTrackId, carriedAudioTrack]);
 
     // Subtitles
     const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([]);
@@ -186,6 +197,15 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         // Select first track by default if not already selected AND no initial selection was provided
         // (If initialAudioTrackId was provided, selectedAudioTrackId is already set to it)
         if (selectedAudioTrackId === undefined && tracks.length > 0) {
+            if (carriedAudioTrack) {
+                const carried = tracks[matchCarriedTrack(tracks.map(t => ({ ...t, title: t.name })), carriedAudioTrack)];
+                const fromHistory = tracks.find(t => t.id === initialAudioTrackId);
+                if (carried || fromHistory) {
+                    setSelectedAudioTrackId((carried ?? fromHistory)!.id);
+                    return;
+                }
+            }
+
             // Check for preferred language using smart matching
             if (defaultAudioLanguage) {
                 const matchedTrackId = findMatchingAudioTrack(tracks, defaultAudioLanguage);
@@ -207,7 +227,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
             // Fallback to first track
             setSelectedAudioTrackId(tracks[0].id);
         }
-    }, [selectedAudioTrackId, defaultAudioLanguage]);
+    }, [selectedAudioTrackId, defaultAudioLanguage, carriedAudioTrack, initialAudioTrackId]);
 
     const selectAudioTrack = useCallback((trackId: number | null) => {
         setSelectedAudioTrackId(trackId === null ? undefined : trackId);
@@ -249,6 +269,17 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
             mounted = false;
         };
     }, [videoPath]);
+
+    // The previous episode's subtitle, found again in this file once its tracks are read.
+    // Once only, so it never overrides a pick made here. No match leaves subtitles off.
+    const carriedSubtitleApplied = useRef(!carriedSubtitleTrack);
+    useEffect(() => {
+        // Waits for a non-empty list: ffmpeg can come back empty and the player list later.
+        if (carriedSubtitleApplied.current || !subtitleTracksReady || subtitleTracks.length === 0) {return;}
+        carriedSubtitleApplied.current = true;
+        const match = subtitleTracks[matchCarriedTrack(subtitleTracks, carriedSubtitleTrack!)];
+        if (match) {setSelectedSubtitleTrackIndex(match.index);}
+    }, [subtitleTracksReady, subtitleTracks, carriedSubtitleTrack]);
 
     const setSubtitleTracksFromPlayer = useCallback((tracks: SubtitleTrack[]) => {
         if (tracks && tracks.length > 0) {

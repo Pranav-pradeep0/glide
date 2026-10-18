@@ -714,6 +714,16 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             .build()
     }
 
+    /**
+     * The previous episode's audio language, ahead of the device's at open: the player starts
+     * on it rather than switching audibly once JS has read the track list. Open-time only.
+     */
+    private var preferredAudioLanguage: String? = null
+
+    fun setPreferredAudioLanguage(language: String?) {
+        preferredAudioLanguage = language?.takeIf { it.isNotBlank() }
+    }
+
     /** The user's language order, most preferred first. Empty when the list is unreadable. */
     private fun deviceLanguages(): Array<String> {
         val locales = context.resources.configuration.locales
@@ -830,7 +840,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         // unless the user turned captions on in Android's accessibility settings -- rather
         // than a language guess that would switch them on for everyone.
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-            .setPreferredAudioLanguages(*deviceLanguages())
+            .setPreferredAudioLanguages(*(listOfNotNull(preferredAudioLanguage) + deviceLanguages()).toTypedArray())
             .setPreferredTextLanguageAndRoleFlagsToCaptioningManagerSettings(context)
             .build()
 
@@ -1204,6 +1214,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             trackArray.pushMap(Arguments.createMap().apply {
                 putInt("id", id)
                 putString("name", audioTrackName(mediaTrackGroup.getFormat(index), id))
+                mediaTrackGroup.getFormat(index).language?.let { putString("language", it) }
                 putBoolean("isSelected", isSelected)
             })
         }

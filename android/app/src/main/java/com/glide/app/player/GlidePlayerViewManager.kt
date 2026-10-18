@@ -83,6 +83,10 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
         if (id >= 0) view.setAudioTrack(id)
     }
 
+    @ReactProp(name = "preferredAudioLanguage")
+    fun setPreferredAudioLanguage(view: GlidePlayerView, language: String?) =
+        view.setPreferredAudioLanguage(language)
+
     @ReactProp(name = "pipEnabled", defaultBoolean = false)
     fun setPipEnabled(view: GlidePlayerView, enabled: Boolean) = view.setPipEnabled(enabled)
 

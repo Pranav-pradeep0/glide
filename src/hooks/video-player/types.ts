@@ -78,7 +78,56 @@ export interface PlayerSeekEvent {
 export interface NativeAudioTrack {
     id: number;
     name: string;
+    /** The container's language code, as Media3 normalises it. Absent when untagged. */
+    language?: string;
     isSelected?: boolean;
+}
+
+/**
+ * A track choice taken to the next episode. Track ids and indexes are per file, so it is
+ * carried as what identifies "the same track" in another file of the series.
+ */
+export interface CarriedTrack {
+    language?: string;
+    title?: string;
+    /** Position in the track list; used only when the tracks carry no language. */
+    ordinal: number;
+}
+
+const knownLanguage = (language?: string) => {
+    const l = language?.trim().toLowerCase();
+    return l && l !== 'und' ? l : undefined;
+};
+
+/**
+ * Position of `want`'s equivalent in `tracks`, or -1: the same language (preferring the same
+ * title among several, e.g. English vs English SDH), or the same position when untagged.
+ */
+export function matchCarriedTrack(
+    tracks: { language?: string; title?: string }[],
+    want: CarriedTrack,
+): number {
+    const language = knownLanguage(want.language);
+    if (!language) {
+        return want.ordinal < tracks.length ? want.ordinal : -1;
+    }
+    const same = tracks.flatMap((t, i) => (knownLanguage(t.language) === language ? [i] : []));
+    return same.find(i => tracks[i].title === want.title) ?? same[0] ?? -1;
+}
+
+export function carriedAudio(tracks: NativeAudioTrack[], selectedId?: number): CarriedTrack | undefined {
+    const ordinal = tracks.findIndex(t => t.id === selectedId);
+    return ordinal < 0 ? undefined : { language: tracks[ordinal].language, title: tracks[ordinal].name, ordinal };
+}
+
+/** null when subtitles are off; undefined for a choice that cannot carry (an external file). */
+export function carriedSubtitle(
+    tracks: SubtitleTrack[],
+    selectedIndex: number | null,
+): CarriedTrack | null | undefined {
+    if (selectedIndex === null) {return null;}
+    const ordinal = tracks.findIndex(t => t.index === selectedIndex);
+    return ordinal < 0 ? undefined : { language: tracks[ordinal].language, title: tracks[ordinal].title, ordinal };
 }
 
 export interface SubtitleTrack {
@@ -263,6 +312,13 @@ export interface PlayerCarry {
     orientationLocked: boolean;
     /** Autoplay into the next episode keeps a locked screen locked. */
     screenLocked: boolean;
+    /** 0-1, in per-video brightness mode. Absent when the player never set one. */
+    brightness?: number;
+    /** 0-200; only the part above 100 (the player's boost) is carried. */
+    volume?: number;
+    audioTrack?: CarriedTrack;
+    /** null: subtitles were off. Absent: no opinion (an external file is per video). */
+    subtitleTrack?: CarriedTrack | null;
 }
 
 // ============================================================================

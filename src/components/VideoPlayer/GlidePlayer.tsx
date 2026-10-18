@@ -68,6 +68,8 @@ export interface GlidePlayerProps extends ViewProps {
     playInBackground?: boolean;
     pipEnabled?: boolean;
     audioTrack?: number;
+    /** Language code tried first when the media opens (the previous episode's). */
+    preferredAudioLanguage?: string;
     /** Ordinal among subtitle streams, or -1. Bitmap (PGS/VobSub) subtitles only. */
     textTrack?: number;
     title?: string;

@@ -44,6 +44,8 @@ interface AnimatedVideoViewProps {
 
     // Tracks
     audioTrack?: number;
+    /** Open-time only, so it needs no place in areEqual. */
+    preferredAudioLanguage?: string;
     /** Ordinal among subtitle streams for bitmap subs; -1 disables native text output. */
     textTrack?: number;
 
@@ -106,6 +108,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
             pipEnabled,
             pipPresentationActive,
             audioTrack,
+            preferredAudioLanguage,
             textTrack,
             title,
             artist,
@@ -167,6 +170,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
                     rate={rate}
                     style={styles.video}
                     audioTrack={audioTrack}
+                    preferredAudioLanguage={preferredAudioLanguage}
                     textTrack={textTrack}
                     muted={muted}
                     resizeMode={resizeMode}

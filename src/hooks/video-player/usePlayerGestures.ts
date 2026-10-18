@@ -47,6 +47,8 @@ interface UsePlayerGesturesOptions {
     onBrightnessChange?: (value: number) => void;
     onBrightnessSave?: (value: number) => void;
     initialBrightness?: number;
+    /** The previous episode's volume (0-200); only a boost above 100 is re-applied. */
+    carriedVolume?: number;
     resizeMode?: PlayerResizeMode;
     isInPipMode?: boolean;
 }
@@ -73,6 +75,8 @@ interface UsePlayerGesturesReturn {
 
     // Current volume max (100 or 200)
     maxVolume: number;
+    /** 0-200, as last settled (not mid-gesture). */
+    volume: number;
 
     // Helper to reset zoom
     resetZoom: () => void;
@@ -106,6 +110,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         onTemporarySpeedChange,
         onSeekUpdate,
         initialBrightness,
+        carriedVolume,
         onBrightnessChange,
         onBrightnessSave,
         resizeMode = 'contain',
@@ -134,7 +139,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
     }, [hud]);
 
     // Initialize Audio Controller
-    const audioController = useAudioController(player.videoRef, 100, handleHardwareVolumeChange);
+    const audioController = useAudioController(player.videoRef, 100, handleHardwareVolumeChange, carriedVolume);
 
     // ========================================================================
     // SHARED VALUES FOR GESTURES
@@ -546,11 +551,12 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
             swipeSeekStart: seekStartTime,
         },
         maxVolume: audioController.maxVolume,
+        volume: audioController.volume,
         resetZoom,
     }), [
         composedGesture, videoAnimatedStyle,
         zoomActive, pinchScale, currentBrightness, currentVolume, seekTimeShared, gestureActive, seekStartTime,
-        audioController.maxVolume, resetZoom,
+        audioController.maxVolume, audioController.volume, resetZoom,
     ]);
 }
 
