@@ -102,6 +102,8 @@ type RouteParams = {
     playAll?: boolean;
     /** The folder screen's order: Next, Previous and the playlist follow it. */
     videoSort?: VideoSort;
+    /** Opened by next/previous while in PiP, where the resume prompt can't be answered. */
+    fromPip?: boolean;
 };
 
 type Props = {
@@ -129,6 +131,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         carry,
         playAll,
         videoSort,
+        fromPip,
     } = route.params;
 
     // "The.Boys.S05E04.1080p" → "The Boys" + "S5 E4", as in the library.
@@ -500,6 +503,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         recapChecked: recap.recapChecked,
         recapVisible: recap.recapVisible,
         isPaused: player.state.paused,
+        // The prompt holds the player paused and muted, and nobody can answer it in PiP: a
+        // PiP skip to a part-watched video played silently. Such a skip resumes instead.
+        promptBlocked: !!fromPip || isInPipMode,
         currentTimeRef: player.currentTimeRef,
         onPromptPosition: setPromptPosition,
         onPlay: player.play,
@@ -972,9 +978,10 @@ export default function VideoPlayerScreen({ route }: Props) {
                 playAll,
                 videoSort,
                 carry: carryRef.current,
+                fromPip: isInPipMode,
             });
         }
-    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort]);
+    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode]);
 
     const handleNext = useCallback(() => {
         if (!hasNext) {return;}
@@ -990,9 +997,10 @@ export default function VideoPlayerScreen({ route }: Props) {
                 playAll,
                 videoSort,
                 carry: carryRef.current,
+                fromPip: isInPipMode,
             });
         }
-    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort]);
+    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode]);
 
     // ========================================================================
     // UPDATE

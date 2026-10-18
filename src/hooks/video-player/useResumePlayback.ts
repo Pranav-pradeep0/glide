@@ -14,6 +14,8 @@ interface UseResumePlaybackOptions {
     recapChecked: boolean;
     recapVisible: boolean;
     isPaused: boolean;
+    /** No prompt now: in PiP, or opened from it, where nothing can answer it. */
+    promptBlocked: boolean;
     currentTimeRef: RefObject<number>;
     /** The long-pause prompt offers to resume from here, not from where the video was opened. */
     onPromptPosition: (seconds: number) => void;
@@ -34,6 +36,7 @@ export function useResumePlayback({
     recapChecked,
     recapVisible,
     isPaused,
+    promptBlocked,
     currentTimeRef,
     onPromptPosition,
     onPlay,
@@ -46,7 +49,8 @@ export function useResumePlayback({
         return !isNetworkStream && !!(resumePosition && resumePosition > 15);
     }, [resumePosition, isNetworkStream]);
 
-    const [resumeModalVisible, setResumeModalVisible] = useState(shouldResume);
+    // Blocked means resume: the media already opens at the saved position.
+    const [resumeModalVisible, setResumeModalVisible] = useState(shouldResume && !promptBlocked);
     const lastPauseTimeRef = useRef<number | null>(null);
 
     const resumeModalData = useMemo(() => {
@@ -76,7 +80,7 @@ export function useResumePlayback({
         } else {
             if (lastPauseTimeRef.current) {
                 const pauseDuration = Date.now() - lastPauseTimeRef.current;
-                if (!isNetworkStream && pauseDuration > RECAP_INACTIVITY_THRESHOLD && !resumeModalVisible && !recapVisible) {
+                if (!isNetworkStream && !promptBlocked && pauseDuration > RECAP_INACTIVITY_THRESHOLD && !resumeModalVisible && !recapVisible) {
                     onPromptPosition(currentTimeRef.current);
                     setResumeModalVisible(true);
                     onPause();
@@ -84,7 +88,7 @@ export function useResumePlayback({
             }
             lastPauseTimeRef.current = null;
         }
-    }, [isPaused, resumeModalVisible, recapVisible, isNetworkStream, onPause, onPromptPosition, currentTimeRef]);
+    }, [isPaused, resumeModalVisible, recapVisible, isNetworkStream, promptBlocked, onPause, onPromptPosition, currentTimeRef]);
 
     // The modal holds playback paused while it's up; closing it must leave the player paused.
     const closeResumeModal = useCallback(() => {
