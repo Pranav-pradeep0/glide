@@ -191,20 +191,24 @@ export default function PlayerDetailScreen() {
                     </Text>
 
                     {(!!meta || !!imdbRating || !!rottenTomatoes) && (
-                        <View style={styles.metaRow}>
+                        <View style={styles.metaBlock}>
                             {!!meta && (
-                                <Text style={[type.caption, styles.meta, { color: colors.textSecondary }]} numberOfLines={2}>{meta}</Text>
+                                <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={2}>{meta}</Text>
                             )}
-                            {imdbRating && (
-                                <View style={styles.ratingItem} accessibilityLabel={`IMDb ${imdbRating}`}>
-                                    <ImdbIcon size={18} />
-                                    <Text style={[type.label, styles.tnum, { color: colors.text }]}>{imdbRating}</Text>
-                                </View>
-                            )}
-                            {rottenTomatoes && (
-                                <View style={styles.ratingItem} accessibilityLabel={`Rotten Tomatoes ${rottenTomatoes}`}>
-                                    <RottenTomatoesIcon size={18} />
-                                    <Text style={[type.label, styles.tnum, { color: colors.text }]}>{rottenTomatoes}</Text>
+                            {(!!imdbRating || !!rottenTomatoes) && (
+                                <View style={styles.ratingRow}>
+                                    {imdbRating && (
+                                        <View style={styles.ratingItem} accessibilityLabel={`IMDb ${imdbRating}`}>
+                                            <ImdbIcon size={18} />
+                                            <Text style={[type.label, styles.tnum, { color: colors.text }]}>{imdbRating}</Text>
+                                        </View>
+                                    )}
+                                    {rottenTomatoes && (
+                                        <View style={styles.ratingItem} accessibilityLabel={`Rotten Tomatoes ${rottenTomatoes}`}>
+                                            <RottenTomatoesIcon size={18} />
+                                            <Text style={[type.label, styles.tnum, { color: colors.text }]}>{rottenTomatoes}</Text>
+                                        </View>
+                                    )}
                                 </View>
                             )}
                         </View>
@@ -277,8 +281,8 @@ const styles = StyleSheet.create({
     contentLandscape: { marginLeft: '40%' },
 
     movieTitle: { marginBottom: metrics.space.sm },
-    metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: metrics.space.md },
-    meta: { flexShrink: 1 },
+    metaBlock: { gap: metrics.space.sm },
+    ratingRow: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.md },
     ratingItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     tnum: { fontVariant: ['tabular-nums'] },
 
