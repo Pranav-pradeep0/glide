@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createMMKV } from 'react-native-mmkv';
-import { VideoHistoryEntry, VideoBookmark } from '../types';
+import { VideoHistoryEntry, VideoBookmark, VideoFile } from '../types';
 
 const mmkv = createMMKV({ id: 'video_history_v1' });
 const HISTORY_KEY = '@video_history_v1';
@@ -37,6 +37,8 @@ interface VideoHistoryState {
     updateBookmarkLabel: (videoPath: string, bookmarkId: string, label: string) => void;
     clearVideoHistory: (videoPath: string) => void;
     clearAllHistory: () => void;
+    /** Point entries at where their file moved; see findMovedVideo. */
+    relinkMoved: (moves: [string, VideoFile][]) => void;
 
     // Persistence
     hydrateFromStorage: () => Promise<void>;
@@ -62,6 +64,48 @@ export function prune(history: Map<string, VideoHistoryEntry>): VideoHistoryEntr
         .sort((a, b) => b.lastWatchedTime - a.lastWatchedTime)
         .slice(0, Math.max(0, MAX_HISTORY_ENTRIES - kept.length));
     return [...kept, ...rest];
+}
+
+const isLocalPath = (p: string) => p.startsWith('/') || p.startsWith('file://');
+
+/**
+ * History is keyed by path, so a file moved to another folder leaves an entry pointing at
+ * nothing, and Recents opened it into "file not found". Same MediaStore id first (a move
+ * through MediaStore keeps it), then the only video in the library with the same file
+ * name. Two files sharing a name are not guessed between.
+ */
+export function findMovedVideo(entry: VideoHistoryEntry, library: VideoFile[]): VideoFile | null {
+    const byUri = entry.contentUri ? library.find(v => v.uri === entry.contentUri) : undefined;
+    if (byUri) {return byUri;}
+    const name = entry.videoPath.split('/').pop()?.toLowerCase();
+    const same = library.filter(v => v.name.toLowerCase() === name);
+    return same.length === 1 ? same[0] : null;
+}
+
+/**
+ * Local entries whose file is gone: where each moved to, and which are nowhere. Only
+ * entries the library does not list are checked on disk, so a normal visit costs a set
+ * lookup per entry. Missing ones are reported, not deleted: an SD card comes back.
+ */
+export async function findMissingHistory(
+    entries: VideoHistoryEntry[],
+    library: VideoFile[],
+    exists: (path: string) => Promise<boolean>,
+): Promise<{ moves: [string, VideoFile][]; missing: Set<string> }> {
+    const listed = new Set(library.map(v => v.path));
+    const moves: [string, VideoFile][] = [];
+    const missing = new Set<string>();
+    for (const entry of entries) {
+        const path = entry.videoPath.replace('file://', '');
+        if (!isLocalPath(entry.videoPath) || listed.has(path) || await exists(path)) {continue;}
+        const moved = findMovedVideo(entry, library);
+        if (moved) {
+            moves.push([entry.videoPath, moved]);
+        } else {
+            missing.add(entry.videoPath);
+        }
+    }
+    return { moves, missing };
 }
 
 // Batch persistence to reduce writes
@@ -459,6 +503,23 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
     clearAllHistory: () => {
         set({ history: new Map() });
         mmkv.remove(HISTORY_KEY);
+    },
+
+    relinkMoved: (moves) => {
+        if (moves.length === 0) {return;}
+        set((state) => {
+            const newHistory = new Map(state.history);
+            for (const [oldPath, video] of moves) {
+                const entry = newHistory.get(oldPath);
+                if (!entry) {continue;}
+                newHistory.delete(oldPath);
+                // Already played from its new place: that entry is the newer truth.
+                if (newHistory.has(video.path)) {continue;}
+                newHistory.set(video.path, { ...entry, videoPath: video.path, contentUri: video.uri ?? entry.contentUri });
+            }
+            return { history: newHistory };
+        });
+        get().persistNow();
     },
 
     // Deprecated: No longer needed with sync initialization

@@ -3,11 +3,13 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList, VideoHistoryEntry } from '@/types';
 import { Loader } from '@/components/Loader';
-import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { findMissingHistory, useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { MediaService } from '@/services/MediaService';
+import { FileService } from '@/services/FileService';
 import { useTheme } from '@/hooks/useTheme';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
@@ -56,6 +58,7 @@ export default function RecentsScreen() {
     const hydrateFromStorage = useVideoHistoryStore(s => s.hydrateFromStorage);
     const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
     const clearVideoHistory = useVideoHistoryStore(s => s.clearVideoHistory);
+    const relinkMoved = useVideoHistoryStore(s => s.relinkMoved);
 
     const [kind, setKind] = useState<RecentsKind>('videos');
     const [refreshing, setRefreshing] = useState(false);
@@ -70,19 +73,36 @@ export default function RecentsScreen() {
         }
     }, [hydrateFromStorage, isHydrated]);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- historyMap is what getAllHistory reads
-    const history = useMemo(() => sortHistory(getAllHistory(), sortBy), [historyMap, getAllHistory, sortBy]);
+    // Files moved since they were watched are relinked; ones gone everywhere are hidden, not deleted.
+    const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
+    const checkMissing = useCallback(async (forceRefresh = false) => {
+        const { videos } = await MediaService.getLibrary(forceRefresh);
+        const found = await findMissingHistory(getAllHistory(), videos, p => FileService.exists(p));
+        relinkMoved(found.moves);
+        setMissing(found.missing);
+    }, [getAllHistory, relinkMoved]);
+
+    useFocusEffect(useCallback(() => {
+        checkMissing().catch(error => console.error('[RecentsScreen] Missing check error:', error));
+    }, [checkMissing]));
+
+    const history = useMemo(
+        () => sortHistory(getAllHistory().filter(e => !missing.has(e.videoPath)), sortBy),
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- historyMap is what getAllHistory reads
+        [historyMap, getAllHistory, sortBy, missing],
+    );
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
         try {
             await hydrateFromStorage();
+            await checkMissing(true);
         } catch (error) {
             console.error('[RecentsScreen] Refresh error:', error);
         } finally {
             setRefreshing(false);
         }
-    }, [hydrateFromStorage]);
+    }, [hydrateFromStorage, checkMissing]);
 
     const handleVideoPress = useCallback((video: VideoHistoryEntry) => {
         if (!video.videoPath) {return;}
