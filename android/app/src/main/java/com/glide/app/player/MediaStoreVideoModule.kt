@@ -7,11 +7,14 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
+import android.media.MediaScannerConnection
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.storage.StorageManager
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
@@ -26,6 +29,8 @@ import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @ReactModule(name = MediaStoreVideoModule.NAME)
 class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
@@ -320,10 +325,31 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    private fun rescanVolumes() {
+        val roots = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            reactContext.getSystemService(StorageManager::class.java).storageVolumes.mapNotNull { it.directory?.path }
+        } else {
+            @Suppress("DEPRECATION")
+            listOf(Environment.getExternalStorageDirectory().path)
+        }
+        val done = CountDownLatch(roots.size)
+        MediaScannerConnection.scanFile(reactContext, roots.toTypedArray(), null) { _, _ -> done.countDown() }
+        // ponytail: fixed cap; a slow card just returns the library as it stands so far.
+        done.await(30, TimeUnit.SECONDS)
+    }
+
+    /**
+     * [rescan] first asks Android to re-index every storage volume. Files written by some
+     * downloaders stay in MediaStore as pending, size-less rows until something rescans
+     * them, and the SIZE filter below hides those rows, so a pull to refresh has to fix the
+     * index rather than just read it again. Unchanged files are skipped, so a phone with
+     * ~11k files takes a few seconds.
+     */
     @ReactMethod
-    fun getLibrary(promise: Promise) {
+    fun getLibrary(rescan: Boolean, promise: Promise) {
         BackgroundWork.submit(promise) {
             try {
+                if (rescan) rescanVolumes()
                 val resolver = reactContext.contentResolver
                 val selection = "${MediaStore.Video.Media.SIZE} > 0"
                 val sortOrder = "${MediaStore.Video.Media.DATE_MODIFIED} DESC"

@@ -131,7 +131,7 @@ class MediaServiceClass {
         // Started from a resolved promise, so even a synchronous throw from the native call
         // lands in .catch after `scan` is assigned, never before it.
         const scan: Promise<MediaLibraryResult> = Promise.resolve()
-            .then(() => this.module.getLibrary())
+            .then(() => this.module.getLibrary(forceRefresh))
             .then((result) => {
                 const data: MediaLibraryResult = {
                     videos: (result?.videos || []) as VideoFile[],
