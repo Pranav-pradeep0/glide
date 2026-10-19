@@ -434,8 +434,6 @@ interface PlayerControlsProps {
     onAddBookmark?: () => void;
     /** Speed chip and ⋮ both open the Playback panel. */
     onOpenPlayback: () => void;
-    /** An app update is waiting: a dot on ⋮, where the Playback panel lists it. */
-    updatePending?: boolean;
     playbackRate: number;
     paused: boolean;
     onTogglePlayPause: () => void;
@@ -513,7 +511,7 @@ export const PlayerControls: FC<PlayerControlsProps> = (props) => {
 };
 
 const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
-    showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, onOpenPlayback, updatePending = false, playbackRate,
+    showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, onOpenPlayback, playbackRate,
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
     onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, chapters = NO_CHAPTERS, buffering = false, isLandscape, insets, cutouts,
@@ -621,8 +619,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 <IconButton
                     icon="more-vertical"
                     onPress={onOpenPlayback}
-                    accessibilityLabel={updatePending ? 'Playback settings, update available' : 'Playback settings'}
-                    badge={updatePending}
+                    accessibilityLabel="Playback settings"
                     onPlayer
                 />
             </Animated.View>

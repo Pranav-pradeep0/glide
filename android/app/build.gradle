@@ -16,7 +16,7 @@ if (envFile.exists()) {
 }
 // What JS reads (src/utils/constants.ts), via GlideNative's `env` constant.
 def jsEnvKeys = ["SUBDL_API_URL", "SUBDL_API_KEY", "SUBDL_DOWNLOAD_URL", "OMDB_API_KEY", "OMDB_API_URL",
-                 "AI_PROXY_URL", "GITHUB_OWNER", "GITHUB_REPO", "GITHUB_RELEASES_URL"]
+                 "AI_PROXY_URL"]
 def jsEnvJson = JsonOutput.toJson(env.subMap(jsEnvKeys))
 
 def packageVersion = new JsonSlurper().parse(file("../../package.json")).version?.toString()
@@ -100,8 +100,7 @@ def allowDebugSigning = project.hasProperty('allowDebugSigning') &&
         project.property('allowDebugSigning').toString().toBoolean()
 
 // A release build with no keystore used to fall back to the debug key silently.
-// The in-app updater installs APKs as signature-compatible upgrades, so a
-// debug-signed release is unusable. Fail the build instead.
+// Play rejects a debug-signed upload, so fail the build instead.
 gradle.taskGraph.whenReady { graph ->
     if (hasReleaseSigningConfig || allowDebugSigning) {
         return

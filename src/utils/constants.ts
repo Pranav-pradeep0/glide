@@ -38,12 +38,6 @@ const configuredAiProxyUrl = (BUILD_ENV.AI_PROXY_URL || '').trim().replace(/\/+$
 export const AI_PROXY_URL = configuredAiProxyUrl.startsWith('https://') ? configuredAiProxyUrl : '';
 export const RECAP_AVAILABLE = AI_PROXY_URL.length > 0;
 
-// GitHub Releases (Update Check)
-export const GITHUB_OWNER = BUILD_ENV.GITHUB_OWNER || '';
-export const GITHUB_REPO = BUILD_ENV.GITHUB_REPO || '';
-export const GITHUB_RELEASES_URL = BUILD_ENV.GITHUB_RELEASES_URL || '';
-
 // export const DEFAULT_STORAGE_PATH = '/storage/emulated/0/Movies';
 export const DEFAULT_STORAGE_PATH = RNFS.ExternalStorageDirectoryPath;
-
 

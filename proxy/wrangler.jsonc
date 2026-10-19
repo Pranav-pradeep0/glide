@@ -3,9 +3,6 @@
   "name": "glide-ai-proxy",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-23",
-  "vars": {
-    "RELEASE_REPO": "Pranav-pradeep0/glide-public"
-  },
   // Workers Logs persist by default; keep sampling low and never log request content.
   "observability": {
     "enabled": true,

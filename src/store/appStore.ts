@@ -1,28 +1,7 @@
 import { create } from 'zustand';
 import { Appearance } from 'react-native';
 import { AppSettings, HapticPreset, HapticSettings, ShakeAction } from '../types';
-import type { UpdateError } from '../hooks/useUpdateInstaller';
-import { updateStorage, type UpdateApkCache } from '../storage/updateStorage';
 import { storage } from '../storage/storage';
-
-/**
- * The update UI appears in two places at once: the app-level UpdateModal and the
- * Settings update card. Both drive the same download and the same cached file, so the
- * progress, status, and error live here rather than in each component's own state.
- */
-export interface UpdateInstallState {
-    isDownloading: boolean;
-    downloadProgress: number | null;
-    error: UpdateError | null;
-    cachedApk: UpdateApkCache | null;
-}
-
-const INITIAL_UPDATE_INSTALL: UpdateInstallState = {
-    isDownloading: false,
-    downloadProgress: null,
-    error: null,
-    cachedApk: null,
-};
 
 // Registered in MainApplication from res/font/atkinson_hyperlegible_next.xml.
 export const SUBTITLE_FONT_FAMILY = 'AtkinsonHyperlegibleNext';
@@ -122,19 +101,6 @@ export function loadInitialSettings(): AppSettings {
 
 interface AppStore {
     settings: AppSettings;
-    updateStatus: {
-        available: boolean;
-        latestVersion: string | null;
-        releaseUrl: string | null;
-        releaseNotes: string | null;
-        apkUrl: string | null;
-        apkSha256Url: string | null;
-        lastCheckedAt: number | null;
-        seen: boolean;
-        notified: boolean;
-    };
-    updateInstall: UpdateInstallState;
-    setUpdateInstall: (patch: Partial<UpdateInstallState>) => void;
     updateSettings: (settings: Partial<AppSettings>) => void;
     toggleDarkMode: () => void;
     toggleHaptics: () => void;
@@ -167,36 +133,10 @@ interface AppStore {
     setShakeEnabled: (enabled: boolean) => void;
     setShakeAction: (action: ShakeAction) => void;
     setOnlineLyricsEnabled: (enabled: boolean) => void;
-
-    // Update actions
-    setUpdateStatus: (data: {
-        available: boolean;
-        latestVersion: string | null;
-        releaseUrl: string | null;
-        releaseNotes: string | null;
-        apkUrl: string | null;
-        apkSha256Url: string | null;
-    }) => void;
-    markUpdateSeen: () => void;
-    markUpdateNotified: () => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
     settings: loadInitialSettings(),
-    updateStatus: {
-        available: false,
-        latestVersion: null,
-        releaseUrl: null,
-        releaseNotes: null,
-        apkUrl: null,
-        apkSha256Url: null,
-        lastCheckedAt: null,
-        seen: false,
-        notified: false,
-    },
-    updateInstall: INITIAL_UPDATE_INSTALL,
-    setUpdateInstall: (patch) =>
-        set((state) => ({ updateInstall: { ...state.updateInstall, ...patch } })),
     updateSettings: (newSettings) =>
         set((state) => ({
             settings: { ...state.settings, ...newSettings },
@@ -341,33 +281,6 @@ export const useAppStore = create<AppStore>((set) => ({
         set((state) => ({
             settings: { ...state.settings, onlineLyricsEnabled: enabled },
         })),
-
-    setUpdateStatus: (data) =>
-        set((state) => {
-            return {
-                updateStatus: {
-                    ...state.updateStatus,
-                    ...data,
-                    lastCheckedAt: Date.now(),
-                    seen: data.available ? false : state.updateStatus.seen,
-                    // Kept across launches: a release is announced once, not on every cold start.
-                    notified: data.available && data.latestVersion !== null
-                        && updateStorage.notifiedVersion() === data.latestVersion,
-                },
-            };
-        }),
-    markUpdateSeen: () =>
-        set((state) => ({
-            updateStatus: {
-                ...state.updateStatus,
-                seen: true,
-            },
-        })),
-    markUpdateNotified: () =>
-        set((state) => {
-            if (state.updateStatus.latestVersion) { updateStorage.setNotifiedVersion(state.updateStatus.latestVersion); }
-            return { updateStatus: { ...state.updateStatus, notified: true } };
-        }),
 }));
 
 // Automatically persist settings to MMKV whenever they change

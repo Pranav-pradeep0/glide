@@ -126,9 +126,6 @@ function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
 }
 
 function MainTabs() {
-    const { colors } = useTheme();
-    const updateAvailable = useAppStore((state) => state.updateStatus.available);
-
     return (
         <Tab.Navigator
             tabBar={renderTabBar}
@@ -164,12 +161,7 @@ function MainTabs() {
                 component={SettingsScreen}
                 options={{
                     title: 'Settings',
-                    tabBarIcon: ({ color }) => (
-                        <View>
-                            <Feather name="settings" size={22} color={color} />
-                            {updateAvailable && <View style={[styles.badge, { backgroundColor: colors.primary }]} />}
-                        </View>
-                    ),
+                    tabBarIcon: ({ color }) => <Feather name="settings" size={22} color={color} />,
                 }}
             />
         </Tab.Navigator>
@@ -378,7 +370,6 @@ const styles = StyleSheet.create({
     pill: { width: 56, height: 32, alignItems: 'center', justifyContent: 'center' },
     pillFill: { ...StyleSheet.absoluteFill, borderRadius: 16 },
     label: { fontWeight: '500' },
-    badge: { position: 'absolute', top: -2, right: -4, width: 8, height: 8, borderRadius: 4 },
     playerCrash: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: metrics.space.xl, gap: metrics.space.md },
     playerCrashDetail: { textAlign: 'center' },
 });

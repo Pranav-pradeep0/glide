@@ -26,7 +26,6 @@ class MainApplication : Application(), ReactApplication {
               add(SimpleThumbnailPackage())
               add(AudioControlPackage())
               add(SplashPackage())
-              add(ApkInstallerPackage())
               // The Media3/ExoPlayer playback core. Registered alongside the VLC view, not
               // instead of it; which one renders is a setting (docs/player-engine-migration-plan.md).
               add(com.glide.app.player.GlidePlayerPackage())

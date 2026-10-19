@@ -12,9 +12,6 @@
     <base-config cleartextTrafficPermitted="true" />
 
     <domain-config cleartextTrafficPermitted="false">
-        <!-- Update discovery and release assets. -->
-        <domain includeSubdomains="true">github.com</domain>
-        <domain includeSubdomains="true">githubusercontent.com</domain>
         <!-- Subtitle search and download. -->
         <domain includeSubdomains="true">subdl.com</domain>
         <!-- Metadata lookup. -->

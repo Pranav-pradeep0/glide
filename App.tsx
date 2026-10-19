@@ -10,17 +10,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { withStallion } from 'react-native-stallion';
 import { NativeModules } from 'react-native';
-import UpdateModal from '@/components/UpdateModal';
-import { refreshUpdateStatus } from '@/services/refreshUpdateStatus';
 
 function App() {
   const [appReady, setAppReady] = useState(false);
   const [navReady, setNavReady] = useState(false);
   const theme = useTheme();
   const hasCompletedOnboarding = useAppStore((state) => state.settings.hasCompletedOnboarding);
-  const updateStatus = useAppStore((state) => state.updateStatus);
-  const markUpdateNotified = useAppStore((state) => state.markUpdateNotified);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   const initialize = useVideoIndexStore((state) => state.initialize);
   const hasStartedMediaInitRef = useRef(false);
@@ -32,41 +27,6 @@ function App() {
   useEffect(() => {
     initializeApp();
   }, []);
-
-  useEffect(() => {
-    if (!appReady) {
-      return;
-    }
-
-    refreshUpdateStatus();
-  }, [appReady]);
-
-  const [splashHidden, setSplashHidden] = useState(false);
-
-  useEffect(() => {
-    if (!updateStatus.available || updateStatus.notified || !updateStatus.latestVersion) {
-      return;
-    }
-    if (!splashHidden) {
-      return;
-    }
-
-    // Wait for the UI to fully settle after splash hides
-    const timer = setTimeout(() => {
-      setShowUpdateModal(true);
-      markUpdateNotified();
-    }, 800);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [
-    updateStatus.available,
-    updateStatus.notified,
-    updateStatus.latestVersion,
-    markUpdateNotified,
-    splashHidden,
-  ]);
 
   useEffect(() => {
     if (!appReady || !navReady || !hasCompletedOnboarding) {
@@ -86,7 +46,6 @@ function App() {
   useEffect(() => {
     if (appReady && navReady) {
       NativeModules.SplashModule?.hide();
-      setSplashHidden(true);
     }
   }, [appReady, navReady]);
 
@@ -113,17 +72,6 @@ function App() {
           onReset={() => console.log('App Reset')}
         >
           <RootNavigator onReady={() => setNavReady(true)} />
-          <UpdateModal
-            visible={showUpdateModal}
-            latestVersion={updateStatus.latestVersion}
-            releaseNotes={updateStatus.releaseNotes}
-            releaseUrl={updateStatus.releaseUrl}
-            apkUrl={updateStatus.apkUrl}
-            apkSha256Url={updateStatus.apkSha256Url}
-            onDismiss={() => {
-              setShowUpdateModal(false);
-            }}
-          />
         </ErrorBoundary>
       </GestureHandlerRootView>
     </SafeAreaProvider>

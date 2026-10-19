@@ -94,8 +94,6 @@ jobs:
           OMDB_API_KEY=$OMDB_API_KEY
           OMDB_API_URL=$OMDB_API_URL
           AI_PROXY_URL=$AI_PROXY_URL
-          GITHUB_OWNER=Pranav-pradeep0
-          GITHUB_REPO=glide-public
           STALLION_PROJECT_ID=$STALLION_PROJECT_ID
           STALLION_APP_TOKEN=$STALLION_APP_TOKEN
           EOF
@@ -274,8 +272,6 @@ jobs:
           OMDB_API_KEY=$OMDB_API_KEY
           OMDB_API_URL=$OMDB_API_URL
           AI_PROXY_URL=$AI_PROXY_URL
-          GITHUB_OWNER=Pranav-pradeep0
-          GITHUB_REPO=glide-public
           STALLION_PROJECT_ID=$STALLION_PROJECT_ID
           STALLION_APP_TOKEN=$STALLION_APP_TOKEN
           EOF

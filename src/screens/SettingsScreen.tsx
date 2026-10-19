@@ -20,10 +20,7 @@ import { ShakeDetector } from '../hooks/video-player';
 import Feather from '@react-native-vector-icons/feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { SharedValue, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import { UpdateActionButton, UpdateNotice } from '@/components/UpdateActionButton';
-import { UpdateNotes } from '@/components/UpdateNotes';
 import { LicencesSheet } from '@/components/LicencesSheet';
-import { useUpdateInstaller } from '@/hooks/useUpdateInstaller';
 import {
     Chip,
     IconButton,
@@ -171,7 +168,6 @@ export default function SettingsScreen() {
     const versionTaps = useRef(0);
 
     const settings = useAppStore((state) => state.settings);
-    const updateStatus = useAppStore((state) => state.updateStatus);
     const toggleDarkMode = useAppStore((state) => state.toggleDarkMode);
     const toggleHaptics = useAppStore((state) => state.toggleHaptics);
     const setSubtitleFontSize = useAppStore((state) => state.setSubtitleFontSize);
@@ -292,26 +288,6 @@ export default function SettingsScreen() {
         ? 'outline'
         : settings.subtitleBackgroundColor !== 'transparent' ? 'box' : 'none';
 
-    const {
-        canDownload,
-        unavailableReason,
-        downloadProgress,
-        error,
-        handleCancelDownload,
-        hasCachedApk,
-        isDownloading,
-        handleDownloadAndInstall,
-        handleInstallCached,
-        handleOpenRelease,
-    } = useUpdateInstaller({
-        latestVersion: updateStatus.latestVersion,
-        releaseUrl: updateStatus.releaseUrl,
-        apkUrl: updateStatus.apkUrl,
-        apkSha256Url: updateStatus.apkSha256Url,
-    });
-
-    const showUpdate = updateStatus.available && updateStatus.latestVersion && (updateStatus.releaseUrl || updateStatus.apkUrl);
-
     function closeLanguages() {
         setLanguageModalVisible(false);
         setSearchQuery('');
@@ -332,30 +308,6 @@ export default function SettingsScreen() {
                 keyboardShouldPersistTaps="handled"
             >
                 <Text style={[type.title, styles.title, { color: colors.text }]} accessibilityRole="header">Settings</Text>
-
-                {showUpdate && (
-                    <View style={[styles.updateCard, { backgroundColor: colors.primaryContainer }]}>
-                        <View>
-                            <Text style={[type.section, { color: colors.text }]}>Update available</Text>
-                            <Text style={[type.caption, { color: colors.textSecondary }]}>
-                                v{updateStatus.latestVersion} is ready to install
-                            </Text>
-                        </View>
-                        <UpdateNotes notes={updateStatus.releaseNotes} maxHeight={160} />
-                        <UpdateNotice error={error} unavailableReason={unavailableReason} />
-                        <UpdateActionButton
-                            canDownload={canDownload}
-                            downloadProgress={downloadProgress}
-                            error={error}
-                            onCancelDownload={handleCancelDownload}
-                            hasCachedApk={hasCachedApk}
-                            isDownloading={isDownloading}
-                            onDownloadAndInstall={handleDownloadAndInstall}
-                            onInstallCached={handleInstallCached}
-                            onOpenRelease={handleOpenRelease}
-                        />
-                    </View>
-                )}
 
                 <SectionLabel title="Playback" />
                 <ListGroup>
@@ -686,12 +638,6 @@ const styles = StyleSheet.create({
     gap: { marginTop: metrics.space.sm },
     regular: { fontWeight: '400' },
     tnum: { fontVariant: ['tabular-nums'] },
-    updateCard: {
-        borderRadius: metrics.radius.card,
-        padding: metrics.space.lg,
-        gap: metrics.space.md,
-        marginTop: metrics.space.md,
-    },
     block: {
         paddingHorizontal: metrics.space.lg,
         paddingVertical: metrics.space.md,

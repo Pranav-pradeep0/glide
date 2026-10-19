@@ -46,20 +46,6 @@ await check('POST /v1/nope -> 404', async () => {
     expectStatus(await fetch(`${base}/v1/nope`, { method: 'POST' }), 404);
 });
 
-await check('GET /v1/latest-release -> the release, trimmed to what the app reads', async () => {
-    const res = await fetch(`${base}/v1/latest-release`);
-    expectStatus(res, 200);
-    const release = await readJson(res);
-    if (!/^v?\d+\.\d+/.test(release.tag_name ?? '')) {throw new Error(`bad tag_name ${release.tag_name}`);}
-    if (!Array.isArray(release.assets)) {throw new Error('assets missing');}
-    const extra = Object.keys(release).filter(k => !['tag_name', 'html_url', 'body', 'prerelease', 'draft', 'assets'].includes(k));
-    if (extra.length) {throw new Error(`untrimmed fields: ${extra}`);}
-});
-
-await check('POST /v1/latest-release -> 405', async () => {
-    expectStatus(await fetch(`${base}/v1/latest-release`, { method: 'POST' }), 405);
-});
-
 await check('recap happy path -> 200 with recap text', async () => {
     const res = await fetch(`${base}/v1/recap`, {
         method: 'POST',
