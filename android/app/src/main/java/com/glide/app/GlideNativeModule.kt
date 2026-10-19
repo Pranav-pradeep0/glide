@@ -41,6 +41,7 @@ import com.facebook.react.uimanager.ViewManager
  * 12: GlidePlayer prop `haptics` analyses the film's audio itself (HapticListener) and caches the track.
  * 13: GlidePlayer props `pipHasPrevious`/`pipHasNext` and events `onPipPrevious`/`onPipNext`:
  *     the PiP window's own previous/play-pause/next buttons.
+ * 14: HapticsLab module is debug-only; release builds no longer register it.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -55,7 +56,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 13
+        const val API_LEVEL = 14
     }
 
     class Package : ReactPackage {

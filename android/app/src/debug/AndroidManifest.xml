@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Haptics Lab (debug only): the accelerometer above 200 Hz, to see the motor
+         (~170 Hz). Normal permission, granted at install. -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+
     <application
         tools:targetApi="28"
         tools:ignore="GoogleAppIndexingWarning">

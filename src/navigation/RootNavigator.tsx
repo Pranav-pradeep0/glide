@@ -351,10 +351,13 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                                 freezeOnBlur: true,
                             }}
                         />
-                        <Stack.Screen
-                            name="HapticsLab"
-                            getComponent={() => require('@/screens/HapticsLabScreen').default}
-                        />
+                        {/* Dev screen; release builds have no HapticsLab native module. */}
+                        {__DEV__ && (
+                            <Stack.Screen
+                                name="HapticsLab"
+                                getComponent={() => require('@/screens/HapticsLabScreen').default}
+                            />
+                        )}
                     </>
                 )}
             </Stack.Navigator>
