@@ -179,5 +179,19 @@ export class RecapService {
             return null;
         }
     }
-}
 
+    /** Flags a recap as wrong or offensive (Play AI-content policy). Resolves false if it was not sent. */
+    static async reportRecap(recap: string, videoTitle: string): Promise<boolean> {
+        if (!RECAP_AVAILABLE) {return false;}
+        try {
+            const response = await fetchWithTimeout(`${AI_PROXY_URL}/v1/report`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ recap, title: videoTitle }),
+            }, RECAP_TIMEOUT_MS);
+            return response.ok;
+        } catch {
+            return false;
+        }
+    }
+}

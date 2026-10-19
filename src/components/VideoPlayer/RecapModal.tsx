@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     StyleSheet,
     View,
@@ -14,6 +14,7 @@ import { Button, SheetHeader } from '@/components/ui';
 import { PLAYER_BACKDROP } from '@/theme/colors';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { parseEmphasis } from '@/utils/markdownEmphasis';
+import { RecapService } from '@/services/RecapService';
 
 const { colors } = playerTheme;
 
@@ -39,8 +40,16 @@ export const RecapModal: React.FC<RecapModalProps> = ({
     loadingMessage,
 }) => {
     const { width, height } = useWindowDimensions();
+    // Keyed by text, so a new recap can be reported again without a reset effect.
+    const [reported, setReported] = useState<{ text: string; status: 'sending' | 'sent' | 'failed' } | null>(null);
+    const reportStatus = reported && reported.text === recapText ? reported.status : null;
 
     if (!visible) {return null;}
+
+    const report = (text: string) => {
+        setReported({ text, status: 'sending' });
+        RecapService.reportRecap(text, videoName).then(ok => setReported({ text, status: ok ? 'sent' : 'failed' }));
+    };
 
     const isLandscape = width > height;
     const showLoading = isLoading || recapText === null;
@@ -83,6 +92,23 @@ export const RecapModal: React.FC<RecapModalProps> = ({
                                     : span.text
                                 ))}
                             </Animated.Text>
+                            <Text style={styles.disclosure}>
+                                Written by AI from the subtitles. It can be wrong or give things away.
+                            </Text>
+                            <Pressable
+                                onPress={() => report(recapText)}
+                                disabled={reportStatus === 'sending' || reportStatus === 'sent'}
+                                hitSlop={metrics.space.sm}
+                                accessibilityRole="button"
+                                style={styles.reportRow}
+                            >
+                                <Text style={styles.reportText}>
+                                    {reportStatus === 'sent' ? 'Reported. Thanks.'
+                                        : reportStatus === 'sending' ? 'Reporting…'
+                                        : reportStatus === 'failed' ? 'Could not send. Tap to try again.'
+                                        : 'Report this recap'}
+                                </Text>
+                            </Pressable>
                         </ScrollView>
                     )}
 
@@ -124,6 +150,9 @@ const styles = StyleSheet.create({
     },
     loadingText: { ...type.body, color: colors.textSecondary },
     recapText: { ...type.body, color: colors.text, fontSize: 16, lineHeight: 24 },
+    disclosure: { ...type.caption, color: colors.textSecondary, marginTop: metrics.space.md },
+    reportRow: { alignSelf: 'flex-start', minHeight: 48, justifyContent: 'center' },
+    reportText: { ...type.caption, color: colors.textSecondary, textDecorationLine: 'underline' },
     bold: { fontWeight: '700' },
     italic: { fontStyle: 'italic' },
 });
