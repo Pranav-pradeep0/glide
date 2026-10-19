@@ -43,6 +43,7 @@ import com.facebook.react.uimanager.ViewManager
  *     the PiP window's own previous/play-pause/next buttons.
  * 14: HapticsLab module is debug-only; release builds no longer register it.
  * 15: constant `env` holds only AI_PROXY_URL; the SubDL and OMDb keys and URLs moved to the Worker.
+ * 16: GlidePlayer prop `haptics` also recognises the film's sounds (HapticRecognizer, YAMNet).
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -57,7 +58,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 15
+        const val API_LEVEL = 16
     }
 
     class Package : ReactPackage {
