@@ -125,23 +125,27 @@ class HapticFilmTest {
         val srt = File(file.parentFile, "$name.srt")
         val cues = if (srt.isFile) cues(srt.readText()) else emptyList()
         val tags = HapticMeaning.tags(cues)
-        val audio = metrics(decoded, HapticDirector.direct(decoded.raw), cues, tags)
-        val fused = metrics(decoded, HapticDirector.direct(decoded.raw, tags), cues, tags)
+        // Sound labels direct; the subtitles' own tags stay the yardstick.
+        val heard = tags + sounds(File(file.parentFile, "$name.sounds"))
+        val audio = metrics(decoded, HapticDirector.direct(decoded.raw), cues, tags, heard)
+        val subs = metrics(decoded, HapticDirector.direct(decoded.raw, tags), cues, tags, heard)
+        val fused = metrics(decoded, HapticDirector.direct(decoded.raw, heard), cues, tags, heard)
         val fails = mutableListOf<String>()
-        println("     %-14s %-26s %8s %8s".format(name.take(14), "", "audio", "fused"))
+        println("     %-14s %-26s %8s %8s %8s".format(name.take(14), "", "audio", "subs", "fused"))
         for ((what, f) in fused) {
             val a = audio.getValue(what)
             val target = TARGETS[what]
-            val better = if (what in HIGHER) f >= a - 1e-9 else f <= a + 1e-9
+            val tol = if ("correlation" in what) CORRELATION_NOISE else 1e-9
+            val better = if (what in HIGHER) f >= a - tol else f <= a + tol
             val meets = target?.let { (min, max) -> f >= min && f <= max } ?: true
             val scored = what !in INFO
             val ok = (!scored || better) && meets
-            println("%-4s %-14s %-26s %8.3f %8.3f  %s".format(if (!scored && target == null) "" else if (ok) "ok" else "FAIL", name.take(14), what, a, f, target?.let { "${it.first}..${it.second}" } ?: ""))
+            println("%-4s %-14s %-26s %8.3f %8.3f %8.3f  %s".format(if (!scored && target == null) "" else if (ok) "ok" else "FAIL", name.take(14), what, a, subs[what] ?: Double.NaN, f, target?.let { "${it.first}..${it.second}" } ?: ""))
             if (!ok) fails += "$name $what audio=$a fused=$f"
         }
         // Phase 6: Subtle feels less of the film and fewer hits, Intense more. A Phase 4 target a
         // preset misses is shown ("over"), not failed: the user chose the preset.
-        val presets = Preset.entries.associateWith { metrics(decoded, HapticDirector.direct(decoded.raw, tags, it), cues, tags) }
+        val presets = Preset.entries.associateWith { metrics(decoded, HapticDirector.direct(decoded.raw, heard, it), cues, tags, heard) }
         println("     %-14s %-26s %8s %8s %8s".format(name.take(14), "", "subtle", "cinema", "intense"))
         for (what in PRESET_ROWS) {
             val v = Preset.entries.mapNotNull { presets.getValue(it)[what] }
@@ -156,7 +160,19 @@ class HapticFilmTest {
         return fails
     }
 
-    private fun metrics(d: Decoded, track: HapticTrack, cues: List<HapticMeaning.Cue>, tags: List<HapticMeaning.Tag>): Map<String, Double> {
+    /** YAMNet's tags from `scripts/haptics-yamnet.py`; none without the file. */
+    private fun sounds(file: File): List<HapticMeaning.Tag> {
+        if (!file.isFile) return emptyList()
+        DataInputStream(file.inputStream().buffered()).use { d ->
+            val row = ByteArray(HapticSounds.CLASSES)
+            return HapticSounds.tags(List(d.readInt()) {
+                d.readFully(row)
+                HapticSounds.groups(FloatArray(row.size) { (row[it].toInt() and 0xFF) / 255f })
+            })
+        }
+    }
+
+    private fun metrics(d: Decoded, track: HapticTrack, cues: List<HapticMeaning.Cue>, tags: List<HapticMeaning.Tag>, heard: List<HapticMeaning.Tag>): Map<String, Double> {
         val m = linkedMapOf<String, Double>()
         val active = BooleanArray(d.ms / HapticTrack.BED_FRAME_MS)
         for (i in active.indices) active[i] = track.bedIntensity.getOrElse(i) { 0f } > 0f
@@ -183,6 +199,12 @@ class HapticFilmTest {
             m["dialogue FP/min"] = track.events.count { e -> lines.any { e.timeMs in it } } / minutes
             m["dialogue bed share"] = bedShare(track, lines)
         }
+        // Studio logos and title music come before anyone speaks.
+        lines.firstOrNull()?.let { first -> m["opening felt, s"] = (0 until minOf(first.first, d.ms) / HapticTrack.BED_FRAME_MS).count { active[it] } * HapticTrack.BED_FRAME_MS / 1000.0 }
+        val engines = tags.filter { it.kind == Kind.ENGINE }
+        if (engines.isNotEmpty()) m["engine tags felt"] = engines.count { t ->
+            (t.startMs - HapticDirector.SNAP_MS until t.endMs + HapticDirector.SNAP_MS step HapticTrack.BED_FRAME_MS).any { active.getOrElse(it / HapticTrack.BED_FRAME_MS) { false } }
+        }.toDouble() / engines.size
         val hits = tags.filter { it.kind == Kind.SHARP || it.kind == Kind.HEAVY }
         if (hits.isNotEmpty()) {
             val near = hits.map { it.startMs - HapticDirector.SNAP_MS..it.startMs + HapticDirector.SNAP_MS }
@@ -202,10 +224,10 @@ class HapticFilmTest {
             val bed = d.lfe.indices.map { w -> (0 until 100 step HapticTrack.BED_FRAME_MS).map { track.bedAt(w * 100 + it).toDouble() }.average() }
             m["LFE-only correlation"] = HapticHarness.pearson(d.lfe, bed)
             m["subwoofer, whole film"] = HapticHarness.pearson(d.sub, bed)
-            // A song's bass is felt lighter under music tags, which the subwoofer doesn't know: there
-            // the yardstick is whether loud LFE still plays, and the correlation is judged elsewhere.
+            // Music alone isn't felt, which the subwoofer doesn't know: the correlation is judged
+            // outside it (music tags and labels with no effect named), the same for every column.
             val tagged = BooleanArray(d.sub.size)
-            for (t in tags) if (t.kind == Kind.MUSIC) for (w in t.startMs / 100..minOf(d.sub.size - 1, t.endMs / 100)) tagged[w] = true
+            for (t in heard.sortedBy { it.kind != Kind.MUSIC }) if (t.kind == Kind.MUSIC || t.kind in EFFECTS) for (w in t.startMs / 100..minOf(d.sub.size - 1, t.endMs / 100)) tagged[w] = t.kind == Kind.MUSIC
             val free = d.sub.indices.filter { !tagged[it] }
             m["subwoofer correlation"] = HapticHarness.pearson(free.map { d.sub[it] }, free.map { bed[it] })
             // The LFE tells them apart: mixers put explosions there, voices in the centre.
@@ -244,6 +266,9 @@ class HapticFilmTest {
         private const val QUIET_LFE = 100.0
         /** Felt stretches closer than this are one moment. */
         private const val MOMENT_JOIN_MS = 300
+        /** Correlations this close are the same: labels move a few frames at the edges. */
+        private const val CORRELATION_NOISE = 0.005
+        private val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE)
 
         /** Phase 4 targets the fused track must still meet: (min, max). */
         private val TARGETS = mapOf(
@@ -251,10 +276,14 @@ class HapticFilmTest {
             "dialogue FP/min" to (0.0 to HapticHarness.MAX_QUIET_FP_PER_MIN),
             "subwoofer correlation" to (HapticHarness.MIN_LFE_CORRELATION to 1.0)
         )
-        private val PRESET_ROWS = listOf("active share", "felt moments/min", "hits", "mean hit strength", "longest felt run, s", "dialogue FP/min", "subwoofer correlation", "tagged hits felt")
-        private val HIGHER = setOf("subwoofer correlation", "tagged hits felt", "MUSIC, loud LFE felt", "VOICE, loud LFE felt")
-        /** Shown, not scored: more hits and active time are the point of a rescued hit. */
-        private val INFO = setOf("active share", "felt moments/min", "tagged hits, bed or hit", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
+        private val PRESET_ROWS = listOf("active share", "felt moments/min", "hits", "mean hit strength", "longest felt run, s", "dialogue FP/min", "subwoofer correlation", "tagged hits felt", "opening felt, s")
+        private val HIGHER = setOf("subwoofer correlation", "tagged hits felt", "engine tags felt", "MUSIC, loud LFE felt", "VOICE, loud LFE felt")
+        /**
+         * Shown, not compared with audio only: more hits and active time are the point of a rescued
+         * hit. Dialogue FP keeps its target: sound labels find real
+         * glass and clangs during lines (Frankenstein, scores 0.5-0.94) that this yardstick counts as false.
+         */
+        private val INFO = setOf("dialogue FP/min", "active share", "felt moments/min", "opening felt, s", "tagged hits, bed or hit", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
 
         private val TIME = Regex("""(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)""")
         private val TAG = Regex("""[\[(♪#*]""")

@@ -167,6 +167,10 @@ android {
     // Native libraries use the default modern packaging: stored uncompressed and 16 KB
     // aligned, loaded straight from the APK. Play compresses the download itself and
     // serves per-ABI patches, so the old useLegacyPackaging trade no longer applies.
+    // The YAMNet model is memory-mapped from the APK, which needs it stored, not deflated.
+    androidResources {
+        noCompress += "tflite"
+    }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
@@ -226,6 +230,12 @@ dependencies {
     // replace with its GitHub Packages coordinate (plan section 4.3) so a fresh clone can
     // build at all.
     implementation files("libs/lib-decoder-ffmpeg-release.aar")
+
+    // Haptics sound recognition (HapticRecognizer): YAMNet, assets/yamnet.tflite, on the CPU.
+    // 1.x, the plain Java build: 2.0-2.2 fail the manifest merge (litert and litert-api share
+    // a namespace), 2.3 is compiled with Kotlin 2.4 metadata this project's 2.2 can't read,
+    // and 2.x adds a data-sync foreground-service permission.
+    implementation "com.google.ai.edge.litert:litert:1.4.2"
 
     // computeGeometry is pure arithmetic over ints and floats, so the six resize modes --
     // the part of the engine migration the plan calls the risk peak -- can be checked on

@@ -523,3 +523,65 @@ share of the whole film above the same threshold.
 
 **Decision.** Go: build the integration (labels → tags → Director) and score it with `HapticFilmTest`.
 Phone speed still to measure.
+
+## Sound recognition, built (2026-10-19)
+
+**Pipeline.** `HapticRecognizer` runs YAMNet beside the Listener in `HapticAnalysis`: the same mono
+mix, anti-aliased (4th-order, 7 kHz) and resampled to 16 kHz, a window every 0.48 s. `HapticSounds`
+turns the 521 scores into group scores (the track's new `sounds` lane) and those into tags the
+Director already reads. The Listener adds a `body` lane: level below 300 Hz, unweighted. Track
+format 2, Listener VERSION 4 (bump it whenever `HapticSounds.Group` changes: the cache holds group
+scores). If the model fails to load, haptics go on from the sound alone.
+
+| Group | Classes | Threshold | Tag |
+|---|---|---|---|
+| Music | Music | 0.2 (one-window dips bridged) | MUSIC |
+| Speech | Speech | 0.5 | SPEECH |
+| Engine | vehicle, car, engine, revving, idling, skid, motorcycle… | 0.2 | ENGINE |
+| Glass | glass, shatter, smash, breaking (not chink/clink) | 0.3 | SHARP |
+| Boom | explosion, gunshot, thunder, boom… | 0.3 | HEAVY |
+| Impact | slam, knock, thump, thunk, bang, whack, clang, rumble… | 0.3 | HEAVY |
+
+**Rules (Director).**
+- **Music alone** (no effect tag over it): half bed, no hits, as ♪ was. **Before the first speech
+  it isn't felt at all**: Frankenstein's logo is as loud and deep as its explosions, *louder on
+  the LFE* (−13 to −24 dB vs −27 to −45 dB per second), so only its place tells it apart. Muting
+  music everywhere was tried: loud-LFE moments under voice tags fell from 0.76 to 0.45 (Us), the
+  score's braams under screams. Halving keeps them.
+- **An effect under music plays**: boom, impact, glass or engine tags lift the music rule there.
+- **Labels snap only inside their own window** (`Tag.exact`), not ±1 s like a caption: with ±1 s
+  they picked speech consonants. Clink was dropped from glass and effect thresholds raised to 0.3
+  for the same reason (Frankenstein's lab instruments and chains).
+- **Engine**: under an ENGINE tag (label or `[engine revs]`, a new SDH keyword) the bed is at least
+  the body level, gated on the film's 99th-percentile body like the bed on its bass.
+
+**Results** (Cinematic; audio only → subtitles → subtitles + labels).
+
+| | Us | Frankenstein | Together | Blast |
+|---|---|---|---|---|
+| Opening felt before the first line, s | 1.1 → 1.3 → 1.5 | 14.2 → 14.2 → **6.3** | 0 | 2.8 = |
+| Engine tags felt | 0.31 → **0.77** → 0.77 | | | |
+| Tagged hits felt | 0.32 → 0.54 → 0.54 | 0.25 → 0.48 → 0.48 | 0.44 → 0.50 → **0.56** | |
+| Dialogue hits/min (≤ 1) | 0.61 → 0.61 → **0.45** | 0.42 → 0.42 → 0.44 | 0.43 → 0.43 → **0.30** | 1.00 → 1.00 → **0.85** |
+| Loud LFE felt, ♪ / voice | kept | kept | kept | |
+| Felt moments/min | 5.6 → 5.7 → 6.0 | 3.0 → 3.1 → 3.1 | 2.5 → 2.5 → 2.7 | 8.8 → 8.8 → 8.9 |
+
+- Frankenstein's remaining 6 s of opening are its storm: YAMNet calls the ship and wind "vehicle",
+  so the engine rule plays them.
+- Felt moments barely move: halved music bass still counts as felt. Engines add a few.
+- Blast's 40–47 s opening is labelled explosion and stays.
+
+**Yardstick changes** (`HapticFilmTest`). Subtitle tags stay the ground truth; labels only direct.
+A *subs* column shows subtitles alone. The subwoofer correlation is judged outside music-only
+stretches (labels included, the Phase 5 rule widened) with 0.005 tolerance. Dialogue hits keep the
+≤ 1/min target but are no longer compared with audio only: labels find real glass and clangs
+during lines (Frankenstein, scores 0.5–0.94), which that comparison counts as false.
+
+**Runtime.** LiteRT 1.4.2 (`org.tensorflow.lite.Interpreter`, CPU, 2 threads): 2.0–2.2 fail the
+manifest merge (two artifacts share a namespace), 2.3 carries Kotlin 2.4 metadata this project's
+2.2 can't read, and 2.x adds a data-sync foreground-service permission. APK: model 4.1 MB, runtime
+4.5 MB (arm64) / 2.6 MB (armv7), both stored. R8 keeps the JNI wrapper by name.
+`HapticRecognizerTest` checks the resampler and windowing.
+
+**Still to measure on the phone:** classify time per window and the analysis staying ahead of the
+playhead (`listen ... classify=` in the log), battery, and that its labels match the PC's.

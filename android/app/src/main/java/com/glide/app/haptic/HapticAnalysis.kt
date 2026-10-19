@@ -11,9 +11,9 @@ import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
 /**
- * Runs the [HapticListener] over a film's whole audio in the background (decision L2) and hands
- * [publish] the track as it grows, about once a second, so haptics start once analysis passes the
- * playhead. A finished track is cached per file; a cached one is handed over at once.
+ * Runs the [HapticListener] and [HapticRecognizer] over a film's whole audio in the background
+ * (decision L2) and hands [publish] the track as it grows, about once a second, so haptics start
+ * once analysis passes the playhead. A finished track is cached per file; a cached one is handed over at once.
  *
  * The thread runs at the lowest priority, and FFmpeg's decode thread, created from it, inherits
  * that (L2 measured it at normal priority, competing with the player).
@@ -54,6 +54,10 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
             return
         }
         val listener = HapticListener()
+        val opened = HapticRecognizer.open(context)
+        if (opened == null) Log.w(TAG, "listen recognizer unavailable")
+        val recognizer = opened?.first
+        fun snapshot() = listener.track(fp).withSounds(recognizer?.windows?.toList().orEmpty())
         val t0 = SystemClock.elapsedRealtime()
         var shown = t0
         val sink = object : SubtitleSyncModule.PcmSink {
@@ -61,27 +65,29 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
 
             override fun add(ptsUs: Long, data: ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
                 listener.add(ptsUs, data, channels, rate, isFloat)
+                recognizer?.add(ptsUs, data, channels, rate, isFloat)
                 val now = SystemClock.elapsedRealtime()
                 if (now - shown >= PUBLISH_MS) {
                     shown = now
-                    publish(listener.track(fp))
+                    publish(snapshot())
                     Log.w(TAG, "listen progress analysed=${listener.analysedMs} wall=${System.currentTimeMillis()}")
                 }
             }
         }
         val error = runCatching { SubtitleSyncModule.decodeAudio(context, uri, sink) }.exceptionOrNull()
+        opened?.second?.close()
         if (cancelled) {
             Log.w(TAG, "listen cancelled analysed=${listener.analysedMs}")
             return
         }
         listener.finish()
-        val track = listener.track(fp)
+        val track = snapshot()
         publish(track)
         // An extractor error in the last 1% is junk after the end (L2, Blast): keep the track.
         val complete = listener.analysedMs > 0 && (error == null || listener.analysedMs >= 0.99 * durationMs())
         if (complete) HapticPerformer.saveTrack(context, track)
         Log.w(TAG, "listen done analysed=${listener.analysedMs} took=${SystemClock.elapsedRealtime() - t0} " +
-            "events=${track.events.size} cached=$complete error=${error?.message?.replace(' ', '_')} wall=${System.currentTimeMillis()}")
+            "events=${track.events.size} windows=${track.sounds.size} classify=${recognizer?.classifyMs} cached=$complete error=${error?.message?.replace(' ', '_')} wall=${System.currentTimeMillis()}")
         // Hit times for the script to score against a fixture's truth.
         track.events.filter { it.sources and HapticTrack.LIGHT == 0 }.chunked(200).forEach { c -> Log.w(TAG, "listen events " + c.joinToString(",") { "${it.timeMs}" }) }
     }

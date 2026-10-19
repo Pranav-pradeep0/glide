@@ -1,9 +1,10 @@
 """
 YAMNet sound labels for the haptics film test (docs/haptics-decisions.md, Sound recognition).
 
-For each <name>.mka in .haptics-fixtures/films, writes <name>.yamnet.npy: one row of 521 scores
-(float16) per 0.48 s hop, row k covering [k*0.48, k*0.48 + 0.975) s. The audio is the first track,
-downmixed to mono at 16 kHz, as the phone will feed it. Existing files are kept.
+For each <name>.mka in .haptics-fixtures/films, writes <name>.sounds for HapticFilmTest: the frame
+count (int32, big-endian), then one row of 521 scores as bytes (score * 255) per 0.48 s hop, row k
+covering [k*0.48, k*0.48 + 0.975) s. The audio is the first track, downmixed to mono at 16 kHz, as
+the phone will feed it. Existing files are kept.
 
 Setup (once): python -m venv .haptics-fixtures/venv, then pip install tensorflow numpy, and put
 yamnet.tflite (MediaPipe, float32) and yamnet_class_map.csv in .haptics-fixtures/yamnet.
@@ -12,6 +13,7 @@ Run: .haptics-fixtures/venv/Scripts/python -I scripts/haptics-yamnet.py
 import os
 import subprocess
 import sys
+import struct
 import time
 
 import numpy as np
@@ -45,10 +47,16 @@ def label(audio):
     return scores
 
 
+def save(path, scores):
+    with open(path, "wb") as f:
+        f.write(struct.pack(">i", len(scores)))
+        f.write(np.round(scores.astype(np.float32) * 255).clip(0, 255).astype(np.uint8).tobytes())
+
+
 def main():
     names = sys.argv[1:] or sorted(f[:-4] for f in os.listdir(FILMS) if f.endswith(".mka"))
     for name in names:
-        dst = os.path.join(FILMS, name + ".yamnet.npy")
+        dst = os.path.join(FILMS, name + ".sounds")
         if os.path.exists(dst):
             print(f"{name}: kept")
             continue
@@ -57,7 +65,7 @@ def main():
         t1 = time.time()
         scores = label(audio)
         t2 = time.time()
-        np.save(dst, scores)
+        save(dst, scores)
         minutes = len(audio) / RATE / 60
         print(f"{name}: {minutes:.1f} min, {len(scores)} frames, decode {t1 - t0:.0f} s, label {t2 - t1:.0f} s "
               f"({minutes * 60 / (t2 - t1):.0f}x realtime, {1000 * (t2 - t1) / max(1, len(scores)):.1f} ms/frame)")

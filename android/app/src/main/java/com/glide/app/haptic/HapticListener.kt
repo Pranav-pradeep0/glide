@@ -19,6 +19,9 @@ import kotlin.math.tan
  * - Hits: onsets in 1 ms blocks of the mix. A hit is a jump in energy over both the moment just
  *   before and the scene's recent level, so an impact over dialogue counts but a sentence starting
  *   after a pause doesn't. Its time is the first block of the rise.
+ * - Body: level of the mix below [BODY_HZ] per bed frame, unweighted. An engine revs up through
+ *   100-2000 Hz (Us, [engine revs]: 1-15% of it below 100 Hz), where the bed fades out; the
+ *   Director plays the body where a sound label says engine.
  * - Intensity is loudness; sharpness is brightness (RMS frequency of the onset), which also sets
  *   the pulse length: bright and short, dull and long (decision L5).
  *
@@ -32,6 +35,8 @@ class HapticListener {
     private var startMs = 0
     private lateinit var lowA: Biquad
     private lateinit var lowB: Biquad
+    private lateinit var bodyA: Biquad
+    private lateinit var bodyB: Biquad
 
     // Mix state.
     private var prev = 0f
@@ -41,6 +46,8 @@ class HapticListener {
     private var inFrame = 0
     private var frameE = 0.0
     private var lastFrameE = 0.0
+    private var frameB = 0.0
+    private var lastFrameB = 0.0
     private var frameAll = 0.0
     private val shareLow = DoubleArray(SHARE_FRAMES)
     private val shareAll = DoubleArray(SHARE_FRAMES)
@@ -66,6 +73,7 @@ class HapticListener {
 
     private var bed = FloatArray(1 shl 12)
     private var bedSize = 0
+    private var body = FloatArray(1 shl 12)
     private val events = ArrayList<HapticTrack.Event>()
 
     /** Media time analysed so far. */
@@ -95,7 +103,7 @@ class HapticListener {
 
     fun track(fingerprint: HapticTrack.Fingerprint): HapticTrack {
         val frames = minOf(bedSize, analysedMs / HapticTrack.BED_FRAME_MS)
-        return HapticTrack(VERSION, fingerprint, bed.copyOf(frames), FloatArray(frames), events.toList())
+        return HapticTrack(VERSION, fingerprint, bed.copyOf(frames), FloatArray(frames), events.toList(), body.copyOf(frames))
     }
 
     private fun start(ptsUs: Long, rate: Int) {
@@ -106,11 +114,15 @@ class HapticListener {
         // 4th-order Butterworth low-pass: two biquads.
         lowA = Biquad(rate, BED_HZ, 0.5412)
         lowB = Biquad(rate, BED_HZ, 1.3066)
-        repeat(startMs / HapticTrack.BED_FRAME_MS) { pushBed(0f) }
+        bodyA = Biquad(rate, BODY_HZ, 0.5412)
+        bodyB = Biquad(rate, BODY_HZ, 1.3066)
+        repeat(startMs / HapticTrack.BED_FRAME_MS) { pushBed(0f, 0f) }
     }
 
     private fun sample(x: Float) {
         val low = lowB.run(lowA.run(x.toDouble()))
+        val b = bodyB.run(bodyA.run(x.toDouble()))
+        frameB += b * b
         frameE += low * low
         blockL += low * low
         frameAll += x * x
@@ -120,8 +132,12 @@ class HapticListener {
             shareAll[frames++ % SHARE_FRAMES] = frameAll
             val share = shareLow.sum() / (shareAll.sum() + 1e-12)
             val weight = ((share - SHARE_FROM) / (SHARE_FULL - SHARE_FROM)).coerceIn(0.0, 1.0).toFloat()
-            pushBed(weight * bedLevel(sqrt((e + lastFrameE) / 2))) // 20 ms window: a 50 Hz cycle reads steady
+            val eb = frameB / frame
+            // 20 ms windows: a 50 Hz cycle reads steady.
+            pushBed(weight * bedLevel(sqrt((e + lastFrameE) / 2)), bedLevel(sqrt((eb + lastFrameB) / 2)))
             lastFrameE = e
+            lastFrameB = eb
+            frameB = 0.0
             frameE = 0.0
             frameAll = 0.0
             inFrame = 0
@@ -227,8 +243,12 @@ class HapticListener {
         return if (db < BED_FLOOR_DB) 0f else ((db - BED_FLOOR_DB) / -BED_FLOOR_DB).toFloat().coerceIn(0f, 1f)
     }
 
-    private fun pushBed(v: Float) {
-        if (bedSize == bed.size) bed = bed.copyOf(bed.size * 2)
+    private fun pushBed(v: Float, b: Float) {
+        if (bedSize == bed.size) {
+            bed = bed.copyOf(bed.size * 2)
+            body = body.copyOf(bed.size)
+        }
+        body[bedSize] = b
         bed[bedSize++] = v
     }
 
@@ -264,13 +284,14 @@ class HapticListener {
 
     companion object {
         /** Bump when the output changes: cached tracks are rebuilt. */
-        const val VERSION = 3
+        const val VERSION = 4
 
         /** A hit's pulse and tail from its sharpness: bright and short, dull and long (decision L5). */
         fun lengthMs(sharpness: Float) = (80 - 50 * sharpness).roundToInt()
         fun decayMs(sharpness: Float) = (150 * (1 - sharpness)).roundToInt()
 
         const val BED_HZ = 100.0
+        const val BODY_HZ = 300.0
         private const val BED_FLOOR_DB = -45.0
         private const val SHARE_FRAMES = 20 // 200 ms
         private const val SHARE_FROM = 0.15 // no bed at or below this share of the sound

@@ -50,6 +50,20 @@ const entries = [
         notice: 'Copyright The Android Open Source Project.',
     },
     {
+        name: `LiteRT ${read('android/app/build.gradle').match(/com\.google\.ai\.edge\.litert:litert:([\d.]+)/)[1]}`,
+        license: 'Apache-2.0',
+        text: 'Apache-2.0',
+        notice: 'Copyright Google LLC. Runs YAMNet on the phone for haptics.',
+        source: 'https://github.com/google-ai-edge/LiteRT',
+    },
+    {
+        name: 'YAMNet',
+        license: 'Apache-2.0',
+        text: 'Apache-2.0',
+        notice: 'Copyright The TensorFlow Authors. The sound-event model haptics use to tell music, speech and effects apart.',
+        source: 'https://github.com/tensorflow/models/tree/master/research/audioset/yamnet',
+    },
+    {
         name: 'AndroidX libraries',
         license: 'Apache-2.0',
         text: 'Apache-2.0',

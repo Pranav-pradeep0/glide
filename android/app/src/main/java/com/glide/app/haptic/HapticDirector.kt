@@ -43,6 +43,7 @@ object HapticDirector {
     private const val SMOOTH_FRAMES = 10 // 100 ms
     private const val FOLLOW_DB = 6f // how far under the gate an open bed follows
     private const val MUSIC_BED = 0.5f
+    private val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE)
     private const val SHARP = 0.8f
     private const val HEAVY = 0.1f
     private const val LIGHT_LEAD_MS = 200 // a light onset well before its cue is the line before
@@ -60,6 +61,7 @@ object HapticDirector {
      */
     fun direct(raw: HapticTrack, tags: List<HapticMeaning.Tag> = emptyList(), preset: Preset = Preset.CINEMATIC, strength: Float = 1f): HapticTrack {
         if (raw.analyzerVersion == 0) return raw // a fixture's truth, imported by the Lab
+        val tags = tags + HapticSounds.tags(raw.sounds)
         // Levels are judged on power averaged over [SMOOTH_FRAMES]: low tones beat 10-20 times a
         // second, and judged frame by frame their dips would chop a rumble into pieces.
         val v = raw.bedIntensity
@@ -85,20 +87,41 @@ object HapticDirector {
         }
         // On the film's own sound, before tags: a flicker is the same with or without subtitles.
         dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, weighty.filter { it.intensity >= hitGate })
-        // Under music the bed is lighter but still there: what a mixer sends to the LFE in a song
-        // scene is meant to be heavy. Gating it out lost 15-50% of loud-LFE moments.
-        val music = tags.filter { it.kind == Kind.MUSIC }.map { it.startMs until it.endMs }
-        for (r in music) for (i in r.first / HapticTrack.BED_FRAME_MS until minOf(bed.size, r.last / HapticTrack.BED_FRAME_MS)) bed[i] *= MUSIC_BED
+        // Music alone (no effect named with it: score, songs) is lighter under the bed and has no
+        // hits of its own; an effect under the score plays as usual. Before anyone first speaks
+        // (studio logos, title music) it isn't felt at all: a logo's boom is as deep and loud as an
+        // explosion, even on the LFE, and only its place tells it apart.
+        val opening = tags.filter { it.kind == Kind.SPEECH }.minOfOrNull { it.startMs } ?: 0
+        val musicOnly = BooleanArray(bed.size)
+        fun mark(kinds: Set<Kind>, on: Boolean) = tags.filter { it.kind in kinds }.forEach { t ->
+            musicOnly.fill(on, (t.startMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size), (t.endMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size))
+        }
+        mark(setOf(Kind.MUSIC), true)
+        mark(EFFECTS, false)
+        for (i in bed.indices) if (musicOnly[i]) bed[i] *= if (i * HapticTrack.BED_FRAME_MS < opening) 0f else MUSIC_BED
+        fun underMusic(ms: Int) = musicOnly.getOrElse(ms / HapticTrack.BED_FRAME_MS) { false }
+        // An engine revs above the bed's 100 Hz: under an engine tag the bed follows the body
+        // (below 300 Hz), gated on the film's own loud body as the bed is on its loud bass.
+        val body = raw.body
+        if (body.isNotEmpty()) {
+            val bodyRef = percentile(body.filter { it > 0f }.toFloatArray(), 0.99f)
+            val bodyLow = bodyRef - (preset.bedRangeDb + FOLLOW_DB) / BED_DB
+            for (t in tags) if (t.kind == Kind.ENGINE) {
+                for (i in (t.startMs / HapticTrack.BED_FRAME_MS).coerceAtLeast(0) until minOf(bed.size, t.endMs / HapticTrack.BED_FRAME_MS)) {
+                    bed[i] = maxOf(bed[i], preset.bedGain * ((body[i] - bodyLow) / (bodyRef - bodyLow)).coerceIn(0f, 1f))
+                }
+            }
+        }
 
         fun scaled(e: HapticTrack.Event) = e.copy(
             intensity = (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (hitRef - hitGate)).coerceIn(preset.hitMin, 1f),
             sources = e.sources and HapticTrack.LIGHT.inv()
         )
         // Music has no hits of its own: one there is kept only if a tag names it (below).
-        val events = weighty.filter { e -> e.intensity >= hitGate && music.none { e.timeMs in it } }.map(::scaled).toMutableList()
+        val events = weighty.filter { e -> e.intensity >= hitGate && !underMusic(e.timeMs) }.map(::scaled).toMutableList()
         for (t in tags) {
             val sharpness = when (t.kind) { Kind.SHARP -> SHARP; Kind.HEAVY -> HEAVY; else -> continue }
-            val near = t.startMs - SNAP_MS..t.startMs + SNAP_MS
+            val near = if (t.exact) t.startMs..t.endMs else t.startMs - SNAP_MS..t.startMs + SNAP_MS
             val felt = events.indices.filter { events[it].timeMs in near }.maxByOrNull { events[it].intensity }
             val e = felt?.let { events.removeAt(it) }
                 ?: raw.events.filter { it.timeMs in near && (it.sources and HapticTrack.LIGHT == 0 || it.timeMs >= t.startMs - LIGHT_LEAD_MS) }

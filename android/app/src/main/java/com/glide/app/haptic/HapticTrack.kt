@@ -17,6 +17,10 @@ import java.io.IOException
  * Event lane: hits, sorted by time. [Event.lengthMs] is the pulse at full intensity and
  * [Event.decayMs] the tail after it; with no frequency control a hit's character is its length
  * (decision L5).
+ *
+ * Raw tracks only (format 2): [body], the level below 300 Hz per bed frame with no weighting, where
+ * an engine revs; [sounds], [HapticSounds] group scores per window of [HapticSounds.HOP_MS]. Both
+ * may be empty.
  */
 class HapticTrack(
     /** Bumped by a producer when its output changes, so cached tracks are rebuilt. */
@@ -24,7 +28,9 @@ class HapticTrack(
     val fingerprint: Fingerprint,
     val bedIntensity: FloatArray,
     val bedSharpness: FloatArray,
-    val events: List<Event>
+    val events: List<Event>,
+    val body: FloatArray = FloatArray(0),
+    val sounds: List<FloatArray> = emptyList()
 ) {
     /** Identifies the media file the track was made from. */
     data class Fingerprint(val path: String, val size: Long, val mtimeMs: Long)
@@ -40,13 +46,16 @@ class HapticTrack(
     )
 
     init {
-        require(bedIntensity.size == bedSharpness.size) { "bed lanes differ in length" }
-        require(bedIntensity.all { it in 0f..1f } && bedSharpness.all { it in 0f..1f }) { "bed value outside 0..1" }
+        require(bedIntensity.size == bedSharpness.size && (body.isEmpty() || body.size == bedIntensity.size)) { "bed lanes differ in length" }
+        require(sounds.all { it.size == HapticSounds.Group.entries.size && it.all { v -> v in 0f..1f } }) { "bad sound window" }
+        require(bedIntensity.all { it in 0f..1f } && bedSharpness.all { it in 0f..1f } && body.all { it in 0f..1f }) { "bed value outside 0..1" }
         require(events.zipWithNext().all { (a, b) -> a.timeMs <= b.timeMs }) { "events not sorted" }
         require(events.all { it.timeMs >= 0 && it.intensity in 0f..1f && it.sharpness in 0f..1f && it.lengthMs in 0..0xFFFF && it.decayMs in 0..0xFFFF }) {
             "event field out of range"
         }
     }
+
+    fun withSounds(sounds: List<FloatArray>) = HapticTrack(analyzerVersion, fingerprint, bedIntensity, bedSharpness, events, body, sounds)
 
     /** Bed intensity at [timeMs], 0 outside the lane. */
     fun bedAt(timeMs: Int): Float = bedIntensity.getOrElse(timeMs / BED_FRAME_MS) { 0f }
@@ -65,6 +74,8 @@ class HapticTrack(
         out.writeInt(bedIntensity.size)
         bedIntensity.forEach { out.writeByte(quantize(it)) }
         bedSharpness.forEach { out.writeByte(quantize(it)) }
+        out.writeInt(body.size)
+        body.forEach { out.writeByte(quantize(it)) }
         out.writeInt(events.size)
         for (e in events) {
             out.writeInt(e.timeMs)
@@ -74,11 +85,13 @@ class HapticTrack(
             out.writeShort(e.decayMs)
             out.writeByte(e.sources)
         }
+        out.writeInt(sounds.size)
+        for (w in sounds) w.forEach { out.writeByte(quantize(it)) }
         out.flush()
     }
 
     companion object {
-        const val FORMAT_VERSION = 1
+        const val FORMAT_VERSION = 2
         const val BED_FRAME_MS = 10
         const val SOURCE_AUDIO = 1
         const val SOURCE_SUBTITLE = 2
@@ -102,6 +115,9 @@ class HapticTrack(
             if (frames !in 0..MAX_FRAMES) throw IOException("bad frame count $frames")
             val intensity = FloatArray(frames) { input.readUnsignedByte() / 255f }
             val sharpness = FloatArray(frames) { input.readUnsignedByte() / 255f }
+            val bodyFrames = input.readInt()
+            if (bodyFrames != 0 && bodyFrames != frames) throw IOException("bad body frame count $bodyFrames")
+            val body = FloatArray(bodyFrames) { input.readUnsignedByte() / 255f }
             val count = input.readInt()
             if (count !in 0..MAX_FRAMES) throw IOException("bad event count $count")
             val events = List(count) {
@@ -114,8 +130,11 @@ class HapticTrack(
                     sources = input.readUnsignedByte()
                 )
             }
+            val windows = input.readInt()
+            if (windows !in 0..MAX_FRAMES) throw IOException("bad window count $windows")
+            val sounds = List(windows) { FloatArray(HapticSounds.Group.entries.size) { input.readUnsignedByte() / 255f } }
             return try {
-                HapticTrack(analyzer, fingerprint, intensity, sharpness, events)
+                HapticTrack(analyzer, fingerprint, intensity, sharpness, events, body, sounds)
             } catch (e: IllegalArgumentException) {
                 throw IOException("corrupt haptic track: ${e.message}")
             }
