@@ -462,3 +462,64 @@ The film test runs at strength 1, so its tables above are unchanged.
   (and a "Feel what you hear" line) was tried and dropped: plain words for what the user feels
   beat explaining the engine. The native Alert dialogs were replaced by the app's own
   (`showDialog`, `DialogHost`) on the way.
+
+## Flickers (2026-10-19)
+
+**Report:** "vibrates for everything", including studio logos; misses glass and engine revs.
+
+**Measured** (`HapticFilmTest`, new row *felt moments/min*: felt stretches, gaps under 300 ms joined).
+47–67% of everything felt was a bed burst under 300 ms with no hit: bass notes and gusts brushing the
+gate, 2–10 a minute. *Active share* can't see them; they are short.
+
+**Fix.** The Director drops a bed burst under 300 ms whose 100 ms level stays within 3 dB of the gate
+and that holds no hit. It runs before tags, so a flicker is the same with or without subtitles (run
+after them, music's halved bed read as faint and failed the audio-vs-tags check).
+
+| Cinematic, with tags | Us | Frankenstein | Together | Blast |
+|---|---|---|---|---|
+| Felt moments/min | 7.5 → **5.6** | 4.3 → **3.1** | 5.6 → **2.5** | 15.1 → **8.8** |
+| Subwoofer correlation (≥ 0.5) | 0.755 → 0.737 | 0.758 → 0.747 | 0.734 → 0.713 | 0.740 → 0.703 |
+| Loud LFE felt under voice tags | 0.80 → 0.76 | 0.86 → 0.82 | 0.85 → 0.78 | no tags |
+| Tagged hits felt | same | same | same | |
+
+Dropping every short burst (no 3 dB rule) took moments/min lower (Blast 5.8) but lost loud-LFE
+thumps (Us under voice 0.80 → 0.65); past ~4 dB the gain flattens and the losses keep growing.
+
+**Not fixed here, measured for the next step.** The Listener knows how loud and how deep a sound
+is, not what it is:
+- **Logos.** Frankenstein's 0–11 s logo is 121–131 dB with 40–99% of it below 100 Hz, as loud and
+  deep as its explosion scene (124–133 dB). ♪ tags cover only the 2–4 s a caption is on screen.
+- **Engines.** A revving engine lives at 100–2000 Hz: Us 57:59 [engine revs] is at full level with
+  1–15% below 100 Hz, so the bed fades out (share ≤ 15%) exactly as it revs. 4 of 10 engine tags
+  in Us are felt, by their bass alone. `HapticMeaning` has no engine keyword.
+- **Glass.** In a loud scene bass hides it: Us 70:46 [glass shattering] rose 15 dB in 2–8 kHz but
+  4 dB overall, under the 10 dB onset rule; Frankenstein's [cuffs shatter] the same. Caught alone it
+  is light (no bass), played only with a tag and at the softest hit. `[glass breaking]` matches no
+  keyword.
+
+## Sound recognition, go/no-go (2026-10-19)
+
+**Test.** `scripts/haptics-yamnet.py` runs Google's YAMNet (`yamnet.tflite`, MediaPipe float32, 4.1 MB,
+Apache 2.0) over each film's mono 16 kHz audio, one 0.975 s window every 0.48 s, and saves the 521
+scores as `<name>.yamnet.npy`. Scored against the films' own SDH tags (±1.5 s); "false frames" is the
+share of the whole film above the same threshold.
+
+| Question | Result |
+|---|---|
+| Speed (PC, XNNPACK) | 4.1 ms a window, ~115× realtime: a 2.5 h film in 81 s |
+| Music logos labelled music? | **Yes.** Frankenstein 2–11 s Music 0.26–0.59; Together 4–9 s 0.67–0.99 |
+| Engine tags found (Us, > 0.2) | **7 of 13** (3 of 4 [engine revs]); 1.4% false frames |
+| Breaking-glass tags found (> 0.15) | **5 of 6** (Us 0.74, 0.89; Frankenstein 0.26, 0.20, 0.74); ≤ 1% false frames. Missed: Us 70:46, under a thud |
+| Gunshots / explosions found (Frankenstein, > 0.1) | 20 of 29; missed ones are mostly low [thunder rumbling], which the bed carries |
+| Music under plain dialogue lines | 6–35% of their time (Blast's score runs under its dialogue) |
+
+**Findings.**
+- **Music is a span, not a mute.** It covers 24–51% of these films, including action under score.
+  Silencing everything under music would cut real effects; the rule has to be "under music, only
+  what is also labelled an effect is felt".
+- **Not every opening is a music logo.** Blast 40–47 s and Us 45–57 s are labelled explosion and
+  thunder: they are, as sound. Only a music logo can be told apart.
+- Speech is found under 69–79% of dialogue-line time.
+
+**Decision.** Go: build the integration (labels → tags → Director) and score it with `HapticFilmTest`.
+Phone speed still to measure.
