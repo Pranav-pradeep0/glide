@@ -170,6 +170,11 @@ class HapticFilmTest {
         var longest = 0
         for (a in active) { run = if (a) run + 1 else 0; longest = maxOf(longest, run) }
         m["longest felt run, s"] = longest * HapticTrack.BED_FRAME_MS / 1000.0
+        // How often something starts: half of these were sub-300 ms bass flickers, which active share can't see.
+        var moments = 0
+        var quiet = Int.MAX_VALUE
+        for (a in active) if (a) { if (quiet > MOMENT_JOIN_MS / HapticTrack.BED_FRAME_MS) moments++; quiet = 0 } else quiet++
+        m["felt moments/min"] = moments / (d.ms / 60_000.0)
         // The renderer plays the louder of bed and hit: a hit no stronger than the bed under it is lost.
         m["hits lost under the bed"] = track.events.count { e -> (0 until e.lengthMs step HapticTrack.BED_FRAME_MS).all { track.bedAt(e.timeMs + it) >= e.intensity } }.toDouble()
         val lines = dialogue(cues)
@@ -183,6 +188,7 @@ class HapticFilmTest {
             val near = hits.map { it.startMs - HapticDirector.SNAP_MS..it.startMs + HapticDirector.SNAP_MS }
             m["tagged hits felt"] = near.count { w -> track.events.any { it.timeMs in w } }.toDouble() / hits.size
             m["tagged hits, raw onset"] = near.count { w -> d.raw.events.any { it.timeMs in w } }.toDouble() / hits.size
+            m["tagged hits, bed or hit"] = near.count { w -> (w step HapticTrack.BED_FRAME_MS).any { active.getOrElse(it / HapticTrack.BED_FRAME_MS) { false } } }.toDouble() / hits.size
         }
         for (kind in listOf(Kind.MUSIC, Kind.VOICE)) {
             val spans = tags.filter { it.kind == kind }.map { it.startMs until it.endMs }
@@ -236,6 +242,8 @@ class HapticFilmTest {
         private const val LOUD_BASS = 2.0
         /** An LFE 40 dB under its loud level is silent. */
         private const val QUIET_LFE = 100.0
+        /** Felt stretches closer than this are one moment. */
+        private const val MOMENT_JOIN_MS = 300
 
         /** Phase 4 targets the fused track must still meet: (min, max). */
         private val TARGETS = mapOf(
@@ -243,10 +251,10 @@ class HapticFilmTest {
             "dialogue FP/min" to (0.0 to HapticHarness.MAX_QUIET_FP_PER_MIN),
             "subwoofer correlation" to (HapticHarness.MIN_LFE_CORRELATION to 1.0)
         )
-        private val PRESET_ROWS = listOf("active share", "hits", "mean hit strength", "longest felt run, s", "dialogue FP/min", "subwoofer correlation", "tagged hits felt")
+        private val PRESET_ROWS = listOf("active share", "felt moments/min", "hits", "mean hit strength", "longest felt run, s", "dialogue FP/min", "subwoofer correlation", "tagged hits felt")
         private val HIGHER = setOf("subwoofer correlation", "tagged hits felt", "MUSIC, loud LFE felt", "VOICE, loud LFE felt")
         /** Shown, not scored: more hits and active time are the point of a rescued hit. */
-        private val INFO = setOf("active share", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
+        private val INFO = setOf("active share", "felt moments/min", "tagged hits, bed or hit", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
 
         private val TIME = Regex("""(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)""")
         private val TAG = Regex("""[\[(♪#*]""")

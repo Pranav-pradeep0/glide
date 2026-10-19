@@ -46,6 +46,8 @@ object HapticDirector {
     private const val SHARP = 0.8f
     private const val HEAVY = 0.1f
     private const val LIGHT_LEAD_MS = 200 // a light onset well before its cue is the line before
+    private const val MIN_BURST_MS = 300
+    private const val FLICKER_DB = 3f
 
     // The Listener's dB scales: bed 0..1 is -45..0 dB, hit 0..1 is -40..0 dBFS.
     private const val BED_DB = 45f
@@ -75,17 +77,19 @@ object HapticDirector {
         val bedRef = percentile(heard, 0.99f)
         val bedGate = bedRef - preset.bedRangeDb / BED_DB
         val bedLow = bedGate - FOLLOW_DB / BED_DB
+        val weighty = raw.events.filter { it.sources and HapticTrack.LIGHT == 0 }
+        val hitRef = percentile(FloatArray(weighty.size) { weighty[it].intensity }, 0.95f)
+        val hitGate = hitRef - preset.hitRangeDb / HIT_DB
         val bed = FloatArray(v.size) { i ->
             if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * ((v[i] - bedLow) / (bedRef - bedLow)).coerceIn(0f, 1f)
         }
+        // On the film's own sound, before tags: a flicker is the same with or without subtitles.
+        dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, weighty.filter { it.intensity >= hitGate })
         // Under music the bed is lighter but still there: what a mixer sends to the LFE in a song
         // scene is meant to be heavy. Gating it out lost 15-50% of loud-LFE moments.
         val music = tags.filter { it.kind == Kind.MUSIC }.map { it.startMs until it.endMs }
         for (r in music) for (i in r.first / HapticTrack.BED_FRAME_MS until minOf(bed.size, r.last / HapticTrack.BED_FRAME_MS)) bed[i] *= MUSIC_BED
 
-        val weighty = raw.events.filter { it.sources and HapticTrack.LIGHT == 0 }
-        val hitRef = percentile(FloatArray(weighty.size) { weighty[it].intensity }, 0.95f)
-        val hitGate = hitRef - preset.hitRangeDb / HIT_DB
         fun scaled(e: HapticTrack.Event) = e.copy(
             intensity = (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (hitRef - hitGate)).coerceIn(preset.hitMin, 1f),
             sources = e.sources and HapticTrack.LIGHT.inv()
@@ -110,6 +114,27 @@ object HapticDirector {
         events.sortBy { it.timeMs }
         for (i in bed.indices) bed[i] *= strength
         return HapticTrack(raw.analyzerVersion, raw.fingerprint, bed, raw.bedSharpness, events.map { it.copy(intensity = it.intensity * strength) })
+    }
+
+    /**
+     * A bed burst shorter than [MIN_BURST_MS] whose [level] stays under [ceiling] (within
+     * [FLICKER_DB] of the gate) and with no hit in it is a flicker: a bass note or gust brushing
+     * the gate. They were half of all felt moments and read as noise; short loud ones are thumps
+     * and stay. Gaps the renderer plays through ([HapticRenderer.MIN_GAP_MS]) don't end a burst.
+     */
+    private fun dropFlickers(bed: FloatArray, level: FloatArray, ceiling: Float, hits: List<HapticTrack.Event>) {
+        val gap = HapticRenderer.MIN_GAP_MS / HapticTrack.BED_FRAME_MS
+        var i = 0
+        while (i < bed.size) {
+            if (bed[i] <= 0f) { i++; continue }
+            var end = i + 1 // after the burst's last felt frame
+            var j = end
+            while (j < bed.size && j - end < gap) if (bed[j++] > 0f) end = j
+            val from = i * HapticTrack.BED_FRAME_MS
+            val to = end * HapticTrack.BED_FRAME_MS
+            if (to - from < MIN_BURST_MS && (i until end).all { level[it] < ceiling } && hits.none { it.timeMs in from until to }) bed.fill(0f, i, end)
+            i = end
+        }
     }
 
     // ponytail: sorts the whole lane per publish (~1/s, 0.7M floats for a 2 h film); a 256-bin
