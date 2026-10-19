@@ -79,20 +79,10 @@ jobs:
         # Secrets come in as env vars, never pasted into the script: a value holding $, `
         # or a line reading EOF is written as-is instead of running or ending the heredoc.
         env:
-          SUBDL_API_KEY: ${{ secrets.SUBDL_API_KEY }}
-          SUBDL_API_URL: ${{ secrets.SUBDL_API_URL }}
-          SUBDL_DOWNLOAD_URL: ${{ secrets.SUBDL_DOWNLOAD_URL }}
-          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
-          OMDB_API_URL: ${{ secrets.OMDB_API_URL }}
           STALLION_PROJECT_ID: ${{ secrets.STALLION_PROJECT_ID }}
           STALLION_APP_TOKEN: ${{ secrets.STALLION_APP_TOKEN }}
         run: |
           cat << EOF > .env
-          SUBDL_API_KEY=$SUBDL_API_KEY
-          SUBDL_API_URL=$SUBDL_API_URL
-          SUBDL_DOWNLOAD_URL=$SUBDL_DOWNLOAD_URL
-          OMDB_API_KEY=$OMDB_API_KEY
-          OMDB_API_URL=$OMDB_API_URL
           AI_PROXY_URL=$AI_PROXY_URL
           STALLION_PROJECT_ID=$STALLION_PROJECT_ID
           STALLION_APP_TOKEN=$STALLION_APP_TOKEN
@@ -257,20 +247,10 @@ jobs:
         # Secrets come in as env vars, never pasted into the script: a value holding $, `
         # or a line reading EOF is written as-is instead of running or ending the heredoc.
         env:
-          SUBDL_API_KEY: ${{ secrets.SUBDL_API_KEY }}
-          SUBDL_API_URL: ${{ secrets.SUBDL_API_URL }}
-          SUBDL_DOWNLOAD_URL: ${{ secrets.SUBDL_DOWNLOAD_URL }}
-          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
-          OMDB_API_URL: ${{ secrets.OMDB_API_URL }}
           STALLION_PROJECT_ID: ${{ secrets.STALLION_PROJECT_ID }}
           STALLION_APP_TOKEN: ${{ secrets.STALLION_APP_TOKEN }}
         run: |
           cat << EOF > .env
-          SUBDL_API_KEY=$SUBDL_API_KEY
-          SUBDL_API_URL=$SUBDL_API_URL
-          SUBDL_DOWNLOAD_URL=$SUBDL_DOWNLOAD_URL
-          OMDB_API_KEY=$OMDB_API_KEY
-          OMDB_API_URL=$OMDB_API_URL
           AI_PROXY_URL=$AI_PROXY_URL
           STALLION_PROJECT_ID=$STALLION_PROJECT_ID
           STALLION_APP_TOKEN=$STALLION_APP_TOKEN

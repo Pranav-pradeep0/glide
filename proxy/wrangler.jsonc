@@ -8,8 +8,8 @@
     "enabled": true,
     "head_sampling_rate": 0.05
   },
-  // GROQ_API_KEY is a Worker secret (`wrangler secret put GROQ_API_KEY`); src/index.ts
-  // refuses every request when it is unset.
+  // GROQ_API_KEY, SUBDL_API_KEY and OMDB_API_KEY are Worker secrets
+  // (`wrangler secret put <NAME>`); a route whose key is unset answers 502.
   "ratelimits": [
     {
       "name": "AI_RATE_LIMITER",
@@ -28,6 +28,20 @@
         "limit": 60,
         "period": 60
       }
+    },
+    // Subtitle/metadata lookups and recap reports, per IP. One subtitle search can make
+    // two SubDL calls plus OMDb lookups, so this is looser than the recap limit.
+    {
+      "name": "LOOKUP_RATE_LIMITER",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
     }
+  ],
+  // Recap reports. No id: wrangler deploy creates the namespace the first time.
+  "kv_namespaces": [
+    { "binding": "REPORTS" }
   ]
 }

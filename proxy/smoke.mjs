@@ -86,6 +86,31 @@ await check('invalid JSON -> 400', async () => {
     expectStatus(res, 400);
 });
 
+await check('omdb lookup -> 200 with a match (key held by the Worker)', async () => {
+    const body = await readJson(await fetch(`${base}/v1/omdb?t=Inception&y=2010`));
+    if (body.Response !== 'True') {
+        throw new Error(`no match: ${body.Error}`);
+    }
+});
+
+await check('subdl search -> 200 with subtitles (key held by the Worker)', async () => {
+    const res = await fetch(`${base}/v1/subdl?film_name=Inception&type=movie&languages=EN&subs_per_page=3`);
+    expectStatus(res, 200);
+    const body = await readJson(res);
+    if (!Array.isArray(body.subtitles) || body.subtitles.length === 0) {
+        throw new Error('no subtitles');
+    }
+});
+
+await check('report without recap -> 400', async () => {
+    const res = await fetch(`${base}/v1/report`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+    });
+    expectStatus(res, 400);
+});
+
 // Rate limit is 6/60s per IP per location, so run this last.
 await check('flood -> at least one 429 within limit window', async () => {
     let saw429 = false;

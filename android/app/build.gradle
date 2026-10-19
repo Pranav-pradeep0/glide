@@ -14,9 +14,9 @@ if (envFile.exists()) {
         if (m.matches()) env[m.group(1)] = m.group(2)
     }
 }
-// What JS reads (src/utils/constants.ts), via GlideNative's `env` constant.
-def jsEnvKeys = ["SUBDL_API_URL", "SUBDL_API_KEY", "SUBDL_DOWNLOAD_URL", "OMDB_API_KEY", "OMDB_API_URL",
-                 "AI_PROXY_URL"]
+// What JS reads (src/utils/constants.ts), via GlideNative's `env` constant. It ships readable
+// in the APK, so no API key belongs here: SubDL, OMDb and Groq keys live in the Worker (proxy/).
+def jsEnvKeys = ["AI_PROXY_URL"]
 def jsEnvJson = JsonOutput.toJson(env.subMap(jsEnvKeys))
 
 def packageVersion = new JsonSlurper().parse(file("../../package.json")).version?.toString()

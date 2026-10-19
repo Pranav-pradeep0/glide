@@ -1,5 +1,5 @@
 // src/services/OMDBService.ts
-import { OMDB_API_KEY, OMDB_API_URL } from '../utils/constants';
+import { OMDB_API_URL } from '../utils/constants';
 import { fetchWithTimeout, NetworkTimeoutError } from '../utils/network';
 
 const LOG_PREFIX = '[OMDBService]';
@@ -37,7 +37,6 @@ export class OMDBService {
     static async search(title: string, year?: number, type?: 'movie' | 'series'): Promise<OMDBResult | null> {
         try {
             const params = new URLSearchParams({
-                apikey: OMDB_API_KEY,
                 t: title,
             });
 
@@ -97,7 +96,6 @@ export class OMDBService {
     ): Promise<OMDBResult[]> {
         try {
             const params = new URLSearchParams({
-                apikey: OMDB_API_KEY,
                 s: title,
             });
 
@@ -132,7 +130,6 @@ export class OMDBService {
     static async getByIMDBId(imdbId: string): Promise<OMDBResult | null> {
         try {
             const params = new URLSearchParams({
-                apikey: OMDB_API_KEY,
                 i: imdbId,
                 plot: 'short',
             });

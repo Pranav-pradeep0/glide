@@ -6,10 +6,18 @@ interface RateLimit {
     limit(key: { key: string }): Promise<RateLimitResult>;
 }
 
+interface KVNamespace {
+    put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+}
+
 export interface Env {
     GROQ_API_KEY: string;
+    SUBDL_API_KEY: string;
+    OMDB_API_KEY: string;
     AI_RATE_LIMITER: RateLimit;
     AI_GLOBAL_LIMITER: RateLimit;
+    LOOKUP_RATE_LIMITER: RateLimit;
+    REPORTS: KVNamespace;
 }
 
 const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -20,6 +28,30 @@ const MAX_DIALOGUE_CHARS = 5000;
 const MAX_TITLE_CHARS = 200;
 const MAX_RECAP_BODY_BYTES = 8 * 1024;
 const CHAT_TIMEOUT_MS = 15000;
+const LOOKUP_TIMEOUT_MS = 12000;
+const MAX_REPORT_BODY_BYTES = 4 * 1024;
+const REPORT_TTL_SECONDS = 180 * 24 * 60 * 60;
+
+/**
+ * Subtitle and metadata lookups. The keys stay here as Worker secrets instead of shipping in
+ * the APK. Only the listed query parameters are forwarded, so the proxy cannot be used to
+ * call anything else on either API.
+ */
+const LOOKUPS: Record<string, { url: string; keyParam: string; secret: 'SUBDL_API_KEY' | 'OMDB_API_KEY'; params: string[] }> = {
+    '/v1/subdl': {
+        url: 'https://api.subdl.com/api/v1/subtitles',
+        keyParam: 'api_key',
+        secret: 'SUBDL_API_KEY',
+        params: ['languages', 'subs_per_page', 'releases', 'film_name', 'type', 'comment', 'year', 'hi',
+            'file_name', 'imdb_id', 'season_number', 'episode_number', 'full_season'],
+    },
+    '/v1/omdb': {
+        url: 'https://www.omdbapi.com/',
+        keyParam: 'apikey',
+        secret: 'OMDB_API_KEY',
+        params: ['t', 's', 'i', 'y', 'type', 'plot'],
+    },
+};
 
 const RECAP_SYSTEM_PROMPT = `You are a cinematic recap expert. Your task is to provide a "Previously on..." style recap based on provided dialogue.
 
@@ -57,11 +89,11 @@ function logUpstreamFailure(route: string, upstreamStatus: number): void {
 // ponytail: per-colo burst gates, not a spend budget. The binding only supports 10s/60s
 // windows, so the actual cost bound is the spending limit set in the Groq console. Move to
 // a Durable Object / KV counter only if a real daily cap is needed.
-async function checkRate(env: Env, request: Request, route: string): Promise<Response | null> {
+async function checkRate(env: Env, request: Request, route: string, perIpLimiter: RateLimit): Promise<Response | null> {
     const key = `${route}:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`;
     const [perIp, global] = await Promise.all([
-        env.AI_RATE_LIMITER.limit({ key }),
-        env.AI_GLOBAL_LIMITER.limit({ key: 'all' }),
+        perIpLimiter.limit({ key }),
+        env.AI_GLOBAL_LIMITER.limit({ key: route }),
     ]);
     if (perIp.success && global.success) {
         return null;
@@ -152,32 +184,96 @@ async function handleRecap(request: Request, env: Env): Promise<Response> {
     return json({ recap });
 }
 
+async function handleLookup(url: URL, env: Env, lookup: (typeof LOOKUPS)[string], route: string): Promise<Response> {
+    const upstreamUrl = new URL(lookup.url);
+    for (const name of lookup.params) {
+        const value = url.searchParams.get(name);
+        if (value !== null) {
+            upstreamUrl.searchParams.set(name, value);
+        }
+    }
+    upstreamUrl.searchParams.set(lookup.keyParam, env[lookup.secret]);
+
+    const upstream = await fetch(upstreamUrl, {
+        signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+        headers: { accept: 'application/json' },
+    });
+    if (upstream.status >= 500) {
+        logUpstreamFailure(route, upstream.status);
+        return err(502, 'Lookup service unavailable.');
+    }
+    logRoute(route, upstream.status);
+    // The body is passed through: both APIs report "no match" inside a 200 or 404 JSON body.
+    return new Response(upstream.body, {
+        status: upstream.status,
+        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+    });
+}
+
+/**
+ * A viewer flags an AI recap (Play's AI-generated content policy). Kept for review in KV:
+ * `npx wrangler kv key list --binding REPORTS --remote`, then `kv key get` each one.
+ */
+async function handleReport(request: Request, env: Env): Promise<Response> {
+    const body = await readCappedText(request, MAX_REPORT_BODY_BYTES);
+    if (body.tooLarge) {
+        logRoute('report', 413);
+        return err(413, 'Report too large.');
+    }
+    let parsed: { title?: unknown; recap?: unknown };
+    try {
+        parsed = JSON.parse(body.text) as { title?: unknown; recap?: unknown };
+    } catch {
+        logRoute('report', 400);
+        return err(400, 'Invalid JSON.');
+    }
+    const recap = typeof parsed.recap === 'string' ? parsed.recap : '';
+    if (!recap) {
+        logRoute('report', 400);
+        return err(400, 'recap must be a non-empty string.');
+    }
+    const title = typeof parsed.title === 'string' ? parsed.title.slice(0, MAX_TITLE_CHARS) : '';
+    const reportedAt = new Date().toISOString();
+    await env.REPORTS.put(
+        `${reportedAt}-${crypto.randomUUID()}`,
+        JSON.stringify({ reportedAt, title, recap, model: CHAT_MODEL }),
+        { expirationTtl: REPORT_TTL_SECONDS },
+    );
+    logRoute('report', 204);
+    return new Response(null, { status: 204 });
+}
+
 export default {
     async fetch(request: Request, env: Env): Promise<Response> {
         const url = new URL(request.url);
+        const lookup = LOOKUPS[url.pathname];
+        const route = url.pathname.slice('/v1/'.length);
+        const method = lookup ? 'GET' : 'POST';
 
-        if (request.method !== 'POST') {
-            return err(405, 'Method not allowed.', { allow: 'POST' });
-        }
-
-        if (url.pathname !== '/v1/recap') {
+        if (!lookup && url.pathname !== '/v1/recap' && url.pathname !== '/v1/report') {
             return err(404, 'Not found.');
         }
-        const route = 'recap';
+        if (request.method !== method) {
+            return err(405, 'Method not allowed.', { allow: method });
+        }
 
-        if (!env.GROQ_API_KEY) {
+        const secret = lookup ? env[lookup.secret] : url.pathname === '/v1/recap' ? env.GROQ_API_KEY : 'none';
+        if (!secret) {
             logRoute(route, 502);
             return err(502, 'Service not configured.');
         }
 
-        const limited = await checkRate(env, request, route);
+        const limited = await checkRate(env, request, route, url.pathname === '/v1/recap' ? env.AI_RATE_LIMITER : env.LOOKUP_RATE_LIMITER);
         if (limited) {
             logRoute(route, 429);
             return limited;
         }
 
         try {
-            return await handleRecap(request, env);
+            if (lookup) {
+                return await handleLookup(url, env, lookup, route);
+            }
+            return url.pathname === '/v1/recap' ? await handleRecap(request, env) : await handleReport(request, env);
         } catch (error) {
             const timedOut = error instanceof Error && error.name === 'TimeoutError';
             logRoute(route, timedOut ? 504 : 502);

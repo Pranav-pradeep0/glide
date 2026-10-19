@@ -25,18 +25,18 @@ export const SUBTITLE_COLORS = [
 
 export const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
-// SubDL API
-export const SUBDL_API_URL = BUILD_ENV.SUBDL_API_URL || 'https://api.subdl.com/api/v1/subtitles';
-export const SUBDL_API_KEY = BUILD_ENV.SUBDL_API_KEY || '';
-export const SUBDL_DOWNLOAD_URL = BUILD_ENV.SUBDL_DOWNLOAD_URL || 'https://dl.subdl.com';
-
-// OMDB API (1,000 free requests/day)
-export const OMDB_API_KEY = BUILD_ENV.OMDB_API_KEY || '';
-export const OMDB_API_URL = BUILD_ENV.OMDB_API_URL || 'https://www.omdbapi.com';
-
+// Glide's Worker (proxy/): AI recap, plus SubDL and OMDb lookups, whose API keys it holds so
+// they never ship in the APK. With no proxy configured, those features are simply unavailable.
 const configuredAiProxyUrl = (BUILD_ENV.AI_PROXY_URL || '').trim().replace(/\/+$/, '');
 export const AI_PROXY_URL = configuredAiProxyUrl.startsWith('https://') ? configuredAiProxyUrl : '';
 export const RECAP_AVAILABLE = AI_PROXY_URL.length > 0;
+
+// SubDL search goes through the proxy; downloads are public and need no key.
+export const SUBDL_API_URL = AI_PROXY_URL && `${AI_PROXY_URL}/v1/subdl`;
+export const SUBDL_DOWNLOAD_URL = 'https://dl.subdl.com';
+
+// OMDB (1,000 free requests/day, shared by every install).
+export const OMDB_API_URL = AI_PROXY_URL && `${AI_PROXY_URL}/v1/omdb`;
 
 // export const DEFAULT_STORAGE_PATH = '/storage/emulated/0/Movies';
 export const DEFAULT_STORAGE_PATH = RNFS.ExternalStorageDirectoryPath;

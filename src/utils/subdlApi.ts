@@ -1,7 +1,7 @@
 // src/utils/subdlApi.ts
 
 import { SubtitleCue, SubtitleResult } from '../types';
-import { SUBDL_API_URL, SUBDL_API_KEY, SUBDL_DOWNLOAD_URL } from './constants';
+import { SUBDL_API_URL, SUBDL_DOWNLOAD_URL } from './constants';
 import { NativeModules } from 'react-native';
 import * as RNFS from '@dr.pogodin/react-native-fs';
 import { hasNativeApi } from '@/native/GlideNative';
@@ -460,7 +460,6 @@ function buildSearchParams({
     includeComments?: boolean;
 }): URLSearchParams {
     const params = new URLSearchParams({
-        api_key: SUBDL_API_KEY,
         languages: language,
         subs_per_page: '30',
         releases: '1',
