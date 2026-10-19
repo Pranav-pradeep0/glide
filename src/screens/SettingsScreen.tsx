@@ -7,12 +7,13 @@ import {
     FlatList,
     TextInput,
     useWindowDimensions,
+    Linking,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { DEFAULT_APP_SETTINGS, HAPTIC_PRESETS, HAPTIC_STRENGTH_MIN, hapticPresetAt, SUBTITLE_FONT_FAMILY, useAppStore } from '../store/appStore';
 import { useVideoHistoryStore } from '../store/videoHistoryStore';
 import { useTheme } from '../hooks/useTheme';
-import { SUBTITLE_COLORS } from '../utils/constants';
+import { PRIVACY_POLICY_URL, SUBTITLE_COLORS } from '../utils/constants';
 import { FileService } from '@/services/FileService';
 import { LANGUAGES } from '@/utils/languages';
 import HapticModule from '../native/HapticModule';
@@ -552,13 +553,19 @@ export default function SettingsScreen() {
 
                 <SectionLabel title="About" />
                 <ListGroup>
-                    {/* Seven taps open the Haptics Lab, a dev screen. */}
+                    {/* In debug builds, seven taps open the Haptics Lab, a dev screen. */}
                     <ListRow
                         icon="info"
                         title="Version"
                         // The JS version alone can't tell an OTA from a new APK; the native level can.
                         value={`${pkg.version} (${NATIVE_API_LEVEL})`}
-                        onPress={() => { if (++versionTaps.current % 7 === 0) navigation.navigate('HapticsLab'); }}
+                        onPress={__DEV__ ? () => { if (++versionTaps.current % 7 === 0) navigation.navigate('HapticsLab'); } : undefined}
+                    />
+                    <ListRow
+                        icon="shield"
+                        title="Privacy policy"
+                        chevron
+                        onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => {})}
                     />
                     <ListRow
                         icon="file-text"

@@ -72,7 +72,6 @@ export interface HapticSettings {
 export interface AppSettings {
     darkMode: boolean;
     hapticSettings: HapticSettings;
-    autoDownloadSubtitles: boolean;
     subtitleFontSize: number;
     subtitleColor: string;
     subtitleFontWeight: number; // 400-900

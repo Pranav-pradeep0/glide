@@ -41,3 +41,6 @@ export const RECAP_AVAILABLE = AI_PROXY_URL.length > 0;
 // export const DEFAULT_STORAGE_PATH = '/storage/emulated/0/Movies';
 export const DEFAULT_STORAGE_PATH = RNFS.ExternalStorageDirectoryPath;
 
+
+// Served by GitHub Pages from the public repo; the Play listing links the same page.
+export const PRIVACY_POLICY_URL = 'https://pranav-pradeep0.github.io/glide-public/privacy';

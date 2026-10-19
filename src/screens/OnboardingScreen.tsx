@@ -102,8 +102,10 @@ const SLIDES: SlideData[] = [
         title: 'Safe and Private',
         tagline: 'Your videos and music stay yours.',
         bullets: [
-            'No accounts, no analytics',
-            'Free forever, no ads',
+            // Not "no analytics": Stallion sends crash reports, and subtitle and lyrics
+            // lookups send titles. The privacy policy (Settings > About) lists them.
+            'No accounts, no ads, free forever',
+            'Your videos and music never leave your phone',
         ],
     },
 ];

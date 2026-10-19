@@ -31,7 +31,6 @@ export const DEFAULT_HAPTIC_SETTINGS: HapticSettings = {
 export const DEFAULT_APP_SETTINGS: AppSettings = {
     darkMode: false,
     hapticSettings: DEFAULT_HAPTIC_SETTINGS,
-    autoDownloadSubtitles: true,
     subtitleFontSize: 20,
     subtitleColor: '#FFFFFF',
     subtitleFontWeight: 600,
@@ -104,7 +103,6 @@ interface AppStore {
     updateSettings: (settings: Partial<AppSettings>) => void;
     toggleDarkMode: () => void;
     toggleHaptics: () => void;
-    toggleAutoDownloadSubtitles: () => void;
     setSubtitleFontSize: (size: number) => void;
     setSubtitleColor: (color: string) => void;
     setSubtitleFontWeight: (weight: number) => void;
@@ -153,13 +151,6 @@ export const useAppStore = create<AppStore>((set) => ({
                     ...state.settings.hapticSettings,
                     enabled: !state.settings.hapticSettings.enabled,
                 },
-            },
-        })),
-    toggleAutoDownloadSubtitles: () =>
-        set((state) => ({
-            settings: {
-                ...state.settings,
-                autoDownloadSubtitles: !state.settings.autoDownloadSubtitles,
             },
         })),
     setSubtitleFontSize: (size) =>
