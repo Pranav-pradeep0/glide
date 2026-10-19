@@ -143,7 +143,7 @@ jobs:
           # APK has already once shipped with no libffmpegJNI.so. FFmpeg itself is separate
           # .so files (LGPL: replaceable), and libffmpegJNI.so fails to load without any
           # of them. The renderer is loaded by class name, so R8 dropping it fails the same.
-          APK=android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          APK=android/app/build/outputs/apk/release/app-release.apk
           for lib in ffmpegJNI avcodec avutil swresample; do
             unzip -l "$APK" "lib/arm64-v8a/lib${lib}.so" >/dev/null \
               || { echo "::error::lib${lib}.so missing from the release APK"; exit 1; }
@@ -290,8 +290,9 @@ jobs:
             exit 1
           fi
 
-      - name: Build signed APKs
+      - name: Build signed app bundle
         working-directory: android
+        # Signed with the upload key; Play re-signs what it serves with the app signing key.
         # Gradle reads ORG_GRADLE_PROJECT_<name> as the property <name>, so the signing
         # secrets reach it without passing through the shell.
         env:
@@ -301,34 +302,55 @@ jobs:
           ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew bundleRelease
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/dist/Glide-v${VERSION}.aab"
+          echo "AAB_PATH=$GITHUB_WORKSPACE/dist/Glide-v${VERSION}.aab" >> "$GITHUB_ENV"
+
+      - name: Keep the bundle
+        # Until the Play service account secret exists, this artifact is the release: upload
+        # it to the internal track by hand.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Glide-v${{ env.VERSION }}-aab
+          path: ${{ env.AAB_PATH }}
+          if-no-files-found: error
+
+      - name: Build a universal APK from the bundle
+        # Only for the checks below: the same libraries and dex Play will serve, laid out
+        # the way bundletool lays them out. Never published.
+        run: |
+          set -e
+          curl -sSfL -o "$RUNNER_TEMP/bundletool.jar" \
+            https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum -c -
+          java -jar "$RUNNER_TEMP/bundletool.jar" build-apks --mode=universal \
+            --bundle="$AAB_PATH" --output="$RUNNER_TEMP/check.apks"
+          unzip -p "$RUNNER_TEMP/check.apks" universal.apk > "$RUNNER_TEMP/check.apk"
+          echo "CHECK_APK=$RUNNER_TEMP/check.apk" >> "$GITHUB_ENV"
 
       - name: Verify the FFmpeg decoder shipped
         run: |
           set -e
-          # See the verify job. Both ABIs here, since both are published.
+          # See the verify job. Both ABIs, since Play serves both.
           for abi in arm64-v8a armeabi-v7a; do
-            APK="android/app/build/outputs/apk/release/app-${abi}-release.apk"
             for lib in ffmpegJNI avcodec avutil swresample; do
-              unzip -l "$APK" "lib/${abi}/lib${lib}.so" >/dev/null \
-                || { echo "::error::lib${lib}.so missing from the ${abi} APK"; exit 1; }
+              unzip -l "$CHECK_APK" "lib/${abi}/lib${lib}.so" >/dev/null \
+                || { echo "::error::lib${lib}.so missing for ${abi}"; exit 1; }
             done
-            unzip -p "$APK" 'classes*.dex' | grep -aq 'Landroidx/media3/decoder/ffmpeg/FfmpegAudioRenderer;' \
-              || { echo "::error::FfmpegAudioRenderer stripped from the ${abi} APK"; exit 1; }
           done
+          unzip -p "$CHECK_APK" 'classes*.dex' | grep -aq 'Landroidx/media3/decoder/ffmpeg/FfmpegAudioRenderer;' \
+            || { echo "::error::FfmpegAudioRenderer stripped from the release build"; exit 1; }
 
       - name: Verify 16 KB page alignment
         run: |
           set -e
-          # Android 15 and later run on 16 KB pages on some arm64 devices, and a shared
-          # library whose LOAD segments are aligned to less will not load there at all.
-          #
-          # This reads the ELF headers, not the zip. The libraries are stored compressed
-          # (useLegacyPackaging) and extracted at install, so zip-level alignment
-          # (zipalign -P 16) says nothing about them; segment alignment is what the loader
-          # checks. 32-bit ARM has no 16 KB devices, so only arm64 is checked.
+          # Android 15 and later run on 16 KB pages on some arm64 devices. A shared library
+          # whose LOAD segments are aligned to less will not load there at all, and since the
+          # libraries are stored uncompressed and loaded straight from the APK, their offsets
+          # inside the zip must be 16 KB aligned too. 32-bit ARM has no 16 KB devices.
           LIBS=$(mktemp -d)
-          unzip -q android/app/build/outputs/apk/release/app-arm64-v8a-release.apk 'lib/arm64-v8a/*' -d "$LIBS"
+          unzip -q "$CHECK_APK" 'lib/arm64-v8a/*' -d "$LIBS"
           FAILED=0
           for so in "$LIBS"/lib/arm64-v8a/*.so; do
             for align in $(readelf -lW "$so" | awk '$1 == "LOAD" { print $NF }'); do
@@ -338,33 +360,10 @@ jobs:
               fi
             done
           done
+          ZIPALIGN="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)zipalign"
+          "$ZIPALIGN" -c -P 16 4 "$CHECK_APK" \
+            || { echo "::error::native libraries are not 16 KB aligned inside the APK"; FAILED=1; }
           exit $FAILED
-
-      - name: Collect assets and checksums
-        run: |
-          set -e
-          APK_DIR="android/app/build/outputs/apk/release"
-
-          ARM_SRC="$APK_DIR/app-armeabi-v7a-release.apk"
-          ARM64_SRC="$APK_DIR/app-arm64-v8a-release.apk"
-          ARM_DEST="$APK_DIR/Glide-v${VERSION}-arm.apk"
-          ARM64_DEST="$APK_DIR/Glide-v${VERSION}-arm64.apk"
-
-          mv "$ARM_SRC" "$ARM_DEST"
-          mv "$ARM64_SRC" "$ARM64_DEST"
-
-          sha256sum "$ARM_DEST"  > "${ARM_DEST}.sha256"
-          sha256sum "$ARM64_DEST" > "${ARM64_DEST}.sha256"
-
-          echo "ARM_PATH=$ARM_DEST" >> "$GITHUB_ENV"
-          echo "ARM64_PATH=$ARM64_DEST" >> "$GITHUB_ENV"
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
-        with:
-          subject-path: |
-            ${{ env.ARM_PATH }}
-            ${{ env.ARM64_PATH }}
 
       - name: Generate changelog from previous published release
         run: |
@@ -372,11 +371,8 @@ jobs:
           # The previous *published* release, not the newest tag. A tag whose release
           # build failed leaves an orphan tag behind (v1.9.1), and ranging from it
           # silently drops every commit between the last real release and that tag --
-          # which is how 1.9.2's notes came to omit both crash fixes.
-          #
-          # This is the same endpoint the in-app updater reads, so the notes describe
-          # exactly the jump users are taking. The release being built does not exist
-          # yet at this step, so this cannot return the current tag.
+          # which is how 1.9.2's notes came to omit both crash fixes. The release being
+          # built does not exist yet at this step, so this cannot return the current tag.
           LAST_TAG=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)
           if [ -z "$LAST_TAG" ] || [ "$LAST_TAG" = "null" ] \
               || ! git rev-parse -q --verify "refs/tags/$LAST_TAG" >/dev/null; then
@@ -423,15 +419,93 @@ jobs:
             echo "- Date: \`$(date +'%Y-%m-%d')\`"
           } > release_notes.md
 
+          # Play's "What's new": plain text, at most 500 characters. Whole bullets only, in
+          # the order above, so a long release drops its last lines instead of ending mid-word.
+          printf '%s\n' "$BODY" | grep '^- ' \
+            | LC_ALL=C.UTF-8 awk '{ if (n + length($0) + 1 > 500) exit; print; n += length($0) + 1 }' > whatsnew.txt || true
+          [ -s whatsnew.txt ] || echo "- Bug fixes and improvements." > whatsnew.txt
+
+      - name: Upload to Play and fetch the Play-signed APK
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          # A Play app that has never been published only accepts draft releases; set the
+          # repository variable PLAY_RELEASE_STATUS=draft until the first rollout.
+          PLAY_RELEASE_STATUS: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
+          PACKAGE: com.glide.app
+        run: |
+          set -euo pipefail
+          if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::warning::PLAY_SERVICE_ACCOUNT_JSON is not set. The bundle is kept as a workflow artifact only, and this GitHub Release has no APK."
+            exit 0
+          fi
+
+          # Service-account OAuth token, minted here so no third-party action holds the key.
+          b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+          EMAIL=$(jq -r .client_email <<< "$PLAY_SERVICE_ACCOUNT_JSON")
+          KEY_FILE=$(mktemp)
+          jq -r .private_key <<< "$PLAY_SERVICE_ACCOUNT_JSON" > "$KEY_FILE"
+          NOW=$(date +%s)
+          HEADER=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+          CLAIMS=$(jq -nc --arg iss "$EMAIL" --argjson now "$NOW" \
+            '{iss: $iss, scope: "https://www.googleapis.com/auth/androidpublisher",
+              aud: "https://oauth2.googleapis.com/token", iat: $now, exp: ($now + 3600)}' | b64url)
+          SIG=$(printf '%s.%s' "$HEADER" "$CLAIMS" | openssl dgst -sha256 -sign "$KEY_FILE" | b64url)
+          rm -f "$KEY_FILE"
+          TOKEN=$(curl -sS --fail-with-body \
+            -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer -d "assertion=$HEADER.$CLAIMS.$SIG" \
+            https://oauth2.googleapis.com/token | jq -r .access_token)
+          echo "::add-mask::$TOKEN"
+          AUTH="Authorization: Bearer $TOKEN"
+          API="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$PACKAGE"
+
+          # One edit: upload the bundle, put it on the internal track with the notes, commit.
+          EDIT=$(curl -sS --fail-with-body -X POST -H "$AUTH" "$API/edits" | jq -r .id)
+          VERSION_CODE=$(curl -sS --fail-with-body -X POST -H "$AUTH" \
+            -H 'Content-Type: application/octet-stream' --data-binary @"$AAB_PATH" \
+            "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/$PACKAGE/edits/$EDIT/bundles?uploadType=media" \
+            | jq -r .versionCode)
+          jq -n --arg name "$VERSION" --arg code "$VERSION_CODE" --arg status "$PLAY_RELEASE_STATUS" \
+              --rawfile notes whatsnew.txt \
+              '{track: "internal", releases: [{name: $name, versionCodes: [$code], status: $status,
+                releaseNotes: [{language: "en-US", text: $notes}]}]}' \
+            | curl -sS --fail-with-body -X PUT -H "$AUTH" -H 'Content-Type: application/json' \
+                --data-binary @- "$API/edits/$EDIT/tracks/internal" > /dev/null
+          curl -sS --fail-with-body -X POST -H "$AUTH" "$API/edits/$EDIT:commit" > /dev/null
+          echo "Uploaded versionCode $VERSION_CODE to the internal track ($PLAY_RELEASE_STATUS)."
+
+          # Play builds its signed APKs from the bundle shortly after the upload.
+          DOWNLOAD_ID=""
+          for _ in $(seq 1 30); do
+            DOWNLOAD_ID=$(curl -sS --fail-with-body -H "$AUTH" "$API/generatedApks/$VERSION_CODE" \
+              | jq -r '[.generatedApks[]?.generatedUniversalApk.downloadId // empty][0] // empty')
+            [ -n "$DOWNLOAD_ID" ] && break
+            sleep 20
+          done
+          if [ -z "$DOWNLOAD_ID" ]; then
+            echo "::error::Play has not generated a universal APK for versionCode $VERSION_CODE after 10 minutes."
+            exit 1
+          fi
+          APK="$GITHUB_WORKSPACE/dist/Glide-v${VERSION}.apk"
+          curl -sS --fail-with-body -L -H "$AUTH" -o "$APK" \
+            "$API/generatedApks/$VERSION_CODE/downloads/$DOWNLOAD_ID:download"
+          sha256sum "$APK" > "$APK.sha256"
+          # Printed so anyone can check a downloaded APK carries Play's app signing key.
+          "$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner" verify --print-certs "$APK" | grep SHA-256
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: dist/Glide-*
+
       - name: Create GitHub Release
         run: |
           set -e
-          test -f "$ARM_PATH" || { echo "::error::Missing ARM APK"; exit 1; }
-          test -f "$ARM64_PATH" || { echo "::error::Missing ARM64 APK"; exit 1; }
-
+          shopt -s nullglob
+          # The Play-signed APK, when the step above fetched one. The AAB is not attached:
+          # it is signed with the upload key and is of no use to anyone but Play.
+          ASSETS=(dist/Glide-*.apk dist/Glide-*.apk.sha256)
           gh release create "$TAG" \
             --title "Glide ${VERSION}" \
             --notes-file release_notes.md \
             --verify-tag \
-            "$ARM_PATH" "${ARM_PATH}.sha256" \
-            "$ARM64_PATH" "${ARM64_PATH}.sha256"
+            "${ASSETS[@]}"

@@ -140,13 +140,10 @@ android {
         resValue "string", "StallionAppToken", env.get("STALLION_APP_TOKEN", "")
         buildConfigField "String", "JS_ENV", '"' + jsEnvJson.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
-    }
-    splits {
-        abi {
-            reset()
-            enable true
-            universalApk false
-            include(*rootProject.ext.nativeArchitectures)
+        // Play builds per-ABI APKs from the bundle. This keeps prebuilt AARs (the FFmpeg one
+        // also carries x86 and x86_64) from adding ABIs the rest of the app is not built for.
+        ndk {
+            abiFilters(*rootProject.ext.nativeArchitectures)
         }
     }
     signingConfigs {
@@ -167,19 +164,9 @@ android {
             keyPassword 'android'
         }
     }
-    // Compress the native libraries in the APK, rather than storing them uncompressed as
-    // modern packaging does. Glide ships whole APKs over GitHub Releases, so every update
-    // is a full download on the user's mobile data -- and the .so files are 22.6 MB of a
-    // 31 MB APK, about 14 MB compressed.
-    //
-    // The trade is that Android extracts them at install: more disk used and a slower
-    // install, against half the download every release. Measure both on a device before
-    // changing this back.
-    packaging {
-        jniLibs {
-            useLegacyPackaging true
-        }
-    }
+    // Native libraries use the default modern packaging: stored uncompressed and 16 KB
+    // aligned, loaded straight from the APK. Play compresses the download itself and
+    // serves per-ABI patches, so the old useLegacyPackaging trade no longer applies.
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
