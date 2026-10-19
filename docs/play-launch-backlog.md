@@ -15,28 +15,32 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 
 ## A. Play blockers (code)
 
-- [ ] **A1 CI → AAB.** Tag job: `bundleRelease` → upload to Play internal track (needs a
-      service-account JSON secret; until then save AAB as artifact) → fetch Play-signed universal APK
-      → attach to GitHub Release with changelog; changelog also → Play "What's new" (500 chars).
-      Drop `splits.abi` and `useLegacyPackaging` (`android/app/build.gradle`). Run FFmpeg/16 KB
-      checks on `bundletool build-apks` output. Changelog step comment at `android-ci.yml:~395`
-      still mentions the in-app updater.
-- [ ] **A2 Move OMDb + SubDL keys into the Worker** as secrets (pattern: `GROQ_API_KEY`); app
-      calls the proxy. Keys are readable in the shipped dex today (`build.gradle` `JS_ENV`).
-- [ ] **A3 Privacy honesty.** Onboarding says "No accounts, no analytics"
-      (`OnboardingScreen.tsx:104`) but Stallion sends ANDROID_ID + crash traces, SubDL gets raw
-      filenames, LRCLIB gets track metadata. Reword; add Privacy policy link in Settings.
-      `autoDownloadSubtitles` defaults true (`appStore.ts`) — consider default off.
-- [ ] **A4 AI recap "Report" action** + one-line disclosure on RecapModal (Play AI-content policy).
-- [ ] **A5 Remove TV launcher** (`LEANBACK_LAUNCHER`, leanback feature, banner) — no D-pad support.
-      Don't opt in to Android Auto form factor (no voice search, flat browse tree).
-- [ ] **A6 Haptics Lab out of release** (`__DEV__` route + debug-only native module) and
-      `HIGH_SAMPLING_RATE_SENSORS` permission.
-- [ ] **A7 Licences:** FFmpeg notice → exact commit (binary reports `b37bf81`,
-      `scripts/gen-licences.js:32-35`); add Atkinson Hyperlegible Next (OFL).
-- [ ] **A8 Stale comments:** manifest POST_NOTIFICATIONS comment (media notifications are exempt),
-      `network_security_config.xml` "speech-to-text proxy", `android/build.gradle` ffmpeg-kit note,
-      `docs/hardening-roadmap.md` "Play policies do not apply".
+All done 2026-10-19. Not yet run for real: the tag job (no tag cut since), the Play upload (no
+`PLAY_SERVICE_ACCOUNT_JSON` yet), and the Worker changes (not deployed). Follow-ups:
+- **Worker deploy** needs `wrangler secret put SUBDL_API_KEY` / `OMDB_API_KEY` first (new keys,
+  E4), then `npm run deploy` in `proxy/` (creates the `REPORTS` KV namespace), then
+  `BASE_URL=… npm run smoke`. Additive: `/v1/recap` is unchanged, so v2.5.0 testers are
+  unaffected. Until deployed, subtitle search and OMDb fail in new builds. The SubDL/OMDb keys
+  in the local `.env` were rejected by both APIs when tested through `wrangler dev`.
+- **Until the app's first Play rollout**, set repo variable `PLAY_RELEASE_STATUS=draft`.
+- Play "What's new" is sent as `en-US`; change it if the listing's default language differs.
+- Reports: `npx wrangler kv key list --binding REPORTS --remote` in `proxy/`.
+- Privacy link points at `https://pranav-pradeep0.github.io/glide-public/privacy` (E5).
+
+- [x] **A1 CI → AAB.** Tag job builds the AAB (kept as a workflow artifact), checks FFmpeg +
+      16 KB (ELF and zipalign) on a bundletool universal APK, uploads to the internal track
+      with "What's new", downloads Play's universal APK onto the GitHub Release. `splits.abi`
+      and `useLegacyPackaging` gone; `ndk.abiFilters` keeps the FFmpeg AAR's x86 out.
+- [x] **A2** SubDL + OMDb via Worker `/v1/subdl`, `/v1/omdb` (allowlisted params, key added
+      server-side). `JS_ENV` now holds only `AI_PROXY_URL`. API_LEVEL 15.
+- [x] **A3** Onboarding reworded; Settings > About > Privacy policy. `autoDownloadSubtitles` was
+      dead (nothing read it) — deleted. The automatic SubDL call is the haptics SDH lookup.
+- [x] **A4** Disclosure line + "Report this recap" → Worker `/v1/report` → KV (180 days).
+- [x] **A5** TV launcher, leanback and banner removed. Auto metadata kept; just don't opt in.
+- [x] **A6** HapticsLabModule in `src/debug`, registered by reflection in debug only; route and
+      Version taps behind `__DEV__`; permission in the debug manifest. API_LEVEL 14.
+- [x] **A7** FFmpeg commit `b37bf81a7a97`; Atkinson Hyperlegible Next (OFL) listed.
+- [x] **A8** Comments fixed.
 
 ## B. Bugs — playback engine (`android/.../player/GlidePlayerView.kt` unless noted)
 
