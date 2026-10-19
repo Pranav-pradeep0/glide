@@ -8,10 +8,10 @@ tested on a device.
 
 ## Context that changes priorities
 
-Glide ships as **GitHub Release APKs plus Stallion OTA**, not Google Play
-(`docs/hardening-plan.md:92`). So Play deadlines, Play wake-lock penalties and the
-`REQUEST_INSTALL_PACKAGES` policy block **do not apply**. Supply-chain and OTA integrity
-matter much more than Play compliance.
+**2026-10-19: superseded.** Glide now ships on Google Play (`docs/play-launch-backlog.md`), so
+Play policies, deadlines and wake-lock penalties **do apply**. The in-app updater and
+`REQUEST_INSTALL_PACKAGES` are gone (`c68a856`). This section used to say the opposite:
+GitHub Release APKs plus Stallion OTA, not Play (`docs/hardening-plan.md:92`).
 
 **2026-10-11: no JS-over-native preference until launch.** Glide is not live, so a change
 needing a new APK costs nothing today. The "prefer JS so it ships over the air" rule, the

@@ -4,9 +4,9 @@
   cleartext cannot be switched off globally without removing a real feature. What was
   accidentally permitted is cleartext to Glide's own APIs, and that is what this pins.
 
-  This does not constrain LibVLC, which uses its own native network stack. It is not
-  meant to: user streams are the case that must stay permitted. Every app-owned request
-  goes through Android's stack (fetch and react-native-fs), which this does constrain.
+  User streams play through ExoPlayer on Android's network stack, so the base-config is
+  what keeps them working. App-owned requests (fetch and react-native-fs) use the same
+  stack and are pinned to HTTPS by the domain-config below.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />
@@ -20,7 +20,7 @@
              deliberately NOT listed: pinning all of cloudfront would also block a user
              stream hosted there, and that is the feature the base-config exists for. -->
         <domain includeSubdomains="true">stalliontech.io</domain>
-        <!-- Recap and speech-to-text proxy, on its default Workers domain. A custom
+        <!-- Recap proxy, on its default Workers domain. A custom
              proxy domain is not listed here because AI_PROXY_URL is build-time;
              constants.ts already refuses any value that is not https://. -->
         <domain includeSubdomains="true">workers.dev</domain>

@@ -34,9 +34,8 @@ allprojects {
 }
 
 // Third-party native modules pin their own compileSdk, and a stale one now fails the
-// build outright: react-native-ffmpeg-kit compiles against android-33, while
-// react-android 0.87.1 and androidx.appcompat 1.7 both require their consumers to compile
-// against 34 or later, so checkReleaseAarMetadata rejects it.
+// build outright: react-android and androidx.appcompat require their consumers to compile
+// against 34 or later, so checkReleaseAarMetadata rejects a module pinned lower.
 //
 // Raising compileSdk only widens the API surface a library may reference; it does not
 // change minSdk or opt anything into new runtime behaviour, so it is safe to apply
