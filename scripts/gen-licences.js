@@ -18,6 +18,8 @@ const pkg = require('../package.json');
 const texts = {
     'Apache-2.0': read('licences/Apache-2.0.txt'),
     'LGPL-2.1': read('licences/LGPL-2.1.txt'),
+    // Starts with the font's copyright line; the OFL asks for both to ship with the font.
+    'OFL-1.1': read('android/app/src/main/res/raw/ofl_atkinson_hyperlegible_next.txt'),
 };
 
 const media3 = read('android/app/build.gradle').match(/androidx\.media3:media3-exoplayer:([\d.]+)/)[1];
@@ -29,10 +31,17 @@ const entries = [
         license: 'LGPL-2.1-or-later',
         text: 'LGPL-2.1',
         notice:
-            'Copyright (c) the FFmpeg developers. Glide uses FFmpeg 6.0, unmodified, to decode ' +
+            'Copyright (c) the FFmpeg developers. Glide uses FFmpeg 6.0 (commit b37bf81a7a97), unmodified, to decode ' +
             'AC-3, E-AC-3, DTS and TrueHD audio. It ships as separate libraries (libavcodec.so, ' +
             'libavutil.so, libswresample.so) that you may replace with your own build.',
-        source: 'https://github.com/FFmpeg/FFmpeg/tree/release/6.0',
+        source: 'https://github.com/FFmpeg/FFmpeg/tree/b37bf81a7a9782438e4fe06a249329e279694494',
+    },
+    {
+        name: 'Atkinson Hyperlegible Next',
+        license: 'OFL-1.1',
+        text: 'OFL-1.1',
+        notice: 'Copyright 2020-2024 The Atkinson Hyperlegible Next Project Authors.',
+        source: 'https://github.com/googlefonts/atkinson-hyperlegible-next',
     },
     {
         name: `AndroidX Media3 ${media3}`,
