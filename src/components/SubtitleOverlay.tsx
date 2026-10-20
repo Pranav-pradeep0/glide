@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -119,60 +119,64 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = React.memo(({
         textHeight.value = layoutHeight;
     }, [textHeight, textWidth]);
 
-    // Pan gesture for vertical dragging
-    const panGesture = Gesture.Pan()
-        .activeOffsetY([-10, 10])
-        .failOffsetX([-15, 15])
-        .onStart(() => {
-            'worklet';
-            isDragging.value = true;
-            contextY.value = translateY.value;
-        })
-        .onUpdate((event) => {
-            'worklet';
-            // Constraints relative to center
-            const limitY = height * 0.45; // Allow dragging close to edges
-            const minY = -limitY;
-            const maxY = limitY;
+    // Built once, not per render: a new gesture object on every cue makes the detector
+    // reattach its handlers each time.
+    const composedGesture = useMemo(() => {
+        // Pan gesture for vertical dragging
+        const panGesture = Gesture.Pan()
+            .activeOffsetY([-10, 10])
+            .failOffsetX([-15, 15])
+            .onStart(() => {
+                'worklet';
+                isDragging.value = true;
+                contextY.value = translateY.value;
+            })
+            .onUpdate((event) => {
+                'worklet';
+                // Constraints relative to center
+                const limitY = height * 0.45; // Allow dragging close to edges
+                const minY = -limitY;
+                const maxY = limitY;
 
-            const newY = contextY.value + event.translationY;
-            translateY.value = Math.max(minY, Math.min(maxY, newY));
-        })
-        .onEnd(() => {
-            'worklet';
-            isDragging.value = false;
+                const newY = contextY.value + event.translationY;
+                translateY.value = Math.max(minY, Math.min(maxY, newY));
+            })
+            .onEnd(() => {
+                'worklet';
+                isDragging.value = false;
 
-            if (onPositionChange) {
-                runOnJS(onPositionChange)(translateY.value);
-            }
-        });
+                if (onPositionChange) {
+                    runOnJS(onPositionChange)(translateY.value);
+                }
+            });
 
-    // Pinch gesture for font size adjustment
-    const pinchGesture = Gesture.Pinch()
-        .onStart(() => {
-            'worklet';
-            isPinching.value = true;
-            savedFontSize.value = fontSize.value;
-        })
-        .onUpdate((event) => {
-            'worklet';
-            const newFontSize = savedFontSize.value * event.scale;
-            fontSize.value = Math.max(
-                MIN_FONT_SIZE,
-                Math.min(MAX_FONT_SIZE, newFontSize)
-            );
-        })
-        .onEnd(() => {
-            'worklet';
-            isPinching.value = false;
+        // Pinch gesture for font size adjustment
+        const pinchGesture = Gesture.Pinch()
+            .onStart(() => {
+                'worklet';
+                isPinching.value = true;
+                savedFontSize.value = fontSize.value;
+            })
+            .onUpdate((event) => {
+                'worklet';
+                const newFontSize = savedFontSize.value * event.scale;
+                fontSize.value = Math.max(
+                    MIN_FONT_SIZE,
+                    Math.min(MAX_FONT_SIZE, newFontSize)
+                );
+            })
+            .onEnd(() => {
+                'worklet';
+                isPinching.value = false;
 
-            if (onFontSizeChange) {
-                runOnJS(onFontSizeChange)(fontSize.value);
-            }
-        });
+                if (onFontSizeChange) {
+                    runOnJS(onFontSizeChange)(fontSize.value);
+                }
+            });
 
-    // Compose gestures to work simultaneously
-    const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+        // Compose gestures to work simultaneously
+        return Gesture.Simultaneous(panGesture, pinchGesture);
+    }, [height, onPositionChange, onFontSizeChange, isDragging, isPinching, contextY, translateY, savedFontSize, fontSize]);
 
     // Animated style for container position and subtle feedback
     const animatedContainerStyle = useAnimatedStyle(() => {
