@@ -9,6 +9,7 @@ describe('describePlayerError', () => {
         ['ERROR_CODE_DECODING_FORMAT_UNSUPPORTED', "Your device can't play this video"],
         ['ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES', "Your device can't play this video"],
         ['ERROR_CODE_AUDIO_TRACK_INIT_FAILED', "Sound couldn't start"],
+        ['ERROR_CODE_AUDIO_UNSUPPORTED', "Can't play this video's sound"],
         ['ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED', 'This video is protected'],
         ['Playback error', "This video couldn't be played"],
     ])('%s', (code, title) => {

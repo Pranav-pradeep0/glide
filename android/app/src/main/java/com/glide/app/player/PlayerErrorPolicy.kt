@@ -67,8 +67,8 @@ object PlayerErrorPolicy {
 
     /**
      * Media with audio of which no track has a decoder (ALAC, say, which the FFmpeg extension
-     * is not built with). ExoPlayer selects no audio track and plays on in silence without
-     * an error, so the caller has to treat this as one. Exceeding capabilities still counts
+     * is not built with). ExoPlayer then plays on in silence, or selects the track anyway and
+     * fails at decoder init, so the caller has to handle it first. Exceeding capabilities still counts
      * as playable: the track selector picks such a track when there is nothing better.
      */
     @JvmStatic

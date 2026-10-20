@@ -37,6 +37,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -1130,16 +1131,23 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             pendingTextTrack?.let { setTextTrack(it) }
             maybeEmitLoad()
 
-            // ExoPlayer raises no error when no audio track has a decoder: it plays the
-            // picture in silence. Pause and say so; Retry then plays it without sound.
+            // No audio track has a decoder. Left alone, ExoPlayer either plays the picture in
+            // silence or still selects the track and fails at decoder init (measured
+            // 2026-10-20: WMA in MKV, audio/x-unknown). Drop audio, pause and say so; Retry
+            // then plays the picture without sound.
             if (!silentAudioReported && PlayerErrorPolicy.hasNoPlayableAudio(tracks)) {
                 silentAudioReported = true
                 Log.w(TAG, "no audio track has a decoder")
-                player?.playWhenReady = false
+                player?.let {
+                    it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                        .build()
+                    it.playWhenReady = false
+                }
                 keepScreenOn = false
                 emit(EVENT_ERROR, eventMap().apply {
                     putString("type", "Error")
-                    putString("error", "ERROR_CODE_DECODING_FORMAT_UNSUPPORTED")
+                    putString("error", "ERROR_CODE_AUDIO_UNSUPPORTED")
                 })
             }
         }
@@ -1205,6 +1213,17 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             // ExoPlayer's own DefaultLoadErrorHandlingPolicy has already retried the load
             // before this fires, so retry a bounded number of times and slowly, then give
             // up and tell JS. Position is preserved: prepare() resumes where it stopped.
+            // The audio decoder failing before the track change above landed. Audio is
+            // disabled now and the card is already up: re-prepare without it.
+            val p = player
+            if (silentAudioReported && p != null && error is ExoPlaybackException &&
+                error.type == ExoPlaybackException.TYPE_RENDERER &&
+                p.getRendererType(error.rendererIndex) == C.TRACK_TYPE_AUDIO
+            ) {
+                p.prepare()
+                return
+            }
+
             if (PlayerErrorPolicy.shouldRestartFromBeginning(error.errorCode, openingAtResumePoint)) {
                 Log.w(TAG, "resume point ${startPositionMs}ms is past the end of the file, playing from the start")
                 openingAtResumePoint = false

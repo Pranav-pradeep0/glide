@@ -12,6 +12,9 @@ export function describePlayerError(code: string): { title: string; body: string
     if (/MALFORMED/.test(code)) {
         return { title: 'This file looks damaged', body: 'Part of it could not be read. It may be incomplete.' };
     }
+    if (/AUDIO_UNSUPPORTED/.test(code)) {
+        return { title: "Can't play this video's sound", body: 'Its audio format is not supported. Retry plays the picture without sound.' };
+    }
     if (/UNSUPPORTED|EXCEEDS_CAPABILITIES|DECODER|DECODING/.test(code)) {
         return { title: "Your device can't play this video", body: 'Its format or resolution is beyond what the decoder supports.' };
     }
