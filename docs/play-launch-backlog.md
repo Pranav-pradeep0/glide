@@ -18,7 +18,7 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 
 All done 2026-10-19. Not yet run for real: the tag job (no tag cut since), the Play upload (no
 `PLAY_SERVICE_ACCOUNT_JSON` yet), and the Worker changes (not deployed). Follow-ups:
-- **Worker deploy** needs `wrangler secret put GROQ_API_KEY` / `SUBDL_API_KEY` / `OMDB_API_KEY
+- **Worker deploy: done 2026-10-20** (new keys set, KV `glide-proxy-reports`, smoke 10/10 PASS). Was: needs `wrangler secret put GROQ_API_KEY` / `SUBDL_API_KEY` / `OMDB_API_KEY
   --name glide-proxy` first (new keys, E4), then `npm run deploy` in `proxy/` (creates the Worker
   and the `REPORTS` KV namespace), then `BASE_URL=… npm run smoke`. Until deployed, recap,
   subtitle search and OMDb fail in every build. The SubDL/OMDb keys
