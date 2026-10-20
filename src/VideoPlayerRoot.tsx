@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, ActivityIndicator, DeviceEventEmitter } from 'react-native';
-import { NavigationContainer, DarkTheme, NavigationContainerRef } from '@react-navigation/native';
+import { BaseNavigationContainer, DarkTheme, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,6 +13,7 @@ import { ContentDetector } from '@/services/ContentDetector';
 import { NavigationService } from '@/services/NavigationService';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { finishCurrentActivity } from '@/native/PipModule';
+import { useActivityBackButton } from '@/navigation/useActivityBackButton';
 
 const Stack = createNativeStackNavigator();
 
@@ -54,6 +55,7 @@ async function resolveRoute(uri: string): Promise<OpenRequest> {
 export default function VideoPlayerRoot({ videoUri }: Props) {
     const theme = useTheme();
     const navigationRef = useRef<NavigationContainerRef<any>>(null);
+    useActivityBackButton(navigationRef, 'VideoPlayerActivity');
     const openedUriRef = useRef<string | undefined>(videoUri);
 
     const [ready, setReady] = useState(false);
@@ -114,7 +116,7 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
         <SafeAreaProvider style={{ flex: 1, backgroundColor: '#000' }}>
             <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                 <ErrorBoundary onError={console.error}>
-                    <NavigationContainer ref={navigationRef} theme={DarkTheme}>
+                    <BaseNavigationContainer ref={navigationRef} theme={DarkTheme}>
                         <Stack.Navigator
                             initialRouteName={initialState.routeName}
                             screenOptions={{ headerShown: false }}
@@ -131,7 +133,7 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
                                 initialParams={initialState.routeName === 'VideoPlayer' ? initialState.params : undefined}
                             />
                         </Stack.Navigator>
-                    </NavigationContainer>
+                    </BaseNavigationContainer>
                 </ErrorBoundary>
             </GestureHandlerRootView>
         </SafeAreaProvider>

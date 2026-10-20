@@ -1307,8 +1307,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                 />
             )}
 
-            {/* Bars follow the controls. A stack entry, so leaving restores the app's own (RootNavigator). */}
-            <SystemBars style="light" hidden={!ui.state.controlsVisible} />
+            {/* Bars follow the controls. A stack entry, so leaving restores the app's own (RootNavigator).
+                None in PiP: the bars are then the library's, which React follows (GlideBaseActivity). */}
+            {!isInPipMode && <SystemBars style="light" hidden={!ui.state.controlsVisible} />}
 
             {/* Night Mode Overlay - Sits between video and controls/HUD */}
             {!pipPresentationActive && nightMode && (

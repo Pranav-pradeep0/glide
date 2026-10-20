@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { DefaultTheme, NavigationContainer, NavigationContainerRef, useNavigation } from '@react-navigation/native';
+import { BaseNavigationContainer, DefaultTheme, NavigationContainerRef, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useAppStore } from '../store/appStore';
@@ -12,6 +12,7 @@ import { Button, DialogHost, Touchable, SnackbarHost, useSnackbarClearance } fro
 import { ErrorBoundary } from '../../ErrorBoundary';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { metrics, type } from '@/theme/theme';
+import { useActivityBackButton } from './useActivityBackButton';
 
 // The four tabs are what the first frame needs, so they are imported.
 //
@@ -176,6 +177,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
     const hasCompletedOnboarding = useAppStore((state) => state.settings.hasCompletedOnboarding);
     const theme = useTheme();
     const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+    useActivityBackButton(navigationRef, 'MainActivity');
 
     // Set when an opened file arrives before navigation is ready (a cold start); the player
     // opens as soon as it is.
@@ -239,7 +241,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
     }, [onReady, openNowPlaying]);
 
     return (
-        <NavigationContainer
+        <BaseNavigationContainer
             ref={navigationRef}
             onReady={onNavigationReady}
             theme={{
@@ -363,7 +365,7 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
             </Stack.Navigator>
             <SnackbarHost aboveBottomBar />
             <DialogHost />
-        </NavigationContainer>
+        </BaseNavigationContainer>
     );
 }
 

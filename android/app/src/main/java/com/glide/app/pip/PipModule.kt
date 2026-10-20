@@ -8,6 +8,7 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.glide.app.GlideBaseActivity
 import com.glide.app.VideoPlayerActivity
 
 /**
@@ -44,8 +45,8 @@ class PipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
     @ReactMethod
     fun isInPipMode(promise: Promise) {
-        val activity = reactApplicationContext.currentActivity
-        promise.resolve(activity != null && activity.isInPictureInPictureMode)
+        // Not the current activity's mode: React follows the library while a window is open.
+        promise.resolve(GlideBaseActivity.inPip)
     }
 
     @ReactMethod
