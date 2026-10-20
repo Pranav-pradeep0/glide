@@ -12,6 +12,7 @@ import { DeepLinkService } from '@/services/DeepLinkService';
 import { ContentDetector } from '@/services/ContentDetector';
 import { NavigationService } from '@/services/NavigationService';
 import { SystemBars } from 'react-native-edge-to-edge';
+import { finishCurrentActivity } from '@/native/PipModule';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,8 +27,13 @@ type OpenRequest = { routeName: string; params: any };
  * first; anything else, and every stream, goes straight to the player.
  */
 async function resolveRoute(uri: string): Promise<OpenRequest> {
-    // Resolve content URI to file path
-    const resolvedPath = await DeepLinkService.resolveToFilePath(uri);
+    let resolvedPath = uri;
+    try {
+        resolvedPath = await DeepLinkService.resolveToFilePath(uri);
+    } catch (error) {
+        // The player can still try the URI as given, and shows its own error if it can't.
+        console.error('[VideoPlayerRoot] Could not resolve', uri, error);
+    }
     // Name it from the resolved path: a MediaStore URI (.../video/media/1234) only names "External Video".
     const videoName = DeepLinkService.getVideoNameFromUri(resolvedPath);
 
@@ -55,10 +61,13 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
 
     useEffect(() => {
         const prepare = async () => {
-            if (videoUri) {
-                openedUriRef.current = videoUri;
-                setInitialState(await resolveRoute(videoUri));
+            if (!videoUri) {
+                // Nothing to play: leave instead of spinning forever.
+                finishCurrentActivity();
+                return;
             }
+            openedUriRef.current = videoUri;
+            setInitialState(await resolveRoute(videoUri));
             setReady(true);
         };
         prepare();
