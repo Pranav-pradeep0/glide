@@ -3,8 +3,11 @@ import { ThumbnailService } from '@/services/ThumbnailService';
 
 /** `timeMs` picks the frame; 0 is the service's smart scan. */
 export function useThumbnail(videoPath: string | undefined, timeMs = 0) {
-    const [thumbnail, setThumbnail] = useState<string | null>(null);
+    // Tagged with the request it answers: a recycled list row renders with its new path
+    // before the effect runs, and must not paint the previous video's frame meanwhile.
+    const [result, setResult] = useState<{ key: string; uri: string | null } | null>(null);
     const [loading, setLoading] = useState(false);
+    const key = `${videoPath}|${timeMs}`;
 
     useEffect(() => {
         let isMounted = true;
@@ -13,18 +16,15 @@ export function useThumbnail(videoPath: string | undefined, timeMs = 0) {
         const token = {};
 
         if (!videoPath) {
-            setThumbnail(null);
             return;
         }
-
-        setThumbnail(null);
 
         const fetchThumbnail = async () => {
             setLoading(true);
             try {
                 const thumb = await ThumbnailService.getThumbnail(videoPath, timeMs, token);
                 if (isMounted) {
-                    setThumbnail(thumb);
+                    setResult({ key: `${videoPath}|${timeMs}`, uri: thumb });
                 }
             } catch (error) {
                 console.error('Failed to load thumbnail:', error);
@@ -39,11 +39,10 @@ export function useThumbnail(videoPath: string | undefined, timeMs = 0) {
 
         return () => {
             isMounted = false;
-            if (videoPath) {
-                ThumbnailService.cancelRequest(videoPath, timeMs, token);
-            }
+            ThumbnailService.cancelRequest(videoPath, timeMs, token);
         };
     }, [videoPath, timeMs]);
 
+    const thumbnail = videoPath && result?.key === key ? result.uri : null;
     return { thumbnail, loading };
 }
