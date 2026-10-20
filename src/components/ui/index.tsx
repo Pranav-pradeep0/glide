@@ -66,10 +66,10 @@ export interface TouchableProps extends Omit<PressableProps, 'style' | 'children
     onPlayer?: boolean;
 }
 
-/** The one pressable. Long-press gets the system long-press haptic. */
+/** The one pressable. Long-press gets the system long-press haptic. A button to TalkBack unless told otherwise. */
 export function Touchable({
     style, children, scaleTo = motion.pressScale, stateLayer = false, onPlayer,
-    onPressIn, onPressOut, onLongPress, disabled, ...rest
+    onPressIn, onPressOut, onLongPress, disabled, accessibilityRole = 'button', ...rest
 }: TouchableProps) {
     const { colors } = useUiTheme(onPlayer);
     const pressed = useSharedValue(0);
@@ -82,6 +82,7 @@ export function Touchable({
     return (
         <AnimatedPressable
             {...rest}
+            accessibilityRole={accessibilityRole}
             disabled={disabled}
             onPressIn={e => {
                 pressed.value = withSpring(1, motion.press);
@@ -119,6 +120,8 @@ interface IconButtonProps {
     variant?: 'plain' | 'filled';
     iconSize?: number;
     color?: string;
+    /** Circle colour; overrides `variant`. Put backgrounds here, not in `style` (that's the 48 dp box). */
+    fill?: string;
     disabled?: boolean;
     /** On (a toggle that is switched on): inverted glyph on a solid accent circle, like a selected Chip. */
     active?: boolean;
@@ -126,30 +129,32 @@ interface IconButtonProps {
     style?: StyleProp<ViewStyle>;
 }
 
-/** 40 dp visual, 48 dp target. */
+/**
+ * 40 dp visual inside a real 48 dp box. hitSlop doesn't count for Android's touch-target checks,
+ * so the pressable itself is 48 dp and the circle is drawn by an inner view.
+ */
 export function IconButton({
     icon, onPress, accessibilityLabel, variant = 'plain', iconSize = 22, color,
-    disabled, active, onPlayer, style,
+    fill, disabled, active, onPlayer, style,
 }: IconButtonProps) {
     const { colors } = useUiTheme(onPlayer);
     return (
         <Touchable
             onPress={onPress}
             disabled={disabled}
-            hitSlop={4}
             scaleTo={0.9}
             onPlayer={onPlayer}
-            accessibilityRole="button"
             accessibilityLabel={accessibilityLabel}
             accessibilityState={{ disabled: !!disabled, selected: active }}
-            style={[
-                styles.iconButton,
-                variant === 'filled' && { backgroundColor: colors.fill },
-                active && { backgroundColor: colors.primary },
-                style,
-            ]}
+            style={[styles.iconButtonTarget, style]}
         >
-            <Feather name={icon} size={iconSize} color={active ? colors.onPrimary : color ?? colors.text} />        </Touchable>
+            <View style={[
+                styles.iconButton,
+                { backgroundColor: active ? colors.primary : fill ?? (variant === 'filled' ? colors.fill : undefined) },
+            ]}>
+                <Feather name={icon} size={iconSize} color={active ? colors.onPrimary : color ?? colors.text} />
+            </View>
+        </Touchable>
     );
 }
 
@@ -926,6 +931,12 @@ const styles = StyleSheet.create({
     layer: { borderRadius: 4 },
     block: { alignSelf: 'stretch' },
 
+    iconButtonTarget: {
+        width: metrics.touch,
+        height: metrics.touch,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     iconButton: {
         width: 40,
         height: 40,
@@ -987,9 +998,9 @@ const styles = StyleSheet.create({
     card: { borderRadius: metrics.radius.card },
 
     header: { flexDirection: 'row', alignItems: 'center', minHeight: 48, gap: metrics.space.xs },
-    headerBack: { marginLeft: -metrics.space.sm },
+    headerBack: { marginLeft: -12 },
     headerTitle: { flex: 1 },
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs, marginRight: -metrics.space.sm },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs, marginRight: -12 },
 
     sheet: {
         position: 'absolute',

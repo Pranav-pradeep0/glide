@@ -122,7 +122,8 @@ export default function PlayerDetailScreen() {
                 iconSize={22}
                 onPress={() => navigation.goBack()}
                 accessibilityLabel="Back"
-                style={[styles.floatingBack, { top: insets.top + 8, backgroundColor: colors.card }]}
+                fill={colors.card}
+                style={[styles.floatingBack, { top: insets.top + 4 }]}
             />
 
             {/* Hero behind the content. In portrait it rises at half the scroll speed and fades, with
@@ -255,7 +256,7 @@ const styles = StyleSheet.create({
 
     floatingBack: {
         position: 'absolute',
-        left: 12,
+        left: 8, // 48 dp box, so the 40 dp circle sits 12 from the edge
         zIndex: 10,
     },
 

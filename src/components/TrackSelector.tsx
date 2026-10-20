@@ -859,7 +859,7 @@ tabBar: { marginTop: metrics.space.xs, marginBottom: metrics.space.xs },    cont
         marginBottom: metrics.space.sm,
     },
     searchInput: { flex: 1 },
-    searchSpinner: { width: metrics.touch - 8, alignItems: 'center' },
+    searchSpinner: { width: metrics.touch, alignItems: 'center' },
     input: {
         flexDirection: 'row',
         alignItems: 'center',

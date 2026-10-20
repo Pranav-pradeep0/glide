@@ -174,7 +174,7 @@ export default function AlbumDetailScreen() {
                 <Text style={[type.heading, styles.navTitle, { color: colors.text }]} numberOfLines={1}>
                     {albumTitle}
                 </Text>
-                <View style={{ width: 40 }} />
+                <View style={{ width: metrics.touch }} />
             </View>
 
             {audioAccess === 'denied' ? (
@@ -337,8 +337,6 @@ const styles = StyleSheet.create({
     durationText: {
         fontVariant: ['tabular-nums'],
     },
-    moreBtn: {
-        width: 32,
-        height: 32,
-    },
+    // Pull the 48 dp box into the row's padding so the glyph stays near the edge.
+    moreBtn: { marginRight: -metrics.space.xs },
 });

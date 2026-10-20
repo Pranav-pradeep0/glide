@@ -330,14 +330,16 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: 2,
     },
+    // 48 dp IconButton boxes: no gap, and the last one reaches into the card padding,
+    // so the glyphs stay about where the old 40 dp buttons had them.
     actions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 2,
+        marginRight: -metrics.space.xs,
     },
     spinnerSlot: {
-        width: 40,
-        height: 40,
+        width: metrics.touch,
+        height: metrics.touch,
         alignItems: 'center',
         justifyContent: 'center',
     },

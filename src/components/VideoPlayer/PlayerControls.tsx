@@ -581,7 +581,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
 
             {/* Top bar */}
             <Animated.View
-                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingLeft: metrics.space.sm + edge('left', 0, topBarBottom), paddingRight: metrics.space.sm + edge('right', 0, topBarBottom) }, othersStyle]}
+                style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingLeft: metrics.space.xs + edge('left', 0, topBarBottom), paddingRight: metrics.space.xs + edge('right', 0, topBarBottom) }, othersStyle]}
             >
                 <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" onPlayer />
                 <View style={styles.titleBlock}>
@@ -627,7 +627,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
             {/* Lock, alone on the left edge (clear of a landscape camera cutout), vertically centred where the thumb rests */}
             {/* Portrait has no side room (the centre row reaches the edges), so its lock is in the tools row. */}
             {isLandscape && (
-                <Animated.View style={[styles.rail, { left: metrics.space.sm + edge('left', railMiddle - 24, railMiddle + 24) }, othersStyle]} pointerEvents="box-none">
+                <Animated.View style={[styles.rail, { left: metrics.space.xs + edge('left', railMiddle - 24, railMiddle + 24) }, othersStyle]} pointerEvents="box-none">
                     {/* Small and bare, as it always was: an 18 px glyph about 20 dp from the edge. */}
                     <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
                 </Animated.View>

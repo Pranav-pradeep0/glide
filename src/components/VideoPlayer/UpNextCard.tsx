@@ -149,5 +149,6 @@ const styles = StyleSheet.create({
     heading: { color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
     title: { color: colors.text },
     detail: { color: colors.textTertiary },
-    dismiss: { alignSelf: 'flex-start' },
+    // 48 dp box: pull it into the corner padding so the glyph stays where it was.
+    dismiss: { alignSelf: 'flex-start', marginTop: -4, marginRight: -4 },
 });

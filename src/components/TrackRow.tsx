@@ -96,8 +96,6 @@ const styles = StyleSheet.create({
     duration: {
         fontVariant: ['tabular-nums'],
     },
-    more: {
-        width: 28,
-        height: 28,
-    },
+    // Pull the 48 dp box into the row's padding so the glyph stays near the edge.
+    more: { marginRight: -metrics.space.sm },
 });

@@ -310,8 +310,8 @@ const styles = StyleSheet.create({
     },
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: metrics.touch },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
-    headerBack: { marginLeft: -metrics.space.sm },
-    headerRight: { flexDirection: 'row', alignItems: 'center', marginRight: -metrics.space.sm },
+    headerBack: { marginLeft: -12 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', marginRight: -12 },
     title: { color: colors.text },
 
     stepper: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs },
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
         gap: metrics.space.sm,
         height: 44,
         paddingLeft: 14,
-        paddingRight: metrics.space.xs,
+        paddingRight: 0, // the clear button's 48 dp box brings its own inset
         borderRadius: metrics.radius.pill,
         backgroundColor: colors.fill,
     },

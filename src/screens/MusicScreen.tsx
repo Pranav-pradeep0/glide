@@ -676,10 +676,8 @@ const styles = StyleSheet.create({
         paddingVertical: 0,
         fontSize: 14,
     },
-    searchClearBtn: {
-        width: 28,
-        height: 28,
-    },
+    // The 48 dp box overhangs the 42 dp bar; pull it into the padding so the glyph stays put.
+    searchClearBtn: { marginRight: -metrics.space.md },
     // Without this a horizontal ScrollView in a column grows to fill the screen's height.
     tabChipsScroll: {
         flexGrow: 0,

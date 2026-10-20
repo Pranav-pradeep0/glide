@@ -228,10 +228,11 @@ const styles = StyleSheet.create({
         lineHeight: 38,
         fontWeight: '700',
     },
+    // Flush to the corner: IconButton's 48 dp box already insets the glyph.
     expand: {
         position: 'absolute',
-        top: metrics.space.xs,
-        right: metrics.space.xs,
+        top: 0,
+        right: 0,
     },
     emptyLyricsWrap: {
         flex: 1,

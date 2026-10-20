@@ -916,8 +916,9 @@ const styles = StyleSheet.create({
     },
     repeatBadge: {
         position: 'absolute',
-        top: 0,
-        right: 0,
+        // On the 40 dp circle's corner, inside IconButton's 48 dp box.
+        top: 4,
+        right: 4,
         width: 16,
         height: 16,
         borderRadius: 8,

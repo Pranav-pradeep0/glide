@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     gridCard: { flex: 1 },
     gridThumb: { width: '100%', aspectRatio: 16 / 9 },
     gridInfo: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: metrics.space.sm, paddingLeft: 2 },
-    gridMore: { marginTop: -8, marginRight: -8 },
+    gridMore: { marginTop: -12, marginRight: -12 },
     track: {
         height: 3,
         backgroundColor: 'rgba(255, 255, 255, 0.25)',
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         justifyContent: 'flex-end',
     },
-    heroMore: { position: 'absolute', top: 10, right: 10 },
+    heroMore: { position: 'absolute', top: 6, right: 6 }, // 48 dp box: the circle sits 10 in
     heroBody: { flexDirection: 'row', alignItems: 'flex-end', padding: metrics.space.lg, gap: metrics.space.md },
     heroText: { flex: 1, gap: 4 },
     heroMeta: { color: 'rgba(255, 255, 255, 0.75)', ...type.label, fontVariant: ['tabular-nums'] },
@@ -494,10 +494,10 @@ const styles = StyleSheet.create({
     },
     appBar: { paddingTop: metrics.space.xs },
     appBarTitle: { fontSize: 18, lineHeight: 24, fontWeight: '600' },
-    back: { marginLeft: -metrics.space.sm },
+    back: { marginLeft: -12 },
     headerText: { flex: 1 },
     // Holds the IconButton height even when empty, so a header doesn't jump as its buttons come and go.
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs, minHeight: 40 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.xs, minHeight: metrics.touch },
     empty: {
         flex: 1,
         alignItems: 'center',
