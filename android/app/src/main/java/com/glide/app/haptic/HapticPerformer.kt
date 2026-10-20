@@ -151,6 +151,8 @@ class HapticPerformer(private val context: Context) {
                 if (agreeing >= SETTLE_RUN) settled = true
             }
             if (changed) Log.w(TAG, "sync playing=$isPlaying pos=$heard rate=$speed wall=$wall")
+            // Only while playing: scrubbing through a paused film would start a piece at every step.
+            if (isPlaying) analysis?.playhead(heard.toInt())
             playing = isPlaying
             anchorMs = if (nudge) heard + err * 3 / 4 else heard
             anchorUptime = uptime

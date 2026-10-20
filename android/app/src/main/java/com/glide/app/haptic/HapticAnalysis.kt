@@ -13,7 +13,11 @@ import kotlin.concurrent.thread
 /**
  * Runs the [HapticListener] and [HapticRecognizer] over a film's whole audio in the background
  * (decision L2) and hands [publish] the track as it grows, about once a second, so haptics start
- * once analysis passes the playhead. A finished track is cached per file; a cached one is handed over at once.
+ * once analysis passes the playhead. A jump past the analysis starts a new piece at the [playhead],
+ * and the gaps are filled after. A finished track is cached per file; a cached one is handed over at once.
+ *
+ * ponytail: until the film's start is analysed, the Director's opening rule mutes music-only sound
+ * before a jumped-to piece's first line; tell the Director where the analysis starts if that's felt.
  *
  * The thread runs at the lowest priority, and FFmpeg's decode thread, created from it, inherits
  * that (L2 measured it at normal priority, competing with the player).
@@ -43,6 +47,71 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
         publish = {}
     }
 
+    /**
+     * The player's position while it plays. Landing where nothing is analysed, more than [JUMP_MS]
+     * past the piece being analysed, stops that piece and starts one here (any thread).
+     */
+    fun playhead(ms: Int) {
+        playheadMs = ms
+    }
+
+    @Volatile
+    private var playheadMs = 0
+
+    /** One stretch of the film, analysed from [fromMs] until [untilMs] (the next piece) or the end. */
+    private class Piece(val fromMs: Int, var untilMs: Int, val recognizer: HapticRecognizer?) {
+        val listener = HapticListener()
+        val doneMs get() = minOf(untilMs, listener.analysedMs.coerceAtLeast(fromMs))
+    }
+
+    private val pieces = ArrayList<Piece>() // by fromMs; analysis thread only
+    private var endMs = Int.MAX_VALUE // the film's end, once a piece reaches it
+
+    private fun covered(ms: Int) = pieces.any { ms >= it.fromMs && ms < it.doneMs }
+
+    /** Where the next piece starts: under the playhead, the first gap after it, the first gap, or none. */
+    private fun nextFrom(): Int? {
+        val at = playheadMs
+        val gaps = ArrayList<IntRange>() // [from, until)
+        var t = 0
+        for (p in pieces) {
+            if (p.fromMs > t) gaps += t until p.fromMs
+            t = maxOf(t, p.untilMs)
+        }
+        if (t < endMs) gaps += t until endMs
+        return gaps.firstOrNull { at in it }?.let { at }
+            ?: gaps.firstOrNull { it.first > at }?.first
+            ?: gaps.firstOrNull()?.first
+    }
+
+    /** All pieces as one track: each lane from its own piece, nothing in the gaps. */
+    private fun snapshot(fp: HapticTrack.Fingerprint): HapticTrack {
+        val frames = (pieces.maxOfOrNull { it.doneMs } ?: 0) / HapticTrack.BED_FRAME_MS
+        val bed = FloatArray(frames)
+        val body = FloatArray(frames)
+        val events = ArrayList<HapticTrack.Event>()
+        val sounds = ArrayList<FloatArray>()
+        for (p in pieces) {
+            val t = p.listener.track(fp)
+            val a = p.fromMs / HapticTrack.BED_FRAME_MS
+            val b = minOf(p.doneMs / HapticTrack.BED_FRAME_MS, t.bedIntensity.size)
+            if (a < b) {
+                t.bedIntensity.copyInto(bed, a, a, b)
+                t.body.copyInto(body, a, a, b)
+            }
+            events += t.events.filter { it.timeMs >= p.fromMs && it.timeMs < p.doneMs }
+            // Windows reaching into the piece: the one before stopped at its edge, short of them.
+            val w = p.recognizer?.windows ?: continue
+            for (k in maxOf(0, p.fromMs - HapticSounds.WINDOW_MS + HapticSounds.HOP_MS) / HapticSounds.HOP_MS until w.size) {
+                if (k * HapticSounds.HOP_MS >= p.untilMs) break
+                while (sounds.size <= k) sounds += FloatArray(HapticSounds.Group.entries.size)
+                sounds[k] = w[k]
+            }
+        }
+        events.sortBy { it.timeMs }
+        return HapticTrack(HapticListener.VERSION, fp, bed, FloatArray(frames), events, body).withSounds(sounds)
+    }
+
     private fun run() {
         val fp = HapticPerformer.fingerprint(context, uri)
         val file = HapticPerformer.cacheFile(context, fp)
@@ -53,41 +122,60 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
             publish(cached)
             return
         }
-        val listener = HapticListener()
         val opened = HapticRecognizer.open(context)
         if (opened == null) Log.w(TAG, "listen recognizer unavailable")
-        val recognizer = opened?.first
-        fun snapshot() = listener.track(fp).withSounds(recognizer?.windows?.toList().orEmpty())
+        val classify = opened?.first
         val t0 = SystemClock.elapsedRealtime()
         var shown = t0
-        val sink = object : SubtitleSyncModule.PcmSink {
-            override val done get() = cancelled
+        var failed: Throwable? = null
+        while (!cancelled) {
+            val from = nextFrom() ?: break
+            val p = Piece(from, pieces.firstOrNull { it.fromMs > from }?.fromMs ?: endMs, classify?.let { HapticRecognizer(it) })
+            pieces += p
+            pieces.sortBy { it.fromMs }
+            Log.w(TAG, "listen piece from=$from until=${p.untilMs}")
+            val sink = object : SubtitleSyncModule.PcmSink {
+                var jumped = false
+                override val done get() = cancelled || jumped || p.listener.analysedMs >= p.untilMs
 
-            override fun add(ptsUs: Long, data: ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
-                listener.add(ptsUs, data, channels, rate, isFloat)
-                recognizer?.add(ptsUs, data, channels, rate, isFloat)
-                val now = SystemClock.elapsedRealtime()
-                if (now - shown >= PUBLISH_MS) {
-                    shown = now
-                    publish(snapshot())
-                    Log.w(TAG, "listen progress analysed=${listener.analysedMs} wall=${System.currentTimeMillis()}")
+                override fun add(ptsUs: Long, data: ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
+                    p.listener.add(ptsUs, data, channels, rate, isFloat)
+                    p.recognizer?.add(ptsUs, data, channels, rate, isFloat)
+                    val at = playheadMs
+                    if (!covered(at) && (at < p.fromMs || at > p.doneMs + JUMP_MS)) jumped = true
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - shown >= PUBLISH_MS || jumped) {
+                        shown = now
+                        publish(snapshot(fp))
+                        Log.w(TAG, "listen progress analysed=${p.listener.analysedMs} wall=${System.currentTimeMillis()}")
+                    }
                 }
             }
+            val error = runCatching { SubtitleSyncModule.decodeAudio(context, uri, sink, (from - PREROLL_MS).coerceAtLeast(0) * 1000L) }.exceptionOrNull()
+            if (cancelled) break
+            if (sink.jumped || p.listener.analysedMs >= p.untilMs) {
+                p.untilMs = p.doneMs
+                if (p.untilMs <= p.fromMs) pieces.remove(p)
+                continue
+            }
+            // The end of the film. An extractor error in the last 1% is junk after it (L2, Blast).
+            p.listener.finish()
+            endMs = maxOf(p.doneMs, p.fromMs + 1)
+            p.untilMs = endMs
+            if (error != null && p.doneMs < 0.99 * durationMs()) failed = error
+            if (failed != null) break
         }
-        val error = runCatching { SubtitleSyncModule.decodeAudio(context, uri, sink) }.exceptionOrNull()
         opened?.second?.close()
         if (cancelled) {
-            Log.w(TAG, "listen cancelled analysed=${listener.analysedMs}")
+            Log.w(TAG, "listen cancelled analysed=${pieces.sumOf { it.doneMs - it.fromMs }}")
             return
         }
-        listener.finish()
-        val track = snapshot()
+        val track = snapshot(fp)
         publish(track)
-        // An extractor error in the last 1% is junk after the end (L2, Blast): keep the track.
-        val complete = listener.analysedMs > 0 && (error == null || listener.analysedMs >= 0.99 * durationMs())
+        val complete = failed == null && pieces.isNotEmpty() && nextFrom() == null
         if (complete) HapticPerformer.saveTrack(context, track)
-        Log.w(TAG, "listen done analysed=${listener.analysedMs} took=${SystemClock.elapsedRealtime() - t0} " +
-            "events=${track.events.size} windows=${track.sounds.size} classify=${recognizer?.classifyMs} cached=$complete error=${error?.message?.replace(' ', '_')} wall=${System.currentTimeMillis()}")
+        Log.w(TAG, "listen done analysed=${track.bedIntensity.size * HapticTrack.BED_FRAME_MS} took=${SystemClock.elapsedRealtime() - t0} " +
+            "events=${track.events.size} windows=${track.sounds.size} classify=${pieces.sumOf { it.recognizer?.classifyMs ?: 0 }} pieces=${pieces.size} cached=$complete error=${failed?.message?.replace(' ', '_')} wall=${System.currentTimeMillis()}")
         // Hit times for the script to score against a fixture's truth.
         track.events.filter { it.sources and HapticTrack.LIGHT == 0 }.chunked(200).forEach { c -> Log.w(TAG, "listen events " + c.joinToString(",") { "${it.timeMs}" }) }
     }
@@ -107,6 +195,9 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
     companion object {
         private const val TAG = "GlideHaptics"
         private const val PUBLISH_MS = 1000L
+        private const val JUMP_MS = 30_000 // about a second of analysis at ~30x: closer, it catches up
+        // A piece decodes from this much earlier: the Listener's 1.5 s of context, a sound window.
+        private const val PREROLL_MS = 1500
         private var current: HapticAnalysis? = null
 
         /**

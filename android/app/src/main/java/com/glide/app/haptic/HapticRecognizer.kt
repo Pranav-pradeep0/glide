@@ -56,7 +56,11 @@ class HapticRecognizer(private val classify: (FloatArray) -> FloatArray) {
         // 4th-order Butterworth under the new Nyquist (8 kHz), as the Listener's bed filter.
         aaA = HapticListener.Biquad(rate, ANTI_ALIAS_HZ, 0.5412)
         aaB = HapticListener.Biquad(rate, ANTI_ALIAS_HZ, 1.3066)
-        repeat((ptsUs / 1000 / HapticSounds.HOP_MS).toInt().coerceAtLeast(0)) { windows += FloatArray(HapticSounds.Group.entries.size) }
+        // Windows on the film's grid (k * HOP_MS) wherever decoding starts: skip to the next line.
+        val hopUs = HapticSounds.HOP_MS * 1000L
+        val first = if (ptsUs <= 0) 0L else (ptsUs + hopUs - 1) / hopUs
+        repeat(first.toInt()) { windows += FloatArray(HapticSounds.Group.entries.size) }
+        nextAt = (first * hopUs - ptsUs) * rate / 1e6
     }
 
     /** Linear interpolation between filtered input samples. */
@@ -99,14 +103,18 @@ class HapticRecognizer(private val classify: (FloatArray) -> FloatArray) {
             else -> FloatArray(channels) { 0.707f }
         }
 
-        /** YAMNet on the CPU, or null if it can't load: haptics then go on from the sound alone. */
-        fun open(context: Context): Pair<HapticRecognizer, Interpreter>? = runCatching {
+        /**
+         * YAMNet on the CPU as a classify function for [HapticRecognizer]s fed one at a time, and
+         * its interpreter to close; null if it can't load: haptics then go on from the sound alone.
+         */
+        fun open(context: Context): Pair<(FloatArray) -> FloatArray, Interpreter>? = runCatching {
             val model = context.assets.openFd("yamnet.tflite").use { fd ->
                 FileInputStream(fd.fileDescriptor).channel.use { it.map(FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength) }
             }
             val interpreter = Interpreter(model, Interpreter.Options().setNumThreads(2))
             val out = Array(1) { FloatArray(HapticSounds.CLASSES) }
-            HapticRecognizer { w -> interpreter.run(w, out); out[0] } to interpreter
+            val classify = { w: FloatArray -> interpreter.run(w, out); out[0] }
+            classify to interpreter
         }.getOrNull()
     }
 }

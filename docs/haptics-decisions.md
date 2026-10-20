@@ -610,3 +610,19 @@ front pair 0.707, centre 1, LFE out, the rest 0.5. Listener VERSION 5.
 **Found while testing.** Seeking past the analysis feels nothing until it gets there; in the
 background the decode is frozen by Android, or killed for binder traffic ("excessive binder
 traffic during cached") and its work lost.
+
+## Jumping ahead (2026-10-20)
+
+Analysis ran from the start only, so a jump past it felt nothing until it caught up; testers jump
+straight to scenes. `HapticAnalysis` now works in pieces: playing more than 30 s past the piece
+being analysed (or into a gap) stops it and starts one at the playhead; when a piece ends, the gap
+under the playhead is filled first, then the next after it, then the first. One decodes at a
+time; the cache is written once there are no gaps. Each piece decodes from 1.5 s early (the
+Listener's context, a sound window) and keeps only its own span; YAMNet windows snap to the
+film's 0.48 s grid. Listener VERSION 6.
+
+Frankenstein on the phone, jumping to 53, 131 and 133 min: haptics 0.6-1.8 s after each jump;
+13 pieces filled in 124 s. Without the pre-roll and grid, labels in later pieces fell to r 0.8
+against the PC (first piece 0.99) with 34 empty windows at the seams; with them, 0.993-0.996 in
+every 20 min and 6 empty windows. Still: until the start is analysed, a jumped-to piece's first
+line counts as the film's first for the opening rule.

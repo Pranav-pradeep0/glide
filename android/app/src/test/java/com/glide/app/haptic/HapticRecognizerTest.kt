@@ -37,6 +37,21 @@ class HapticRecognizerTest {
     }
 
     @Test
+    fun windowsStayOnTheFilmsGrid() {
+        // Decoding from 1 s (a piece after a jump): the first window is the grid's next, at 1.44 s.
+        // The signal is its own media time / 10, so a window's first sample says where it starts.
+        val rate = 48000
+        val pcm = ByteBuffer.allocate(rate * 3 * 4).order(ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until rate * 3) pcm.putFloat((1.0 + i.toDouble() / rate).toFloat() / 10)
+        pcm.flip()
+        val fed = mutableListOf<FloatArray>()
+        val r = HapticRecognizer { w -> fed += w.copyOf(); FloatArray(HapticSounds.CLASSES) }
+        r.add(1_000_000, pcm, 1, rate, true)
+        assertEquals(3 + fed.size, r.windows.size) // 0, 0.48 and 0.96 s weren't heard
+        assertEquals(0.144, fed.first()[0].toDouble(), 0.001)
+    }
+
+    @Test
     fun mixesLikeFfmpeg() {
         // 5.1, one channel at a time at 0.5: front 0.707, centre 1, LFE out, surrounds 0.5.
         val expected = listOf(0.707, 0.707, 1.0, 0.0, 0.5, 0.5)
