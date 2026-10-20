@@ -65,3 +65,18 @@ describe('history for moved files', () => {
         expect(history.get(NEW)).toMatchObject({ videoPath: NEW, contentUri: 'content://m/9', lastPausedPosition: 600 });
     });
 });
+
+// Seen on device: a video played from the library (/storage/...) and later through
+// "Open with" (file:///storage/...) showed twice in Recents.
+describe('one entry per file', () => {
+    it('matches a file:// path to the same bare path', () => {
+        const path = '/storage/emulated/0/Movies/clip.mp4';
+        useVideoHistoryStore.setState({ history: new Map() });
+        useVideoHistoryStore.getState().incrementViewCount(path, 'clip.mp4');
+        useVideoHistoryStore.getState().incrementViewCount(`file://${path}`, 'clip.mp4');
+        useVideoHistoryStore.getState().updatePlaybackPosition(`file://${path}`, 'clip.mp4', 30, 60);
+        const all = useVideoHistoryStore.getState().getAllHistory();
+        expect(all).toHaveLength(1);
+        expect(all[0].viewCount).toBe(2);
+    });
+});

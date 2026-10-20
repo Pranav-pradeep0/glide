@@ -147,9 +147,11 @@ function findHistoryEntry(
         return { key: videoPath, entry: history.get(videoPath)! };
     }
 
-    // 2. Scan by videoPath or contentUri
+    // 2. Scan by videoPath or contentUri. "Open with" resolves to file:///storage/... and the
+    // library lists /storage/..., so the same file was getting a second entry in Recents.
+    const bare = videoPath.replace('file://', '');
     for (const [key, entry] of history.entries()) {
-        if (entry.videoPath === videoPath || (entry.contentUri && entry.contentUri === videoPath)) {
+        if (entry.videoPath.replace('file://', '') === bare || (entry.contentUri && entry.contentUri === videoPath)) {
             return { key, entry };
         }
     }
