@@ -35,7 +35,8 @@ export function PlayerErrorCard({ code, onRetry, onNext, onClose }: Props) {
 }
 
 const styles = StyleSheet.create({
-    wrap: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', padding: metrics.gutter },
+    // Above PlayerControls (10), whose centre buttons otherwise draw over the card.
+    wrap: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', padding: metrics.gutter, zIndex: 50, elevation: 10 },
     card: {
         width: '100%',
         maxWidth: 420,
