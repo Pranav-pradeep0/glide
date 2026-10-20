@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Stallion verifies every OTA bundle against this key and drops any it cannot verify.
+         Publish with `stallion publish-bundle ... --private-key <path>`; the private half
+         is kept off this repo. Public by design: it only checks, it cannot sign. -->
+    <string name="StallionPublicSigningKey" translatable="false">MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtpRkYg7pA2pKwlxdO6ii7tMOvlBF49pUo1rNiOB+A7OEjVLrERp8kXYKbb0JcncgQE8nVooFooKWk+Z3RDgOSJZGRw4vT3Hl5aiXtvNOHl44/6qC0PZhBg6qMktoS/M3IBW97DWaNEZSJ18Rs16QDOUPzGqskgi5fLHTJK3oTqBIBQMuUw0eLjZBqLhl9wqN1i1rLkj9itv/4QlbAjT4hHLrDCC+Vjq/KGRW1Yll1oewIxY5jWOx6A8rHk9kYzEew7CosI8XjJ0mkDrWYgjkRS4FIeWeR9/VTfWfQmGSnT/7I9OC5dVMyqLnscDEnyiYV0p4w7ytI2CQlhV3wuuaBwIDAQAB</string>
+</resources>
