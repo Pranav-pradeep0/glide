@@ -79,7 +79,6 @@ final class GlidePipController {
     private ComponentActivity listeningActivity;
 
     private boolean enabled = false;
-    private boolean playing = false;
     private boolean inPipMode = false;
     private boolean showPlay = true;
     private boolean hasPrevious = false;
@@ -198,7 +197,7 @@ final class GlidePipController {
         // player already owns the Activity: those params are its, not ours.
         if (isOwner()) {
             enabled = false;
-            playing = false;
+            showPlay = true;
             OWNERS.remove(listeningActivity);
             Activity activity = currentActivity();
             if (activity != null) {
@@ -231,15 +230,11 @@ final class GlidePipController {
         applyParams();
     }
 
-    void setPlaying(boolean playing) {
-        if (this.playing == playing) {
-            return;
-        }
-        this.playing = playing;
-        applyParams();
-    }
-
-    /** Whether the PiP button offers play (paused, ended, idle) rather than pause. */
+    /**
+     * Whether the PiP button offers play (paused, ended, idle) rather than pause. Also what
+     * arms auto-enter: unlike isPlaying it stays false while buffering, which used to disarm
+     * auto-enter for a home swipe during a stall.
+     */
     void setShowPlay(boolean showPlay) {
         if (this.showPlay == showPlay) {
             return;
@@ -358,7 +353,7 @@ final class GlidePipController {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            builder.setAutoEnterEnabled(enabled && playing);
+            builder.setAutoEnterEnabled(enabled && !showPlay);
             // Video content can be resized without a crossfade.
             builder.setSeamlessResizeEnabled(true);
         }

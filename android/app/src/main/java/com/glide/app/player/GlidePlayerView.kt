@@ -1046,7 +1046,6 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 return
             }
             keepScreenOn = isPlaying
-            pipController.setPlaying(isPlaying)
             Log.d(TAG, "isPlaying=$isPlaying")
             if (isPlaying) {
                 emit(EVENT_PLAYING, eventMap().apply { putString("type", "Playing") })
