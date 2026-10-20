@@ -47,7 +47,7 @@ object CrashReports {
                 negativeButtonText = "Don't send"
             }
             mailSender {
-                mailTo = "pranavpradeep1120@gmail.com"
+                mailTo = "glidemediaplayer@gmail.com"
                 subject = "Glide crash report"
                 // In the body, not attached, so the user sees exactly what is sent.
                 reportAsFile = false
