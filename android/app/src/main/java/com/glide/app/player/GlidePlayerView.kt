@@ -42,6 +42,9 @@ import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.extractor.metadata.Chapter
 import androidx.media3.ui.SubtitleView
 import com.facebook.react.bridge.Arguments
@@ -574,6 +577,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private fun buildMediaItem(uri: String): MediaItem =
         MediaItem.Builder()
             .setUri(uri)
+            .setMimeType(streamMimeType(uri))
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(videoTitle)
@@ -581,6 +585,21 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                     .build()
             )
             .build()
+
+    /**
+     * HLS or DASH, from the MIME type the link was opened with. Media3 tells them apart by
+     * the URL's extension otherwise, so an extensionless playlist was read as a plain file.
+     */
+    private fun streamMimeType(uri: String): String? {
+        val intent = getHostActivity()?.intent ?: return null
+        if (intent.data?.toString() != uri) return null
+        return when (intent.type?.lowercase()) {
+            "application/x-mpegurl", "application/vnd.apple.mpegurl",
+            "audio/x-mpegurl", "audio/mpegurl" -> MimeTypes.APPLICATION_M3U8
+            "application/dash+xml" -> MimeTypes.APPLICATION_MPD
+            else -> null
+        }
+    }
 
     /**
      * Ten band gains in dB, or null to switch the equalizer off. The UI's bands are fixed
@@ -853,7 +872,12 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
         val wakeMode = if (isLocalUri(uri)) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK
 
+        // Cross-protocol redirects are off by default, so an http link answered with a
+        // redirect to https failed to open.
+        val httpSource = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
+
         val p = ExoPlayer.Builder(context, renderers)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpSource)))
             // The entire audio-focus subsystem of the VLC view is this one argument. With
             // handleAudioFocus = true the app must not request or respond to focus itself;
             // ducking, transient loss and resume-on-gain are the player's business.
