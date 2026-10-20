@@ -830,3 +830,21 @@ New truth, so rows move under both: tuning cues 0.80 = (197 -> 216), big 0.94 =,
 3.69, loud 0.26 -> 0.29; held out cues 0.46 -> 0.53 (33 -> 38, Bethlehem's firecrackers), big
 0.80 -> 0.90 (5 -> 10), stray 1.77 -> 2.15, loud 0.08 -> 0.10. Gain left at 0.08-0.2: it is
 chosen again once the model is constrained and the film set grown.
+
+## Constrained moments (2026-10-20)
+
+`HapticMomentTrain` now learns only from `EFFECT` classes (59, chosen from YAMNet's class names
+as `HapticMeaning`'s effects: roars, impacts and breaks, guns and explosions, thunder and fire,
+vehicles and engines), whose weights can only add to a moment, and Speech and Music, which can
+only take from it (projected after each FISTA step). Unconstrained over all 521 it kept 68 classes
+with Flamenco, Microwave oven and Quack; now 14 (Explosion, Vehicle, Glass, Whack, Roaring cats,
+Door, Growling, Smash, Thunder... Music -0.12). Fits are ~8x faster (66 columns, not 526), which
+leave-one-film-out over 20-40 films needs. Listener VERSION 10.
+
+| Same truth (audit's words) | LOO AUC | Anora* / Bethlehem* AUC | Cues | Big | Stray/min | Loud | Held-out cues | Big | Stray | Loud |
+|---|---|---|---|---|---|---|---|---|---|---|
+| All 521, free signs (68 kept) | 0.788 | 0.716 / 0.861 | 0.80 | 0.94 | 3.69 | 0.29 | 0.53 | 0.90 | 2.15 | 0.10 |
+| **Effect classes signed (14)** | 0.782 | 0.713 / **0.876** | 0.76 | 0.94 | **3.24** | **0.26** | 0.53 = | 0.90 = | **1.58** | **0.07** |
+
+Held out it is as good on cues and stiller everywhere else; the tuning cues it gave up were the
+memorised ones (tuning-held gap 0.27 -> 0.24). Gain unchanged (0.08-0.2) until the film set grows.

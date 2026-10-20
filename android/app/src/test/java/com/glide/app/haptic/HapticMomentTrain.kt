@@ -12,8 +12,10 @@ import org.junit.Test
  * Only windows where something could be felt are learned from (bass or a hit near the film's loud
  * level, or a light onset): the score decides among those, silence needs no deciding.
  *
- * L1-regularised logistic regression over all 521 YAMNet scores and the Listener's features, so it
- * keeps a few classes ([HapticSounds.KEPT]). The penalty is chosen by leaving one tuning film out
+ * L1-regularised logistic regression over the Listener's features and YAMNet's scores of [EFFECT]
+ * classes, which can only add to a moment, and [STILL] ones, which can only take from it: trained
+ * freely on all 521, it kept Microwave oven, Flamenco and Quack, three films' sounds that no other
+ * film shares. The L1 penalty keeps a few ([HapticSounds.KEPT]). The penalty is chosen by leaving one tuning film out
  * at a time (ROC AUC on it). [HapticBenchTest.HOLDOUT] films are scored, never learned from.
  *
  * Writing the block changes the shipped model: rerun the tests after (the run that writes it still
@@ -72,7 +74,7 @@ class HapticMomentTrain {
             val l = listened[k]
             if (l[0] <= -1.9f && l[3] <= -1.2f && l[4] <= -3f) continue // nothing to feel: bass and hits far under the film's
             val from = k * HapticSounds.HOP_MS
-            x += FloatArray(HapticSounds.CLASSES) { HapticSounds.logit(sounds[k][it]) } + l
+            x += FloatArray(COLUMNS.size) { HapticSounds.logit(sounds[k][COLUMNS[it]]) } + l
             y += effects.any { from < it.last && it.first < from + HapticSounds.WINDOW_MS }
         }
         return Film(name, x, y.toBooleanArray())
@@ -86,11 +88,11 @@ class HapticMomentTrain {
             return s
         }
 
-        /** YAMNet classes with any weight. */
-        fun classes() = (0 until HapticSounds.CLASSES).filter { z[it] != 0.0 || it == HapticSounds.SPEECH }
+        /** Columns of YAMNet classes with any weight. */
+        fun classes() = COLUMNS.indices.filter { z[it] != 0.0 || COLUMNS[it] == HapticSounds.SPEECH }
     }
 
-    /** Mean log loss plus [lambda] times the weights' L1 norm (not the intercept), by FISTA. */
+    /** Mean log loss plus [lambda] times the weights' L1 norm (not the intercept), by FISTA, signs held as [EFFECT] and [STILL] say. */
     private fun fit(films: List<Film>, lambda: Double, start: DoubleArray?): Model {
         val x = films.flatMap { it.x }
         val y = films.flatMap { it.y.toList() }
@@ -119,7 +121,8 @@ class HapticMomentTrain {
             }
             val next = DoubleArray(d + 1) { j ->
                 val u = v[j] - step * g[j]
-                if (j == d) u else Math.signum(u) * maxOf(0.0, Math.abs(u) - step * lambda)
+                val p = if (j == d) u else Math.signum(u) * maxOf(0.0, Math.abs(u) - step * lambda)
+                when { j >= COLUMNS.size -> p; COLUMNS[j] in EFFECT -> maxOf(0.0, p); else -> minOf(0.0, p) }
             }
             val tn = (1 + Math.sqrt(1 + 4 * t * t)) / 2
             v = DoubleArray(d + 1) { j -> next[j] + (t - 1) / tn * (next[j] - w[j]) }
@@ -160,16 +163,16 @@ class HapticMomentTrain {
     /** The fit in raw features, as HapticSounds.kt's `<model>` block. */
     private fun write(m: Model, lambda: Double, names: List<String>) {
         val classes = m.classes()
-        val raw = (classes + (HapticSounds.CLASSES until m.mean.size)).map { j -> if (m.sd[j] > 0) m.z[j] / m.sd[j] else 0.0 }
-        val bias = m.z.last() - (classes + (HapticSounds.CLASSES until m.mean.size)).sumOf { j -> if (m.sd[j] > 0) m.z[j] * m.mean[j] / m.sd[j] else 0.0 }
+        val raw = (classes + (COLUMNS.size until m.mean.size)).map { j -> if (m.sd[j] > 0) m.z[j] / m.sd[j] else 0.0 }
+        val bias = m.z.last() - (classes + (COLUMNS.size until m.mean.size)).sumOf { j -> if (m.sd[j] > 0) m.z[j] * m.mean[j] / m.sd[j] else 0.0 }
         val map = File(HapticHarness.fixturesDir(), "yamnet/yamnet_class_map.csv").takeIf { it.isFile }?.readLines()?.drop(1)
             ?.associate { l -> l.substringBefore(',').toInt() to l.substringAfter(',').substringAfter(',').trim('"') }.orEmpty()
-        println("kept: " + classes.joinToString { "$it ${map[it]} %+.2f".format(m.z[it]) })
-        println("listened (bass, rise, body, hit, light): " + (HapticSounds.CLASSES until m.mean.size).joinToString { "%+.2f".format(m.z[it]) })
+        println("kept: " + classes.joinToString { "${COLUMNS[it]} ${map[COLUMNS[it]]} %+.2f".format(m.z[it]) })
+        println("listened (bass, rise, body, hit, light): " + (COLUMNS.size until m.mean.size).joinToString { "%+.2f".format(m.z[it]) })
         val block = buildString {
             appendLine("    // <model> written by HapticMomentTrain from ${names.joinToString()} (lambda $lambda); don't edit by hand.")
-            for (c in classes) appendLine("    // $c ${map[c] ?: ""}")
-            appendLine("    val KEPT = intArrayOf(${classes.joinToString()})")
+            for (c in classes) appendLine("    // ${COLUMNS[c]} ${map[COLUMNS[c]] ?: ""}")
+            appendLine("    val KEPT = intArrayOf(${classes.joinToString { COLUMNS[it].toString() }})")
             appendLine("    val WEIGHTS = floatArrayOf(${(raw + bias).joinToString { "%.4ff".format(it) }})")
             append("    // </model>")
         }
@@ -183,5 +186,21 @@ class HapticMomentTrain {
         private val EFFECTS = HapticMeaning.EFFECTS
         private const val LEAD_MS = 1000
         private const val ITERATIONS = 300
+
+        /**
+         * YAMNet classes a viewer would point at, as [HapticMeaning]'s effects: roars, impacts and
+         * breaks, guns and explosions, thunder and fire, engines and vehicles. Chosen from the
+         * class names, not from the films.
+         */
+        private val EFFECT = setOf(
+            74, 104, 105, // growling, roaring cats, roar
+            59, 348, 352, 353, 413, 431, 432, 433, 434, 435, 437, 439, 454, 455, 460, 461, 462, 463, 464, 466, 472, 478, 483, 487, // impacts and breaks
+            420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, // explosions, guns, booms
+            280, 281, 292, 293, // thunder, fire
+            294, 300, 301, 306, 307, 309, 310, 320, 323, 329, 330, 331, 333, 337, 342, 343, 345, 347 // vehicles, engines
+        )
+        /** Speech and music: they only make a moment less likely. */
+        private val STILL = setOf(HapticSounds.SPEECH, 132)
+        private val COLUMNS = (EFFECT + STILL).sorted()
     }
 }
