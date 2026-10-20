@@ -34,6 +34,8 @@ object MusicPlayback {
 
     private const val TAG = "MusicPlayback"
     private const val PREFS = "glide_music_resume"
+    /** Its own file: SharedPreferences rewrites the whole file on every save. */
+    private const val PREFS_QUEUE = "glide_music_resume_queue"
 
     /** What the JS module wants to hear about while one is alive. */
     interface Listener {
@@ -61,7 +63,7 @@ object MusicPlayback {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = save(player)
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) save(player)
+                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) save(player, queue = true)
             }
 
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -224,14 +226,20 @@ object MusicPlayback {
      * The queue, as ids, for Bluetooth play and the System UI resume card after the process
      * is gone. Saved on every track change, queue change and pause, so a kill while playing
      * resumes at the start of the current track at worst. An emptied queue is not saved:
-     * resuming offers the last thing that actually played.
+     * resuming offers the last thing that actually played. The ids are written only with
+     * [queue], when the queue itself changed: a thousand-song queue is no small write to
+     * repeat on every track change and pause.
      */
-    fun save(player: Player) {
+    fun save(player: Player, queue: Boolean = false) {
         if (!::appContext.isInitialized || player.mediaItemCount == 0) return
-        val ids = JSONArray()
-        for (i in 0 until player.mediaItemCount) ids.put(player.getMediaItemAt(i).mediaId)
+        if (queue) {
+            val ids = JSONArray()
+            for (i in 0 until player.mediaItemCount) ids.put(player.getMediaItemAt(i).mediaId)
+            appContext.getSharedPreferences(PREFS_QUEUE, Context.MODE_PRIVATE).edit()
+                .putString("ids", ids.toString())
+                .apply()
+        }
         appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("ids", ids.toString())
             .putInt("index", player.currentMediaItemIndex)
             .putLong("positionMs", player.currentPosition.coerceAtLeast(0))
             .apply()
@@ -239,7 +247,8 @@ object MusicPlayback {
 
     fun savedQueue(context: Context): SavedQueue? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val json = prefs.getString("ids", null) ?: return null
+        val json = context.getSharedPreferences(PREFS_QUEUE, Context.MODE_PRIVATE)
+            .getString("ids", null) ?: return null
         val ids = try {
             JSONArray(json).let { array -> List(array.length()) { array.getString(it) } }
         } catch (e: Exception) {
