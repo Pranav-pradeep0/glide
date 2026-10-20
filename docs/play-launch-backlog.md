@@ -8,8 +8,9 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
   (`glide-public`, not being retired), carrying the changelog plus the **Play-signed universal APK**
   downloaded from Play. One key: Google-generated app signing key + a new upload key in GitHub secrets.
 - Self-updater: removed (`c68a856`). No flavor split.
-- v2.5.0 testers (old `glide-key`) uninstall once. Don't `wrangler deploy` the proxy until the
-  Play version is live and a last GitHub release has told them to move.
+- v2.5.0 testers (old `glide-key`) uninstall once. Owner deleted the old `glide-ai-proxy` Worker
+  2026-10-20, so their Recap is offline. The Worker is now `glide-proxy`
+  (`https://glide-proxy.glidemediaplayer.workers.dev`, repo variable `AI_PROXY_URL` set).
 - Play developer account: created on owner's personal Google account, in verification.
 - Done: `3da5cef` screens 4.30.0 (fixes reanimated #10734 SIGSEGV; reanimated 4.7.1 now unblocked).
 
@@ -17,10 +18,10 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 
 All done 2026-10-19. Not yet run for real: the tag job (no tag cut since), the Play upload (no
 `PLAY_SERVICE_ACCOUNT_JSON` yet), and the Worker changes (not deployed). Follow-ups:
-- **Worker deploy** needs `wrangler secret put SUBDL_API_KEY` / `OMDB_API_KEY` first (new keys,
-  E4), then `npm run deploy` in `proxy/` (creates the `REPORTS` KV namespace), then
-  `BASE_URL=… npm run smoke`. Additive: `/v1/recap` is unchanged, so v2.5.0 testers are
-  unaffected. Until deployed, subtitle search and OMDb fail in new builds. The SubDL/OMDb keys
+- **Worker deploy** needs `wrangler secret put GROQ_API_KEY` / `SUBDL_API_KEY` / `OMDB_API_KEY
+  --name glide-proxy` first (new keys, E4), then `npm run deploy` in `proxy/` (creates the Worker
+  and the `REPORTS` KV namespace), then `BASE_URL=… npm run smoke`. Until deployed, recap,
+  subtitle search and OMDb fail in every build. The SubDL/OMDb keys
   in the local `.env` were rejected by both APIs when tested through `wrangler dev`.
 - **Until the app's first Play rollout**, set repo variable `PLAY_RELEASE_STATUS=draft`.
 - Play "What's new" is sent as `en-US`; change it if the listing's default language differs.

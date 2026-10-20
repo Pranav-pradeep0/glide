@@ -1,4 +1,4 @@
-//   BASE_URL=https://glide-ai-proxy.<account>.workers.dev node smoke.mjs
+//   BASE_URL=https://glide-proxy.glidemediaplayer.workers.dev node smoke.mjs
 
 const base = process.env.BASE_URL?.replace(/\/$/, '');
 if (!base) {

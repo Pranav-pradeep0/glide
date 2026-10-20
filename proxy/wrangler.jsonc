@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "glide-ai-proxy",
+  "name": "glide-proxy",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-23",
   // Workers Logs persist by default; keep sampling low and never log request content.
