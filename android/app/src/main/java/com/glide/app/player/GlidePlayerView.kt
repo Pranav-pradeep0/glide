@@ -81,7 +81,8 @@ import kotlin.math.roundToLong
 class GlidePlayerView(private val reactContext: ThemedReactContext) :
     FrameLayout(reactContext) {
 
-    private val surfaceView = SurfaceView(reactContext)
+    /** Not private: PiP animates from the part of it that is on screen. */
+    val surfaceView = SurfaceView(reactContext)
     private val subtitleView = SubtitleView(reactContext).apply {
         setUserDefaultStyle()
         setUserDefaultTextSize()

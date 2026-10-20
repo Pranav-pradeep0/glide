@@ -153,6 +153,14 @@ final class GlidePipController {
                 enforcePipBounds(right - left, bottom - top);
             };
 
+    /** A resize-mode change moves the picture without moving the view. */
+    private final View.OnLayoutChangeListener surfaceLayoutListener =
+            (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+                    applyParams();
+                }
+            };
+
     private static void logTrace(String tag, String message) {
         Log.d(TAG, tag + " " + message);
     }
@@ -178,11 +186,13 @@ final class GlidePipController {
         ContextCompat.registerReceiver(activity, controlReceiver,
                 new IntentFilter(ACTION_CONTROL), ContextCompat.RECEIVER_NOT_EXPORTED);
         videoView.addOnLayoutChangeListener(layoutChangeListener);
+        videoView.getSurfaceView().addOnLayoutChangeListener(surfaceLayoutListener);
         Log.d(TAG, "attached to " + activity.getClass().getSimpleName());
     }
 
     void detach() {
         videoView.removeOnLayoutChangeListener(layoutChangeListener);
+        videoView.getSurfaceView().removeOnLayoutChangeListener(surfaceLayoutListener);
         unwatchWindowResize();
 
         if (listeningActivity != null && modeChangedListener != null) {
@@ -420,17 +430,29 @@ final class GlidePipController {
     }
 
     /**
-     * Window-relative pixel bounds of the video surface, which is what the system
-     * animates from. Measuring this in JS produced dp and therefore a rect that was
-     * wrong by the display density.
+     * Window-relative pixel bounds of the picture, which is what the system animates from.
+     * Measuring this in JS produced dp and therefore a rect that was wrong by the display
+     * density. The surface's visible part, not the view's: letterbox bars are no part of
+     * the picture. Then centred to the PiP window's shape, which in cover and fill is not
+     * the shape of what is on screen.
      */
     private Rect sourceRectHint() {
         Rect rect = new Rect();
-        if (!videoView.getGlobalVisibleRect(rect)) {
+        if (!videoView.getSurfaceView().getGlobalVisibleRect(rect)) {
             return null;
         }
         if (rect.width() <= 0 || rect.height() <= 0) {
             return null;
+        }
+        Rational aspect = videoAspectRatio();
+        if (aspect == null) {
+            return rect;
+        }
+        float ratio = aspect.floatValue();
+        if (rect.width() > rect.height() * ratio) {
+            rect.inset((rect.width() - Math.round(rect.height() * ratio)) / 2, 0);
+        } else {
+            rect.inset(0, (rect.height() - Math.round(rect.width() / ratio)) / 2);
         }
         return rect;
     }
