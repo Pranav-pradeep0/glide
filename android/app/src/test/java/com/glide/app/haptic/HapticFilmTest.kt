@@ -228,6 +228,11 @@ class HapticFilmTest {
             // outside it (music tags and labels with no effect named), the same for every column.
             val tagged = BooleanArray(d.sub.size)
             for (t in heard.sortedBy { it.kind != Kind.MUSIC }) if (t.kind == Kind.MUSIC || t.kind in EFFECTS) for (w in t.startMs / 100..minOf(d.sub.size - 1, t.endMs / 100)) tagged[w] = t.kind == Kind.MUSIC
+            // Nor is a studio logo: the Director's first seconds before anyone speaks, unless an effect.
+            val speech = heard.filter { it.kind == Kind.SPEECH }.minOfOrNull { it.startMs } ?: 0
+            val effect = BooleanArray(d.sub.size)
+            for (t in heard) if (t.kind in EFFECTS) for (w in t.startMs / 100..minOf(d.sub.size - 1, t.endMs / 100)) effect[w] = true
+            for (w in 0 until minOf(speech, HapticDirector.LOGO_MS, d.sub.size * 100) / 100) if (!effect[w]) tagged[w] = true
             val free = d.sub.indices.filter { !tagged[it] }
             m["subwoofer correlation"] = HapticHarness.pearson(free.map { d.sub[it] }, free.map { bed[it] })
             // The LFE tells them apart: mixers put explosions there, voices in the centre.

@@ -626,3 +626,31 @@ Frankenstein on the phone, jumping to 53, 131 and 133 min: haptics 0.6-1.8 s aft
 against the PC (first piece 0.99) with 34 empty windows at the seams; with them, 0.993-0.996 in
 every 20 min and 6 empty windows. Still: until the start is analysed, a jumped-to piece's first
 line counts as the film's first for the opening rule.
+
+## Logos and texture (2026-10-20)
+
+**Report:** Frankenstein's intro still vibrates; the final explosion feels flat, "linear, no texture".
+
+**Intro, measured on the phone's track.** Two causes. While the start is still being analysed no
+speech has been heard, so the opening rule had no line to anchor to and did nothing: 1-10.5 s
+felt. And Netflix's 1-3 s boom carries no label over its threshold (boom 0.11, impact 0.15, music
+0), so it played as plain bass. Fixes: with labels but no line yet, everything analysed is opening
+(without labels nothing marks speech, subtitles carry no speech tags, and the rule stays off: tried
+without that guard, music under subtitles alone fell to 0.07 loud LFE felt). In the first
+`LOGO_MS` (15 s) before anyone speaks, only what is labelled an effect is felt. The yardstick leaves
+that window out of the subwoofer correlation as it does music. Phone track: nothing felt 0-16 s,
+mid-analysis or finished.
+
+**Texture.** The bed clipped at the film's 99th percentile of bass and hits play as max(bed, hit):
+in Frankenstein's final explosion (peaks 10 dB over that percentile) 147 of 250 frames sat at
+full, and hits under it were lost. The bed now reaches `KNEE` (0.75) at the 99th percentile and the
+loudest 1% fills the rest up to the 99.9th; the engine rule's body lane the same.
+
+| | Clipped | Knee 0.75 |
+|---|---|---|
+| Explosion 8020.5-8023 s: bed sd / frames at max | 0.114 / 147 of 250 | **0.169 / 56 of 250** |
+| Hits lost under the bed (Fr, Us, Together) | 2, 1, 2 | **0, 0, 0** |
+| Subwoofer correlation, labels (Fr, Us, Together, Blast) | 0.771, 0.746, 0.757, 0.822 | 0.781, 0.761, 0.767, 0.823 |
+| Frankenstein opening felt, labels | 6.3 s | 4.0 s |
+
+The rest of the film's bed is 25% lighter for it; the strength setting covers that.

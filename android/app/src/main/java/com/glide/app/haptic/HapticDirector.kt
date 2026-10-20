@@ -49,6 +49,9 @@ object HapticDirector {
     private const val LIGHT_LEAD_MS = 200 // a light onset well before its cue is the line before
     private const val MIN_BURST_MS = 300
     private const val FLICKER_DB = 3f
+    private const val KNEE = 0.75f // bed at the film's loud bass (99th percentile)
+    // ponytail: a fixed window catches one or two logos; stacked studio logos run longer.
+    const val LOGO_MS = 15_000
 
     // The Listener's dB scales: bed 0..1 is -45..0 dB, hit 0..1 is -40..0 dBFS.
     private const val BED_DB = 45f
@@ -82,8 +85,11 @@ object HapticDirector {
         val weighty = raw.events.filter { it.sources and HapticTrack.LIGHT == 0 }
         val hitRef = percentile(FloatArray(weighty.size) { weighty[it].intensity }, 0.95f)
         val hitGate = hitRef - preset.hitRangeDb / HIT_DB
+        // The film's loud bass plays at [KNEE]; its loudest 1% fills the rest up to the 99.9th
+        // percentile instead of clipping, so an explosion keeps moving and hits stand out of it.
+        val bedTop = percentile(heard, 0.999f)
         val bed = FloatArray(v.size) { i ->
-            if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * ((v[i] - bedLow) / (bedRef - bedLow)).coerceIn(0f, 1f)
+            if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * kneed(v[i], bedLow, bedRef, bedTop)
         }
         // On the film's own sound, before tags: a flicker is the same with or without subtitles.
         dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, weighty.filter { it.intensity >= hitGate })
@@ -91,24 +97,38 @@ object HapticDirector {
         // hits of its own; an effect under the score plays as usual. Before anyone first speaks
         // (studio logos, title music) it isn't felt at all: a logo's boom is as deep and loud as an
         // explosion, even on the LFE, and only its place tells it apart.
-        val opening = tags.filter { it.kind == Kind.SPEECH }.minOfOrNull { it.startMs } ?: 0
+        // Labels heard but no line yet (the start still being analysed): it's all opening so far.
+        // Without labels nothing says where speech is (subtitles carry no speech tags).
+        val opening = tags.filter { it.kind == Kind.SPEECH }.minOfOrNull { it.startMs }
+            ?: if (raw.sounds.isEmpty()) 0 else bed.size * HapticTrack.BED_FRAME_MS
         val musicOnly = BooleanArray(bed.size)
-        fun mark(kinds: Set<Kind>, on: Boolean) = tags.filter { it.kind in kinds }.forEach { t ->
-            musicOnly.fill(on, (t.startMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size), (t.endMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size))
+        val effect = BooleanArray(bed.size)
+        fun mark(lane: BooleanArray, kinds: Set<Kind>, on: Boolean) = tags.filter { it.kind in kinds }.forEach { t ->
+            lane.fill(on, (t.startMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size), (t.endMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size))
         }
-        mark(setOf(Kind.MUSIC), true)
-        mark(EFFECTS, false)
-        for (i in bed.indices) if (musicOnly[i]) bed[i] *= if (i * HapticTrack.BED_FRAME_MS < opening) 0f else MUSIC_BED
+        mark(musicOnly, setOf(Kind.MUSIC), true)
+        mark(musicOnly, EFFECTS, false)
+        mark(effect, EFFECTS, true)
+        // A studio logo needn't be labelled music (Netflix's boom isn't anything): in the first
+        // [LOGO_MS], before anyone speaks, only what is labelled an effect is felt.
+        val logoEnd = minOf(opening, LOGO_MS) / HapticTrack.BED_FRAME_MS
+        for (i in bed.indices) {
+            if (i < logoEnd && !effect[i]) bed[i] = 0f
+            if (musicOnly[i]) bed[i] *= if (i * HapticTrack.BED_FRAME_MS < opening) 0f else MUSIC_BED
+        }
         fun underMusic(ms: Int) = musicOnly.getOrElse(ms / HapticTrack.BED_FRAME_MS) { false }
+        fun inLogo(ms: Int) = ms / HapticTrack.BED_FRAME_MS < logoEnd && !effect.getOrElse(ms / HapticTrack.BED_FRAME_MS) { false }
         // An engine revs above the bed's 100 Hz: under an engine tag the bed follows the body
         // (below 300 Hz), gated on the film's own loud body as the bed is on its loud bass.
         val body = raw.body
         if (body.isNotEmpty()) {
-            val bodyRef = percentile(body.filter { it > 0f }.toFloatArray(), 0.99f)
+            val heardBody = body.filter { it > 0f }.toFloatArray()
+            val bodyRef = percentile(heardBody, 0.99f)
+            val bodyTop = percentile(heardBody, 0.999f)
             val bodyLow = bodyRef - (preset.bedRangeDb + FOLLOW_DB) / BED_DB
             for (t in tags) if (t.kind == Kind.ENGINE) {
                 for (i in (t.startMs / HapticTrack.BED_FRAME_MS).coerceAtLeast(0) until minOf(bed.size, t.endMs / HapticTrack.BED_FRAME_MS)) {
-                    bed[i] = maxOf(bed[i], preset.bedGain * ((body[i] - bodyLow) / (bodyRef - bodyLow)).coerceIn(0f, 1f))
+                    if (body[i] > bodyLow) bed[i] = maxOf(bed[i], preset.bedGain * kneed(body[i], bodyLow, bodyRef, bodyTop))
                 }
             }
         }
@@ -118,7 +138,7 @@ object HapticDirector {
             sources = e.sources and HapticTrack.LIGHT.inv()
         )
         // Music has no hits of its own: one there is kept only if a tag names it (below).
-        val events = weighty.filter { e -> e.intensity >= hitGate && !underMusic(e.timeMs) }.map(::scaled).toMutableList()
+        val events = weighty.filter { e -> e.intensity >= hitGate && !underMusic(e.timeMs) && !inLogo(e.timeMs) }.map(::scaled).toMutableList()
         for (t in tags) {
             val sharpness = when (t.kind) { Kind.SHARP -> SHARP; Kind.HEAVY -> HEAVY; else -> continue }
             val near = if (t.exact) t.startMs..t.endMs else t.startMs - SNAP_MS..t.startMs + SNAP_MS
@@ -159,6 +179,14 @@ object HapticDirector {
             i = end
         }
     }
+
+    /**
+     * A level [x] from [low] (0) to the film's loud [ref] (its 99th percentile, [KNEE]), and on up
+     * to its [top] (99.9th, 1): the loudest 1% keeps moving instead of clipping.
+     */
+    private fun kneed(x: Float, low: Float, ref: Float, top: Float): Float =
+        if (x <= ref) KNEE * ((x - low) / (ref - low)).coerceAtLeast(0f)
+        else KNEE + (1 - KNEE) * ((x - ref) / maxOf(top - ref, 1e-3f)).coerceAtMost(1f)
 
     // ponytail: sorts the whole lane per publish (~1/s, 0.7M floats for a 2 h film); a 256-bin
     // histogram if it shows up in a profile.
