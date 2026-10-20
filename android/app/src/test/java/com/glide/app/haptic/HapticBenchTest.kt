@@ -46,17 +46,17 @@ class HapticBenchTest {
         assumeTrue("no films with subtitles in .haptics-fixtures/films", films.isNotEmpty())
         val tune = Row()
         val held = Row()
-        println("%-14s %5s %6s %5s %6s %9s %9s %9s".format("film", "cues", "felt", "big", "felt", "stray/min", "loud felt", "opening"))
+        println("%-22s %5s %6s %5s %6s %9s %9s %9s".format("film", "cues", "felt", "big", "felt", "stray/min", "loud felt", "opening"))
         for (file in films) {
             val name = file.nameWithoutExtension
             // Plain subtitles (Blast's) would count every felt moment as stray.
-            if (HapticMeaning.tags(HapticFilmTest.cues(File(file.parentFile, "$name.srt").readText())).isEmpty()) { println("%-14s no SDH tags, skipped".format(name.take(14))); continue }
+            if (HapticMeaning.tags(HapticFilmTest.cues(File(file.parentFile, "$name.srt").readText())).isEmpty()) { println("%-22s no SDH tags, skipped".format(name.take(22))); continue }
             val row = score(file)
-            if (name in HOLDOUT) held += row else tune += row
-            println("%-14s %s".format(name.take(14) + if (name in HOLDOUT) "*" else "", row))
+            if (isHeld(name)) held += row else tune += row
+            println("%-22s %s".format(name.take(22) + if (isHeld(name)) "*" else "", row))
         }
-        println("%-14s %s".format("tuning", tune))
-        println("%-14s %s".format("held out*", held))
+        println("%-22s %s".format("tuning", tune))
+        println("%-22s %s".format("held out*", held))
     }
 
     /**
@@ -86,7 +86,7 @@ class HapticBenchTest {
                 if (HapticMeaning.tags(listOf(HapticMeaning.Cue(0, 0, m.value))).isNotEmpty()) continue
                 val from = (c.startMs - LEAD_MS).coerceAtLeast(0) / 100
                 val to = minOf(sub.size - 1, maxOf(c.endMs, c.startMs + LEAD_MS) / 100)
-                val big = sub.isNotEmpty() && (from..to).maxOfOrNull { sub[it] }.let { it != null && it >= subTop / LOUD }
+                val big = subTop > 0 && (from..to).maxOfOrNull { sub[it] }.let { it != null && it >= subTop / LOUD }
                 val text = inner.lowercase()
                 for (s in listOf(cues.getOrPut(text, ::Seen)) + text.split(Regex("[^a-z]+")).filter { it.length > 2 }.distinct().map { words.getOrPut(it, ::Seen) }) {
                     s.n++; if (big) s.big++; s.films += name
@@ -122,7 +122,7 @@ class HapticBenchTest {
             row.cues++
             if (felt) row.cuesFelt++
             val peak = (w.first.coerceAtLeast(0) / 100..minOf(d.sub.size - 1, w.last / 100)).maxOfOrNull { d.sub[it] } ?: 0.0
-            if (peak >= subTop / LOUD) { row.big++; if (felt) row.bigFelt++ else println("   %s missed big %d s %s".format(name, cue.startMs / 1000, cue.text)) }
+            if (subTop > 0 && peak >= subTop / LOUD) { row.big++; if (felt) row.bigFelt++ else println("   %s missed big %d s %s".format(name, cue.startMs / 1000, cue.text)) }
         }
 
         var quiet = Int.MAX_VALUE
@@ -151,8 +151,10 @@ class HapticBenchTest {
     }
 
     companion object {
-        /** Never tuned on. */
-        val HOLDOUT = setOf("anora", "bethlehem")
+        /** Titles never tuned on: a series' episodes are named `<title>-s01e01` and held out together. */
+        val HOLDOUT = setOf("anora", "bethlehem", "boys")
+        fun title(name: String) = name.substringBefore('-')
+        fun isHeld(name: String) = title(name) in HOLDOUT
         private val EFFECTS = HapticMeaning.EFFECTS
         /** SDH cues trail their sound; a felt start up to this much before the cue is its moment. */
         private const val LEAD_MS = 1000

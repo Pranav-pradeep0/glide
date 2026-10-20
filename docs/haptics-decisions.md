@@ -876,3 +876,35 @@ Before training on it, Spider-Man scored as an unseen film: cues 0.85, big 0.94,
 
 (Tuning rows include Spider-Man in both.) The held-out cue drop is Anora's cars, 4 -> 2 of 18;
 38 held-out cues are too few to tell that from noise, and the AUC rose on both. Kept.
+
+## Eleven films (2026-10-20)
+
+From the phone (`adb pull`, the English track copied to `.mka`, the video deleted): Once Upon a
+Time in Hollywood (2019, Blu-ray), The Boys S05E04, Behind Her Eyes S01E01 and E06, Stranger
+Things S01E01 (stereo). Subtitles by `haptics-subsync.py`: the release's own SDH track where it
+had one (Behind Her Eyes, Stranger Things, The Boys), SubDL's otherwise (Hollywood, SPARKS-HI);
+all fit at -0.1 to 0.0 s. Dropped: the phone's "S05E05" and "S05E06" are S05E04 again (labels r
+1.000, the same subtitle track); Now You See Me, every SDH on SubDL is another cut (best offset
+-68 to +9 s across 20 min stretches); It's A Medical Miracle (Malayalam), not on SubDL.
+
+**Split by title**, a series' episodes on one side (`<title>-s01e01`, `HapticBenchTest.title`):
+held out Anora, Bethlehem, The Boys (5.7 h of 19.5); tuning the other seven titles.
+`HapticMomentTrain` leaves a title out at a time: two episodes share a mix, and leaving one out
+while learning the other overstated the fit. Stereo films have no subwoofer feed, so no big cues:
+the bench counted every cue big (Stranger Things 24 of 24); fixed in the bench and the audit.
+
+Audit: nothing new to add (more whooshes, sirens, gun clicks: cocking, not shots).
+
+Trained on seven titles: leave-one-title-out AUC 0.795 (over 7, was over 4), held out Anora 0.69,
+Bethlehem 0.89, The Boys 0.69; 16 classes, bass +0.44, body 0. Listener VERSION 12.
+
+| Eleven films, gain 0.08-0.2 | Cues | Big | Stray/min | Loud | Held-out cues | Big | Stray | Loud |
+|---|---|---|---|---|---|---|---|---|
+| Model from four films | 0.77 | 0.93 | 3.00 | 0.25 | 0.52 | 0.86 | 1.74 | 0.09 |
+| **Seven titles** | 0.76 | 0.93 | **2.53** | **0.23** | 0.52 = | 0.86 = | **1.35** | **0.07** |
+| Same, gain 0.06-0.16 | 0.78 | 0.94 | 3.39 | 0.26 | 0.54 | 0.86 | 2.00 | 0.10 |
+| Same, gain 0.1-0.25 | 0.74 | 0.91 | 1.95 | 0.21 | 0.52 | 0.86 | 0.99 | 0.05 |
+
+Gain chosen on the tuning rows: 0.1 gives up 3 big cues for stillness, so 0.08-0.2 stays.
+Creature attack 0.21 felt. Stranger Things' opening (16 s felt before the first line) is its
+cold open's lab alarms and the creature, cue-tagged; the bench's opening counts it.

@@ -29,7 +29,7 @@ class HapticFilmTest {
 
     @Test
     fun films() {
-        val films = File(HapticHarness.fixturesDir(), "films").listFiles { f -> f.name.endsWith(".mka") && f.nameWithoutExtension !in HapticBenchTest.HOLDOUT }.orEmpty().sortedBy { it.name }
+        val films = File(HapticHarness.fixturesDir(), "films").listFiles { f -> f.name.endsWith(".mka") && !HapticBenchTest.isHeld(f.nameWithoutExtension) }.orEmpty().sortedBy { it.name }
         assumeTrue("no films in .haptics-fixtures/films", films.isNotEmpty())
         val fails = films.flatMap { score(it) }
         assertTrue(fails.joinToString("\n"), fails.isEmpty())

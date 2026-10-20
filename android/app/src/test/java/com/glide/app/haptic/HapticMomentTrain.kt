@@ -16,7 +16,7 @@ import org.junit.Test
  * classes, which can only add to a moment, and [STILL] ones, which can only take from it: trained
  * freely on all 521, it kept Microwave oven, Flamenco and Quack, three films' sounds that no other
  * film shares. The L1 penalty keeps a few ([HapticSounds.KEPT]). The penalty is chosen by leaving one tuning film out
- * at a time (ROC AUC on it). [HapticBenchTest.HOLDOUT] films are scored, never learned from.
+ * at a time (ROC AUC on it; a series' episodes leave together, they share a mix). [HapticBenchTest.HOLDOUT] films are scored, never learned from.
  *
  * Writing the block changes the shipped model: rerun the tests after (the run that writes it still
  * scores the old one). A change to [HapticSounds.KEPT] must bump [HapticListener.VERSION].
@@ -29,32 +29,33 @@ class HapticMomentTrain {
         val dir = File(HapticHarness.fixturesDir(), "films")
         val films = dir.listFiles { f -> f.name.endsWith(".mka") && File(dir, f.nameWithoutExtension + ".srt").isFile && File(dir, f.nameWithoutExtension + ".sounds").isFile }
             .orEmpty().sortedBy { it.name }.mapNotNull(::load)
-        val tuning = films.filter { it.name !in HapticBenchTest.HOLDOUT }
+        val tuning = films.filter { !HapticBenchTest.isHeld(it.name) }
         assumeTrue("no tuning films with subtitles and sounds", tuning.size >= 2)
-        for (f in films) println("%-14s %6d windows, %4d moments".format(f.name, f.y.size, f.y.count { it }))
+        for (f in films) println("%-22s %6d windows, %4d moments".format(f.name, f.y.size, f.y.count { it }))
 
         // Strongest penalty first, each fit starting from the last.
         val lambdas = listOf(0.02, 0.01, 0.005, 0.003, 0.002, 0.001)
         val auc = lambdas.associateWith { 0.0 }.toMutableMap()
         val kept = lambdas.associateWith { 0 }.toMutableMap()
-        for (out in tuning) {
-            val train = tuning - out
+        val titles = tuning.groupBy { HapticBenchTest.title(it.name) }.values
+        for (out in titles) {
+            val train = tuning - out.toSet()
             var start: DoubleArray? = null
             for (l in lambdas) {
                 val m = fit(train, l, start)
                 start = m.z
-                auc[l] = auc.getValue(l) + auc(out, m) / tuning.size
+                auc[l] = auc.getValue(l) + out.sumOf { auc(it, m) } / out.size / titles.size
                 kept[l] = kept.getValue(l) + m.classes().size
             }
         }
-        for (l in lambdas) println("lambda %.3f: left-out AUC %.3f, %.1f classes".format(l, auc[l], kept.getValue(l) / tuning.size.toDouble()))
+        for (l in lambdas) println("lambda %.3f: left-out AUC %.3f, %.1f classes".format(l, auc[l], kept.getValue(l) / titles.size.toDouble()))
         // The fewest classes within 0.005 of the best: a handful of sounds is easier to trust.
         val best = auc.values.max()
         val lambda = lambdas.first { auc.getValue(it) >= best - 0.005 }
         var start: DoubleArray? = null
         lateinit var model: Model
         for (l in lambdas.takeWhile { it >= lambda }) { model = fit(tuning, l, start); start = model.z }
-        for (f in films) println("%-14s AUC %.3f".format(f.name + if (f.name in HapticBenchTest.HOLDOUT) "*" else "", auc(f, model)))
+        for (f in films) println("%-22s AUC %.3f".format(f.name + if (HapticBenchTest.isHeld(f.name)) "*" else "", auc(f, model)))
         write(model, lambda, tuning.map { it.name })
     }
 
