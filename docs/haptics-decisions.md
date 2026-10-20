@@ -585,3 +585,28 @@ manifest merge (two artifacts share a namespace), 2.3 carries Kotlin 2.4 metadat
 
 **Still to measure on the phone:** classify time per window and the analysis staying ahead of the
 playhead (`listen ... classify=` in the log), battery, and that its labels match the PC's.
+
+## Phone check (2026-10-20)
+
+**Device:** AIN065, Android 16, arm64, release build. The model loads.
+
+**Speed.** Us (116 min) analysed in 201 s, 35× realtime, 20 s ahead of the playhead after 1 s.
+YAMNet is 30.5 s of it (2.1 ms a window, 14556 windows); decoding and the Listener are the rest.
+
+**Labels were 12 dB low.** The phone mixed to mono by averaging every channel, LFE included; the PC
+labels (and every threshold) came from ffmpeg's downmix, 4× louder on 5.1. Same correlation shape,
+but scores sank under the thresholds. Relabelling Us on the PC with the phone's mix reproduced the
+phone (r 0.99). `HapticRecognizer` now mixes as ffmpeg does (fitted on all four films and on noise):
+front pair 0.707, centre 1, LFE out, the rest 0.5. Listener VERSION 5.
+
+| Us, windows over threshold (phone / PC) | Averaged | ffmpeg mix |
+|---|---|---|
+| Music | 4466 / 5341 | 5397 / 5341 |
+| Speech | 2775 / 3137 | 3168 / 3137 |
+| Engine | 57 / 208 | 194 / 208 |
+| Glass | 14 / 38 | 36 / 38 |
+| Boom | 48 / 126 | 130 / 126 |
+
+**Found while testing.** Seeking past the analysis feels nothing until it gets there; in the
+background the decode is frozen by Android, or killed for binder traffic ("excessive binder
+traffic during cached") and its work lost.

@@ -32,6 +32,21 @@ class HapticRecognizerTest {
         // 1 kHz at 16 kHz: 2000 zero crossings a second, RMS of a half-scale sine.
         val crossings = (1 until w.size).count { (w[it - 1] < 0) != (w[it] < 0) }
         assertEquals(2000.0 * w.size / HapticRecognizer.RATE, crossings.toDouble(), 4.0)
-        assertEquals(0.5 / sqrt(2.0), sqrt(w.map { it * it.toDouble() }.average()), 0.01)
+        // Two half-scale channels at 0.707 each, as ffmpeg mixes stereo.
+        assertEquals(0.707 * 0.5 * 2 / sqrt(2.0), sqrt(w.map { it * it.toDouble() }.average()), 0.01)
+    }
+
+    @Test
+    fun mixesLikeFfmpeg() {
+        // 5.1, one channel at a time at 0.5: front 0.707, centre 1, LFE out, surrounds 0.5.
+        val expected = listOf(0.707, 0.707, 1.0, 0.0, 0.5, 0.5)
+        for (ch in 0 until 6) {
+            val pcm = ByteBuffer.allocate(16000 * 2 * 6 * 4).order(ByteOrder.LITTLE_ENDIAN)
+            repeat(16000 * 2) { repeat(6) { c -> pcm.putFloat(if (c == ch) 0.5f else 0f) } }
+            pcm.flip()
+            val fed = mutableListOf<FloatArray>()
+            HapticRecognizer { w -> fed += w.copyOf(); FloatArray(HapticSounds.CLASSES) }.add(0, pcm, 6, 16000, true)
+            assertEquals("channel $ch", 0.5 * expected[ch], fed.last().last().toDouble(), 0.01)
+        }
     }
 }

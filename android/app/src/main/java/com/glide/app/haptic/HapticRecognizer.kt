@@ -9,7 +9,7 @@ import org.tensorflow.lite.Interpreter
 
 /**
  * Hears what a film's sounds are (docs/haptics-decisions.md, Sound recognition): the decoded audio,
- * mixed to mono as the [HapticListener] hears it and resampled to 16 kHz, through YAMNet
+ * mixed to mono as ffmpeg does ([downmix]) and resampled to 16 kHz, through YAMNet
  * (`assets/yamnet.tflite`), one 0.975 s window every [HapticSounds.HOP_MS]. Each window's
  * [HapticSounds] group scores land in [windows], the track's sounds lane.
  *
@@ -31,20 +31,22 @@ class HapticRecognizer(private val classify: (FloatArray) -> FloatArray) {
     private var inputs = 0L // input samples seen
     private var nextAt = 0.0 // input-sample time of the next 16 kHz sample
     private var prev = 0.0
+    private var mix = FloatArray(0) // per-channel gains, [downmix]
 
     /** Interleaved PCM from its position to its limit, starting at [ptsUs]; as `PcmSink.add`. */
     fun add(ptsUs: Long, data: ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
         if (this.rate == 0) start(ptsUs, rate)
+        if (mix.size != channels) mix = downmix(channels)
         data.order(ByteOrder.LITTLE_ENDIAN)
         val bytes = if (isFloat) 4 else 2
         var p = data.position()
         repeat((data.limit() - p) / (bytes * channels)) {
             var s = 0f
             for (c in 0 until channels) {
-                s += if (isFloat) data.getFloat(p) else data.getShort(p) / 32768f
+                s += mix[c] * if (isFloat) data.getFloat(p) else data.getShort(p) / 32768f
                 p += bytes
             }
-            sample(s / channels)
+            sample(s)
         }
     }
 
@@ -83,6 +85,19 @@ class HapticRecognizer(private val classify: (FloatArray) -> FloatArray) {
         private const val WINDOW = 15600
         private const val HOP = RATE * HapticSounds.HOP_MS / 1000
         private const val ANTI_ALIAS_HZ = 7000.0
+
+        /**
+         * ffmpeg's mono downmix, which the labels and thresholds were tuned on: front pair 0.707,
+         * centre 1, LFE out, the rest 0.5, in WAVE order (FL FR FC LFE BL BR SL SR) as MediaCodec
+         * outputs it. Averaging every channel instead fed YAMNet 12 dB low on 5.1 and its scores
+         * sank under the thresholds (Us: engine over 0.2 in 57 windows, not 208).
+         */
+        // ponytail: 3-5 and 7 channels take 0.707 each; layouts that rare don't carry a film's mix.
+        fun downmix(channels: Int): FloatArray = when (channels) {
+            1 -> floatArrayOf(1f)
+            6, 8 -> FloatArray(channels) { listOf(0.707f, 0.707f, 1f, 0f).getOrElse(it) { 0.5f } }
+            else -> FloatArray(channels) { 0.707f }
+        }
 
         /** YAMNet on the CPU, or null if it can't load: haptics then go on from the sound alone. */
         fun open(context: Context): Pair<HapticRecognizer, Interpreter>? = runCatching {
