@@ -833,12 +833,12 @@ chosen again once the model is constrained and the film set grown.
 
 ## Constrained moments (2026-10-20)
 
-`HapticMomentTrain` now learns only from `EFFECT` classes (59, chosen from YAMNet's class names
+`HapticMomentTrain` now learns only from `EFFECT` classes (60, chosen from YAMNet's class names
 as `HapticMeaning`'s effects: roars, impacts and breaks, guns and explosions, thunder and fire,
 vehicles and engines), whose weights can only add to a moment, and Speech and Music, which can
 only take from it (projected after each FISTA step). Unconstrained over all 521 it kept 68 classes
 with Flamenco, Microwave oven and Quack; now 14 (Explosion, Vehicle, Glass, Whack, Roaring cats,
-Door, Growling, Smash, Thunder... Music -0.12). Fits are ~8x faster (66 columns, not 526), which
+Door, Growling, Smash, Thunder... Music -0.12). Fits are ~8x faster (62 columns, not 526), which
 leave-one-film-out over 20-40 films needs. Listener VERSION 10.
 
 | Same truth (audit's words) | LOO AUC | Anora* / Bethlehem* AUC | Cues | Big | Stray/min | Loud | Held-out cues | Big | Stray | Loud |
