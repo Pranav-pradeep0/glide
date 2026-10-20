@@ -14,6 +14,42 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 - Play developer account: created on owner's personal Google account, in verification.
 - Done: `3da5cef` screens 4.30.0 (fixes reanimated #10734 SIGSEGV; reanimated 4.7.1 now unblocked).
 
+## RESUME HERE (state at end of 2026-10-20)
+
+Everything below is committed on main and NOT pushed. Check `git log --oneline -40` and
+`git status` first.
+
+1. **D4 dependency bumps — in progress when the session ended.** RN 0.88.0 is committed
+   (2297e02). Check `git log` for which of reanimated 4.7.1 + worklets 0.13, gesture-handler
+   3.4, navigation 7.5, safe-area 5.10.1, flash-list 2.3.3 and Kotlin 2.4 → ACRA latest landed.
+   If `git status` shows a half-done package.json/package-lock.json, restore them to HEAD
+   and `npm ci`, then resume the remaining bumps one per commit.
+2. **Package rename (owner decision): applicationId `com.glide.app` → `com.glide.player`**
+   (only one available on Play). Keep `namespace "com.glide.app"` (no file moves). Change:
+   `android/app/build.gradle` applicationId, `.github/workflows/android-ci.yml` PACKAGE,
+   `scripts/glide-trace.ps1`, `scripts/haptics-lab.js`, `scripts/verify-player-engine.sh`.
+   On the phone it installs as a separate app beside com.glide.app.
+3. **One combined phone check** (adb 4319afd2): new package launches; Stallion registers with
+   the NEW project (logcat); edge-swipe Back in the player (portrait + landscape) and seek 1–2 cm
+   in; library Back → background and resume; skipped-song toasts
+   (/sdcard/Music/GlideTest/glide-b4-noaudio.mka); crash dialog → email to
+   glidemediaplayer@gmail.com; D2 layouts at largest font; B3 background play.
+4. **Push** main when 1–3 pass.
+
+Done 2026-10-20 outside the code: Worker `glide-proxy` live (old glide-ai-proxy deleted),
+new Groq/SubDL/OMDb keys, SubDL key stripped from download links. Stallion moved to a new
+account (glidemediaplayer@gmail.com): GitHub secrets STALLION_PROJECT_ID / STALLION_APP_TOKEN
+and .env updated; bundle path glide-media-player/glide-media-player/glide-media-player-bucket.
+OTA bundles must be signed (public key in res/values/stallion.xml). Secrets backup:
+C:UsersPranavDesktopGlide-secrets-backup.txt.
+
+Owner to-dos: upload keystore (keytool, alias `upload`) + 4 ANDROID_* GitHub secrets;
+`npx stallion login` as the app account; save the Stallion private key
+(scratchpad/stallion-keys/private-key.pem) to a password manager; revoke the old Groq key and
+set a Groq spending limit; Play Console app with package **com.glide.player**; service
+account JSON; `PLAY_RELEASE_STATUS=draft`; privacy page; 12 testers; Console forms (Data
+safety adds Crash logs, Diagnostics, Email address — optional).
+
 ## A. Play blockers (code)
 
 All done 2026-10-19. Not yet run for real: the tag job (no tag cut since), the Play upload (no
