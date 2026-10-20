@@ -44,43 +44,50 @@ All done 2026-10-19. Not yet run for real: the tag job (no tag cut since), the P
 
 ## B. Bugs — playback engine (`android/.../player/GlidePlayerView.kt` unless noted)
 
+Done 2026-10-20 (B4 in-app half only; ALAC still pending): B4 0db6de7, B5 69b2a64 (+manifest MIME filter),
+B6 f8e1078, B8 e92c6e2, B9 d72ec9b, B10 99d0818 (own prefs file), API_LEVEL 17 a91fec3. All need a device check.
+B1/B2/B3/B7 wait for the haptics work (they touch haptic timing).
+
 - [ ] **B1** `stopPlayer` (~810) doesn't cancel the IO retry `postDelayed({ player?.prepare() })`
       (~1179) or clear `playWhenReady` → old video can restart after exit/Next.
 - [ ] **B2** `progressTick` (~241) runs every 250 ms forever, also paused/backgrounded. Start/stop
       from `onIsPlayingChanged`; slow when host stopped.
 - [ ] **B3** Background play keeps decoding video: `setTrackTypeDisabled(TRACK_TYPE_VIDEO, true)` in
       `onActivityStopped` (~221) when playing on and not PiP; re-enable on start.
-- [ ] **B4** ALAC not in FFmpeg `ENABLED_DECODERS` (`docs/exoplayer-migration.md:75`, private
+- [x] **B4** ALAC not in FFmpeg `ENABLED_DECODERS` (`docs/exoplayer-migration.md:75`, private
       decoder repo); tracks with no supported audio play silently with no error →
       treat as error in `onTracksChanged` (music: `MusicPlayback.kt`).
-- [ ] **B5** HTTP redirects http→https fail (default `DefaultHttpDataSource`,
+- [x] **B5** HTTP redirects http→https fail (default `DefaultHttpDataSource`,
       `allowCrossProtocolRedirects`); extensionless HLS fails (intent MIME type dropped in
       `VideoPlayerActivity`; set `MediaItem.Builder.setMimeType`).
-- [ ] **B6** PiP `sourceRectHint` uses whole view rect, not video aspect
+- [x] **B6** PiP `sourceRectHint` uses whole view rect, not video aspect
       (`GlidePipController.java:~432`).
 - [ ] **B7** Media3 #3286: 1.11.x positions up to 200 ms stale (dynamic scheduling). Try
       `experimentalSetDynamicSchedulingEnabled(false)` for video only; may explain haptic offset.
       Unverified on device.
-- [ ] **B8** PiP auto-enter disarmed while buffering (`GlidePipController.java:361`, use `!showPlay`).
-- [ ] **B9** `onPlaybackResumption(isForPlayback=false)` switches session to music
+- [x] **B8** PiP auto-enter disarmed while buffering (`GlidePipController.java:361`, use `!showPlay`).
+- [x] **B9** `onPlaybackResumption(isForPlayback=false)` switches session to music
       (`GlidePlayerService.kt:~398`).
-- [ ] **B10** `MusicPlayback.save` rewrites whole queue on every event (`MusicPlayback.kt:54-63`).
+- [x] **B10** `MusicPlayback.save` rewrites whole queue on every event (`MusicPlayback.kt:54-63`).
 - [ ] **B11** Credits detection runs a second decoder during playback (`Credits.kt`) — measure first.
 
 ## C. Bugs — RN layer
 
-- [ ] **C1** Thumbnails flash previous video in recycled rows (`src/hooks/useThumbnails.ts:20`).
-- [ ] **C2** ErrorBoundary "Report Error" only console.logs then says "reported"
+Done 2026-10-20: C1 7e2f5b7, C2 c8e0a56 ("Share details"), C3 de2f05f, C4 0ebe120, C5 2bf5f75, C6 92e0d8c,
+C7 3553d6d, C8 db356fb. Left: Recents `isHydrated` loader branch and `LyricsService.clearCache` are dead too.
+
+- [x] **C1** Thumbnails flash previous video in recycled rows (`src/hooks/useThumbnails.ts:20`).
+- [x] **C2** ErrorBoundary "Report Error" only console.logs then says "reported"
       (`ErrorBoundary.tsx:112-117`); fallback hardcoded light colours; "Try again" loops.
-- [ ] **C3** Lyrics cache unbounded, never cleared, copies embedded lyrics
+- [x] **C3** Lyrics cache unbounded, never cleared, copies embedded lyrics
       (`LyricsService.ts:9,179,198,219,366`).
-- [ ] **C4** `useAudioController.ts:287` uncleared 300 ms guard timer.
-- [ ] **C5** `VideoPlayerRoot.tsx` spinner never ends if no `videoUri` / `resolveRoute` throws.
-- [ ] **C6** Dead code: `storage.clearCache`, `persistRaf` (`videoHistoryStore.ts`), no-op
+- [x] **C4** `useAudioController.ts:287` uncleared 300 ms guard timer.
+- [x] **C5** `VideoPlayerRoot.tsx` spinner never ends if no `videoUri` / `resolveRoute` throws.
+- [x] **C6** Dead code: `storage.clearCache`, `persistRaf` (`videoHistoryStore.ts`), no-op
       `hydrateFromStorage`, duplicate `SystemBars.setStyle` in `App.tsx`, `@glide/vlc-player` in
       `jest.config.js`, unused `RECAP_AVAILABLE` import in `VideoPlayerScreen.tsx`.
-- [ ] **C7** `SubtitleOverlay.tsx:123-175` rebuilds gestures every cue → `useMemo`.
-- [ ] **C8** Recents re-renders under the player on every history save (`RecentsScreen.tsx:56`).
+- [x] **C7** `SubtitleOverlay.tsx:123-175` rebuilds gestures every cue → `useMemo`.
+- [x] **C8** Recents re-renders under the player on every history save (`RecentsScreen.tsx:56`).
 
 ## D. Before launch
 
