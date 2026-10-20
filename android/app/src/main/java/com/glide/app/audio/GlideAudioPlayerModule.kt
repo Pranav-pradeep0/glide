@@ -68,6 +68,14 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
             emitDeviceEvent("onSleepTimerFired", Arguments.createMap())
             emitPlaybackState()
         }
+
+        override fun onUnplayable(title: String, skipped: Boolean, allFailed: Boolean) {
+            emitDeviceEvent("onAudioSkippedUnplayable", Arguments.createMap().apply {
+                putString("title", title)
+                putBoolean("skipped", skipped)
+                putBoolean("allFailed", allFailed)
+            })
+        }
     }
 
     /**

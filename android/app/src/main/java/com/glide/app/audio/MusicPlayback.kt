@@ -40,6 +40,9 @@ object MusicPlayback {
     /** What the JS module wants to hear about while one is alive. */
     interface Listener {
         fun onSleepTimerFired()
+
+        /** [title] would not play; [skipped] to the next, or stopped. [allFailed]: the whole queue. */
+        fun onUnplayable(title: String, skipped: Boolean, allFailed: Boolean)
     }
 
     var listener: Listener? = null
@@ -98,13 +101,17 @@ object MusicPlayback {
     /** Skip a file that will not play, until every item has failed in a row. */
     private fun skipFailed(player: ExoPlayer) {
         consecutiveErrors++
+        val title = player.currentMediaItem?.mediaMetadata?.title?.toString() ?: ""
         if (consecutiveErrors < player.mediaItemCount && player.hasNextMediaItem()) {
             player.seekToNextMediaItem()
             player.prepare()
             player.play()
+            listener?.onUnplayable(title, skipped = true, allFailed = false)
         } else {
+            val allFailed = player.mediaItemCount > 1 && consecutiveErrors >= player.mediaItemCount
             consecutiveErrors = 0
             player.stop()
+            listener?.onUnplayable(title, skipped = false, allFailed = allFailed)
         }
     }
 

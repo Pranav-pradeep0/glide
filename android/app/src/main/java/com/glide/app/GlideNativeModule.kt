@@ -47,7 +47,8 @@ import com.facebook.react.uimanager.ViewManager
  * 16: GlidePlayer prop `haptics` also recognises the film's sounds (HapticRecognizer, YAMNet).
  * 17: GlidePlayer emits onVideoError ERROR_CODE_DECODING_FORMAT_UNSUPPORTED for audio with no
  *     decoder; follows http->https redirects; plays extensionless HLS/DASH opened by MIME type;
- *     GlideNative.setCrashReportsEnabled(enabled) (CrashReports.kt).
+ *     GlideNative.setCrashReportsEnabled(enabled) (CrashReports.kt); GlideAudioPlayerModule emits
+ *     onAudioSkippedUnplayable { title, skipped, allFailed } for a song that will not play.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 

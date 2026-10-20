@@ -8,6 +8,7 @@ import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { useMusicHistoryStore } from '@/store/musicHistoryStore';
 import { usePermissionStore } from '@/store/permissionStore';
 import { hasNativeApi } from '@/native/GlideNative';
+import { createUnplayableNotifier } from '@/utils/unplayableToast';
 
 const getAudioModule = () => NativeModules.GlideAudioPlayerModule;
 const mmkv = createMMKV({ id: 'glide_audio_store_v1' });
@@ -901,6 +902,15 @@ if (Platform.OS === 'android') {
 
     DeviceEventEmitter.addListener('onAudioError', () => {
         useAudioStore.getState()._setPlaybackState({ isPlaying: false, isBuffering: false });
+    });
+
+    const notifyUnplayable = createUnplayableNotifier(
+        // Required here, not imported: the UI kit pulls in Reanimated, which the store's tests can't load.
+        (text) => require('@/components/ui').showSnackbar({ text, tone: 'reject' }),
+        () => AppState.currentState === 'active',
+    );
+    DeviceEventEmitter.addListener('onAudioSkippedUnplayable', (event) => {
+        notifyUnplayable({ title: event.title ?? '', skipped: !!event.skipped, allFailed: !!event.allFailed });
     });
 
     DeviceEventEmitter.addListener('onSleepTimerFired', () => {
