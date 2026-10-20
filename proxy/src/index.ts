@@ -204,7 +204,14 @@ async function handleLookup(url: URL, env: Env, lookup: (typeof LOOKUPS)[string]
     }
     logRoute(route, upstream.status);
     // The body is passed through: both APIs report "no match" inside a 200 or 404 JSON body.
-    return new Response(upstream.body, {
+    // SubDL writes our key into every download link (`...zip?api_key=...`). The download
+    // works without it, so take it out rather than hand the key to every client.
+    const key = env[lookup.secret];
+    const body = (await upstream.text())
+        .replaceAll(`?${lookup.keyParam}=${key}`, '')
+        .replaceAll(`&${lookup.keyParam}=${key}`, '')
+        .replaceAll(key, '');
+    return new Response(body, {
         status: upstream.status,
         headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
     });

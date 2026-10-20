@@ -93,12 +93,22 @@ await check('omdb lookup -> 200 with a match (key held by the Worker)', async ()
     }
 });
 
-await check('subdl search -> 200 with subtitles (key held by the Worker)', async () => {
+await check('subdl search -> 200, no key in links, zip downloads', async () => {
     const res = await fetch(`${base}/v1/subdl?film_name=Inception&type=movie&languages=EN&subs_per_page=3`);
     expectStatus(res, 200);
     const body = await readJson(res);
     if (!Array.isArray(body.subtitles) || body.subtitles.length === 0) {
         throw new Error('no subtitles');
+    }
+    if (JSON.stringify(body).includes('api_key')) {
+        throw new Error('the SubDL key leaked into the response');
+    }
+    // What the app does next: fetch the zip from SubDL directly, with no key.
+    const zip = await fetch(`https://dl.subdl.com${body.subtitles[0].url}`);
+    expectStatus(zip, 200);
+    const magic = new Uint8Array(await zip.arrayBuffer()).slice(0, 2);
+    if (magic[0] !== 0x50 || magic[1] !== 0x4b) {
+        throw new Error('download is not a zip');
     }
 });
 
