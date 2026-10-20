@@ -19,7 +19,7 @@ import java.io.IOException
  * (decision L5).
  *
  * Raw tracks only (format 2): [body], the level below 300 Hz per bed frame with no weighting, where
- * an engine revs; [sounds], [HapticSounds] group scores per window of [HapticSounds.HOP_MS]. Both
+ * an engine revs; [sounds], the [HapticSounds.KEPT] YAMNet scores per window of [HapticSounds.HOP_MS]. Both
  * may be empty.
  */
 class HapticTrack(
@@ -47,7 +47,7 @@ class HapticTrack(
 
     init {
         require(bedIntensity.size == bedSharpness.size && (body.isEmpty() || body.size == bedIntensity.size)) { "bed lanes differ in length" }
-        require(sounds.all { it.size == HapticSounds.Group.entries.size && it.all { v -> v in 0f..1f } }) { "bad sound window" }
+        require(sounds.all { it.size == HapticSounds.KEPT.size && it.all { v -> v in 0f..1f } }) { "bad sound window" }
         require(bedIntensity.all { it in 0f..1f } && bedSharpness.all { it in 0f..1f } && body.all { it in 0f..1f }) { "bed value outside 0..1" }
         require(events.zipWithNext().all { (a, b) -> a.timeMs <= b.timeMs }) { "events not sorted" }
         require(events.all { it.timeMs >= 0 && it.intensity in 0f..1f && it.sharpness in 0f..1f && it.lengthMs in 0..0xFFFF && it.decayMs in 0..0xFFFF }) {
@@ -132,7 +132,7 @@ class HapticTrack(
             }
             val windows = input.readInt()
             if (windows !in 0..MAX_FRAMES) throw IOException("bad window count $windows")
-            val sounds = List(windows) { FloatArray(HapticSounds.Group.entries.size) { input.readUnsignedByte() / 255f } }
+            val sounds = List(windows) { FloatArray(HapticSounds.KEPT.size) { input.readUnsignedByte() / 255f } }
             return try {
                 HapticTrack(analyzer, fingerprint, intensity, sharpness, events, body, sounds)
             } catch (e: IllegalArgumentException) {

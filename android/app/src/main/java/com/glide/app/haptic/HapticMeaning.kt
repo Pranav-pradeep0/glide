@@ -7,13 +7,11 @@ package com.glide.app.haptic
  * ("[VICTOR]"), names nothing here and is dropped.
  */
 object HapticMeaning {
-    /** [SPEECH] comes only from [HapticSounds]: captions of plain dialogue carry no tag. */
-    enum class Kind { SHARP, HEAVY, ENGINE, MUSIC, VOICE, SPEECH }
+    enum class Kind { SHARP, HEAVY, ENGINE, MUSIC, VOICE }
 
     data class Cue(val startMs: Int, val endMs: Int, val text: String)
 
-    /** [exact]: the sound is within [startMs, endMs] (heard, [HapticSounds]), not near a caption's start. */
-    data class Tag(val startMs: Int, val endMs: Int, val kind: Kind, val exact: Boolean = false)
+    data class Tag(val startMs: Int, val endMs: Int, val kind: Kind)
 
     // First match wins: "[thunderclap]" is heavy, not sharp; "[pluto snarling, banging]" a hit.
     private val KINDS = listOf(

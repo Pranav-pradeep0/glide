@@ -64,8 +64,7 @@ class HapticBenchTest {
         val d = film.load(file)
         val name = file.nameWithoutExtension
         val cues = HapticFilmTest.cues(File(file.parentFile, "$name.srt").readText())
-        val heard = HapticMeaning.tags(cues) + film.sounds(File(file.parentFile, "$name.sounds"))
-        val track = HapticDirector.direct(d.raw, heard)
+        val track = HapticDirector.direct(film.labelled(d.raw, File(file.parentFile, "$name.sounds")), HapticMeaning.tags(cues))
         val felt = HapticFilmTest.felt(track, d.ms)
         val f = HapticTrack.BED_FRAME_MS
         fun anyFelt(from: Int, to: Int) = (from.coerceAtLeast(0) / f until minOf(felt.size, to / f)).any { felt[it] }

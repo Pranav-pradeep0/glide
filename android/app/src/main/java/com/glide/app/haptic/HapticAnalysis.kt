@@ -16,9 +16,6 @@ import kotlin.concurrent.thread
  * once analysis passes the playhead. A jump past the analysis starts a new piece at the [playhead],
  * and the gaps are filled after. A finished track is cached per file; a cached one is handed over at once.
  *
- * ponytail: until the film's start is analysed, the Director's opening rule mutes music-only sound
- * before a jumped-to piece's first line; tell the Director where the analysis starts if that's felt.
- *
  * The thread runs at the lowest priority, and FFmpeg's decode thread, created from it, inherits
  * that (L2 measured it at normal priority, competing with the player).
  *
@@ -104,7 +101,7 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
             val w = p.recognizer?.windows ?: continue
             for (k in maxOf(0, p.fromMs - HapticSounds.WINDOW_MS + HapticSounds.HOP_MS) / HapticSounds.HOP_MS until w.size) {
                 if (k * HapticSounds.HOP_MS >= p.untilMs) break
-                while (sounds.size <= k) sounds += FloatArray(HapticSounds.Group.entries.size)
+                while (sounds.size <= k) sounds += FloatArray(HapticSounds.KEPT.size)
                 sounds[k] = w[k]
             }
         }

@@ -11,11 +11,10 @@ import kotlin.math.log10
  * quarter of their runtime and quiet hits under dialogue; this keeps the bed to 5-11% of Us and
  * Blast and dialogue to under 1 hit a minute (docs/haptics-decisions.md, Phase 4).
  *
- * Subtitle tags (Phase 5, [HapticMeaning]) add meaning: a hit tag keeps the loudest onset within
- * [SNAP_MS] of its cue, light or below the gate, and gives it the tag's character. Under music the
- * bed is halved and untagged hits dropped. Voice tags change nothing: centre-channel grunts drive
- * the bed for 1-6% of their time, and every rule tried to quiet them cut more of the effect bass
- * under the same tags (docs/haptics-decisions.md, Phase 5). With no tags the result is audio-only.
+ * What the sound is decides the rest: the moment score ([HapticSounds.moment]) fades out score,
+ * logos, ambience and dialogue and keeps what a viewer would point at. Subtitle hit tags (Phase 5,
+ * [HapticMeaning]) keep the loudest onset within [SNAP_MS] of their cue, light or below the gate,
+ * and give it the tag's character.
  *
  * Runs on every published track: the cache holds the raw one, so changing this rebuilds nothing.
  * While a film is still being analysed the levels come from the part heard so far.
@@ -42,8 +41,6 @@ object HapticDirector {
     const val SNAP_MS = 1000
     private const val SMOOTH_FRAMES = 10 // 100 ms
     private const val FOLLOW_DB = 6f // how far under the gate an open bed follows
-    private const val MUSIC_BED = 0.5f
-    private val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE)
     private const val SHARP = 0.8f
     private const val HEAVY = 0.1f
     private const val LIGHT_LEAD_MS = 200 // a light onset well before its cue is the line before
@@ -53,8 +50,13 @@ object HapticDirector {
     private const val RECENT_FRAMES = 300 // 3 s: what the bed is heard against, as well as the film
     private const val STEADY_DB = 4f // no more than this over the last 3 s is steady: not felt
     private const val RISE_DB = 6f // this far over that is fully felt
+    private const val MOMENT_FROM = 0.05f // moment score with nothing felt
+    private const val MOMENT_FULL = 0.15f // and fully felt
+    private const val FLOOR = -3f // listened features: 30 dB under the film's loud level is silence
+    private const val TOP = 1.5f
     // ponytail: a fixed window catches one or two logos; stacked studio logos run longer.
-    const val LOGO_MS = 15_000
+    private const val LOGO_MS = 15_000
+    private const val SPEECH = 0.5f // YAMNet's Speech score over this is someone speaking
 
     // The Listener's dB scales: bed 0..1 is -45..0 dB, hit 0..1 is -40..0 dBFS.
     private const val BED_DB = 45f
@@ -67,86 +69,45 @@ object HapticDirector {
      */
     fun direct(raw: HapticTrack, tags: List<HapticMeaning.Tag> = emptyList(), preset: Preset = Preset.CINEMATIC, strength: Float = 1f): HapticTrack {
         if (raw.analyzerVersion == 0) return raw // a fixture's truth, imported by the Lab
-        val tags = tags + HapticSounds.tags(raw.sounds)
-        // Levels are judged on power averaged over [SMOOTH_FRAMES]: low tones beat 10-20 times a
-        // second, and judged frame by frame their dips would chop a rumble into pieces.
+        val film = Film(raw)
         val v = raw.bedIntensity
-        val sum = DoubleArray(v.size + 1) // running power
-        for (i in v.indices) sum[i + 1] = sum[i] + if (v[i] > 0f) Math.pow(10.0, (v[i] - 1.0) * BED_DB / 10) else 0.0
-        val half = SMOOTH_FRAMES / 2
-        val level = FloatArray(v.size) { i ->
-            val a = maxOf(0, i - half)
-            val b = minOf(v.size, i + half + 1)
-            (1 + 10 * log10((sum[b] - sum[a]) / (b - a) + 1e-12) / BED_DB).toFloat()
-        }
-        val heard = FloatArray(v.count { it > 0f })
-        var k = 0
-        for (i in v.indices) if (v[i] > 0f) heard[k++] = level[i]
-        val bedRef = percentile(heard, 0.99f)
-        val bedGate = bedRef - preset.bedRangeDb / BED_DB
+        val level = film.level
+        val bedGate = film.bedRef - preset.bedRangeDb / BED_DB
         val bedLow = bedGate - FOLLOW_DB / BED_DB
-        val weighty = raw.events.filter { it.sources and HapticTrack.LIGHT == 0 }
-        val hitRef = percentile(FloatArray(weighty.size) { weighty[it].intensity }, 0.95f)
-        val hitGate = hitRef - preset.hitRangeDb / HIT_DB
+        val hitGate = film.hitRef - preset.hitRangeDb / HIT_DB
         // The film's loud bass plays at [KNEE]; its loudest 1% fills the rest up to the 99.9th
         // percentile instead of clipping, so an explosion keeps moving and hits stand out of it.
-        val bedTop = percentile(heard, 0.999f)
         val bed = FloatArray(v.size) { i ->
-            if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * kneed(v[i], bedLow, bedRef, bedTop)
+            if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * kneed(v[i], bedLow, film.bedRef, film.bedTop)
         }
-        val bedSalience = salience(level, bedRef, bedTop)
+        val bedSalience = salience(film.level, film.recent, film.bedRef, film.bedTop)
         for (i in bed.indices) bed[i] *= bedSalience[i]
-        // On the film's own sound, before tags: a flicker is the same with or without subtitles.
-        dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, weighty.filter { it.intensity >= hitGate })
-        // Music alone (no effect named with it: score, songs) is lighter under the bed and has no
-        // hits of its own; an effect under the score plays as usual. Before anyone first speaks
-        // (studio logos, title music) it isn't felt at all: a logo's boom is as deep and loud as an
-        // explosion, even on the LFE, and only its place tells it apart.
-        // Labels heard but no line yet (the start still being analysed): it's all opening so far.
-        // Without labels nothing says where speech is (subtitles carry no speech tags).
-        val opening = tags.filter { it.kind == Kind.SPEECH }.minOfOrNull { it.startMs }
-            ?: if (raw.sounds.isEmpty()) 0 else bed.size * HapticTrack.BED_FRAME_MS
-        val musicOnly = BooleanArray(bed.size)
-        val effect = BooleanArray(bed.size)
-        fun mark(lane: BooleanArray, kinds: Set<Kind>, on: Boolean) = tags.filter { it.kind in kinds }.forEach { t ->
-            lane.fill(on, (t.startMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size), (t.endMs / HapticTrack.BED_FRAME_MS).coerceIn(0, bed.size))
-        }
-        mark(musicOnly, setOf(Kind.MUSIC), true)
-        mark(musicOnly, EFFECTS, false)
-        mark(effect, EFFECTS, true)
-        // A studio logo needn't be labelled music (Netflix's boom isn't anything): in the first
-        // [LOGO_MS], before anyone speaks, only what is labelled an effect is felt.
-        val logoEnd = minOf(opening, LOGO_MS) / HapticTrack.BED_FRAME_MS
-        for (i in bed.indices) {
-            if (i < logoEnd && !effect[i]) bed[i] = 0f
-            if (musicOnly[i]) bed[i] *= if (i * HapticTrack.BED_FRAME_MS < opening) 0f else MUSIC_BED
-        }
-        fun underMusic(ms: Int) = musicOnly.getOrElse(ms / HapticTrack.BED_FRAME_MS) { false }
-        fun inLogo(ms: Int) = ms / HapticTrack.BED_FRAME_MS < logoEnd && !effect.getOrElse(ms / HapticTrack.BED_FRAME_MS) { false }
-        // An engine revs above the bed's 100 Hz: under an engine tag the bed follows the body
-        // (below 300 Hz), gated on the film's own loud body as the bed is on its loud bass.
-        val body = raw.body
-        if (body.isNotEmpty()) {
-            val heardBody = body.filter { it > 0f }.toFloatArray()
-            val bodyRef = percentile(heardBody, 0.99f)
-            val bodyTop = percentile(heardBody, 0.999f)
-            val bodyLow = bodyRef - (preset.bedRangeDb + FOLLOW_DB) / BED_DB
-            for (t in tags) if (t.kind == Kind.ENGINE) {
-                for (i in (t.startMs / HapticTrack.BED_FRAME_MS).coerceAtLeast(0) until minOf(bed.size, t.endMs / HapticTrack.BED_FRAME_MS)) {
-                    if (body[i] > bodyLow) bed[i] = maxOf(bed[i], preset.bedGain * kneed(body[i], bodyLow, bodyRef, bodyTop))
-                }
+        // On the film's own sound, before meaning: a flicker is the same with or without labels.
+        dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, film.weighty.filter { it.intensity >= hitGate })
+        // What the sound is: score, logos, ambience and dialogue fade out, what a viewer would
+        // point at stays. Without labels (the model didn't load) everything plays.
+        val moment = moments(raw, film)
+        fun at(ms: Int) = moment?.getOrElse(ms / HapticTrack.BED_FRAME_MS) { 0f } ?: 1f
+        if (moment != null) for (i in bed.indices) bed[i] *= moment[i]
+        // A moment above the bed's 100 Hz (an engine revving, 100-2000 Hz) follows the body (below
+        // 300 Hz), gated on the film's own loud body as the bed is on its loud bass and faded the
+        // same way when steady. Unfaded, it buzzed through loud scenes (creature attack 0.72 felt).
+        if (moment != null && raw.body.isNotEmpty()) {
+            val bodyLow = film.bodyRef - (preset.bedRangeDb + FOLLOW_DB) / BED_DB
+            val bodySalience = smoothed(raw.body).let { salience(it, recent(it), film.bodyRef, film.bodyTop) }
+            for (i in bed.indices) if (moment[i] > 0f && raw.body[i] > bodyLow) {
+                bed[i] = maxOf(bed[i], moment[i] * bodySalience[i] * preset.bedGain * kneed(raw.body[i], bodyLow, film.bodyRef, film.bodyTop))
             }
         }
 
         fun scaled(e: HapticTrack.Event) = e.copy(
-            intensity = (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (hitRef - hitGate)).coerceIn(preset.hitMin, 1f),
+            intensity = (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (film.hitRef - hitGate)).coerceIn(preset.hitMin, 1f),
             sources = e.sources and HapticTrack.LIGHT.inv()
         )
-        // Music has no hits of its own: one there is kept only if a tag names it (below).
-        val events = weighty.filter { e -> e.intensity >= hitGate && !underMusic(e.timeMs) && !inLogo(e.timeMs) }.map(::scaled).toMutableList()
+        val events = film.weighty.filter { e -> e.intensity >= hitGate && at(e.timeMs) > 0f }.map(::scaled).toMutableList()
         for (t in tags) {
             val sharpness = when (t.kind) { Kind.SHARP -> SHARP; Kind.HEAVY -> HEAVY; else -> continue }
-            val near = if (t.exact) t.startMs..t.endMs else t.startMs - SNAP_MS..t.startMs + SNAP_MS
+            val near = t.startMs - SNAP_MS..t.startMs + SNAP_MS
             val felt = events.indices.filter { events[it].timeMs in near }.maxByOrNull { events[it].intensity }
             val e = felt?.let { events.removeAt(it) }
                 ?: raw.events.filter { it.timeMs in near && (it.sources and HapticTrack.LIGHT == 0 || it.timeMs >= t.startMs - LIGHT_LEAD_MS) }
@@ -162,6 +123,125 @@ object HapticDirector {
         events.sortBy { it.timeMs }
         for (i in bed.indices) bed[i] *= strength
         return HapticTrack(raw.analyzerVersion, raw.fingerprint, bed, raw.bedSharpness, events.map { it.copy(intensity = it.intensity * strength) })
+    }
+
+    /**
+     * The film's own levels, the same for every preset. Levels are judged on power averaged over
+     * [SMOOTH_FRAMES]: low tones beat 10-20 times a second, and judged frame by frame their dips
+     * would chop a rumble into pieces.
+     */
+    internal class Film(raw: HapticTrack) {
+        val level: FloatArray
+        /** Mean [level] (dB) over the last [RECENT_FRAMES]: what the bed is heard against. */
+        val recent: FloatArray
+        val bedRef: Float
+        val bedTop: Float
+        val weighty = raw.events.filter { it.sources and HapticTrack.LIGHT == 0 }
+        val hitRef = percentile(FloatArray(weighty.size) { weighty[it].intensity }, 0.95f)
+        private val heardBody = raw.body.filter { it > 0f }.toFloatArray()
+        val bodyRef = percentile(heardBody, 0.99f)
+        val bodyTop = percentile(heardBody, 0.999f)
+
+        init {
+            val v = raw.bedIntensity
+            level = smoothed(v)
+            val heard = FloatArray(v.count { it > 0f })
+            var k = 0
+            for (i in v.indices) if (v[i] > 0f) heard[k++] = level[i]
+            bedRef = percentile(heard, 0.99f)
+            bedTop = percentile(heard, 0.999f)
+            recent = recent(level)
+        }
+    }
+
+    /** [v] as power over [SMOOTH_FRAMES], centred. */
+    private fun smoothed(v: FloatArray): FloatArray {
+        val sum = DoubleArray(v.size + 1) // running power
+        for (i in v.indices) sum[i + 1] = sum[i] + if (v[i] > 0f) Math.pow(10.0, (v[i] - 1.0) * BED_DB / 10) else 0.0
+        val half = SMOOTH_FRAMES / 2
+        return FloatArray(v.size) { i ->
+            val a = maxOf(0, i - half)
+            val b = minOf(v.size, i + half + 1)
+            (1 + 10 * log10((sum[b] - sum[a]) / (b - a) + 1e-12) / BED_DB).toFloat()
+        }
+    }
+
+    /** Mean of [level] (dB) over the last [RECENT_FRAMES] at each frame. */
+    private fun recent(level: FloatArray): FloatArray {
+        val s = DoubleArray(level.size + 1)
+        for (i in level.indices) s[i + 1] = s[i] + level[i].coerceAtLeast(0f)
+        return FloatArray(level.size) { i ->
+            val a = maxOf(0, i + 1 - RECENT_FRAMES)
+            ((s[i + 1] - s[a]) / (i + 1 - a)).toFloat()
+        }
+    }
+
+    /**
+     * The Listener's view of each of [windows] sound windows, the moment score's other inputs, in
+     * tens of dB: bass against the film's loud bass (99th percentile), its rise over the last 3 s,
+     * the body (below 300 Hz) against the film's, and the loudest weighty and light hit against
+     * the film's loud hits (95th). Clamped, so silence and the film's peak read as fixed ends.
+     */
+    internal fun listened(raw: HapticTrack, film: Film, windows: Int): Array<FloatArray> {
+        val f = HapticTrack.BED_FRAME_MS
+        val n = raw.bedIntensity.size
+        var e = 0 // first event at or after the window
+        return Array(windows) { k ->
+            val from = k * HapticSounds.HOP_MS
+            val to = from + HapticSounds.WINDOW_MS
+            var bass = -1f
+            var rise = -1f
+            var body = -1f
+            for (i in from / f until minOf(n, to / f)) {
+                bass = maxOf(bass, film.level[i])
+                rise = maxOf(rise, film.level[i] - film.recent[i])
+                if (raw.body.isNotEmpty()) body = maxOf(body, raw.body[i])
+            }
+            while (e < raw.events.size && raw.events[e].timeMs < from) e++
+            var hit = -1f
+            var light = -1f
+            for (j in e until raw.events.size) {
+                val ev = raw.events[j]
+                if (ev.timeMs >= to) break
+                if (ev.sources and HapticTrack.LIGHT != 0) light = maxOf(light, ev.intensity) else hit = maxOf(hit, ev.intensity)
+            }
+            floatArrayOf(
+                ((bass - film.bedRef) * BED_DB / 10).coerceIn(FLOOR, TOP),
+                (rise * BED_DB / 10).coerceIn(-1f, 3f),
+                ((body - film.bodyRef) * BED_DB / 10).coerceIn(FLOOR, TOP),
+                ((hit - film.hitRef) * HIT_DB / 10).coerceIn(FLOOR, TOP),
+                ((light - film.hitRef) * HIT_DB / 10).coerceIn(FLOOR, TOP)
+            )
+        }
+    }
+
+    /**
+     * The moment gain per bed frame, 0..1, from each window's score (the best of it and its
+     * neighbours): linear between window centres,
+     * none under [MOMENT_FROM], full from [MOMENT_FULL]. Null with no sounds lane.
+     */
+    private fun moments(raw: HapticTrack, film: Film): FloatArray? {
+        if (raw.sounds.isEmpty()) return null
+        val listened = listened(raw, film, raw.sounds.size)
+        // A studio logo is as loud and deep as an explosion, even on the LFE, and only its place
+        // tells it apart: in the first [LOGO_MS], until YAMNet hears speech, nothing is a moment.
+        // Three tuning films are three openings, too few to learn it from (it trained to 0). A
+        // piece analysed later, past it, never reads as one.
+        val speech = HapticSounds.KEPT.indexOf(HapticSounds.SPEECH)
+        val spoken = raw.sounds.indexOfFirst { it[speech] > SPEECH }.let { if (it < 0) raw.sounds.size else it }
+        val q = FloatArray(raw.sounds.size) { k ->
+            if (k < spoken && k * HapticSounds.HOP_MS < LOGO_MS) 0f else HapticSounds.moment(raw.sounds[k], listened[k])
+        }
+        // A window takes its neighbours' best: a moment's sound spans windows, and a score dipping
+        // between them stuttered the bed.
+        val p = FloatArray(q.size) { k -> maxOf(q[k], q.getOrElse(k - 1) { 0f }, q.getOrElse(k + 1) { 0f }) }
+        val f = HapticTrack.BED_FRAME_MS
+        return FloatArray(raw.bedIntensity.size) { i ->
+            val x = ((i * f - HapticSounds.WINDOW_MS / 2f) / HapticSounds.HOP_MS).coerceIn(0f, p.size - 1f)
+            val k = x.toInt()
+            val s = p[k] + (p[minOf(k + 1, p.size - 1)] - p[k]) * (x - k)
+            ((s - MOMENT_FROM) / (MOMENT_FULL - MOMENT_FROM)).coerceIn(0f, 1f)
+        }
     }
 
     /**
@@ -188,19 +268,13 @@ object HapticDirector {
     /**
      * Two timescales: the bed's gain at each frame, 0..1. Against the film the bed is gated on its
      * own (before this); against the last [RECENT_FRAMES] it must rise over [STEADY_DB]: a steady
-     * roar fades after its start unless it is the film's loudest 1% (over [ref], full at [top]),
-     * and a hit out of it rises again. The yardstick is the typical recent [level] (mean dB), not
-     * its peaks: power-averaged, a loud scene's peaks hid the thuds and gunshots inside it.
+     * roar fades after its start unless it is the film's loudest 1% (over its 99th percentile, full
+     * at its 99.9th), and a hit out of it rises again. The yardstick is the typical recent level
+     * (mean dB), not its peaks: power-averaged, a loud scene's peaks hid the thuds and gunshots inside it.
      */
-    private fun salience(level: FloatArray, ref: Float, top: Float): FloatArray {
-        val sum = DoubleArray(level.size + 1)
-        for (i in level.indices) sum[i + 1] = sum[i] + level[i].coerceAtLeast(0f)
-        return FloatArray(level.size) { i ->
-            val a = maxOf(0, i + 1 - RECENT_FRAMES)
-            val recent = ((sum[i + 1] - sum[a]) / (i + 1 - a)).toFloat()
-            val rise = (((level[i] - recent) * BED_DB - STEADY_DB) / RISE_DB).coerceIn(0f, 1f)
-            maxOf(rise, ((level[i] - ref) / maxOf(top - ref, 1e-3f)).coerceIn(0f, 1f))
-        }
+    private fun salience(level: FloatArray, recent: FloatArray, ref: Float, top: Float): FloatArray = FloatArray(level.size) { i ->
+        val rise = (((level[i] - recent[i]) * BED_DB - STEADY_DB) / RISE_DB).coerceIn(0f, 1f)
+        maxOf(rise, ((level[i] - ref) / maxOf(top - ref, 1e-3f)).coerceIn(0f, 1f))
     }
 
     /**

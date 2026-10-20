@@ -21,7 +21,7 @@ import kotlin.math.tan
  *   after a pause doesn't. Its time is the first block of the rise.
  * - Body: level of the mix below [BODY_HZ] per bed frame, unweighted. An engine revs up through
  *   100-2000 Hz (Us, [engine revs]: 1-15% of it below 100 Hz), where the bed fades out; the
- *   Director plays the body where a sound label says engine.
+ *   moment score reads it ([HapticDirector.listened]).
  * - Intensity is loudness; sharpness is brightness (RMS frequency of the onset), which also sets
  *   the pulse length: bright and short, dull and long (decision L5).
  *
@@ -284,7 +284,7 @@ class HapticListener {
 
     companion object {
         /** Bump when the output changes: cached tracks are rebuilt. */
-        const val VERSION = 6
+        const val VERSION = 7
 
         /** A hit's pulse and tail from its sharpness: bright and short, dull and long (decision L5). */
         fun lengthMs(sharpness: Float) = (80 - 50 * sharpness).roundToInt()

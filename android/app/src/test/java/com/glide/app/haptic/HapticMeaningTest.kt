@@ -39,8 +39,9 @@ class HapticMeaningTest {
         val tags = listOf(Tag(2900, 3500, Kind.SHARP), Tag(6500, 8000, Kind.MUSIC))
         assertEquals(listOf(1000, 7000), HapticDirector.direct(raw).events.map { it.timeMs }) // audio only
         val e = HapticDirector.direct(raw, tags).events
-        // The tagged light onset is kept, sharp and short; the untagged one isn't; music drops the hit under it.
-        assertEquals(listOf(1000, 3000), e.map { it.timeMs })
+        // The tagged light onset is kept, sharp and short; the untagged one isn't. Music tags change
+        // nothing: what the sound is comes from the moment score.
+        assertEquals(listOf(1000, 3000, 7000), e.map { it.timeMs })
         assertEquals(HapticTrack.SOURCE_AUDIO or HapticTrack.SOURCE_SUBTITLE, e[1].sources)
         assertEquals(0.8f, e[1].sharpness)
     }

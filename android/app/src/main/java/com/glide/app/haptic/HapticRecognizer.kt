@@ -11,9 +11,9 @@ import org.tensorflow.lite.Interpreter
  * Hears what a film's sounds are (docs/haptics-decisions.md, Sound recognition): the decoded audio,
  * mixed to mono as ffmpeg does ([downmix]) and resampled to 16 kHz, through YAMNet
  * (`assets/yamnet.tflite`), one 0.975 s window every [HapticSounds.HOP_MS]. Each window's
- * [HapticSounds] group scores land in [windows], the track's sounds lane.
+ * [HapticSounds.KEPT] scores land in [windows], the track's sounds lane.
  *
- * Changing [HapticSounds.Group] changes what the cache holds: bump [HapticListener.VERSION].
+ * Changing [HapticSounds.KEPT] changes what the cache holds: bump [HapticListener.VERSION].
  */
 class HapticRecognizer(private val classify: (FloatArray) -> FloatArray) {
     val windows = ArrayList<FloatArray>()
@@ -59,7 +59,7 @@ class HapticRecognizer(private val classify: (FloatArray) -> FloatArray) {
         // Windows on the film's grid (k * HOP_MS) wherever decoding starts: skip to the next line.
         val hopUs = HapticSounds.HOP_MS * 1000L
         val first = if (ptsUs <= 0) 0L else (ptsUs + hopUs - 1) / hopUs
-        repeat(first.toInt()) { windows += FloatArray(HapticSounds.Group.entries.size) }
+        repeat(first.toInt()) { windows += FloatArray(HapticSounds.KEPT.size) }
         nextAt = (first * hopUs - ptsUs) * rate / 1e6
     }
 
@@ -78,7 +78,7 @@ class HapticRecognizer(private val classify: (FloatArray) -> FloatArray) {
         window[filled++] = s
         if (filled < WINDOW) return
         val t0 = System.nanoTime()
-        windows += HapticSounds.groups(classify(window))
+        windows += HapticSounds.features(classify(window))
         classifyMs += (System.nanoTime() - t0) / 1_000_000
         window.copyInto(window, 0, HOP, WINDOW)
         filled = WINDOW - HOP

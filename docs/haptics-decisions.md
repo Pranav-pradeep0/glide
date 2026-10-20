@@ -753,3 +753,43 @@ now stands out of the faded bed, so `HapticFilmTest`'s music and voice bed rows 
 heavier with labels; none with the rule off) are information now. The directed clips skip bed
 coverage: their steady 2-6 s rumbles are felt for the first 2-3 s; the Listener's run of the clips
 still checks it.
+
+## Moments (2026-10-20)
+
+Layer 2. `HapticSounds.moment`: logistic regression per 0.48 s YAMNet window over the logits of
+the `KEPT` classes' scores and five Listener features (bass against the film's 99th percentile, its
+rise over the last 3 s, the body below 300 Hz, the loudest weighty and light onset, in tens of dB).
+`HapticMomentTrain` (JVM test) fits it on the tuning films and writes the `<model>` block in
+HapticSounds.kt: a window is a moment if it meets an SDH effect cue (as the bench), and only windows
+where something could be felt are learned from. L1 over all 521 classes keeps 22 (Explosion,
+Door, Wind noise, Glass, Smash, Thunder, Vehicle...); the penalty is the fewest classes within 0.005
+of the best leave-one-film-out ROC AUC (0.78). Held out: Anora 0.69, Bethlehem 0.73. The sounds lane
+holds the `KEPT` scores (22 bytes a window), so a retrain on the same classes rebuilds nothing;
+Listener VERSION 7.
+
+**Director.** Bed and hits are scaled by the moment gain: a window's score is the best of it and
+its neighbours (a dipping score between windows stuttered the bed), linear between window centres,
+none under 0.05 and full from 0.15. Where it is a moment the bed also follows the body, gated on
+the film's loud body and faded when steady like the bed. Removed: the label groups and thresholds,
+labels as tags, music halving (labels and ♪), the opening rule, the engine rule. Subtitle hit tags
+still keep their onset. Kept as a rule: in the first 15 s, until YAMNet hears speech, nothing is a
+moment (as a sixth feature it trained to 0: three films are three openings).
+
+| Tuning films | Effect cues felt | Big cues felt | Stray moments/min | Loud scenes felt | Creature attack felt | Opening felt |
+|---|---|---|---|---|---|---|
+| Before (two timescales) | 0.80 | 0.97 | 3.83 | 0.39 | 0.34 | 5.5 s |
+| Model, gain 0.1-0.3, no body | 0.61 | 0.75 | 0.84 | 0.11 | 0.03 | 3.1 s |
+| Logits, body unfaded, 0.05-0.15 | 0.83 | 0.96 | 3.05 | 0.44 | 0.72 | 16.1 s |
+| Dilated, body unfaded, 0.08-0.2 | 0.78 | 0.93 | 1.90 | 0.39 | 0.54 | 15.1 s |
+| **Dilated, body faded, 0.05-0.15, logo rule** | **0.81** | **0.93** | **3.66** | **0.25** | **0.21** | 7.8 s |
+| Same, 0.08-0.2 | 0.74 | 0.89 | 2.08 | 0.18 | 0.15 | 5.3 s |
+
+Held out after the choice: cues 0.53 -> 0.41, big 0.80 = (4 of 5), stray 6.57 -> 2.09, loud 0.29 ->
+0.10. The cue loss is Anora's cars (0.50 -> 0.22): the engine rule opened the body under SDH
+`[engine]` tags, the bench's own truth. Big cues missed: Frankenstein's thunder rumbling and fire
+crackling, and Us's gunshots and knocking "on stereo" (a song, rightly still).
+
+`HapticFilmTest`: the subwoofer correlation and loud LFE under music and voice are information
+now (Us: loud LFE under ♪ 0.62 -> 0.07, the score's braams); the moment score fades bass a viewer
+wouldn't point at, which they count as missed. Blast, no SDH: 160 -> 55 hits, felt moments 9.4 ->
+5.8 a minute.
