@@ -8,6 +8,40 @@ import { AudioMediaService } from './AudioMediaService';
 
 const lyricsMMKV = createMMKV({ id: 'glide_lyrics_cache_v1' });
 
+// Only lyrics with no copy on the device are stored: LRCLIB downloads (bounded, oldest
+// dropped first) and files the user picked (kept). A companion .lrc or embedded tag is
+// read from the track itself each time.
+const FETCHED_ORDER_KEY = 'fetched_order';
+const FETCHED_LIMIT = 500;
+const MEMORY_LIMIT = 100;
+
+function readFetchedOrder(): string[] {
+    try {
+        return JSON.parse(lyricsMMKV.getString(FETCHED_ORDER_KEY) ?? '[]');
+    } catch {
+        return [];
+    }
+}
+
+function storeFetched(trackId: string, lyrics: string) {
+    const order = readFetchedOrder().filter((id) => id !== trackId);
+    order.push(trackId);
+    while (order.length > FETCHED_LIMIT) {
+        lyricsMMKV.remove(`lyrics_${order.shift()}`);
+    }
+    lyricsMMKV.set(`lyrics_${trackId}`, lyrics);
+    lyricsMMKV.set(FETCHED_ORDER_KEY, JSON.stringify(order));
+}
+
+function storePicked(trackId: string, lyrics: string) {
+    // Picked lyrics replace a download for the same track and must not be evicted with it.
+    const order = readFetchedOrder();
+    if (order.includes(trackId)) {
+        lyricsMMKV.set(FETCHED_ORDER_KEY, JSON.stringify(order.filter((id) => id !== trackId)));
+    }
+    lyricsMMKV.set(`lyrics_${trackId}`, lyrics);
+}
+
 export interface LyricsTrackInfo {
     id: string;
     path?: string;
@@ -112,7 +146,16 @@ export function withInstrumentalBreaks(lyrics: LyricLine[]): LyricLine[] {
 }
 
 export class LyricsServiceClass {
+    // Least recently used first, so the oldest key is the one to drop.
     private cache = new Map<string, LyricLine[] | null>();
+
+    private remember(key: string, lines: LyricLine[] | null) {
+        this.cache.delete(key);
+        this.cache.set(key, lines);
+        if (this.cache.size > MEMORY_LIMIT) {
+            this.cache.delete(this.cache.keys().next().value!);
+        }
+    }
 
     async getLyricsForTrack(
         trackOrId: string | AudioTrack | LyricsTrackInfo,
@@ -145,7 +188,9 @@ export class LyricsServiceClass {
 
         // 1. In-memory cache
         if (this.cache.has(cacheKey)) {
-            return this.cache.get(cacheKey) ?? null;
+            const cached = this.cache.get(cacheKey) ?? null;
+            this.remember(cacheKey, cached);
+            return cached;
         }
 
         // 2. Persistent storage (MMKV cache)
@@ -156,7 +201,7 @@ export class LyricsServiceClass {
                     const parsed = parseLrc(storedLrc);
                     const finalLines = parsed.length > 0 ? parsed : parsePlainLyrics(storedLrc);
                     if (finalLines.length > 0) {
-                        this.cache.set(cacheKey, finalLines);
+                        this.remember(cacheKey, finalLines);
                         return finalLines;
                     }
                 }
@@ -175,10 +220,7 @@ export class LyricsServiceClass {
                     const parsed = parseLrc(rawContent);
                     const finalResult = parsed.length > 0 ? parsed : parsePlainLyrics(rawContent);
                     if (finalResult.length > 0) {
-                        if (trackId) {
-                            try { lyricsMMKV.set(`lyrics_${trackId}`, rawContent); } catch { /* ignore */ }
-                        }
-                        this.cache.set(cacheKey, finalResult);
+                        this.remember(cacheKey, finalResult);
                         return finalResult;
                     }
                 }
@@ -194,10 +236,7 @@ export class LyricsServiceClass {
                 const parsed = parseLrc(embedded);
                 const finalResult = parsed.length > 0 ? parsed : parsePlainLyrics(embedded);
                 if (finalResult.length > 0) {
-                    if (trackId) {
-                        try { lyricsMMKV.set(`lyrics_${trackId}`, embedded); } catch { /* ignore */ }
-                    }
-                    this.cache.set(cacheKey, finalResult);
+                    this.remember(cacheKey, finalResult);
                     return finalResult;
                 }
             }
@@ -216,9 +255,9 @@ export class LyricsServiceClass {
                     const finalResult = parsed.length > 0 ? parsed : parsePlainLyrics(fetched);
                     if (finalResult.length > 0) {
                         if (trackId) {
-                            try { lyricsMMKV.set(`lyrics_${trackId}`, fetched); } catch { /* ignore */ }
+                            try { storeFetched(trackId, fetched); } catch { /* ignore */ }
                         }
-                        this.cache.set(cacheKey, finalResult);
+                        this.remember(cacheKey, finalResult);
                         return finalResult;
                     }
                 }
@@ -232,7 +271,7 @@ export class LyricsServiceClass {
         // later re-asks without a restart) and LRCLIB was actually reached (a network blip
         // must not hide lyrics for the rest of the session).
         if (onlineLyricsEnabled && !lookupFailed) {
-            this.cache.set(cacheKey, null);
+            this.remember(cacheKey, null);
         }
         return null;
     }
@@ -363,9 +402,9 @@ export class LyricsServiceClass {
 
             if (finalResult.length > 0) {
                 if (trackId) {
-                    lyricsMMKV.set(`lyrics_${trackId}`, rawContent);
+                    storePicked(trackId, rawContent);
                 }
-                this.cache.set(trackId, finalResult);
+                this.remember(trackId, finalResult);
                 return finalResult;
             }
             return null;

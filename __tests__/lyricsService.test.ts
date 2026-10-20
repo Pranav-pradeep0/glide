@@ -12,12 +12,12 @@ jest.mock('@react-native-documents/picker', () => ({
     pick: jest.fn(async () => []),
 }));
 
+const mockStore = new Map<string, string>();
 jest.mock('react-native-mmkv', () => ({
     createMMKV: () => ({
-        set: jest.fn(),
-        getString: jest.fn(),
-        delete: jest.fn(),
-        clearAll: jest.fn(),
+        set: (k: string, v: string) => mockStore.set(k, v),
+        getString: (k: string) => mockStore.get(k),
+        remove: (k: string) => mockStore.delete(k),
     }),
 }));
 
@@ -27,7 +27,7 @@ jest.mock('../src/store/appStore', () => ({
 }));
 
 jest.mock('../src/services/AudioMediaService', () => ({
-    AudioMediaService: { getEmbeddedLyrics: async () => null },
+    AudioMediaService: { getEmbeddedLyrics: async (_uri?: string, path?: string) => (path === '/embedded.mp3' ? '[00:01.00]Tagged' : null) },
 }));
 import { INSTRUMENTAL, LyricsServiceClass, isLyricsSynced, parseLrc, parsePlainLyrics, withInstrumentalBreaks } from '../src/services/LyricsService';
 
@@ -132,5 +132,31 @@ describe('LyricsService online lookup', () => {
         expect(await service.getLyricsForTrack(track)).toBeNull();
         expect(await service.getLyricsForTrack(track)).toBeNull();
         expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('LyricsService storage', () => {
+    beforeEach(() => {
+        mockStore.clear();
+        (globalThis as any).fetch = jest.fn(async () => ({
+            ok: true, status: 200, json: async () => ({ syncedLyrics: '[00:01.00]Hi' }),
+        }));
+    });
+
+    it('does not copy embedded lyrics into storage', async () => {
+        const service = new LyricsServiceClass();
+        const lines = await service.getLyricsForTrack({ id: 'e1', path: '/embedded.mp3' });
+        expect(lines?.[0].text).toBe('Tagged');
+        expect(mockStore.has('lyrics_e1')).toBe(false);
+    });
+
+    it('keeps at most 500 downloads, dropping the oldest', async () => {
+        const service = new LyricsServiceClass();
+        for (let i = 0; i <= 500; i++) {
+            await service.getLyricsForTrack({ id: `t${i}`, title: 'Song', artist: 'Band' });
+        }
+        expect(mockStore.has('lyrics_t0')).toBe(false);
+        expect(mockStore.has('lyrics_t1')).toBe(true);
+        expect(mockStore.has('lyrics_t500')).toBe(true);
     });
 });
