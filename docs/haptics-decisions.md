@@ -701,3 +701,26 @@ haptics" from its detail screen; a VIEW intent plays without them. The track cac
 exec-out run-as com.glide.app cat files/haptics/<f>.ght`, reinstall the release APK (data kept).
 Test films: `/sdcard/Download/1DMP/Videos` (Us, Frankenstein, Together, Blast, and more 5.1 films).
 Screen captures come back black; `uiautomator dump` reads the UI.
+
+## Benchmark (2026-10-20)
+
+Layer 0 of the long-term plan, `HapticBenchTest`. Ground truth by script: SDH cues `HapticMeaning`
+calls an effect should be felt (from 1 s before the cue to its end); big when the subwoofer feed
+peaks within 6 dB of the film's 99th percentile. Two films added from the phone, both 5.1 with
+English SDH inside the file, both held out (`HOLDOUT`, never tuned on; `HapticFilmTest` skips them):
+Anora (2024, Blu-ray) and Bethlehem Kudumba Unit (2026, web, its second subtitle track). Blast's
+subtitles have no sound tags and SubDL has none for it, so it sits out. Stereo films on the phone
+(Stranger Things, Now You See Me) have no LFE. Baseline, no change to the feel:
+
+| Cinematic, labels | Effect cues felt | Big cues felt | Stray moments/min | Loud scenes felt | Opening felt |
+|---|---|---|---|---|---|
+| Frankenstein | 0.80 of 80 | 0.97 of 36 | 2.66 | 0.69 | 4.0 s |
+| Together | 0.78 of 18 | 0.88 of 8 | 2.55 | 0.68 | 0.0 s |
+| Us | 0.82 of 50 | 1.00 of 28 | 5.57 | 0.55 | 1.5 s |
+| **Tuning** | **0.80 of 148** | **0.97 of 72** | **3.54** | **0.63** | 5.5 s |
+| Anora* | 0.56 of 18 | 1.00 of 2 | 2.98 | 0.53 | 0.2 s |
+| Bethlehem* | 0.57 of 14 | 1.00 of 3 | 7.81 | 0.55 | 0.0 s |
+| **Held out*** | **0.56 of 32** | **1.00 of 5** | **5.53** | **0.55** | 0.2 s |
+
+Creature attack (Frankenstein 223-265 s): felt 0.66 of the time. Stray moments and loud scenes
+felt are what the later layers must bring down without losing big cues.

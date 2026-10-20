@@ -29,21 +29,21 @@ class HapticFilmTest {
 
     @Test
     fun films() {
-        val films = File(HapticHarness.fixturesDir(), "films").listFiles { f -> f.name.endsWith(".mka") }.orEmpty().sortedBy { it.name }
+        val films = File(HapticHarness.fixturesDir(), "films").listFiles { f -> f.name.endsWith(".mka") && f.nameWithoutExtension !in HapticBenchTest.HOLDOUT }.orEmpty().sortedBy { it.name }
         assumeTrue("no films in .haptics-fixtures/films", films.isNotEmpty())
         val fails = films.flatMap { score(it) }
         assertTrue(fails.joinToString("\n"), fails.isEmpty())
     }
 
     /** The raw track, the LFE and the subwoofer feed (RMS per 100 ms), and the length in ms. */
-    private class Decoded(val raw: HapticTrack, val lfe: List<Double>, val sub: List<Double>, val ms: Int)
+    internal class Decoded(val raw: HapticTrack, val lfe: List<Double>, val sub: List<Double>, val ms: Int)
 
     /**
      * Decoding is most of the run (~3 min for the four films), so the result is kept beside the
      * film as `<name>.raw` until the Listener's VERSION or the film changes. The track goes
      * through the cache's 8-bit format, as a cached film does on the phone.
      */
-    private fun load(file: File): Decoded {
+    internal fun load(file: File): Decoded {
         val cache = File(file.parentFile, file.nameWithoutExtension + ".raw")
         val cached = runCatching {
             DataInputStream(cache.inputStream().buffered()).use { d ->
@@ -161,7 +161,7 @@ class HapticFilmTest {
     }
 
     /** YAMNet's tags from `scripts/haptics-yamnet.py`; none without the file. */
-    private fun sounds(file: File): List<HapticMeaning.Tag> {
+    internal fun sounds(file: File): List<HapticMeaning.Tag> {
         if (!file.isFile) return emptyList()
         DataInputStream(file.inputStream().buffered()).use { d ->
             val row = ByteArray(HapticSounds.CLASSES)
@@ -174,11 +174,7 @@ class HapticFilmTest {
 
     private fun metrics(d: Decoded, track: HapticTrack, cues: List<HapticMeaning.Cue>, tags: List<HapticMeaning.Tag>, heard: List<HapticMeaning.Tag>): Map<String, Double> {
         val m = linkedMapOf<String, Double>()
-        val active = BooleanArray(d.ms / HapticTrack.BED_FRAME_MS)
-        for (i in active.indices) active[i] = track.bedIntensity.getOrElse(i) { 0f } > 0f
-        for (e in track.events) for (t in e.timeMs until e.timeMs + e.lengthMs + e.decayMs step HapticTrack.BED_FRAME_MS) {
-            if (t / HapticTrack.BED_FRAME_MS < active.size) active[t / HapticTrack.BED_FRAME_MS] = true
-        }
+        val active = felt(track, d.ms)
         m["active share"] = active.count { it }.toDouble() / active.size
         m["hits"] = track.events.size.toDouble()
         m["mean hit strength"] = track.events.map { it.intensity.toDouble() }.average()
@@ -292,6 +288,16 @@ class HapticFilmTest {
 
         private val TIME = Regex("""(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)""")
         private val TAG = Regex("""[\[(♪#*]""")
+
+        /** Each [HapticTrack.BED_FRAME_MS] frame of [ms]: true where bed or a hit (with its decay) moves the motor. */
+        fun felt(track: HapticTrack, ms: Int): BooleanArray {
+            val active = BooleanArray(ms / HapticTrack.BED_FRAME_MS)
+            for (i in active.indices) active[i] = track.bedIntensity.getOrElse(i) { 0f } > 0f
+            for (e in track.events) for (t in e.timeMs until e.timeMs + e.lengthMs + e.decayMs step HapticTrack.BED_FRAME_MS) {
+                if (t / HapticTrack.BED_FRAME_MS < active.size) active[t / HapticTrack.BED_FRAME_MS] = true
+            }
+            return active
+        }
 
         /** An SRT file's cues, markup stripped. */
         fun cues(srt: String): List<HapticMeaning.Cue> = srt.replace("\r", "").split(Regex("\n\n+")).mapNotNull { cue ->
