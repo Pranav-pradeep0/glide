@@ -47,13 +47,14 @@ All done 2026-10-19. Not yet run for real: the tag job (no tag cut since), the P
 
 Done 2026-10-20 (B4 in-app half only; ALAC still pending): B4 0db6de7, B5 69b2a64 (+manifest MIME filter),
 B6 f8e1078, B8 e92c6e2, B9 d72ec9b, B10 99d0818 (own prefs file), API_LEVEL 17 a91fec3. All need a device check.
-B1/B2/B3/B7 wait for the haptics work (they touch haptic timing).
+B1 04fda3f, B2 dc973ea (5 s tick in background), B3 5ada6c7 (video decoder off in background play). B7 measured:
+no difference on this phone (p95 staleness 10 ms either way), not changed. Haptic clock never used the tick.
 
-- [ ] **B1** `stopPlayer` (~810) doesn't cancel the IO retry `postDelayed({ player?.prepare() })`
+- [x] **B1** `stopPlayer` (~810) doesn't cancel the IO retry `postDelayed({ player?.prepare() })`
       (~1179) or clear `playWhenReady` → old video can restart after exit/Next.
-- [ ] **B2** `progressTick` (~241) runs every 250 ms forever, also paused/backgrounded. Start/stop
+- [x] **B2** `progressTick` (~241) runs every 250 ms forever, also paused/backgrounded. Start/stop
       from `onIsPlayingChanged`; slow when host stopped.
-- [ ] **B3** Background play keeps decoding video: `setTrackTypeDisabled(TRACK_TYPE_VIDEO, true)` in
+- [x] **B3** Background play keeps decoding video: `setTrackTypeDisabled(TRACK_TYPE_VIDEO, true)` in
       `onActivityStopped` (~221) when playing on and not PiP; re-enable on start.
 - [x] **B4** ALAC not in FFmpeg `ENABLED_DECODERS` (`docs/exoplayer-migration.md:75`, private
       decoder repo); tracks with no supported audio play silently with no error →
@@ -63,7 +64,7 @@ B1/B2/B3/B7 wait for the haptics work (they touch haptic timing).
       `VideoPlayerActivity`; set `MediaItem.Builder.setMimeType`).
 - [x] **B6** PiP `sourceRectHint` uses whole view rect, not video aspect
       (`GlidePipController.java:~432`).
-- [ ] **B7** Media3 #3286: 1.11.x positions up to 200 ms stale (dynamic scheduling). Try
+- [x] **B7** Media3 #3286: 1.11.x positions up to 200 ms stale (dynamic scheduling). Try
       `experimentalSetDynamicSchedulingEnabled(false)` for video only; may explain haptic offset.
       Unverified on device.
 - [x] **B8** PiP auto-enter disarmed while buffering (`GlidePipController.java:361`, use `!showPlay`).
