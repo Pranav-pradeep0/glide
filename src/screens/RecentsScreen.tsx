@@ -1,5 +1,5 @@
 // src/screens/RecentsScreen.tsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -55,7 +55,6 @@ export default function RecentsScreen() {
     // Subscribing to the map keeps the list live without reloading on every focus.
     const historyMap = useVideoHistoryStore(s => s.history);
     const isHydrated = useVideoHistoryStore(s => s.isHydrated);
-    const hydrateFromStorage = useVideoHistoryStore(s => s.hydrateFromStorage);
     const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
     const clearVideoHistory = useVideoHistoryStore(s => s.clearVideoHistory);
     const relinkMoved = useVideoHistoryStore(s => s.relinkMoved);
@@ -66,12 +65,6 @@ export default function RecentsScreen() {
     const [sortBy, setSortBy] = useState<SortByOption>('recent');
     const [selectedVideo, setSelectedVideo] = useState<VideoHistoryEntry | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
-
-    useEffect(() => {
-        if (!isHydrated) {
-            hydrateFromStorage().catch(error => console.error('[RecentsScreen] Hydrate error:', error));
-        }
-    }, [hydrateFromStorage, isHydrated]);
 
     // Files moved since they were watched are relinked; ones gone everywhere are hidden, not deleted.
     const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
@@ -95,14 +88,13 @@ export default function RecentsScreen() {
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
         try {
-            await hydrateFromStorage();
             await checkMissing(true);
         } catch (error) {
             console.error('[RecentsScreen] Refresh error:', error);
         } finally {
             setRefreshing(false);
         }
-    }, [hydrateFromStorage, checkMissing]);
+    }, [checkMissing]);
 
     const handleVideoPress = useCallback((video: VideoHistoryEntry) => {
         if (!video.videoPath) {return;}

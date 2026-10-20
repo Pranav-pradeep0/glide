@@ -7,7 +7,6 @@ import { ErrorBoundary } from './ErrorBoundary';
 import React, { useEffect, useState, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { SystemBars } from 'react-native-edge-to-edge';
 import { withStallion } from 'react-native-stallion';
 import { NativeModules } from 'react-native';
 
@@ -19,10 +18,6 @@ function App() {
 
   const initialize = useVideoIndexStore((state) => state.initialize);
   const hasStartedMediaInitRef = useRef(false);
-
-  useEffect(() => {
-    SystemBars.setStyle(theme.dark ? 'light' : 'dark');
-  }, [theme]);
 
   useEffect(() => {
     initializeApp();

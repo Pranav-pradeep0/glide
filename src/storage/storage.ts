@@ -35,12 +35,4 @@ export const storage = {
             console.error('Error clearing settings:', error);
         }
     },
-
-    clearCache(): void {
-        try {
-            mmkvStorage.clearAll();
-        } catch (error) {
-            console.error('Error clearing cache:', error);
-        }
-    },
 };

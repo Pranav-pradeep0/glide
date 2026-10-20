@@ -41,7 +41,6 @@ interface VideoHistoryState {
     relinkMoved: (moves: [string, VideoFile][]) => void;
 
     // Persistence
-    hydrateFromStorage: () => Promise<void>;
     persistToStorage: () => void;
     persistNow: () => void;
 }
@@ -110,16 +109,9 @@ export async function findMissingHistory(
 
 // Batch persistence to reduce writes
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
-let persistRaf: number | null = null;
 
 function debouncedPersist() {
     if (persistTimer) {clearTimeout(persistTimer);}
-    if (persistRaf) {cancelAnimationFrame(persistRaf);}
-
-    // Use RAF for immediate feedback, timeout for actual write
-    persistRaf = requestAnimationFrame(() => {
-        persistRaf = null;
-    });
 
     persistTimer = setTimeout(() => {
         useVideoHistoryStore.getState().persistToStorage();
@@ -522,9 +514,6 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         get().persistNow();
     },
 
-    // Deprecated: No longer needed with sync initialization
-    hydrateFromStorage: async () => { },
-
     persistToStorage: () => {
         try {
             const state = get();
@@ -537,9 +526,7 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
     persistNow: () => {
         // Clear pending debounce timers
         if (persistTimer) {clearTimeout(persistTimer);}
-        if (persistRaf) {cancelAnimationFrame(persistRaf);}
         persistTimer = null;
-        persistRaf = null;
 
         // Force synchronous save
         get().persistToStorage();

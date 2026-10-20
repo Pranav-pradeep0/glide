@@ -42,7 +42,6 @@ import { FloatingSyncPanel } from '@/components/FloatingSyncPanel';
 import { useSubtitleAutoSync } from '@/hooks/video-player/useSubtitleAutoSync';
 import { RecapModal } from '@/components/VideoPlayer/RecapModal';
 import { ResumeModal } from '@/components/VideoPlayer/ResumeModal';
-import { RECAP_AVAILABLE } from '@/utils/constants';
 import { getResumablePosition } from '@/utils/playbackResume';
 
 // Hooks
