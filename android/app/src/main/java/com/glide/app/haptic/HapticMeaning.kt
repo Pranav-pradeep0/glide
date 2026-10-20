@@ -19,11 +19,11 @@ object HapticMeaning {
 
     // First match wins: "[thunderclap]" is heavy, not sharp; "[pluto snarling, banging]" a hit.
     private val KINDS = listOf(
-        Kind.HEAVY to Regex("""\b(explo|boom|thud|thump|slam|crash|thunder|pound|rumbl|heartbeat|impact|smash|stomp|collaps)"""),
-        Kind.SHARP to Regex("""\b(gunshot|gunfire|shot|bang|fir(es|ing)\b|crack|snap|slap|punch|knock|clang|clank|shatter|stab|whip|(glass|window|bottle) break|breaking (glass|window|bottle))"""),
+        Kind.HEAVY to Regex("""\b(explo|boom|thud|thump|slam|crash|thunder|pound|rumbl|heartbeat|impact|smash|stomp|collaps|splash)"""),
+        Kind.SHARP to Regex("""\b(gunshot|gunfire|shot|bang|fir(es|ing)\b|crack|snap|slap|punch|knock|clang|clank|shatter|clatter|firecracker|firework|stab|whip|(glass|window|bottle) break|breaking (glass|window|bottle))"""),
         Kind.ENGINE to Regex("""\b(engine|rev(s|ving|ved)?\b|motor|tires|skid|vroom)"""),
-        Kind.ROAR to Regex("""\b(roar|growl|snarl)"""),
-        Kind.MUSIC to Regex("""♪|♫|\b(music|song|sing|choir|chant|guitar|piano|r&b|vocaliz|waltz|humming)"""),
+        Kind.ROAR to Regex("""\b(roar|growl|snarl|bellow)"""),
+        Kind.MUSIC to Regex("""♪|♫|\b(music|song|sing|choir|chant|guitar|piano|r&b|vocaliz|waltz|humming|score|tune|band|drum)"""),
         Kind.VOICE to Regex("""\b(grunt|gasp|groan|pant|breath|chuckl|sigh|s i g h|scream|shriek|laugh|whimper|wheez|moan|sob|yell|gag|cough|whisper|sniff|huff|exhal|inhal|cry|crie|retch|shudder|strain|stammer|mumbl|shout|exclaim|clears throat|yelp|chok|gurgl)""")
     )
     private val BRACKETS = Regex("""\[([^\]]*)]|\(([^)]*)\)""")

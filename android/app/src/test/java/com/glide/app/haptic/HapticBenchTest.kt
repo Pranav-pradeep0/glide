@@ -59,6 +59,50 @@ class HapticBenchTest {
         println("%-14s %s".format("held out*", held))
     }
 
+    /**
+     * The caption vocabulary's gaps, by data: every bracketed SDH cue [HapticMeaning] gives no kind,
+     * with how often the subwoofer is big under it (as [score]'s big cues). A word that is often
+     * big and unclassified ("roar" was) is a missing effect; speaker names and language notes stay
+     * small. All films with SDH tags, held out too: this changes the truth, not the feel.
+     */
+    @Test
+    fun audit() {
+        val films = File(HapticHarness.fixturesDir(), "films").listFiles { f -> f.name.endsWith(".mka") && File(f.parentFile, f.nameWithoutExtension + ".srt").isFile }
+            .orEmpty().sortedBy { it.name }
+        assumeTrue("no films with subtitles in .haptics-fixtures/films", films.isNotEmpty())
+        class Seen(var n: Int = 0, var big: Int = 0, val films: MutableSet<String> = mutableSetOf())
+        val cues = sortedMapOf<String, Seen>()
+        val words = sortedMapOf<String, Seen>()
+        for (file in films) {
+            val name = file.nameWithoutExtension
+            val all = HapticFilmTest.cues(File(file.parentFile, "$name.srt").readText())
+            if (HapticMeaning.tags(all).isEmpty()) continue
+            val sub = HapticFilmTest().load(file).sub
+            val subTop = sub.sorted().getOrElse((sub.size - 1) * 99 / 100) { 0.0 }
+            for (c in all) for (m in BRACKETS.findAll(c.text)) {
+                val inner = m.value.drop(1).dropLast(1).trim()
+                // Speaker names are capitalised words: "[Victor]", "[Hunter 2]".
+                if (inner.isEmpty() || inner.split(' ').all { it.first().isUpperCase() || it.first().isDigit() }) continue
+                if (HapticMeaning.tags(listOf(HapticMeaning.Cue(0, 0, m.value))).isNotEmpty()) continue
+                val from = (c.startMs - LEAD_MS).coerceAtLeast(0) / 100
+                val to = minOf(sub.size - 1, maxOf(c.endMs, c.startMs + LEAD_MS) / 100)
+                val big = sub.isNotEmpty() && (from..to).maxOfOrNull { sub[it] }.let { it != null && it >= subTop / LOUD }
+                val text = inner.lowercase()
+                for (s in listOf(cues.getOrPut(text, ::Seen)) + text.split(Regex("[^a-z]+")).filter { it.length > 2 }.distinct().map { words.getOrPut(it, ::Seen) }) {
+                    s.n++; if (big) s.big++; s.films += name
+                }
+            }
+        }
+        // Big first: those are what a viewer would feel.
+        fun show(title: String, m: Map<String, Seen>) {
+            println("$title (count, big, films)")
+            for ((k, s) in m.entries.sortedWith(compareByDescending<Map.Entry<String, Seen>> { it.value.big }.thenByDescending { it.value.n }).take(80))
+                println("%5d %4d %2d  %s".format(s.n, s.big, s.films.size, k))
+        }
+        show("unclassified words", words)
+        show("unclassified cues", cues)
+    }
+
     private fun score(file: File): Row {
         val film = HapticFilmTest()
         val d = film.load(file)
@@ -117,6 +161,7 @@ class HapticBenchTest {
         private const val SCENE_MS = 3000
         /** Within 6 dB of the loud level is loud (amplitude ratio). */
         private const val LOUD = 2.0
+        private val BRACKETS = Regex("""\[[^\]]*]|\([^)]*\)""")
         /** Testers' reports: (span, what was wrong). */
         private val SCENES = mapOf(
             "frankenstein" to listOf(223_000..265_000 to "creature attack, buzzes nonstop")

@@ -18,12 +18,17 @@ class HapticMeaningTest {
                 Cue(3000, 4000, "♪ I got five on it ♪"),
                 Cue(4000, 5000, "(breathing heavily)"),
                 Cue(5000, 6000, "- [engine revs] - [glass breaking]"),
-                Cue(6000, 7000, "[guttural, beastly roar]")
+                Cue(6000, 7000, "[guttural, beastly roar]"),
+                // Found by HapticBenchTest.audit: loud cues no pattern knew.
+                Cue(7000, 8000, "[firecracker bursts]"),
+                Cue(8000, 9000, "[heavy splash]"),
+                Cue(9000, 10000, "[whimsical score plays]")
             )
         )
         assertEquals(
             listOf(Tag(1000, 2000, Kind.SHARP), Tag(1000, 2000, Kind.VOICE), Tag(2000, 3000, Kind.HEAVY), Tag(3000, 4000, Kind.MUSIC), Tag(4000, 5000, Kind.VOICE),
-                Tag(5000, 6000, Kind.ENGINE), Tag(5000, 6000, Kind.SHARP), Tag(6000, 7000, Kind.ROAR)),
+                Tag(5000, 6000, Kind.ENGINE), Tag(5000, 6000, Kind.SHARP), Tag(6000, 7000, Kind.ROAR),
+                Tag(7000, 8000, Kind.SHARP), Tag(8000, 9000, Kind.HEAVY), Tag(9000, 10000, Kind.MUSIC)),
             tags
         )
     }

@@ -43,40 +43,39 @@ object HapticSounds {
     // <model> written by HapticMomentTrain from frankenstein, together, us (lambda 0.003); don't edit by hand.
     // 0 Speech
     // 2 Conversation
-    // 28 Mantra
+    // 3 Narration, monologue
+    // 27 Chant
     // 38 Snoring
     // 52 Stomach rumble
     // 67 Animal
-    // 70 Bark
-    // 71 Yip
-    // 73 Bow-wow
     // 74 Growling
     // 82 Horse
     // 83 Clip-clop
     // 90 Goat
+    // 100 Quack
     // 102 Honk
     // 104 Roaring cats (lions, tigers)
     // 113 Caw
-    // 119 Mouse
+    // 117 Canidae, dogs, wolves
+    // 120 Patter
     // 128 Croak
-    // 132 Music
     // 137 Bass guitar
-    // 156 Percussion
     // 168 Wood block
     // 169 Tambourine
+    // 171 Maraca
     // 179 Orchestra
+    // 184 Bowed string instrument
     // 210 Scratching (performance technique)
     // 215 Heavy metal
     // 222 Soul music
-    // 232 Classical music
+    // 224 Country
     // 236 Techno
     // 241 Ambient music
     // 245 Flamenco
+    // 249 Vocal music
     // 253 Christian music
     // 262 Background music
-    // 263 Theme music
-    // 271 Happy music
-    // 273 Tender music
+    // 264 Jingle (music)
     // 279 Wind noise (microphone)
     // 281 Thunder
     // 288 Ocean
@@ -84,31 +83,35 @@ object HapticSounds {
     // 303 Toot
     // 304 Car alarm
     // 307 Tire squeal
-    // 309 Race car, auto racing
+    // 314 Ice cream truck, ice cream van
     // 319 Fire engine, fire truck (siren)
-    // 325 Train horn
+    // 326 Railroad car, train wagon
     // 331 Jet engine
     // 341 Chainsaw
     // 345 Engine starting
     // 354 Tap
     // 362 Microwave oven
     // 381 Writing
+    // 394 Fire alarm
     // 397 Steam whistle
+    // 401 Tick
     // 415 Sawing
     // 420 Explosion
+    // 426 Fireworks
     // 436 Chink, clink
     // 438 Liquid
+    // 442 Drip
     // 459 Basketball bounce
     // 462 Whack, thwack
+    // 463 Smash, crash
     // 473 Crumpling, crinkling
     // 475 Beep, bleep
     // 487 Rumble
     // 501 Inside, large room or hall
-    // 503 Outside, urban or manmade
+    // 502 Inside, public space
     // 506 Echo
-    // 516 Throbbing
     // 517 Vibration
-    val KEPT = intArrayOf(0, 2, 28, 38, 52, 67, 70, 71, 73, 74, 82, 83, 90, 102, 104, 113, 119, 128, 132, 137, 156, 168, 169, 179, 210, 215, 222, 232, 236, 241, 245, 253, 262, 263, 271, 273, 279, 281, 288, 294, 303, 304, 307, 309, 319, 325, 331, 341, 345, 354, 362, 381, 397, 415, 420, 436, 438, 459, 462, 473, 475, 487, 501, 503, 506, 516, 517)
-    val WEIGHTS = floatArrayOf(-0.0000f, -0.1464f, -0.0028f, 0.1335f, 0.0641f, 0.0751f, 0.0108f, 0.0060f, 0.0704f, 0.0390f, 0.0908f, 0.0002f, -0.0321f, 0.0611f, 0.1263f, 0.0506f, -0.0161f, 0.3951f, -0.0011f, 0.3854f, 0.0164f, 0.0230f, 0.0049f, -0.0344f, 0.0592f, 0.0828f, -0.0585f, -0.0749f, 0.0684f, -0.1259f, 0.0317f, -0.2246f, -0.0505f, -0.0833f, -0.0731f, -0.1017f, 0.0334f, 0.0321f, 0.0838f, 0.1513f, 0.1187f, -0.2643f, 0.0284f, 0.0039f, 0.0895f, 0.0100f, -0.0792f, 0.1383f, -0.0000f, 0.1296f, -0.1634f, -0.0337f, 0.0798f, -0.0394f, 0.1968f, 0.2278f, -0.0957f, -0.0581f, 0.2058f, 0.0386f, -0.1119f, -0.0032f, 0.1049f, 0.0137f, -0.1188f, 0.0459f, -0.1989f, 0.1519f, 0.0000f, 0.4899f, 0.0558f, -0.0000f, 5.5139f)
+    val KEPT = intArrayOf(0, 2, 3, 27, 38, 52, 67, 74, 82, 83, 90, 100, 102, 104, 113, 117, 120, 128, 137, 168, 169, 171, 179, 184, 210, 215, 222, 224, 236, 241, 245, 249, 253, 262, 264, 279, 281, 288, 294, 303, 304, 307, 314, 319, 326, 331, 341, 345, 354, 362, 381, 394, 397, 401, 415, 420, 426, 436, 438, 442, 459, 462, 463, 473, 475, 487, 501, 502, 506, 517)
+    val WEIGHTS = floatArrayOf(-0.0068f, -0.1359f, -0.0244f, -0.0203f, 0.1189f, 0.0878f, 0.0540f, 0.0338f, 0.0782f, 0.0331f, -0.0095f, 0.0733f, 0.0120f, 0.1233f, 0.0605f, 0.1046f, -0.0110f, 0.3317f, 0.1498f, 0.0378f, 0.0564f, 0.0720f, -0.0902f, -0.0413f, 0.2441f, 0.3033f, -0.2599f, -0.0501f, 0.1304f, -0.1523f, 0.1306f, -0.0765f, -0.0575f, -0.2011f, -0.0006f, 0.0157f, 0.0159f, 0.0946f, 0.1426f, 0.0751f, -0.2180f, 0.1173f, -0.0000f, 0.0514f, 0.0283f, -0.1933f, 0.0797f, -0.0180f, 0.0858f, -0.2172f, -0.0924f, -0.0322f, 0.1031f, -0.0108f, -0.0957f, 0.1877f, 0.0051f, 0.2588f, -0.0771f, -0.0288f, -0.0603f, 0.1709f, 0.0281f, 0.0017f, -0.0915f, -0.0165f, 0.1612f, 0.0605f, -0.1583f, -0.1182f, 0.1855f, 0.0000f, 0.4190f, 0.0340f, -0.0000f, 5.6720f)
     // </model>
 }

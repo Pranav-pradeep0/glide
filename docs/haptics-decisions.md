@@ -812,3 +812,21 @@ Growling, Animal, Explosion, Whack...), bass now weighted. Listener VERSION 8. T
 
 The 3:46 roar is felt (54-100% of its windows) and the volley at "Fire!" (4:23); the scene's
 clamoring and running between still score 0.08-0.15, inside the ramp, and play as faint pulses.
+
+## Caption audit (2026-10-20)
+
+`HapticBenchTest.audit` lists every bracketed SDH cue `HapticMeaning` gives no kind, across all
+films with SDH (held out too: it changes the truth, not the feel), with how often the subwoofer is
+big under it (as the bench's big cues). Speaker names (capitalised words) are skipped. Rerun it
+whenever films are added. First run, 5 films: loud and unclassified were `firecracker bursts` (4
+of 4 big), `clatters`, `heavy splash`, `bellowing`; music words `score`, `tune`, `band`, `drum`.
+Added: firecracker, firework and clatter (sharp), splash (heavy), bellow (roar), and the music
+words. Left out though often loud: creaking (Frankenstein's ship), wind whistling, door closes,
+crowd cheering: ambience a viewer wouldn't point at, and as truth they would teach the model to
+buzz through it.
+
+Retrained (68 classes, still Flamenco, Microwave oven, Quack: memorising), Listener VERSION 9.
+New truth, so rows move under both: tuning cues 0.80 = (197 -> 216), big 0.94 =, stray 3.34 ->
+3.69, loud 0.26 -> 0.29; held out cues 0.46 -> 0.53 (33 -> 38, Bethlehem's firecrackers), big
+0.80 -> 0.90 (5 -> 10), stray 1.77 -> 2.15, loud 0.08 -> 0.10. Gain left at 0.08-0.2: it is
+chosen again once the model is constrained and the film set grown.
