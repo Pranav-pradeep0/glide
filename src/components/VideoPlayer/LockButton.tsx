@@ -33,7 +33,7 @@ export const LockButton: FC<LockButtonProps> = ({ visible, onUnlock, top, left }
                 style={styles.chip}
             >
                 <Feather name="lock" size={16} color={colors.text} />
-                <Text style={styles.text}>Tap to unlock</Text>
+                <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.text}>Tap to unlock</Text>
             </Touchable>
         </Animated.View>
     );

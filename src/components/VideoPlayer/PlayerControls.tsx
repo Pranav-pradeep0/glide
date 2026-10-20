@@ -89,7 +89,7 @@ const ReanimatedText: React.FC<ReanimatedTextProps> = ({ value, formatter, style
             if (next !== null && next !== prev) {runOnJS(updateText)(next);}
         });
 
-    return <Text style={[styles.time, style]} numberOfLines={numberOfLines}>{text}</Text>;
+    return <Text maxFontSizeMultiplier={metrics.playerFontScale} style={[styles.time, style]} numberOfLines={numberOfLines}>{text}</Text>;
 };
 
 // ============================================================================
@@ -391,7 +391,7 @@ const SkipButton: FC<{ seconds: number; forward?: boolean; onPress: () => void }
             <Animated.View style={ringStyle}>
                 <SkipRingIcon size={32} forward={forward} />
             </Animated.View>
-            <Text style={styles.jumpText}>{seconds}</Text>
+            <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.jumpText}>{seconds}</Text>
         </Touchable>
     );
 };
@@ -585,8 +585,8 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
             >
                 <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" onPlayer />
                 <View style={styles.titleBlock}>
-                    <Text numberOfLines={1} style={styles.title}>{title || 'Video'}</Text>
-                    {!!subtitle && <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text>}
+                    <Text maxFontSizeMultiplier={metrics.playerFontScale} numberOfLines={1} style={styles.title}>{title || 'Video'}</Text>
+                    {!!subtitle && <Text maxFontSizeMultiplier={metrics.playerFontScale} numberOfLines={1} style={styles.subtitle}>{subtitle}</Text>}
                 </View>
                 {/* Portrait keeps the title room; enhancement is in the Playback panel too. */}
                 {onToggleVideoEnhancement && (
@@ -613,7 +613,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                         accessibilityLabel={`Playback speed ${formatRate(playbackRate)}`}
                         style={styles.speedChip}
                     >
-                        <Text style={styles.speedText}>{formatRate(playbackRate)}</Text>
+                        <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.speedText}>{formatRate(playbackRate)}</Text>
                     </Touchable>
                 )}
                 <IconButton
@@ -666,7 +666,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                     </View>
                     <View style={styles.endGroup}>
                         <ReanimatedText value={remaining} formatter={remainingFormatter} fallbackText={fallbackRemaining} style={styles.timeMuted} live={timeRowLive} />
-                        <Text style={styles.time}> / {totalText}</Text>
+                        <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.time}> / {totalText}</Text>
                         {!isLandscape && onNext && (
                             <IconButton icon="skip-forward" iconSize={20} onPress={onNext} accessibilityLabel="Next video" onPlayer />
                         )}
@@ -742,7 +742,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                     >
                         <ResizeModeIcon size={18} color={colors.text} />
                         {/* Portrait's row has room for the icon only; a change still names the mode in the HUD. */}
-                        {isLandscape && <Text style={styles.modeText}>{getResizeModeLabel(resizeMode)}</Text>}
+                        {isLandscape && <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.modeText}>{getResizeModeLabel(resizeMode)}</Text>}
                     </Touchable>
                     {onEnterPip && (
                         <GlyphButton onPress={onEnterPip} label="Picture in picture">

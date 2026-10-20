@@ -80,7 +80,7 @@ const Level: React.FC<LevelProps> = React.memo(({ value, kind, max }) => {
                 <View style={styles.trackBg} />
                 <Animated.View style={[styles.fill, fillStyle]} />
             </View>
-            <Text style={styles.value}>{text}</Text>
+            <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.value}>{text}</Text>
         </>
     );
 });
@@ -152,21 +152,21 @@ export const VideoHUD: React.FC<VideoHUDProps> = React.memo(({
         status = (
             <>
                 <Feather name={playbackRate > 1 ? 'fast-forward' : 'clock'} size={18} color={colors.text} />
-                <Text style={styles.value}>{formatRate(playbackRate)}</Text>
+                <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.value}>{formatRate(playbackRate)}</Text>
             </>
         );
     } else if (zoomActive && zoomHUDScale > 1) {
         status = (
             <>
                 <Feather name="maximize" size={18} color={colors.text} />
-                <Text style={styles.value}>{formatRate(zoomHUDScale)}</Text>
+                <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.value}>{formatRate(zoomHUDScale)}</Text>
             </>
         );
     } else if (showResizeHUD) {
         status = (
             <>
                 <ResizeModeIcon size={18} color={colors.text} />
-                <Text style={styles.label}>{getResizeModeLabel(resizeMode)}</Text>
+                <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.label}>{getResizeModeLabel(resizeMode)}</Text>
             </>
         );
     }

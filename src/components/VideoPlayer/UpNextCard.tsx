@@ -102,9 +102,9 @@ export function UpNextCard({ name, path, endsAt, inCredits, onPlay, onDismiss, b
                 ? <Touchable onPress={onPlay} onPlayer scaleTo={0.96} accessibilityRole="button" accessibilityLabel={`Play ${title} now`}>{art}</Touchable>
                 : art}
             <View style={styles.info}>
-                <Text style={[type.caption, styles.heading]}>Up next</Text>
-                <Text style={[type.body, styles.title]} numberOfLines={2}>{title}</Text>
-                {detail ? <Text style={[type.caption, styles.detail]} numberOfLines={1}>{detail}</Text> : null}
+                <Text maxFontSizeMultiplier={metrics.playerFontScale} style={[type.caption, styles.heading]}>Up next</Text>
+                <Text maxFontSizeMultiplier={metrics.playerFontScale} style={[type.body, styles.title]} numberOfLines={2}>{title}</Text>
+                {detail ? <Text maxFontSizeMultiplier={metrics.playerFontScale} style={[type.caption, styles.detail]} numberOfLines={1}>{detail}</Text> : null}
             </View>
             {onDismiss && (
                 <IconButton icon="x" iconSize={18} onPress={onDismiss} accessibilityLabel={inCredits ? 'Watch credits' : endsAt === null ? 'Close' : 'Cancel autoplay'} onPlayer style={styles.dismiss} />

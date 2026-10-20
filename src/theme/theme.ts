@@ -6,6 +6,8 @@ import { lightColors, darkColors, playerColors, ColorScheme } from './colors';
 export const metrics = {
     /** Minimum touch target. */
     touch: 48,
+    /** Cap on system font scaling for text drawn over video, so large fonts don't break the overlay. */
+    playerFontScale: 1.3,
     /** Screen side padding. */
     gutter: 16,
     space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },

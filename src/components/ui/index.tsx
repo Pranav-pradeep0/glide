@@ -209,7 +209,7 @@ export function Button({
             {loading
                 ? <ActivityIndicator size="small" color={fg} />
                 : icon && <Feather name={icon} size={17} color={fg} />}
-            <Text style={[type.label, { color: fg }]} numberOfLines={1}>{label}</Text>
+            <Text maxFontSizeMultiplier={onPlayer ? metrics.playerFontScale : undefined} style={[type.label, { color: fg }]} numberOfLines={1}>{label}</Text>
         </Touchable>
     );
 }
