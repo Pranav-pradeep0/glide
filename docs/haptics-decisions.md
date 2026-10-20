@@ -908,3 +908,43 @@ Bethlehem 0.89, The Boys 0.69; 16 classes, bass +0.44, body 0. Listener VERSION 
 Gain chosen on the tuning rows: 0.1 gives up 3 big cues for stillness, so 0.08-0.2 stays.
 Creature attack 0.21 felt. Stranger Things' opening (16 s felt before the first line) is its
 cold open's lab alarms and the creature, cue-tagged; the bench's opening counts it.
+
+## Shape (2026-10-20)
+
+Layer 4. The bench now scores what reaches the motor: the track at the default strength (slider
+0.6, 0.25 of full motion) through `HapticRenderer` and `HapticCalibration.DEFAULT`, which is the
+AIN065's own curve (the AIN065 is the Nothing Phone 2). Felt is amplitude over 0; on the old feel
+every old column reads as before. New columns: floor (share of the motor's running time at the
+felt floor, amplitude 15), big and stray amp (median peak amplitude of felt big cues and of stray
+moments), plateau (share of big cues' running time within 1 dB of the cue's own peak motion).
+
+**Before.** A quarter of the motor's running time sat at the floor. The Director's gains (moment,
+salience, knee) multiply fades down to 0.1% of full motion, and the calibration lifted anything
+over 0 to the floor, so every fade buzzed alike at 6%: the phone's history was rows of
+`amplitude=0.06`. Nothing passed amplitude 67 of 255: strength scaled the peaks with the rest, and
+the knee clipped at the 99.9th percentile, so Frankenstein's final explosion (8020-8022 s, 15 dB
+of swells in the bass) played between 59 and 67.
+
+**Changes.**
+- Under the floor is silence: an intensity whose motion is under what the floor moves plays 0
+  (`HapticCalibration.amplitude`), and the renderer starts no call in it.
+- Over the film's loud level the motor follows the sound dB for dB, bed and hits, with no clip;
+  strength is a plain volume and full motion the only ceiling. Tried first, a 12 dB headroom over
+  the loud level: peaks rose but the explosion held 134 for 1.2 s, the 99.9th percentile clip
+  still flattening it. Now it moves between 56 and 115.
+- Moment gain 0.06-0.2 (was 0.08): silence took 5 big cues that only the floor had made felt;
+  0.06 gives 3 back at the old stray rate (0.07: big 0.905, stray 2.24; 0.06-0.16: 0.915, 2.65).
+
+| Tuning films | Cues | Big | Stray/min | Loud | Creature | Floor | Big amp | Stray amp | Plateau |
+|---|---|---|---|---|---|---|---|---|---|
+| Before | 0.76 | 0.93 | 2.53 | 0.23 | 0.21 | 0.24 | 57 | 32 | 0.08 |
+| Silence under the floor, gain 0.08 | 0.72 | 0.90 | 2.00 | 0.20 | 0.14 | 0.01 | 58 | 42 | |
+| **Same, dB for dB, gain 0.06** | 0.74 | 0.92 | 2.52 | 0.22 | 0.17 | 0.02 | 58 | 40 | 0.05 |
+
+Held out after the choice: cues 0.52 -> 0.50, big 0.86 =, stray 1.35 -> 1.51, loud 0.07 -> 0.08,
+floor 0.26 -> 0.02, plateau 0.09 -> 0.08. Most big cues peak at the loud level (amplitude ~58,
+23%): only the loudest 1% rise past it, so whether the default is too light is the phone test's.
+
+**Not done: default strength from the device calibration.** Release builds never calibrate (the
+Lab is debug-only), so every phone plays the AIN065's curve, which on the AIN065 is its own. The
+default stays slider 0.6 until the phone test says otherwise; derive it once calibration ships.

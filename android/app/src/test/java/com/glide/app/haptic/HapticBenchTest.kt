@@ -2,6 +2,7 @@ package com.glide.app.haptic
 
 import com.glide.app.haptic.HapticMeaning.Kind
 import java.io.File
+import kotlin.math.log10
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 
@@ -20,22 +21,36 @@ import org.junit.Test
  *  - opening, s: felt before the first line.
  *  - [SCENES]: named reports from testers, felt share in each.
  *
+ * Felt is what reaches the motor: the track at the default strength through [HapticRenderer] and
+ * the reference phone's calibration (the AIN065's own), amplitude over 0. Its shape (layer 4):
+ *
+ *  - floor: share of the motor's running time at the felt floor, where faint and fainter feel alike.
+ *  - big / stray amp: median peak amplitude (of 255) of felt big cues and of stray moments.
+ *  - plateau: share of felt big cues' running time within [PLATEAU_DB] of the cue's own peak
+ *    motion (by the calibration curve): a clipped explosion holds one amplitude, a shaped one moves.
+ *
  * [HOLDOUT] films are never tuned on: read their rows to check a change, never to choose one.
  * Prints only; each layer's step records its numbers in the decisions doc.
  */
 class HapticBenchTest {
     private class Row(
         var cues: Int = 0, var cuesFelt: Int = 0, var big: Int = 0, var bigFelt: Int = 0,
-        var stray: Int = 0, var minutes: Double = 0.0, var loud: Int = 0, var loudFelt: Int = 0, var opening: Double = 0.0
+        var stray: Int = 0, var minutes: Double = 0.0, var loud: Int = 0, var loudFelt: Int = 0, var opening: Double = 0.0,
+        var driven: Long = 0, var floor: Long = 0, var bigMs: Long = 0, var plateauMs: Long = 0
     ) {
+        val bigAmp = mutableListOf<Double>()
+        val strayAmp = mutableListOf<Double>()
+
         operator fun plusAssign(o: Row) {
             cues += o.cues; cuesFelt += o.cuesFelt; big += o.big; bigFelt += o.bigFelt
             stray += o.stray; minutes += o.minutes; loud += o.loud; loudFelt += o.loudFelt; opening += o.opening
+            driven += o.driven; floor += o.floor; bigAmp += o.bigAmp; strayAmp += o.strayAmp; bigMs += o.bigMs; plateauMs += o.plateauMs
         }
 
-        override fun toString() = "%5d %6.3f %5d %6.3f %9.2f %9.3f %9.1f".format(
+        override fun toString() = "%5d %6.3f %5d %6.3f %9.2f %9.3f %9.1f %6.2f %7.0f %6.0f %7.2f".format(
             cues, cuesFelt / cues.coerceAtLeast(1).toDouble(), big, bigFelt / big.coerceAtLeast(1).toDouble(),
-            stray / minutes.coerceAtLeast(1e-9), loudFelt / loud.coerceAtLeast(1).toDouble(), opening
+            stray / minutes.coerceAtLeast(1e-9), loudFelt / loud.coerceAtLeast(1).toDouble(), opening,
+            floor / driven.coerceAtLeast(1).toDouble(), median(bigAmp), median(strayAmp), plateauMs / bigMs.coerceAtLeast(1).toDouble()
         )
     }
 
@@ -46,7 +61,7 @@ class HapticBenchTest {
         assumeTrue("no films with subtitles in .haptics-fixtures/films", films.isNotEmpty())
         val tune = Row()
         val held = Row()
-        println("%-22s %5s %6s %5s %6s %9s %9s %9s".format("film", "cues", "felt", "big", "felt", "stray/min", "loud felt", "opening"))
+        println("%-22s %5s %6s %5s %6s %9s %9s %9s %6s %7s %6s %7s".format("film", "cues", "felt", "big", "felt", "stray/min", "loud felt", "opening", "floor", "big amp", "stray", "plateau"))
         for (file in films) {
             val name = file.nameWithoutExtension
             // Plain subtitles (Blast's) would count every felt moment as stray.
@@ -108,11 +123,14 @@ class HapticBenchTest {
         val d = film.load(file)
         val name = file.nameWithoutExtension
         val cues = HapticFilmTest.cues(File(file.parentFile, "$name.srt").readText())
-        val track = HapticDirector.direct(film.labelled(d.raw, File(file.parentFile, "$name.sounds")), HapticMeaning.tags(cues))
-        val felt = HapticFilmTest.felt(track, d.ms)
+        val track = HapticDirector.direct(film.labelled(d.raw, File(file.parentFile, "$name.sounds")), HapticMeaning.tags(cues), strength = HapticDirector.strength(CINEMATIC))
         val f = HapticTrack.BED_FRAME_MS
+        val amp = played(track, d.ms)
+        val frameAmp = IntArray(d.ms / f) { i -> (i * f until i * f + f).maxOf { amp[it].toInt() and 0xFF } }
+        val felt = BooleanArray(frameAmp.size) { frameAmp[it] > 0 }
         fun anyFelt(from: Int, to: Int) = (from.coerceAtLeast(0) / f until minOf(felt.size, to / f)).any { felt[it] }
         val row = Row(minutes = d.ms / 60_000.0)
+        for (a in amp) if (a.toInt() != 0) { row.driven++; if (a.toInt() and 0xFF <= CAL.floorAmp) row.floor++ }
 
         val subTop = d.sub.sorted().getOrElse((d.sub.size - 1) * 99 / 100) { 0.0 }
         val effectCues = cues.filter { c -> HapticMeaning.tags(listOf(c)).any { it.kind in EFFECTS } }
@@ -122,14 +140,31 @@ class HapticBenchTest {
             row.cues++
             if (felt) row.cuesFelt++
             val peak = (w.first.coerceAtLeast(0) / 100..minOf(d.sub.size - 1, w.last / 100)).maxOfOrNull { d.sub[it] } ?: 0.0
-            if (subTop > 0 && peak >= subTop / LOUD) { row.big++; if (felt) row.bigFelt++ else println("   %s missed big %d s %s".format(name, cue.startMs / 1000, cue.text)) }
+            if (subTop > 0 && peak >= subTop / LOUD) {
+                row.big++
+                if (!felt) { println("   %s missed big %d s %s".format(name, cue.startMs / 1000, cue.text)); continue }
+                row.bigFelt++
+                val ms = w.first.coerceAtLeast(0) until minOf(amp.size, w.last)
+                row.bigAmp += ms.maxOf { amp[it].toInt() and 0xFF }.toDouble()
+                val motion = ms.map { amp[it].toInt() and 0xFF }.filter { it > 0 }.map { 20 * log10(motionOf(it)) }
+                row.bigMs += motion.size
+                val top = motion.max()
+                row.plateauMs += motion.count { it >= top - PLATEAU_DB }
+            }
         }
 
         var quiet = Int.MAX_VALUE
+        var strayPeak = -1 // of the stray moment under way; -1 in a cue's
         for (i in felt.indices) if (felt[i]) {
-            if (quiet > JOIN_MS / f && effects.none { i * f in it }) row.stray++
+            if (quiet > JOIN_MS / f) {
+                if (strayPeak >= 0) row.strayAmp += strayPeak.toDouble()
+                strayPeak = -1
+                if (effects.none { i * f in it }) { row.stray++; strayPeak = 0 }
+            }
+            if (strayPeak >= 0) strayPeak = maxOf(strayPeak, frameAmp[i])
             quiet = 0
         } else quiet++
+        if (strayPeak >= 0) row.strayAmp += strayPeak.toDouble()
 
         // Power over SCENE_MS, centred: a scene is loud for its stretch, not its single peaks.
         if (d.sub.isNotEmpty()) {
@@ -150,7 +185,33 @@ class HapticBenchTest {
         return row
     }
 
+    /** The motor's amplitude at each ms of [ms], call by call as the Performer issues them. */
+    private fun played(track: HapticTrack, ms: Int): ByteArray {
+        val amp = ByteArray(ms)
+        var from = 0
+        while (true) {
+            val c = HapticRenderer.next(track, from, CAL) ?: break
+            var t = c.startMs
+            for (k in c.stepsMs.indices) {
+                amp.fill(c.amplitudes[k].toByte(), minOf(t, ms), minOf(t + c.stepsMs[k], ms))
+                t += c.stepsMs[k]
+            }
+            from = c.endMs
+        }
+        return amp
+    }
+
     companion object {
+        /** The default slider position (src/store/appStore.ts), on the phone the curve is from. */
+        private const val CINEMATIC = 0.6f
+        private const val PLATEAU_DB = 1.0
+        private val CAL = HapticCalibration.DEFAULT
+
+        /** Share of full motion the calibration curve gives [amp]. */
+        private fun motionOf(amp: Int) = (CAL.motionAt(amp) / CAL.motion.last()).toDouble().coerceAtLeast(1e-4)
+
+        private fun median(xs: List<Double>) = xs.sorted().let { if (it.isEmpty()) Double.NaN else it[it.size / 2] }
+
         /** Titles never tuned on: a series' episodes are named `<title>-s01e01` and held out together. */
         val HOLDOUT = setOf("anora", "bethlehem", "boys")
         fun title(name: String) = name.substringBefore('-')

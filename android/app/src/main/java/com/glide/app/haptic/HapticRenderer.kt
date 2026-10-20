@@ -28,11 +28,13 @@ object HapticRenderer {
      */
     fun next(track: HapticTrack, fromMs: Int, cal: HapticCalibration): Call? {
         val level = Level(track)
+        fun amp(ms: Int) = cal.amplitude(level.at(ms))
         val end = track.events.lastOrNull()?.let { it.timeMs + it.lengthMs + it.decayMs }
             .let { maxOf(it ?: 0, track.bedIntensity.size * HapticTrack.BED_FRAME_MS) }
         var start = maxOf(fromMs, 0)
-        // Nothing sounds at a silent ms until the next bed frame or the next hit starts.
-        while (start < end && level.at(start) <= 0f) {
+        // Nothing sounds at a silent ms until the next bed frame or the next hit starts. Silent is
+        // what the motor plays as 0: under its floor too.
+        while (start < end && amp(start) == 0) {
             start = minOf((start / HapticTrack.BED_FRAME_MS + 1) * HapticTrack.BED_FRAME_MS, level.hitAfter(start))
         }
         if (start >= end) return null
@@ -42,10 +44,10 @@ object HapticRenderer {
         val amps = ArrayList<Int>()
         var ms = start
         while (ms < stop) {
-            val a = cal.amplitude(level.at(ms))
+            val a = amp(ms)
             if (a == 0) {
                 var quiet = ms
-                while (quiet < stop && quiet - ms < MIN_GAP_MS && level.at(quiet) <= 0f) quiet++
+                while (quiet < stop && quiet - ms < MIN_GAP_MS && amp(quiet) == 0) quiet++
                 if (quiet == stop || quiet - ms >= MIN_GAP_MS) break
             }
             amps += a

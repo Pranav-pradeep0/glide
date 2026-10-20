@@ -39,6 +39,16 @@ class HapticRendererTest {
         assertNull(HapticRenderer.next(track, 1250, cal))
     }
 
+    /** A fade under the felt floor is silence: no call starts in it, and a short one is a 0 step. */
+    @Test
+    fun underTheFloorIsSilence() {
+        val faint = 0.001f // a moment fading out: a tenth of what the floor moves
+        val t = HapticTrack(0, none, FloatArray(100) { if (it < 30 || it in 50..54) faint else 0.5f }, FloatArray(100), emptyList())
+        val call = HapticRenderer.next(t, 0, cal)!!
+        assertEquals(300, call.startMs)
+        assertArrayEquals(intArrayOf(cal.amplitude(0.5f), 0, cal.amplitude(0.5f)), call.amplitudes)
+    }
+
     @Test
     fun resumeStartsMidStretch() {
         assertEquals(250, HapticRenderer.next(track, 250, cal)!!.startMs)
@@ -56,7 +66,9 @@ class HapticRendererTest {
     @Test
     fun intensityMapsThroughTheCurveAboveTheFloor() {
         assertEquals(0, cal.amplitude(0f))
-        assertEquals(cal.floorAmp, cal.amplitude(0.001f))
+        val floor = cal.motionAt(cal.floorAmp) / cal.motion.last()
+        assertEquals("under what the floor moves: silence", 0, cal.amplitude(floor * 0.9f))
+        assertEquals(cal.floorAmp, cal.amplitude(floor * 1.01f))
         assertEquals(255, cal.amplitude(1f))
         val amps = (1..10).map { cal.amplitude(it / 10f) }
         assertTrue(amps.toString(), amps.zipWithNext().all { (a, b) -> b >= a })

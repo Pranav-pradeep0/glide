@@ -50,7 +50,7 @@ object HapticDirector {
     private const val RECENT_FRAMES = 300 // 3 s: what the bed is heard against, as well as the film
     private const val STEADY_DB = 4f // no more than this over the last 3 s is steady: not felt
     private const val RISE_DB = 6f // this far over that is fully felt
-    private const val MOMENT_FROM = 0.08f // moment score with nothing felt
+    private const val MOMENT_FROM = 0.06f // moment score with nothing felt
     private const val MOMENT_FULL = 0.2f // and fully felt
     private const val FLOOR = -3f // listened features: 30 dB under the film's loud level is silence
     private const val TOP = 1.5f
@@ -64,8 +64,9 @@ object HapticDirector {
 
     /**
      * [strength] 0..1 is the user's volume: the film's loud moments play at that share of full
-     * motor motion (intensity is a share of motion, see [HapticCalibration]). Full strength felt
-     * too strong on the Nothing Phone 2 in every preset (docs/haptics-decisions.md, Phase 6).
+     * motor motion (intensity is a share of motion, see [HapticCalibration]) and louder ones rise
+     * over it ([strengthened]). Full strength felt too strong on the Nothing Phone 2 in every
+     * preset (docs/haptics-decisions.md, Phase 6).
      */
     fun direct(raw: HapticTrack, tags: List<HapticMeaning.Tag> = emptyList(), preset: Preset = Preset.CINEMATIC, strength: Float = 1f): HapticTrack {
         if (raw.analyzerVersion == 0) return raw // a fixture's truth, imported by the Lab
@@ -75,10 +76,10 @@ object HapticDirector {
         val bedGate = film.bedRef - preset.bedRangeDb / BED_DB
         val bedLow = bedGate - FOLLOW_DB / BED_DB
         val hitGate = film.hitRef - preset.hitRangeDb / HIT_DB
-        // The film's loud bass plays at [KNEE]; its loudest 1% fills the rest up to the 99.9th
-        // percentile instead of clipping, so an explosion keeps moving and hits stand out of it.
+        // The film's loud bass plays at [KNEE]; its loudest 1% rises over it dB for dB instead of
+        // clipping, so an explosion keeps moving and hits stand out of it.
         val bed = FloatArray(v.size) { i ->
-            if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * kneed(v[i], bedLow, film.bedRef, film.bedTop)
+            if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * kneed(v[i], bedLow, film.bedRef)
         }
         val bedSalience = salience(film.level, film.recent, film.bedRef, film.bedTop)
         for (i in bed.indices) bed[i] *= bedSalience[i]
@@ -96,12 +97,14 @@ object HapticDirector {
             val bodyLow = film.bodyRef - (preset.bedRangeDb + FOLLOW_DB) / BED_DB
             val bodySalience = smoothed(raw.body).let { salience(it, recent(it), film.bodyRef, film.bodyTop) }
             for (i in bed.indices) if (moment[i] > 0f && raw.body[i] > bodyLow) {
-                bed[i] = maxOf(bed[i], moment[i] * bodySalience[i] * preset.bedGain * kneed(raw.body[i], bodyLow, film.bodyRef, film.bodyTop))
+                bed[i] = maxOf(bed[i], moment[i] * bodySalience[i] * preset.bedGain * kneed(raw.body[i], bodyLow, film.bodyRef))
             }
         }
 
         fun scaled(e: HapticTrack.Event) = e.copy(
-            intensity = (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (film.hitRef - hitGate)).coerceIn(preset.hitMin, 1f),
+            // Over the film's loud hits dB for dB, as the bed: [strengthened] clips.
+            intensity = if (e.intensity > film.hitRef) Math.pow(10.0, ((e.intensity - film.hitRef) * HIT_DB / 20).toDouble()).toFloat()
+            else (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (film.hitRef - hitGate)).coerceAtLeast(preset.hitMin),
             sources = e.sources and HapticTrack.LIGHT.inv()
         )
         val events = film.weighty.filter { e -> e.intensity >= hitGate && at(e.timeMs) > 0f }.map(::scaled).toMutableList()
@@ -121,9 +124,16 @@ object HapticDirector {
             )
         }
         events.sortBy { it.timeMs }
-        for (i in bed.indices) bed[i] *= strength
-        return HapticTrack(raw.analyzerVersion, raw.fingerprint, bed, raw.bedSharpness, events.map { it.copy(intensity = it.intensity * strength) })
+        for (i in bed.indices) bed[i] = strengthened(bed[i], strength)
+        return HapticTrack(raw.analyzerVersion, raw.fingerprint, bed, raw.bedSharpness, events.map { it.copy(intensity = strengthened(it.intensity, strength)) })
     }
+
+    /**
+     * [strength] is a volume and full motion the only ceiling: what is over the film's loud level
+     * rises into the motor's top. Clipped at the loud level before the volume, the motor never
+     * passed amplitude 67 of 255 at Cinematic.
+     */
+    private fun strengthened(x: Float, strength: Float) = minOf(1f, x * strength)
 
     /**
      * The film's own levels, the same for every preset. Levels are judged on power averaged over
@@ -278,12 +288,13 @@ object HapticDirector {
     }
 
     /**
-     * A level [x] from [low] (0) to the film's loud [ref] (its 99th percentile, [KNEE]), and on up
-     * to its [top] (99.9th, 1): the loudest 1% keeps moving instead of clipping.
+     * A level [x] from [low] (0) to the film's loud [ref] (its 99th percentile, [KNEE]), and over
+     * it dB for dB, past 1 ([strengthened] clips): the loudest 1% keeps its swells. Clipped at the
+     * 99.9th percentile, Frankenstein's final explosion (15 dB of swells) held one amplitude for 1.2 s.
      */
-    private fun kneed(x: Float, low: Float, ref: Float, top: Float): Float =
+    private fun kneed(x: Float, low: Float, ref: Float): Float =
         if (x <= ref) KNEE * ((x - low) / (ref - low)).coerceAtLeast(0f)
-        else KNEE + (1 - KNEE) * ((x - ref) / maxOf(top - ref, 1e-3f)).coerceAtMost(1f)
+        else KNEE * Math.pow(10.0, ((x - ref) * BED_DB / 20).toDouble()).toFloat()
 
     // ponytail: sorts the whole lane per publish (~1/s, 0.7M floats for a 2 h film); a 256-bin
     // histogram if it shows up in a profile.

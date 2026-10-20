@@ -22,14 +22,27 @@ class HapticCalibration(
         require(amps.size == motion.size && amps.size >= 2) { "curve needs two points" }
     }
 
-    /** Amplitude 0..255 for [intensity] 0..1; 0 only for intensity 0. */
+    /**
+     * What the floor moves. Less than this isn't felt, so it plays as silence: lifted to the
+     * floor, the Director's fades (0.1% of full motion and less) all buzzed alike at 6%, a quarter
+     * of the motor's running time (docs/haptics-decisions.md, Shape).
+     */
+    private val floorMotion = motionAt(floorAmp)
+
+    /** Amplitude 0..255 for [intensity] 0..1; 0 for what the floor can't play. */
     fun amplitude(intensity: Float): Int {
-        if (intensity <= 0f) return 0
         val target = intensity.coerceAtMost(1f) * motion.last()
+        if (intensity <= 0f || target < floorMotion) return 0
         val i = motion.indexOfFirst { it >= target }.coerceAtLeast(1)
         val (a0, a1, m0, m1) = listOf(amps[i - 1].toFloat(), amps[i].toFloat(), motion[i - 1], motion[i])
         val amp = if (m1 > m0) a0 + (a1 - a0) * (target - m0) / (m1 - m0) else a1
         return amp.roundToInt().coerceIn(floorAmp, 255)
+    }
+
+    /** Motion at [amp] along the measured curve. */
+    fun motionAt(amp: Int): Float {
+        val i = amps.indexOfFirst { it >= amp }.let { if (it < 0) amps.size - 1 else it }.coerceAtLeast(1)
+        return (motion[i - 1] + (motion[i] - motion[i - 1]) * (amp - amps[i - 1]).toFloat() / (amps[i] - amps[i - 1])).coerceIn(0f, motion.last())
     }
 
     fun encode() = listOf(amps.joinToString(" "), motion.joinToString(" "), floorAmp, latencyMs).joinToString(";")
