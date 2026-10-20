@@ -40,22 +40,25 @@ object HapticSounds {
      */
     fun logit(s: Float): Float = (s.coerceIn(0.5f / 255, 1 - 0.5f / 255)).let { Math.log(it / (1.0 - it)).toFloat() }
 
-    // <model> written by HapticMomentTrain from frankenstein, together, us (lambda 0.003); don't edit by hand.
+    // <model> written by HapticMomentTrain from frankenstein, spiderman, together, us (lambda 0.002); don't edit by hand.
     // 0 Speech
     // 74 Growling
     // 104 Roaring cats (lions, tigers)
     // 132 Music
     // 281 Thunder
+    // 293 Crackle
     // 294 Vehicle
     // 307 Tire squeal
-    // 323 Train
+    // 309 Race car, auto racing
+    // 320 Motorcycle
     // 348 Door
     // 420 Explosion
+    // 425 Cap gun
     // 426 Fireworks
     // 435 Glass
     // 462 Whack, thwack
     // 463 Smash, crash
-    val KEPT = intArrayOf(0, 74, 104, 132, 281, 294, 307, 323, 348, 420, 426, 435, 462, 463)
-    val WEIGHTS = floatArrayOf(-0.0110f, 0.1731f, 0.1863f, -0.0361f, 0.0938f, 0.1311f, 0.1111f, 0.0181f, 0.0790f, 0.1550f, 0.0455f, 0.1673f, 0.1805f, 0.0770f, 0.2497f, 0.0000f, 0.3198f, 0.0375f, -0.0000f, 6.0465f)
+    val KEPT = intArrayOf(0, 74, 104, 132, 281, 293, 294, 307, 309, 320, 348, 420, 425, 426, 435, 462, 463)
+    val WEIGHTS = floatArrayOf(-0.0657f, 0.1668f, 0.1792f, -0.0876f, 0.0994f, 0.0694f, 0.0522f, 0.1661f, 0.0635f, 0.0116f, 0.1479f, 0.0890f, 0.0131f, 0.0399f, 0.1823f, 0.0401f, 0.0390f, 0.1702f, 0.0469f, 0.4444f, 0.0611f, -0.0000f, 5.5627f)
     // </model>
 }

@@ -848,3 +848,31 @@ leave-one-film-out over 20-40 films needs. Listener VERSION 10.
 
 Held out it is as good on cues and stiller everywhere else; the tuning cues it gave up were the
 memorised ones (tuning-held gap 0.27 -> 0.24). Gain unchanged (0.08-0.2) until the film set grows.
+
+## Spider-Man (2026-10-20)
+
+A fourth tuning film, the first action one: Spider-Man: Brand New Day (2026, web, 145 min), its
+English 5.1 track (the second; the first is a Hindi dub) copied to `spiderman.mka`. Its own
+subtitles have no sound tags; the SDH one is SubDL's (`api.subdl.com/api/v1/subtitles?api_key=..
+&film_name=..&languages=EN&hi=1`, download `dl.subdl.com` + its url; the key is never committed).
+SDH timing differs from a release's own: `scripts/haptics-subsync.py` fits a subtitle's dialogue
+lines to YAMNet's Speech score in 0.1 s steps. Films in sync read -0.1 to +0.2 s (Us, Anora,
+Frankenstein, Together, Bethlehem, Spider-Man's own); the SDH read +0.26 s and is shifted 360 ms.
+Matching its lines' text to the release's own gave 0.76 s: SDH lines start earlier, so text
+matching is no guide.
+
+The audit with it: loud and unclassified `whooshes` (17 of 27 big: web-swinging, every fight),
+sirens, `field warbling`, high-pitched ringing. None added: a whoosh is motion, not a moment, and
+would buzz through every fight. The audit no longer skips all-caps SDH as speaker names.
+
+Before training on it, Spider-Man scored as an unseen film: cues 0.85, big 0.94, stray 4.12, loud
+0.43. Trained on four: leave-one-out AUC 0.795 (three films: 0.782), held out 0.715 / 0.879
+(0.713 / 0.876), 17 classes (Speech -0.22, Music -0.29). Listener VERSION 11.
+
+| | Cues | Big | Stray/min | Loud | Held-out cues | Big | Stray | Loud |
+|---|---|---|---|---|---|---|---|---|
+| Three films | 0.79 | 0.95 | 3.49 | 0.31 | 0.53 | 0.90 | 1.58 | 0.07 |
+| **Four films** | 0.78 | 0.94 | 3.56 | 0.31 | 0.47 | 0.90 | 1.63 | 0.07 |
+
+(Tuning rows include Spider-Man in both.) The held-out cue drop is Anora's cars, 4 -> 2 of 18;
+38 held-out cues are too few to tell that from noise, and the AUC rose on both. Kept.

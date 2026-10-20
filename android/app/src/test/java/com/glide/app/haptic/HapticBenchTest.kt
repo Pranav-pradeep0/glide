@@ -81,8 +81,8 @@ class HapticBenchTest {
             val subTop = sub.sorted().getOrElse((sub.size - 1) * 99 / 100) { 0.0 }
             for (c in all) for (m in BRACKETS.findAll(c.text)) {
                 val inner = m.value.drop(1).dropLast(1).trim()
-                // Speaker names are capitalised words: "[Victor]", "[Hunter 2]".
-                if (inner.isEmpty() || inner.split(' ').all { it.first().isUpperCase() || it.first().isDigit() }) continue
+                // Speaker names are capitalised words: "[Victor]", "[Hunter 2]"; all-caps SDH ("[WHOOSHES]") isn't.
+                if (inner.isEmpty() || inner.any { it.isLowerCase() } && inner.split(' ').all { it.first().isUpperCase() || it.first().isDigit() }) continue
                 if (HapticMeaning.tags(listOf(HapticMeaning.Cue(0, 0, m.value))).isNotEmpty()) continue
                 val from = (c.startMs - LEAD_MS).coerceAtLeast(0) / 100
                 val to = minOf(sub.size - 1, maxOf(c.endMs, c.startMs + LEAD_MS) / 100)
