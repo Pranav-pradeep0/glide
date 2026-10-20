@@ -191,6 +191,7 @@ export default function SettingsScreen() {
     const setShakeEnabled = useAppStore((state) => state.setShakeEnabled);
     const setShakeAction = useAppStore((state) => state.setShakeAction);
     const setOnlineLyricsEnabled = useAppStore((state) => state.setOnlineLyricsEnabled);
+    const setCrashReportsEnabled = useAppStore((state) => state.setCrashReportsEnabled);
     const clearAllHistory = useVideoHistoryStore((state) => state.clearAllHistory);
     const [languageModalVisible, setLanguageModalVisible] = React.useState(false);
     const [licencesVisible, setLicencesVisible] = React.useState(false);
@@ -560,6 +561,12 @@ export default function SettingsScreen() {
                         // The JS version alone can't tell an OTA from a new APK; the native level can.
                         value={`${pkg.version} (${NATIVE_API_LEVEL})`}
                         onPress={__DEV__ ? () => { if (++versionTaps.current % 7 === 0) navigation.navigate('HapticsLab'); } : undefined}
+                    />
+                    <ListRow
+                        icon="send"
+                        title="Offer to send crash reports"
+                        caption="After a crash, ask to email the error details. Nothing is sent unless you press Send"
+                        toggle={{ value: settings.crashReportsEnabled, onChange: setCrashReportsEnabled }}
                     />
                     <ListRow
                         icon="shield"

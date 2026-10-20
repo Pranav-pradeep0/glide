@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Appearance } from 'react-native';
 import { AppSettings, HapticPreset, HapticSettings, ShakeAction } from '../types';
 import { storage } from '../storage/storage';
+import { setCrashReportsEnabled as setNativeCrashReports } from '../native/GlideNative';
 
 // Registered in MainApplication from res/font/atkinson_hyperlegible_next.xml.
 export const SUBTITLE_FONT_FAMILY = 'AtkinsonHyperlegibleNext';
@@ -53,6 +54,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     shakeEnabled: false,
     shakeAction: 'play_pause',
     onlineLyricsEnabled: true,
+    crashReportsEnabled: true,
 };
 
 export function migrateSettings(settings: AppSettings): AppSettings {
@@ -131,6 +133,7 @@ interface AppStore {
     setShakeEnabled: (enabled: boolean) => void;
     setShakeAction: (action: ShakeAction) => void;
     setOnlineLyricsEnabled: (enabled: boolean) => void;
+    setCrashReportsEnabled: (enabled: boolean) => void;
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -272,6 +275,13 @@ export const useAppStore = create<AppStore>((set) => ({
         set((state) => ({
             settings: { ...state.settings, onlineLyricsEnabled: enabled },
         })),
+    setCrashReportsEnabled: (enabled) => {
+        // Native keeps its own copy: ACRA has to know before any JS runs.
+        setNativeCrashReports(enabled);
+        set((state) => ({
+            settings: { ...state.settings, crashReportsEnabled: enabled },
+        }));
+    },
 }));
 
 // Automatically persist settings to MMKV whenever they change

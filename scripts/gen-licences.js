@@ -64,6 +64,13 @@ const entries = [
         source: 'https://github.com/tensorflow/models/tree/master/research/audioset/yamnet',
     },
     {
+        name: `ACRA ${read('android/app/build.gradle').match(/ch\.acra:acra-mail:([\d.]+)/)[1]}`,
+        license: 'Apache-2.0',
+        text: 'Apache-2.0',
+        notice: 'Copyright the ACRA contributors. Offers to email a crash report after a crash.',
+        source: 'https://github.com/ACRA/acra',
+    },
+    {
         name: 'AndroidX libraries',
         license: 'Apache-2.0',
         text: 'Apache-2.0',

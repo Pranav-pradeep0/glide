@@ -11,7 +11,13 @@ import { NativeModules } from 'react-native';
  * them has anything level 1 lacks.
  */
 const native = NativeModules.GlideNative as
-    | { apiLevel?: number; versionName?: string; versionCode?: number; env?: string }
+    | {
+          apiLevel?: number;
+          versionName?: string;
+          versionCode?: number;
+          env?: string;
+          setCrashReportsEnabled?: (enabled: boolean) => void;
+      }
     | undefined;
 
 export const NATIVE_API_LEVEL: number = native?.apiLevel ?? 1;
@@ -24,4 +30,9 @@ export const BUILD_ENV: Partial<Record<string, string>> = JSON.parse(native?.env
 
 export function hasNativeApi(level: number): boolean {
     return NATIVE_API_LEVEL >= level;
+}
+
+/** Turns ACRA's crash dialog on or off (android/.../CrashReports.kt). Level 17+. */
+export function setCrashReportsEnabled(enabled: boolean): void {
+    if (hasNativeApi(17)) native?.setCrashReportsEnabled?.(enabled);
 }

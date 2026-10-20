@@ -4,6 +4,7 @@ import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.uimanager.ViewManager
 
 /**
@@ -45,7 +46,8 @@ import com.facebook.react.uimanager.ViewManager
  * 15: constant `env` holds only AI_PROXY_URL; the SubDL and OMDb keys and URLs moved to the Worker.
  * 16: GlidePlayer prop `haptics` also recognises the film's sounds (HapticRecognizer, YAMNet).
  * 17: GlidePlayer emits onVideoError ERROR_CODE_DECODING_FORMAT_UNSUPPORTED for audio with no
- *     decoder; follows http->https redirects; plays extensionless HLS/DASH opened by MIME type.
+ *     decoder; follows http->https redirects; plays extensionless HLS/DASH opened by MIME type;
+ *     GlideNative.setCrashReportsEnabled(enabled) (CrashReports.kt).
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -57,6 +59,9 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
         "versionCode" to BuildConfig.VERSION_CODE,
         "env" to BuildConfig.JS_ENV,
     )
+
+    @ReactMethod
+    fun setCrashReportsEnabled(enabled: Boolean) = CrashReports.setEnabled(reactApplicationContext, enabled)
 
     companion object {
         const val NAME = "GlideNative"

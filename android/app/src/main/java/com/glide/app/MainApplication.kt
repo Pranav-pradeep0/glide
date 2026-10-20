@@ -1,6 +1,7 @@
 package com.glide.app
 
 import android.app.Application
+import android.content.Context
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -38,8 +39,15 @@ class MainApplication : Application(), ReactApplication {
     )
   }
 
+  override fun attachBaseContext(base: Context) {
+    super.attachBaseContext(base)
+    CrashReports.init(this)
+  }
+
   override fun onCreate() {
     super.onCreate()
+    // ACRA's crash dialog and sender run in their own ":acra" process, which needs no React Native.
+    if (org.acra.ACRA.isACRASenderServiceProcess()) return
     // Replaces SoLoader.init plus the New Architecture entry point load().
     loadReactNative(this)
     // Subtitle font. An XML family (res/font) so fontWeight and italic pick real faces.

@@ -98,6 +98,7 @@ export interface AppSettings {
     shakeEnabled: boolean; // Shake-to-control enabled
     shakeAction: ShakeAction; // Action triggered by shake gesture
     onlineLyricsEnabled: boolean; // Fetch lyrics online via LRCLIB
+    crashReportsEnabled: boolean; // After a crash, offer to email a report (ACRA)
 }
 
 export type ShakeAction = 'play_pause' | 'next' | 'previous' | 'seek_forward' | 'seek_backward';
