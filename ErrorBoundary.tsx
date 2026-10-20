@@ -1,6 +1,7 @@
 // ErrorBoundary.tsx
 import React, { Component, ReactNode, createContext, useContext } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, NativeModules } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Share, NativeModules } from 'react-native';
+import { useTheme } from '@/hooks/useTheme';
 
 // Define the shape of the error boundary context
 interface ErrorBoundaryContextType {
@@ -15,22 +16,34 @@ const ErrorBoundaryContext = createContext<ErrorBoundaryContextType | undefined>
 // Props for the ErrorBoundary component
 interface ErrorBoundaryProps {
     children: ReactNode;
-    fallback?: React.ComponentType<{ error: Error; resetError: () => void; logError: (error: Error, errorInfo: React.ErrorInfo) => void }>;
+    fallback?: React.ComponentType<FallbackProps>;
     onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
     onReset?: () => void;
 }
+
+interface FallbackProps {
+    error: Error;
+    resetError: () => void;
+    logError: (error: Error, errorInfo: React.ErrorInfo) => void;
+    /** False when the last Try Again went straight back into a crash. */
+    canRetry: boolean;
+}
+
+// A crash this soon after Try Again is the same crash again, not a new one.
+const RETRY_CRASH_WINDOW_MS = 5000;
 
 // State for the ErrorBoundary component
 interface ErrorBoundaryState {
     error: Error | null;
     errorInfo: React.ErrorInfo | null;
+    canRetry: boolean;
 }
 
 // The main ErrorBoundary class component
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     constructor(props: ErrorBoundaryProps) {
         super(props);
-        this.state = { error: null, errorInfo: null };
+        this.state = { error: null, errorInfo: null, canRetry: true };
     }
 
     /**
@@ -50,7 +63,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         // A crash before navigation is ready would otherwise sit under the splash, which
         // only lifts on navReady. Hiding twice is harmless.
         NativeModules.SplashModule?.hide();
-        this.setState({ error, errorInfo });
+        this.setState({ error, errorInfo, canRetry: Date.now() - this.lastResetAt > RETRY_CRASH_WINDOW_MS });
 
         // Log the error using the utility function
         logError(error, errorInfo);
@@ -61,9 +74,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         }
     }
 
+    private lastResetAt = 0;
+
     // Function to reset the error state and re-render the children
     resetError = (): void => {
         console.log('[ErrorBoundary] Resetting error state');
+        this.lastResetAt = Date.now();
         this.setState({ error: null, errorInfo: null });
         if (this.props.onReset) {
             this.props.onReset();
@@ -77,7 +93,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     };
 
     render(): ReactNode {
-        const { error, errorInfo } = this.state;
+        const { error, canRetry } = this.state;
         const { children, fallback: FallbackComponent } = this.props;
 
         // If an error occurred, render the fallback UI
@@ -93,7 +109,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
             return (
                 <ErrorBoundaryContext.Provider value={contextValue}>
-                    <Fallback error={error} resetError={this.resetError} logError={this.logError} />
+                    <Fallback error={error} resetError={this.resetError} logError={this.logError} canRetry={canRetry} />
                 </ErrorBoundaryContext.Provider>
             );
         }
@@ -103,30 +119,36 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     }
 }
 
-// Default fallback component to render when an error occurs
-const ErrorBoundaryFallback: React.FC<{ error: Error; resetError: () => void; logError: (error: Error, errorInfo: React.ErrorInfo) => void }> = ({ error, resetError, logError }) => {
-    const handleReset = () => {
-        resetError();
-    };
+// Default fallback component to render when an error occurs. Plain RN only: it has to
+// render even when the crash came from the app's own UI components.
+const ErrorBoundaryFallback: React.FC<FallbackProps> = ({ error, resetError, canRetry }) => {
+    const { colors } = useTheme();
 
-    const handleLogError = () => {
-        // ErrorInfo is not available here, but we can pass a mock one if needed
-        // For simplicity, we'll pass an empty object or null where ErrorInfo is expected
-        logError(error, { componentStack: error.stack || '' });
-        Alert.alert('Error Reported', 'The error details have been logged.');
+    // There is no crash reporting yet, so the user sends the details themselves.
+    const handleShare = () => {
+        Share.share({ message: `${error.toString()}
+
+${error.stack ?? ''}` }).catch(() => {});
     };
 
     return (
-        <View style={styles.fallbackContainer}>
-            <Text style={styles.fallbackTitle}>Oops! Something went wrong.</Text>
-            <Text style={styles.fallbackMessage}>{error.toString()}</Text>
+        <View style={[styles.fallbackContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.fallbackTitle, { color: colors.error }]}>Oops! Something went wrong.</Text>
+            <Text style={[styles.fallbackMessage, { color: colors.textSecondary }]}>{error.toString()}</Text>
+            {!canRetry && (
+                <Text style={[styles.fallbackMessage, { color: colors.textSecondary }]}>
+                    Trying again did not help. Please close and reopen Glide.
+                </Text>
+            )}
             <View style={styles.buttonContainer}>
-                <TouchableOpacity style={[styles.button, { backgroundColor: '#007AFF' }]} onPress={handleLogError}>
-                    <Text style={styles.buttonText}>Report Error</Text>
+                <TouchableOpacity style={[styles.button, { backgroundColor: colors.fill }]} onPress={handleShare}>
+                    <Text style={[styles.buttonText, { color: colors.text }]}>Share details</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.button, { backgroundColor: '#575757' }]} onPress={handleReset}>
-                    <Text style={styles.buttonText}>Try Again</Text>
-                </TouchableOpacity>
+                {canRetry && (
+                    <TouchableOpacity style={[styles.button, { backgroundColor: colors.primary }]} onPress={resetError}>
+                        <Text style={[styles.buttonText, { color: colors.onPrimary }]}>Try Again</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </View>
     );
@@ -161,18 +183,15 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
-        backgroundColor: '#f5f5f5', // Light background for contrast
     },
     fallbackTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#FF3B30', // Red color for error
         marginBottom: 10,
         textAlign: 'center',
     },
     fallbackMessage: {
         fontSize: 16,
-        color: '#555',
         marginBottom: 20,
         textAlign: 'center',
         paddingHorizontal: 10,
@@ -191,7 +210,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     buttonText: {
-        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
     },
