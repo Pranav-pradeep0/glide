@@ -154,6 +154,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     /** Consecutive recoverable IO failures; reset once playback is healthy again. */
     private var ioRetries = 0
+    private val ioRetry = Runnable { player?.prepare() }
 
     /** Opened at a resume point that has not played yet; see shouldRestartFromBeginning. */
     private var openingAtResumePoint = false
@@ -833,6 +834,10 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     fun stopPlayer() {
         val p = player ?: return
+        // A pending IO retry would prepare it again, and with playWhenReady still set the
+        // stopped video played on behind the next one or after leaving.
+        progressHandler.removeCallbacks(ioRetry)
+        p.playWhenReady = false
         p.stop()
         Log.d(TAG, "stopPlayer")
         emit(EVENT_STOPPED, eventMap().apply { putString("type", "Stopped") })
@@ -1236,10 +1241,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             if (PlayerErrorPolicy.shouldRetry(error.errorCode, ioRetries)) {
                 ioRetries++
                 Log.w(TAG, "recoverable IO error, retry $ioRetries/${PlayerErrorPolicy.MAX_IO_RETRIES}")
-                progressHandler.postDelayed(
-                    { player?.prepare() },
-                    PlayerErrorPolicy.IO_RETRY_DELAY_MS
-                )
+                progressHandler.postDelayed(ioRetry, PlayerErrorPolicy.IO_RETRY_DELAY_MS)
                 return
             }
 
