@@ -123,6 +123,9 @@ contacts, accounts, or media upload.
 
 ## F. After launch — features
 
+Later (owner, 2026-10-20): player tools row rework so GlyphButtons reach 48 dp (D2 follow-up); Android TV version —
+plan in depth before starting (needs D-pad player, focus on every list, TV manifest back, SMB/USB sources).
+
 Parity: Open URL sheet (S), SMB/WebDAV (L), full ASS via `io.github.peerless2012:ass-media` (M–L),
 subtitle charset detection with `android.icu.text.CharsetDetector` (S), music playlists + m3u (M),
 scrubbing-mode exact seek preview (S), seek-bar thumbnails (M), ±10 s notification buttons via
