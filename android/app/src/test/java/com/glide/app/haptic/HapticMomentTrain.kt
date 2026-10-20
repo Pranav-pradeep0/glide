@@ -180,7 +180,7 @@ class HapticMomentTrain {
     }
 
     companion object {
-        private val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE)
+        private val EFFECTS = HapticMeaning.EFFECTS
         private const val LEAD_MS = 1000
         private const val ITERATIONS = 300
     }

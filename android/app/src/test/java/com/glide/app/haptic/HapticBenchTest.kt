@@ -109,7 +109,7 @@ class HapticBenchTest {
     companion object {
         /** Never tuned on. */
         val HOLDOUT = setOf("anora", "bethlehem")
-        private val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE)
+        private val EFFECTS = HapticMeaning.EFFECTS
         /** SDH cues trail their sound; a felt start up to this much before the cue is its moment. */
         private const val LEAD_MS = 1000
         /** Felt stretches closer than this are one moment (as HapticFilmTest). */

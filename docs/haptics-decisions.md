@@ -793,3 +793,22 @@ crackling, and Us's gunshots and knocking "on stereo" (a song, rightly still).
 now (Us: loud LFE under ♪ 0.62 -> 0.07, the score's braams); the moment score fades bass a viewer
 wouldn't point at, which they count as missed. Blast, no SDH: 160 -> 55 hits, felt moments 9.4 ->
 5.8 a minute.
+
+**Roars (tester report, same day).** Frankenstein 3:46, "[guttural, beastly roar]" after "A
+prosthetic leg": nothing felt, scattered pulses through the rest of the scene. The roar is the
+scene's loudest bass (-1 dB against the film's loud level, 11 dB over the last 3 s) but YAMNet hears
+Vehicle and Train (0.5-0.74), and `HapticMeaning` had no word for roars: all 65 roar, growl and
+snarl cues in the tuning films were learned as still, and the bench never counted one. They are
+`Kind.ROAR` now (truth only, no hit to keep; `HapticMeaning.EFFECTS` is shared by the tests).
+Retrained: leave-one-out AUC 0.79, held out 0.73 / 0.82; 66 classes (Vehicle, Roaring cats,
+Growling, Animal, Explosion, Whack...), bass now weighted. Listener VERSION 8. The gain moved to
+0.08-0.2 (the base rate rose; 0.07-0.18: stray 3.77, 0.1-0.25: cues 0.78).
+
+| Same truth (roars counted) | Effect cues felt | Big cues felt | Stray moments/min | Loud scenes felt | Creature attack felt |
+|---|---|---|---|---|---|
+| Model above | 0.78 | 0.91 | 3.53 | 0.25 | 0.21 |
+| **Retrained, 0.08-0.2** | **0.80** | **0.94** | **3.34** | 0.26 | 0.26 |
+| Held out, model above / retrained | 0.39 / **0.46** | 0.80 = | 2.09 / **1.77** | 0.10 / **0.08** | |
+
+The 3:46 roar is felt (54-100% of its windows) and the volley at "Fire!" (4:23); the scene's
+clamoring and running between still score 0.08-0.15, inside the ramp, and play as faint pulses.

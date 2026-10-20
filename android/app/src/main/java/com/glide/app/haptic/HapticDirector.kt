@@ -50,8 +50,8 @@ object HapticDirector {
     private const val RECENT_FRAMES = 300 // 3 s: what the bed is heard against, as well as the film
     private const val STEADY_DB = 4f // no more than this over the last 3 s is steady: not felt
     private const val RISE_DB = 6f // this far over that is fully felt
-    private const val MOMENT_FROM = 0.05f // moment score with nothing felt
-    private const val MOMENT_FULL = 0.15f // and fully felt
+    private const val MOMENT_FROM = 0.08f // moment score with nothing felt
+    private const val MOMENT_FULL = 0.2f // and fully felt
     private const val FLOOR = -3f // listened features: 30 dB under the film's loud level is silence
     private const val TOP = 1.5f
     // ponytail: a fixed window catches one or two logos; stacked studio logos run longer.

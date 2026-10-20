@@ -17,12 +17,13 @@ class HapticMeaningTest {
                 Cue(2000, 3000, "[thunderclap]"),
                 Cue(3000, 4000, "♪ I got five on it ♪"),
                 Cue(4000, 5000, "(breathing heavily)"),
-                Cue(5000, 6000, "- [engine revs] - [glass breaking]")
+                Cue(5000, 6000, "- [engine revs] - [glass breaking]"),
+                Cue(6000, 7000, "[guttural, beastly roar]")
             )
         )
         assertEquals(
             listOf(Tag(1000, 2000, Kind.SHARP), Tag(1000, 2000, Kind.VOICE), Tag(2000, 3000, Kind.HEAVY), Tag(3000, 4000, Kind.MUSIC), Tag(4000, 5000, Kind.VOICE),
-                Tag(5000, 6000, Kind.ENGINE), Tag(5000, 6000, Kind.SHARP)),
+                Tag(5000, 6000, Kind.ENGINE), Tag(5000, 6000, Kind.SHARP), Tag(6000, 7000, Kind.ROAR)),
             tags
         )
     }

@@ -284,7 +284,7 @@ class HapticListener {
 
     companion object {
         /** Bump when the output changes: cached tracks are rebuilt. */
-        const val VERSION = 7
+        const val VERSION = 8
 
         /** A hit's pulse and tail from its sharpness: bright and short, dull and long (decision L5). */
         fun lengthMs(sharpness: Float) = (80 - 50 * sharpness).roundToInt()

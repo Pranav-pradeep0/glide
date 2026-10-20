@@ -7,7 +7,11 @@ package com.glide.app.haptic
  * ("[VICTOR]"), names nothing here and is dropped.
  */
 object HapticMeaning {
-    enum class Kind { SHARP, HEAVY, ENGINE, MUSIC, VOICE }
+    /** [ROAR] and [ENGINE] are long sounds, no hit to keep: they mark moments for the benchmark. */
+    enum class Kind { SHARP, HEAVY, ENGINE, ROAR, MUSIC, VOICE }
+
+    /** What a viewer would point at: SDH cues of these kinds should be felt (HapticBenchTest's truth). */
+    val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE, Kind.ROAR)
 
     data class Cue(val startMs: Int, val endMs: Int, val text: String)
 
@@ -18,6 +22,7 @@ object HapticMeaning {
         Kind.HEAVY to Regex("""\b(explo|boom|thud|thump|slam|crash|thunder|pound|rumbl|heartbeat|impact|smash|stomp|collaps)"""),
         Kind.SHARP to Regex("""\b(gunshot|gunfire|shot|bang|fir(es|ing)\b|crack|snap|slap|punch|knock|clang|clank|shatter|stab|whip|(glass|window|bottle) break|breaking (glass|window|bottle))"""),
         Kind.ENGINE to Regex("""\b(engine|rev(s|ving|ved)?\b|motor|tires|skid|vroom)"""),
+        Kind.ROAR to Regex("""\b(roar|growl|snarl)"""),
         Kind.MUSIC to Regex("""♪|♫|\b(music|song|sing|choir|chant|guitar|piano|r&b|vocaliz|waltz|humming)"""),
         Kind.VOICE to Regex("""\b(grunt|gasp|groan|pant|breath|chuckl|sigh|s i g h|scream|shriek|laugh|whimper|wheez|moan|sob|yell|gag|cough|whisper|sniff|huff|exhal|inhal|cry|crie|retch|shudder|strain|stammer|mumbl|shout|exclaim|clears throat|yelp|chok|gurgl)""")
     )

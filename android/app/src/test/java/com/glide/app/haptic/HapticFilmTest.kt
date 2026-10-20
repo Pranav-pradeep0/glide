@@ -273,7 +273,7 @@ class HapticFilmTest {
         private const val LOGO_MS = 15_000
         /** Correlations this close are the same: labels move a few frames at the edges. */
         private const val CORRELATION_NOISE = 0.005
-        private val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE)
+        private val EFFECTS = HapticMeaning.EFFECTS
 
         /**
          * Phase 4 targets the fused track must still meet: (min, max). The subwoofer correlation is
