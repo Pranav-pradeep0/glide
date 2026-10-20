@@ -68,6 +68,11 @@ export function useAudioController(
 
     // Guard to track if gesture is active (prevents hardware events during swipes)
     const isGestureActiveRef = useRef(false);
+    // Lifts the guard shortly after a gesture ends; a new gesture must cancel it.
+    const gestureGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (gestureGuardTimerRef.current) { clearTimeout(gestureGuardTimerRef.current); }
+    }, []);
 
     // Track the last volume we set to ignore quantized feedback from system
     // System volume has discrete steps, so 56% might become 53% - we should ignore this
@@ -203,6 +208,8 @@ export function useAudioController(
         if (!AudioModule) {return;}
 
         if (fromGesture) {
+            if (gestureGuardTimerRef.current) { clearTimeout(gestureGuardTimerRef.current); }
+            gestureGuardTimerRef.current = null;
             isGestureActiveRef.current = true;
         }
 
@@ -284,7 +291,9 @@ export function useAudioController(
         lastSetTimeRef.current = Date.now();
 
         // Clear gesture guard after a delay (allow system feedback to pass)
-        setTimeout(() => {
+        if (gestureGuardTimerRef.current) { clearTimeout(gestureGuardTimerRef.current); }
+        gestureGuardTimerRef.current = setTimeout(() => {
+            gestureGuardTimerRef.current = null;
             isGestureActiveRef.current = false;
         }, 300);
     }, [currentVolumeShared]);
