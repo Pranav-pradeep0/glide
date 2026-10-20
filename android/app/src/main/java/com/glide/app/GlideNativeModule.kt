@@ -44,6 +44,8 @@ import com.facebook.react.uimanager.ViewManager
  * 14: HapticsLab module is debug-only; release builds no longer register it.
  * 15: constant `env` holds only AI_PROXY_URL; the SubDL and OMDb keys and URLs moved to the Worker.
  * 16: GlidePlayer prop `haptics` also recognises the film's sounds (HapticRecognizer, YAMNet).
+ * 17: GlidePlayer emits onVideoError ERROR_CODE_DECODING_FORMAT_UNSUPPORTED for audio with no
+ *     decoder; follows http->https redirects; plays extensionless HLS/DASH opened by MIME type.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -58,7 +60,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 16
+        const val API_LEVEL = 17
     }
 
     class Package : ReactPackage {
