@@ -654,3 +654,50 @@ loudest 1% fills the rest up to the 99.9th; the engine rule's body lane the same
 | Frankenstein opening felt, labels | 6.3 s | 4.0 s |
 
 The rest of the film's bed is 25% lighter for it; the strength setting covers that.
+
+## Long-term system (plan, 2026-10-20)
+
+**Why patching stopped working.** Each tester report got its own Director rule; they interact
+(opening x pieces, logo x yardstick, knee x engine). Root causes: (1) "good" was never a measured
+target: subwoofer correlation rewards following the bass, which is what makes action scenes buzz
+nonstop (Frankenstein 223-265 s, the creature attack: bed on 30-100% of every second, old and new
+Director alike); (2) hand-set label groups and thresholds are brittle (the roar scores Vehicle
+0.74, Train 0.50, Siren 0.42; Netflix's boom scores nothing); (3) loudness is judged only against
+the whole film, never the last seconds; (4) the motor's range is crushed: on the AIN065 the system
+log shows 6-22% amplitude at Cinematic (strength 0.25), ~11 dB for everything; (5) four films, all
+used to tune, none held out; phone feedback has no timestamps.
+
+**Target (to confirm with the user):** feel the moments a viewer would point at (impacts,
+explosions, roars, slams, revving engines) with their shape; stay still for dialogue, score,
+ambience and logos.
+
+**Layers.**
+0. Benchmark: ground truth by script, no hand labels. SDH sound cues sorted feel / don't-feel by
+   `HapticMeaning`; the LFE (5.1) for how big. Scores: cue moments felt (recall), felt moments per
+   minute outside cues, felt share inside loud scenes, opening still. Two or more films held out,
+   never tuned on.
+1. Hear: Listener lanes and YAMNet, as now.
+2. What: one small learned "moment" score per 0.48 s window (logistic regression over YAMNet scores
+   plus a few Listener features: bass rise over the scene, bass share, onset strength), trained on
+   the PC from the fixture films, shipped as a Kotlin array. Replaces the label groups and
+   thresholds, music halving, the opening rule, the logo window and the engine rule.
+3. How much: two timescales, importance against the film and salience against the last ~3 s;
+   steady sound fades unless it is the film's peak.
+4. Shape: the motor's whole range including silence; default strength from the device
+   calibration, not a fixed 25%; texture from the 10 ms envelope. AIN065 has amplitude control only
+   (no primitives, no frequency control: `dumpsys vibrator_manager`).
+5. Feedback: a "too much / missed" mark during playback logs the media time; each becomes a test case.
+
+**Order:** benchmark and more films (5.1 with SDH subtitles) with no change to the feel; layer 3;
+layer 2 replacing the rules; layer 4 then a phone test; layer 5. Alongside: stop analysis in the
+background (Android freezes it, or kills it for binder traffic), 8-bit YAMNet (~3 MB).
+
+**Phone tooling (AIN065, Android 16, arm64).** Release builds are debug-signed:
+`./gradlew :app:assembleRelease -PallowDebugSigning=true`, `adb install -r -d`. `Log.w` survives R8,
+so `adb logcat -v time -s GlideHaptics` shows `listen`, `piece`, `direct`, `sync` and `call` lines
+(a call's steps are `ms x amplitude/255`). Haptics run only when the film is started "with
+haptics" from its detail screen; a VIEW intent plays without them. The track cache is private
+(`files/haptics/<sha1>.ght`, `allowBackup=false`): install the same-key debug APK over it, `adb
+exec-out run-as com.glide.app cat files/haptics/<f>.ght`, reinstall the release APK (data kept).
+Test films: `/sdcard/Download/1DMP/Videos` (Us, Frankenstein, Together, Blast, and more 5.1 films).
+Screen captures come back black; `uiautomator dump` reads the UI.
