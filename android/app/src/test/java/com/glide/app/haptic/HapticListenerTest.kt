@@ -52,7 +52,7 @@ class HapticListenerTest {
     fun directedPassesTheClips() {
         val dir = HapticHarness.fixturesDir()
         assumeTrue("no clips in ${dir.absolutePath}: run node scripts/haptics-fixtures.js", dir.isDirectory)
-        val report = HapticHarness.run(HapticHarness.load(dir)) { HapticDirector.direct(listen(it).track(fp)) }
+        val report = HapticHarness.run(HapticHarness.load(dir), minBedCoverage = null) { HapticDirector.direct(listen(it).track(fp)) }
         println(report)
         assertTrue(report.toString(), report.passed)
     }

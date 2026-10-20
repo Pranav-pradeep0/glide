@@ -69,14 +69,18 @@ object HapticHarness {
             Fixture(readWav(wav, name), readTruth(File(dir, "$name.truth.tsv")))
         }
 
-    fun run(fixtures: List<Fixture>, producer: (Clip) -> HapticTrack): Report {
+    /**
+     * [minBedCoverage] null skips bed coverage: the Director fades steady sound after its start
+     * (two timescales), so a clip's steady 2-6 s rumbles are felt for their first 2-3 s.
+     */
+    fun run(fixtures: List<Fixture>, minBedCoverage: Double? = MIN_BED_COVERAGE, producer: (Clip) -> HapticTrack): Report {
         val checks = mutableListOf<Check>()
         val scores = linkedMapOf<String, Double>()
-        for (f in fixtures) score(f, producer(f.clip), checks, scores)
+        for (f in fixtures) score(f, producer(f.clip), checks, scores, minBedCoverage)
         return Report(checks, scores)
     }
 
-    private fun score(f: Fixture, track: HapticTrack, checks: MutableList<Check>, scores: MutableMap<String, Double>) {
+    private fun score(f: Fixture, track: HapticTrack, checks: MutableList<Check>, scores: MutableMap<String, Double>, minBedCoverage: Double?) {
         val name = f.clip.name
         val t = f.truth
         fun atLeast(key: String, v: Double, min: Double) = checks.add(Check("$name $key", v, ">= $min", v >= min))
@@ -99,7 +103,7 @@ object HapticHarness {
             atMost("quiet $label FP/min", fp / minutes, MAX_QUIET_FP_PER_MIN)
             atMost("quiet $label bed share", share(spans) { track.bedAt(it) > 0f }, MAX_QUIET_BED_SHARE)
         }
-        if (t.beds.isNotEmpty()) atLeast("bed coverage", share(t.beds) { active(track, it) }, MIN_BED_COVERAGE)
+        if (t.beds.isNotEmpty() && minBedCoverage != null) atLeast("bed coverage", share(t.beds) { active(track, it) }, minBedCoverage)
         t.lfeChannel?.let { atLeast("LFE correlation", lfeCorrelation(f.clip, it, track), MIN_LFE_CORRELATION) }
         scores["$name active share"] = share(listOf(Span(0, f.clip.durationMs, ""))) { active(track, it) }
     }

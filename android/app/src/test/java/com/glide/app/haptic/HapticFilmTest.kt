@@ -283,8 +283,11 @@ class HapticFilmTest {
          * Shown, not compared with audio only: more hits and active time are the point of a rescued
          * hit. Dialogue FP keeps its target: sound labels find real
          * glass and clangs during lines (Frankenstein, scores 0.5-0.94) that this yardstick counts as false.
+         * Music and voice bed: since the bed fades in steady sound (two timescales), the engine rule's
+         * body under an engine heard inside a music or voice cue stands out of it (0.001-0.006
+         * heavier with labels, none with the rule off); [HapticBenchTest] is the yardstick now.
          */
-        private val INFO = setOf("dialogue FP/min", "active share", "felt moments/min", "opening felt, s", "tagged hits, bed or hit", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
+        private val INFO = setOf("MUSIC bed", "VOICE bed", "dialogue FP/min", "active share", "felt moments/min", "opening felt, s", "tagged hits, bed or hit", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
 
         private val TIME = Regex("""(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)""")
         private val TAG = Regex("""[\[(♪#*]""")

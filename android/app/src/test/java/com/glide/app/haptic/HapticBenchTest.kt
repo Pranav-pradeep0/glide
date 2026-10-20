@@ -65,19 +65,21 @@ class HapticBenchTest {
         val name = file.nameWithoutExtension
         val cues = HapticFilmTest.cues(File(file.parentFile, "$name.srt").readText())
         val heard = HapticMeaning.tags(cues) + film.sounds(File(file.parentFile, "$name.sounds"))
-        val felt = HapticFilmTest.felt(HapticDirector.direct(d.raw, heard), d.ms)
+        val track = HapticDirector.direct(d.raw, heard)
+        val felt = HapticFilmTest.felt(track, d.ms)
         val f = HapticTrack.BED_FRAME_MS
         fun anyFelt(from: Int, to: Int) = (from.coerceAtLeast(0) / f until minOf(felt.size, to / f)).any { felt[it] }
         val row = Row(minutes = d.ms / 60_000.0)
 
         val subTop = d.sub.sorted().getOrElse((d.sub.size - 1) * 99 / 100) { 0.0 }
-        val effects = HapticMeaning.tags(cues).filter { it.kind in EFFECTS }.map { it.startMs - LEAD_MS..maxOf(it.endMs, it.startMs + LEAD_MS) }
-        for (w in effects) {
+        val effectCues = cues.filter { c -> HapticMeaning.tags(listOf(c)).any { it.kind in EFFECTS } }
+        val effects = effectCues.map { it.startMs - LEAD_MS..maxOf(it.endMs, it.startMs + LEAD_MS) }
+        for ((w, cue) in effects.zip(effectCues)) {
             val felt = anyFelt(w.first, w.last)
             row.cues++
             if (felt) row.cuesFelt++
             val peak = (w.first.coerceAtLeast(0) / 100..minOf(d.sub.size - 1, w.last / 100)).maxOfOrNull { d.sub[it] } ?: 0.0
-            if (peak >= subTop / LOUD) { row.big++; if (felt) row.bigFelt++ }
+            if (peak >= subTop / LOUD) { row.big++; if (felt) row.bigFelt++ else println("   %s missed big %d s %s".format(name, cue.startMs / 1000, cue.text)) }
         }
 
         var quiet = Int.MAX_VALUE
@@ -99,7 +101,8 @@ class HapticBenchTest {
         HapticFilmTest.dialogue(cues).firstOrNull()?.let { first -> row.opening = (0 until minOf(first.first / f, felt.size)).count { felt[it] } * f / 1000.0 }
         for ((range, what) in SCENES[name].orEmpty()) {
             val share = (range.first / 100 until range.last / 100).count { anyFelt(it * 100, it * 100 + 100) } / ((range.last - range.first) / 100.0)
-            println("   %s %d-%d s %s: %.2f felt".format(name, range.first / 1000, range.last / 1000, what, share))
+            val bed = (range.first / f until range.last / f).count { track.bedAt(it * f) > 0f } / ((range.last - range.first) / f.toDouble())
+            println("   %s %d-%d s %s: %.2f felt, bed %.2f, %d hits".format(name, range.first / 1000, range.last / 1000, what, share, bed, track.events.count { it.timeMs in range }))
         }
         return row
     }

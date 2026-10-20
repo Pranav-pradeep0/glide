@@ -50,6 +50,9 @@ object HapticDirector {
     private const val MIN_BURST_MS = 300
     private const val FLICKER_DB = 3f
     private const val KNEE = 0.75f // bed at the film's loud bass (99th percentile)
+    private const val RECENT_FRAMES = 300 // 3 s: what the bed is heard against, as well as the film
+    private const val STEADY_DB = 4f // no more than this over the last 3 s is steady: not felt
+    private const val RISE_DB = 6f // this far over that is fully felt
     // ponytail: a fixed window catches one or two logos; stacked studio logos run longer.
     const val LOGO_MS = 15_000
 
@@ -91,6 +94,8 @@ object HapticDirector {
         val bed = FloatArray(v.size) { i ->
             if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * kneed(v[i], bedLow, bedRef, bedTop)
         }
+        val bedSalience = salience(level, bedRef, bedTop)
+        for (i in bed.indices) bed[i] *= bedSalience[i]
         // On the film's own sound, before tags: a flicker is the same with or without subtitles.
         dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, weighty.filter { it.intensity >= hitGate })
         // Music alone (no effect named with it: score, songs) is lighter under the bed and has no
@@ -177,6 +182,24 @@ object HapticDirector {
             val to = end * HapticTrack.BED_FRAME_MS
             if (to - from < MIN_BURST_MS && (i until end).all { level[it] < ceiling } && hits.none { it.timeMs in from until to }) bed.fill(0f, i, end)
             i = end
+        }
+    }
+
+    /**
+     * Two timescales: the bed's gain at each frame, 0..1. Against the film the bed is gated on its
+     * own (before this); against the last [RECENT_FRAMES] it must rise over [STEADY_DB]: a steady
+     * roar fades after its start unless it is the film's loudest 1% (over [ref], full at [top]),
+     * and a hit out of it rises again. The yardstick is the typical recent [level] (mean dB), not
+     * its peaks: power-averaged, a loud scene's peaks hid the thuds and gunshots inside it.
+     */
+    private fun salience(level: FloatArray, ref: Float, top: Float): FloatArray {
+        val sum = DoubleArray(level.size + 1)
+        for (i in level.indices) sum[i + 1] = sum[i] + level[i].coerceAtLeast(0f)
+        return FloatArray(level.size) { i ->
+            val a = maxOf(0, i + 1 - RECENT_FRAMES)
+            val recent = ((sum[i + 1] - sum[a]) / (i + 1 - a)).toFloat()
+            val rise = (((level[i] - recent) * BED_DB - STEADY_DB) / RISE_DB).coerceIn(0f, 1f)
+            maxOf(rise, ((level[i] - ref) / maxOf(top - ref, 1e-3f)).coerceIn(0f, 1f))
         }
     }
 

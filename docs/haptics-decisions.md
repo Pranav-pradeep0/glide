@@ -724,3 +724,32 @@ subtitles have no sound tags and SubDL has none for it, so it sits out. Stereo f
 
 Creature attack (Frankenstein 223-265 s): felt 0.66 of the time. Stray moments and loud scenes
 felt are what the later layers must bring down without losing big cues.
+
+## Two timescales (2026-10-20)
+
+Layer 3. The bed is judged against the film (its gate, as before) and against the last 3 s: it
+must rise `STEADY_DB` (4 dB) over the typical recent level, and is full `RISE_DB` (6 dB) past
+that; the film's loudest 1% (over the 99th percentile) stays felt however steady. The recent
+level is the mean in dB: averaged as power, a loud scene's peaks hid the thuds and gunshots inside
+it (big cues 0.97 -> 0.92 at the same setting). Chosen on the tuning films only:
+
+| Tuning films | Effect cues felt | Big cues felt | Stray moments/min | Loud scenes felt | Creature attack felt |
+|---|---|---|---|---|---|
+| Before | 0.80 | 0.97 | 3.54 | 0.63 | 0.66 (bed 0.52) |
+| Power mean, 0 dB | 0.80 | 0.97 | 3.94 | 0.51 | 0.56 |
+| Power mean, 4 dB | 0.77 | 0.92 | 3.62 | 0.29 | 0.27 |
+| **dB mean, 4 dB** | **0.80** | **0.97** | 3.83 | **0.39** | **0.34 (bed 0.25)** |
+| dB mean, 6 dB | 0.77 | 0.92 | 3.46 | 0.32 | 0.23 |
+
+Held out after the choice: big cues 5 -> 4 of 5 (Anora's "[gunfire sound effects on TV]"),
+loud scenes 0.55 -> 0.29, stray 5.53 -> 6.57. Stray moments rise a little: a faded bed stutters
+with a roar's swells. Tried and dropped: a 300-600 ms release on the gain (stray 3.79-3.76, loud
+back to 0.40-0.41); judging against the 3 s before the last 300 ms (big cues 0.90); widening the
+steady exemption 2-4 dB under the 99th percentile (loud 0.42-0.47, the clips' rumbles no better);
+the same fade on the engine rule's body lane (cues 0.78; Anora's cars 0.50 -> 0.28).
+
+Tests changed with it. The engine rule's body under an engine heard inside a music or voice cue
+now stands out of the faded bed, so `HapticFilmTest`'s music and voice bed rows (0.001-0.006
+heavier with labels; none with the rule off) are information now. The directed clips skip bed
+coverage: their steady 2-6 s rumbles are felt for the first 2-3 s; the Listener's run of the clips
+still checks it.
