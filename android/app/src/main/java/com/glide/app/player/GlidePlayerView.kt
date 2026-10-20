@@ -213,7 +213,11 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
      */
     private val activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityStarted(activity: Activity) {
+            if (activity !== getHostActivity()) return
+            hostStopped = false
+            restartProgress()
+        }
         override fun onActivityResumed(activity: Activity) {
             // Expanded back from PiP (a PiP window is started but never resumed).
             if (activity === getHostActivity()) inPipSession = false
@@ -229,6 +233,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
          */
         override fun onActivityStopped(activity: Activity) {
             if (activity !== getHostActivity()) return
+            hostStopped = true
             val p = player ?: return
             // A drag cut short by leaving never sends its final exact seek, and scrubbing
             // mode left on suppresses playback silently until Media3's stuck timeout.
@@ -247,16 +252,24 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
     }
 
+    /** The host Activity is stopped: off screen, playing on in the background or not at all. */
+    private var hostStopped = false
+
+    /**
+     * Progress events, only while playing ([restartProgress] starts it). Off screen nothing
+     * is drawn from them; JS only keeps the resume point, so they slow to one every 5 s.
+     */
     private val progressTick = object : Runnable {
         override fun run() {
-            val p = player
-            if (p != null && progressIntervalMs > 0) {
-                if (p.isPlaying) {
-                    emit(EVENT_PROGRESS, eventMap())
-                }
-                progressHandler.postDelayed(this, progressIntervalMs)
-            }
+            if (player?.isPlaying != true || progressIntervalMs <= 0) return
+            emit(EVENT_PROGRESS, eventMap())
+            progressHandler.postDelayed(this, if (hostStopped) BACKGROUND_PROGRESS_MS else progressIntervalMs)
         }
+    }
+
+    private fun restartProgress() {
+        progressHandler.removeCallbacks(progressTick)
+        if (player?.isPlaying == true && progressIntervalMs > 0) progressHandler.post(progressTick)
     }
 
     init {
@@ -791,10 +804,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     fun setProgressUpdateInterval(intervalMs: Long) {
         progressIntervalMs = intervalMs
-        progressHandler.removeCallbacks(progressTick)
-        if (intervalMs > 0 && player != null) {
-            progressHandler.postDelayed(progressTick, intervalMs)
-        }
+        restartProgress()
     }
 
     /**
@@ -958,10 +968,6 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
         // The session describes this player directly -- no adapter mirroring its state.
         GlidePlayerHolder.start(context, p, getHostActivity()?.javaClass)
-
-        if (progressIntervalMs > 0) {
-            progressHandler.postDelayed(progressTick, progressIntervalMs)
-        }
     }
 
     private fun releasePlayer() {
@@ -1045,6 +1051,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             progressHandler.removeCallbacks(hapticAnchor)
             hapticAnchor.count = 0
             if (isPlaying && haptics != null) progressHandler.postDelayed(hapticAnchor, 100)
+            restartProgress()
             // Scrubbing mode suppresses playback while the thumb is dragged, which reads as
             // isPlaying=false. It is not a pause: reporting one dropped keepScreenOn, told
             // PiP the video had stopped, and a Paused event landing after the drag ended
@@ -1479,6 +1486,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
         /** Denominator used to express media3's float pixel ratio as a rational for PiP. */
         private const val SAR_DENOMINATOR = 10000
+        private const val BACKGROUND_PROGRESS_MS = 5000L
 
         const val EVENT_LOAD_START = "onVideoLoadStart"
         const val EVENT_LOAD = "onVideoLoad"
