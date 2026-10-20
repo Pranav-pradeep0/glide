@@ -400,7 +400,9 @@ class GlidePlayerService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             isForPlayback: Boolean
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            useMusicPlayer()
+            // False is System UI only reading what it would resume, for its card: switching
+            // then took the session off a video that was playing.
+            if (isForPlayback) useMusicPlayer()
             return library.submit<MediaSession.MediaItemsWithStartPosition> {
                 val saved = MusicPlayback.savedQueue(this@GlidePlayerService)
                     ?: throw UnsupportedOperationException("nothing to resume")
