@@ -153,6 +153,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     /** Opened at a resume point that has not played yet; see shouldRestartFromBeginning. */
     private var openingAtResumePoint = false
 
+    /** No-decoder audio reported for this media; once, so Retry can play it without sound. */
+    private var silentAudioReported = false
+
     /**
      * Audio tracks in enumeration order. The index *is* the id JS sees, because the JS layer
      * treats track ids as opaque tokens it round-trips back to us -- it only ever displays
@@ -882,6 +885,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         lastBuffering = null
         ioRetries = 0
         openingAtResumePoint = startPositionMs != C.TIME_UNSET
+        silentAudioReported = false
         tracksKnown = false
         audioTracks.clear()
         textTracks.clear()
@@ -1101,6 +1105,19 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             pendingAudioTrack?.let { setAudioTrack(it) }
             pendingTextTrack?.let { setTextTrack(it) }
             maybeEmitLoad()
+
+            // ExoPlayer raises no error when no audio track has a decoder: it plays the
+            // picture in silence. Pause and say so; Retry then plays it without sound.
+            if (!silentAudioReported && PlayerErrorPolicy.hasNoPlayableAudio(tracks)) {
+                silentAudioReported = true
+                Log.w(TAG, "no audio track has a decoder")
+                player?.playWhenReady = false
+                keepScreenOn = false
+                emit(EVENT_ERROR, eventMap().apply {
+                    putString("type", "Error")
+                    putString("error", "ERROR_CODE_DECODING_FORMAT_UNSUPPORTED")
+                })
+            }
         }
 
         override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {

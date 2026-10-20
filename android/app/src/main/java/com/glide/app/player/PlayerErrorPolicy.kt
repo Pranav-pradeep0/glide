@@ -1,6 +1,8 @@
 package com.glide.app.player
 
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.Tracks
 
 /**
  * What to do with a playback failure. Pure, so the decision can be tested without a player.
@@ -62,4 +64,15 @@ object PlayerErrorPolicy {
     fun shouldRejoinLiveEdge(errorCode: Int, retriesSoFar: Int): Boolean =
         errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW &&
             retriesSoFar < MAX_IO_RETRIES
+
+    /**
+     * Media with audio of which no track has a decoder (ALAC, say, which the FFmpeg extension
+     * is not built with). ExoPlayer selects no audio track and plays on in silence without
+     * an error, so the caller has to treat this as one. Exceeding capabilities still counts
+     * as playable: the track selector picks such a track when there is nothing better.
+     */
+    @JvmStatic
+    fun hasNoPlayableAudio(tracks: Tracks): Boolean =
+        tracks.containsType(C.TRACK_TYPE_AUDIO) &&
+            !tracks.isTypeSupported(C.TRACK_TYPE_AUDIO, /* allowExceedsCapabilities = */ true)
 }

@@ -11,8 +11,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import com.glide.app.player.PlayerErrorPolicy
 import org.json.JSONArray
 
 /**
@@ -76,20 +78,32 @@ object MusicPlayback {
                 }
             }
 
-            /** Skip a file that will not play, until every item has failed in a row. */
             override fun onPlayerError(error: PlaybackException) {
                 Log.w(TAG, "audio player error: ${error.errorCodeName} (${error.errorCode}): ${error.message}")
-                consecutiveErrors++
-                if (consecutiveErrors < player.mediaItemCount && player.hasNextMediaItem()) {
-                    player.seekToNextMediaItem()
-                    player.prepare()
-                    player.play()
-                } else {
-                    consecutiveErrors = 0
-                    player.stop()
-                }
+                skipFailed(player)
+            }
+
+            // No decoder for the file's audio (ALAC, say) is no error to ExoPlayer: it plays
+            // the track's length in silence. It is a file that will not play, like any other.
+            override fun onTracksChanged(tracks: Tracks) {
+                if (!PlayerErrorPolicy.hasNoPlayableAudio(tracks)) return
+                Log.w(TAG, "no decoder for ${player.currentMediaItem?.mediaId}")
+                skipFailed(player)
             }
         })
+    }
+
+    /** Skip a file that will not play, until every item has failed in a row. */
+    private fun skipFailed(player: ExoPlayer) {
+        consecutiveErrors++
+        if (consecutiveErrors < player.mediaItemCount && player.hasNextMediaItem()) {
+            player.seekToNextMediaItem()
+            player.prepare()
+            player.play()
+        } else {
+            consecutiveErrors = 0
+            player.stop()
+        }
     }
 
     /** The user asked for playback: earlier failures no longer count towards giving up. */
