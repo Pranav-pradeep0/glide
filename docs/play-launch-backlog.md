@@ -69,7 +69,7 @@ B1/B2/B3/B7 wait for the haptics work (they touch haptic timing).
 - [x] **B9** `onPlaybackResumption(isForPlayback=false)` switches session to music
       (`GlidePlayerService.kt:~398`).
 - [x] **B10** `MusicPlayback.save` rewrites whole queue on every event (`MusicPlayback.kt:54-63`).
-- [ ] **B11** Credits detection runs a second decoder during playback (`Credits.kt`) — measure first.
+- [x] **B11** Credits detection runs a second decoder during playback (`Credits.kt`) — measure first.
 
 ## C. Bugs — RN layer
 
@@ -91,10 +91,14 @@ C7 3553d6d, C8 db356fb. Left: Recents `isHydrated` loader branch and `LyricsServ
 
 ## D. Before launch
 
-- [ ] **D1 Crash reporting** (none today): Sentry SDK → self-hosted GlitchTip, or ACRA; opt-in.
-- [ ] **D2 Accessibility:** `IconButton` real 48 dp box (hitSlop isn't measured); default
+Done 2026-10-20: D1 b7c086b (ACRA mail+dialog, opt-in toggle; report address is the git email — swap for a support address), D2 65f9742 891df14
+(player GlyphButtons still 40 dp: tools row needs a rework), D3 4c48d49 (PiP + library Back fixes). B11 measured: once per file,
+3–12 s, ~0.8 core, ≤3 late frames — no change. Also 7403b4d (B4 Retry), 669bd82 (error card z-order), 0b97274 (Recents dup).
+
+- [x] **D1 Crash reporting** (none today): Sentry SDK → self-hosted GlitchTip, or ACRA; opt-in.
+- [x] **D2 Accessibility:** `IconButton` real 48 dp box (hitSlop isn't measured); default
       `accessibilityRole="button"` in `Touchable`; `maxFontSizeMultiplier` on player chrome.
-- [ ] **D3 Predictive back** on Android 16 / targetSdk 36: device-check player, sheets, PiP.
+- [x] **D3 Predictive back** on Android 16 / targetSdk 36: device-check player, sheets, PiP.
 - [ ] **D4 Dependency bumps:** RN 0.88, reanimated 4.7.1 + worklets 0.13, gesture-handler 3.4,
       navigation 7.5, safe-area 5.10.1, flash-list 2.3.3. Skip feather icons 14 (unreviewed major).
 
