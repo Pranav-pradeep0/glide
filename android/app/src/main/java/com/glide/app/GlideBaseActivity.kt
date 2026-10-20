@@ -1,8 +1,10 @@
 package com.glide.app
 
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.WindowInsetsController
 import androidx.lifecycle.Lifecycle
 import com.swmansion.rnscreens.fragment.restoration.RNScreensFragmentFactory
 import com.facebook.react.ReactActivity
@@ -27,6 +29,26 @@ open class GlideBaseActivity : ReactActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         supportFragmentManager.fragmentFactory = RNScreensFragmentFactory()
         super.onCreate(savedInstanceState)
+        keepSystemGesturesWithBarsHidden()
+    }
+
+    /**
+     * react-native-edge-to-edge sets BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE on every SystemBars
+     * change. With the bars hidden (the player with its controls hidden) that mode spends an
+     * edge swipe on revealing the bars, so Back did nothing until a tap brought them back.
+     * BEHAVIOR_DEFAULT keeps system gestures working whatever the bars' visibility. It means
+     * that only from Android 12; before, it is the non-sticky mode, so older versions keep
+     * the library's. Re-applied before each frame, after the library's change reaches it.
+     */
+    private fun keepSystemGesturesWithBarsHidden() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        window.decorView.viewTreeObserver.addOnPreDrawListener {
+            val controller = window.insetsController
+            if (controller != null && controller.systemBarsBehavior != WindowInsetsController.BEHAVIOR_DEFAULT) {
+                controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_DEFAULT
+            }
+            true
+        }
     }
 
     /**

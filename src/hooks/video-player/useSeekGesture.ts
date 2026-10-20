@@ -36,6 +36,9 @@ interface UseSeekGestureOptions {
     onSeekUpdate: (time: number) => void;
     onSeekComplete: (time: number) => void;
     onLockTap: () => void;
+
+    /** The system Back gesture's left/right edge strips in dp: a swipe starting there is Back. */
+    backEdges: { left: number; right: number };
 }
 
 // ============================================================================
@@ -66,6 +69,7 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
         onSeekUpdate,
         onSeekComplete,
         onLockTap,
+        backEdges,
     } = options;
     const lastSeekJsDispatchAt = useSharedValue(0);
 
@@ -77,6 +81,9 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
             .activeOffsetX([-15, 15])
             // Fail if user swipes vertically
             .failOffsetY([-15, 15])
+            // Not from the edge strips: the system takes that swipe as Back and cancels this
+            // gesture, and a cancelled seek still commits, so the video jumped on the way out.
+            .hitSlop({ left: -backEdges.left, right: -backEdges.right })
             .onStart(() => {
                 'worklet';
 
@@ -173,6 +180,7 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
         onSeekUpdate,
         onSeekComplete,
         onLockTap,
+        backEdges,
     ]);
 
     return gesture;

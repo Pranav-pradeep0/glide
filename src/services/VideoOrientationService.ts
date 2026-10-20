@@ -48,6 +48,14 @@ export const VideoOrientationService = {
     ),
 
     /**
+     * The Back gesture's strips at the left/right window edges in dp; null on an APK without
+     * the method (any API level after 17 has it).
+     */
+    getSystemGestureInsets: async (): Promise<{ left: number; right: number } | null> => (
+        typeof VideoOrientation?.getSystemGestureInsets === 'function' ? VideoOrientation.getSystemGestureInsets() : null
+    ),
+
+    /**
      * Release control and return to system default behavior.
      * Should be called when exiting the video player.
      */

@@ -9,7 +9,7 @@
  * Changes here can break the entire gesture system.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWindowDimensions, NativeModules } from 'react-native';
 import { Gesture } from 'react-native-gesture-handler';
 import {
@@ -20,6 +20,7 @@ import {
 } from 'react-native-reanimated';
 import type { PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
 import { haptic } from '@/native/HapticModule';
+import { VideoOrientationService } from '@/services/VideoOrientationService';
 
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
 
@@ -127,6 +128,16 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
     const { updateZoom: updateHudZoom } = hud;
 
     const { width, height } = useWindowDimensions();
+
+    // The system Back gesture's edge strips; re-read when a rotation moves them.
+    const [backEdges, setBackEdges] = useState({ left: 0, right: 0 });
+    useEffect(() => {
+        let live = true;
+        VideoOrientationService.getSystemGestureInsets()
+            .then(insets => { if (live && insets) { setBackEdges(insets); } })
+            .catch(() => { });
+        return () => { live = false; };
+    }, [width, height]);
 
     // ========================================================================
     // AUDIO CONTROLLER
@@ -419,6 +430,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         onSeekUpdate: handleSeekUpdate, // This is now throttled
         onSeekComplete: handleSeekComplete,
         onLockTap: handleLockTap,
+        backEdges,
     });
 
     const brightnessGesture = useBrightnessGesture({

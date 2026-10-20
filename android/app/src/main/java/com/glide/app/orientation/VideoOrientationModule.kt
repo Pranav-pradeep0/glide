@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.facebook.react.bridge.*
 
 /**
@@ -54,6 +56,31 @@ class VideoOrientationModule(reactContext: ReactApplicationContext) : ReactConte
                 })
             }
             promise.resolve(rects)
+        }
+    }
+
+    /**
+     * How far in from the left and right window edges, in dp, a touch belongs to the system's
+     * Back gesture (0 with 3-button navigation). The player's swipe-seek starts only inside
+     * them, so an edge swipe goes Back instead of seeking.
+     */
+    @ReactMethod
+    fun getSystemGestureInsets(promise: Promise) {
+        val activity = reactApplicationContext.currentActivity
+        if (activity == null) {
+            promise.resolve(null)
+            return
+        }
+        activity.runOnUiThread {
+            val density = activity.resources.displayMetrics.density
+            val insets = ViewCompat.getRootWindowInsets(activity.window.decorView)
+                ?.getInsets(WindowInsetsCompat.Type.systemGestures())
+            promise.resolve(insets?.let {
+                Arguments.createMap().apply {
+                    putDouble("left", (it.left / density).toDouble())
+                    putDouble("right", (it.right / density).toDouble())
+                }
+            })
         }
     }
 
