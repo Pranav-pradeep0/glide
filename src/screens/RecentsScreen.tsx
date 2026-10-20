@@ -1,9 +1,9 @@
 // src/screens/RecentsScreen.tsx
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { View, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList, VideoHistoryEntry } from '@/types';
 import { Loader } from '@/components/Loader';
@@ -52,8 +52,15 @@ export default function RecentsScreen() {
     const navigation = useNavigation<NavigationProp>();
     const insets = useSafeAreaInsets();
 
-    // Subscribing to the map keeps the list live without reloading on every focus.
-    const historyMap = useVideoHistoryStore(s => s.history);
+    // Subscribing to the map keeps the list live without reloading on every focus. While
+    // another screen is on top (the player saves history as it plays) the last map is kept,
+    // so this tab does not re-render under it; regaining focus picks up the latest.
+    const isFocused = useIsFocused();
+    const shownHistoryRef = useRef<Map<string, VideoHistoryEntry> | null>(null);
+    const historyMap = useVideoHistoryStore(s => {
+        if (isFocused || !shownHistoryRef.current) { shownHistoryRef.current = s.history; }
+        return shownHistoryRef.current;
+    });
     const isHydrated = useVideoHistoryStore(s => s.isHydrated);
     const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
     const clearVideoHistory = useVideoHistoryStore(s => s.clearVideoHistory);
