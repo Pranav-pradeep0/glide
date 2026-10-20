@@ -86,6 +86,16 @@ class MainActivity : GlideBaseActivity() {
     setIntent(intent)
   }
 
+  /**
+   * The library's last Back sends the app to the background, as Android 12+ does for launcher
+   * roots, instead of finishing: reopening resumes where the user was. Always, not only when
+   * the system would (its default finishes on Android 11 and below, and a task an "Open with"
+   * started); this also leaves a PiP window from [GlideBaseActivity] open.
+   */
+  override fun invokeDefaultOnBackPressed() {
+    if (isTaskRoot) moveTaskToBack(true) else super.invokeDefaultOnBackPressed()
+  }
+
   /** "Open with" audio lands here, and this Activity is exported; see [PrivatePath]. */
   private fun dropPrivateUri(intent: Intent?) {
     if (intent != null && PrivatePath.isPrivate(this, intent.data)) {
