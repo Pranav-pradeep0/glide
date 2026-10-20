@@ -217,6 +217,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             if (activity !== getHostActivity()) return
             hostStopped = false
             restartProgress()
+            setVideoDecoding(true)
         }
         override fun onActivityResumed(activity: Activity) {
             // Expanded back from PiP (a PiP window is started but never resumed).
@@ -242,6 +243,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             // explicit stop, so it pauses even with background play on.
             if (!playInBackground || inPipSession) {
                 p.playWhenReady = false
+            } else {
+                // Playing on with nothing on screen: stop decoding a picture nobody sees.
+                setVideoDecoding(false)
             }
             inPipSession = false
         }
@@ -254,6 +258,15 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     /** The host Activity is stopped: off screen, playing on in the background or not at all. */
     private var hostStopped = false
+
+    /** Off while playing on in the background, so no decoder works on a picture nobody sees. */
+    private fun setVideoDecoding(on: Boolean) {
+        val p = player ?: return
+        val params = p.trackSelectionParameters
+        if (on == !params.disabledTrackTypes.contains(C.TRACK_TYPE_VIDEO)) return
+        Log.w(TAG, "video decoding on=$on")
+        p.trackSelectionParameters = params.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !on).build()
+    }
 
     /**
      * Progress events, only while playing ([restartProgress] starts it). Off screen nothing
@@ -1192,6 +1205,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             // with enhancement on stayed at displayFrame 0..2412 through every mode tap.
             // The source format below is the truth in both paths.
             if (effectsArmed) return
+            // Unknown while the video track is off in the background: keep the last geometry
+            // so the picture comes back laid out as it left.
+            if (videoSize.width == 0 || videoSize.height == 0) return
             // Anamorphic sources report a non-1 ratio here. Rotation needs no handling:
             // media3 applies it internally and width/height already account for it.
             applyVideoGeometry(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
