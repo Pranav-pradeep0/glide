@@ -32,11 +32,25 @@ object HapticDirector {
         INTENSE(13f, 12f, 0.4f, 1f),
     }
 
-    /** The strength slider spans this many dB of motion, like a volume control. */
+    /** Under Cinematic the strength slider is a volume control, this many dB of motion per full slider. */
     const val STRENGTH_RANGE_DB = 30f
 
-    /** Slider position 0..1 to the [direct] strength: 0 is ~3% of full motion (near the felt floor), 1 is full. */
-    fun strength(level: Float) = Math.pow(10.0, ((level.coerceIn(0f, 1f) - 1) * STRENGTH_RANGE_DB / 20).toDouble()).toFloat()
+    /** Cinematic's slider position (src/store/appStore.ts) and its strength: loud moments [CINEMATIC_DB] under full motion. */
+    private const val CINEMATIC = 0.6f
+    private const val CINEMATIC_DB = -2.4f
+
+    /**
+     * Slider position 0..1 to the [direct] strength. Cinematic plays the film's real moments near
+     * the motor's top (docs/haptics-decisions.md, Contrast): 25% of full motion read as missed.
+     * Over it the slider reaches full at 1: louder clips them flat (a 1.5x Intense held 15% of a
+     * big moment's time at one amplitude, 3x held 36%). Under it each 0.1 is 3 dB, Subtle (0.35)
+     * playing as the old Cinematic did.
+     */
+    fun strength(level: Float): Float {
+        val l = level.coerceIn(0f, 1f)
+        val db = if (l >= CINEMATIC) CINEMATIC_DB * (1 - l) / (1 - CINEMATIC) else CINEMATIC_DB + (l - CINEMATIC) * STRENGTH_RANGE_DB
+        return Math.pow(10.0, db / 20.0).toFloat()
+    }
 
     const val SNAP_MS = 1000
     private const val SMOOTH_FRAMES = 10 // 100 ms
@@ -51,7 +65,8 @@ object HapticDirector {
     private const val STEADY_DB = 4f // no more than this over the last 3 s is steady: not felt
     private const val RISE_DB = 6f // this far over that is fully felt
     private const val MOMENT_FROM = 0.06f // moment score with nothing felt
-    private const val MOMENT_FULL = 0.2f // and fully felt
+    private const val MOMENT_FULL = 0.25f // and fully felt
+    private const val MOMENT_CURVE = 1.5 // the gain is the ramp to this power: the unsure fade first
     private const val FLOOR = -3f // listened features: 30 dB under the film's loud level is silence
     private const val TOP = 1.5f
     // ponytail: a fixed window catches one or two logos; stacked studio logos run longer.
@@ -65,8 +80,7 @@ object HapticDirector {
     /**
      * [strength] 0..1 is the user's volume: the film's loud moments play at that share of full
      * motor motion (intensity is a share of motion, see [HapticCalibration]) and louder ones rise
-     * over it ([strengthened]). Full strength felt too strong on the Nothing Phone 2 in every
-     * preset (docs/haptics-decisions.md, Phase 6).
+     * over it ([strengthened]). The slider maps to it by [strength].
      */
     fun direct(raw: HapticTrack, tags: List<HapticMeaning.Tag> = emptyList(), preset: Preset = Preset.CINEMATIC, strength: Float = 1f): HapticTrack {
         if (raw.analyzerVersion == 0) return raw // a fixture's truth, imported by the Lab
@@ -107,7 +121,10 @@ object HapticDirector {
             else (preset.hitMin + (1 - preset.hitMin) * (e.intensity - hitGate) / (film.hitRef - hitGate)).coerceAtLeast(preset.hitMin),
             sources = e.sources and HapticTrack.LIGHT.inv()
         )
-        val events = film.weighty.filter { e -> e.intensity >= hitGate && at(e.timeMs) > 0f }.map(::scaled).toMutableList()
+        // Hits are scaled by the moment gain as the bed is: gated only, a hit at 0.01 of a moment
+        // played as hard as an explosion's (a "too much" mark on dialogue, 2:52 in Frankenstein).
+        val events = film.weighty.filter { e -> e.intensity >= hitGate && at(e.timeMs) > 0f }
+            .map { scaled(it).let { h -> h.copy(intensity = h.intensity * at(h.timeMs)) } }.toMutableList()
         for (t in tags) {
             val sharpness = when (t.kind) { Kind.SHARP -> SHARP; Kind.HEAVY -> HEAVY; else -> continue }
             val near = t.startMs - SNAP_MS..t.startMs + SNAP_MS
@@ -227,8 +244,8 @@ object HapticDirector {
 
     /**
      * The moment gain per bed frame, 0..1, from each window's score (the best of it and its
-     * neighbours): linear between window centres,
-     * none under [MOMENT_FROM], full from [MOMENT_FULL]. Null with no sounds lane.
+     * neighbours): linear between window centres, none under [MOMENT_FROM], full from
+     * [MOMENT_FULL], the ramp to [MOMENT_CURVE] between. Null with no sounds lane.
      */
     private fun moments(raw: HapticTrack, film: Film): FloatArray? {
         if (raw.sounds.isEmpty()) return null
@@ -250,7 +267,7 @@ object HapticDirector {
             val x = ((i * f - HapticSounds.WINDOW_MS / 2f) / HapticSounds.HOP_MS).coerceIn(0f, p.size - 1f)
             val k = x.toInt()
             val s = p[k] + (p[minOf(k + 1, p.size - 1)] - p[k]) * (x - k)
-            ((s - MOMENT_FROM) / (MOMENT_FULL - MOMENT_FROM)).coerceIn(0f, 1f)
+            Math.pow(((s - MOMENT_FROM) / (MOMENT_FULL - MOMENT_FROM)).coerceIn(0f, 1f).toDouble(), MOMENT_CURVE).toFloat()
         }
     }
 

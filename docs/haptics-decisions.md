@@ -967,3 +967,44 @@ in marks.tsv ("Behind.Her.Eyes" is `behindeyes`). Too much wants the felt share 
 **Background.** Analysis waits while no activity of the app is started (`ProcessLifecycleOwner`,
 a field read: polling the system would itself be binder traffic) and goes on where it was when the
 app is seen again, PiP included. Logs `listen paused` / `listen resumed`.
+
+## Contrast (2026-10-21)
+
+**First marks.** 13 on Frankenstein (Cinematic, phone): 4 too much, 9 missed. The bench showed no
+contrast between them: too much peaked at amplitude 62 (median), missed at 67, about 1 dB of motion
+apart. Two causes. Hits were gated by the moment gain but not scaled by it, so a hit at 0.01 of a
+moment played as hard as an explosion's (2:52, dialogue, q 0.06-0.08, a hit 3 dB under the film's
+loud hits: amplitude 59). And the gain was full from a moment score of 0.2 and the default strength
+0.25 of full motion, so a real moment (61:16, electricity and explosions, q 0.27, bass at the loud
+level) played at ~25% of the motor and read as missed.
+
+Moment scores (`HapticMomentTrain`'s model, tuning films): the best window of a big cue p25 0.15,
+p50 0.25, p75 0.38; windows of loud bass outside every cue p50 0.06, p90 0.20. The score separates
+over 0.2, where the old ramp was already full.
+
+**Changes.**
+- Hits are scaled by the moment gain, as the bed is (SDH hit tags still keep their onset unscaled).
+- Moment gain: the ramp from 0.06 to 0.25 (was 0.2), to the power 1.5: the unsure fade first.
+- Default strength: Cinematic plays the film's loud moments 2.4 dB under full motion (was 12 dB).
+  Over Cinematic the slider reaches full at Intense (1); louder clipped big moments flat (plateau
+  0.15 at 1.5x, 0.36 at 3x). Under it each 0.1 is 3 dB as before: Subtle plays as the old
+  Cinematic did (big amp 59).
+- Tried: a sixth listened feature, the bass rise counted only near the film's loud level ("surge",
+  for the 3:57 roar): L1 gave it weight 0, left-out AUC unchanged. Not kept.
+
+| Tuning films, Cinematic | Cues | Big | Stray/min | Loud | Big amp | Stray amp | Plateau | Missed peak | Too-much peak |
+|---|---|---|---|---|---|---|---|---|---|
+| Before | 0.738 | 0.915 | 2.52 | 0.221 | 58 | 40 | 0.05 | 67 | 62 |
+| Hits follow the gain | 0.732 | 0.910 | 2.47 | 0.220 | 56 | 33 | 0.05 | 67 | 51 |
+| Same, 0.06-0.2, -2.4 dB | 0.748 | 0.931 | 2.85 | 0.242 | 93 | 47 | 0.06 | 135 | 81 |
+| Same, 0.06-0.25, -2.4 dB | 0.745 | 0.931 | 2.76 | 0.237 | 89 | 43 | 0.06 | 130 | 70 |
+| **0.06-0.25 ^1.5, -2.4 dB** | 0.727 | 0.905 | **2.38** | 0.218 | **85** | 40 | 0.05 | **119** | **60** |
+| 0.07-0.25 ^1.5, -2.4 dB | 0.722 | 0.899 | 2.11 | 0.205 | 86 | 43 | 0.06 | 118 | 57 |
+
+Held out after the choice: big 0.857 =, stray 1.51 -> 1.34, loud 0.075 -> 0.068, big amp 59 -> 100.
+Missed and too-much peaks are now ~11 dB of motion apart (was ~1). By mark: explosions and
+electricity at 61 min 67-80 -> 135-203, explosions at 87 min 75 -> 119, rifles at 5:03 50 -> 80,
+the 2:52 dialogue hit 59 -> 27. Not fixed: the 3:57 roar (YAMNet hears Vehicle 0.5, q 0.10:
+amplitude 24 before and after); the 4:05 and 4:15 too-much marks stay ~60, now half of a real
+moment; 5:17 rose 62 -> 113 (q 0.28 at 5:08, thump and door sounds; which second the tap meant is
+unknown); 62:26 has no loud bass or effect sound in the 10 s before it under any setting.

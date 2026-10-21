@@ -74,7 +74,12 @@ class HapticBenchTest {
         for (m in marks()) if (films.none { m.of(it.nameWithoutExtension) }) println("   mark for no film here, name it as its .mka: ${m.film}")
         println("%-22s %s".format("tuning", tune))
         println("%-22s %s".format("held out*", held))
+        for ((kind, xs) in markResults.groupBy({ it.first }) { it.second }.toSortedMap())
+            println("marks %-9s %3d: felt %.2f, peak amp %.0f (median)".format(kind, xs.size, xs.map { it.first }.average(), median(xs.map { it.second.toDouble() })))
     }
+
+    /** Each mark's kind, felt share and peak amplitude, for the summary under the rows. */
+    private val markResults = mutableListOf<Pair<String, Pair<Double, Int>>>()
 
     /**
      * The caption vocabulary's gaps, by data: every bracketed SDH cue [HapticMeaning] gives no kind,
@@ -184,6 +189,7 @@ class HapticBenchTest {
             val share = (range.first / 100 until range.last / 100).count { anyFelt(it * 100, it * 100 + 100) } / ((range.last - range.first) / 100.0)
             val bed = (range.first / f until range.last / f).count { track.bedAt(it * f) > 0f } / ((range.last - range.first) / f.toDouble())
             val peak = (range.first until minOf(amp.size, range.last)).maxOfOrNull { amp[it].toInt() and 0xFF } ?: 0
+            if (what.startsWith("mark ")) markResults += what.removePrefix("mark ") to (share to peak)
             println("   %s %d-%d s %s: %.2f felt, bed %.2f, %d hits, peak amp %d".format(name, range.first / 1000, range.last / 1000, what, share, bed, track.events.count { it.timeMs in range }, peak))
         }
         return row
