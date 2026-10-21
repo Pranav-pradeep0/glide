@@ -221,6 +221,19 @@ jobs:
             fi
           fi
 
+          # Hand-written notes for users, used for both Play's "What's new" and the GitHub
+          # Release. Checked here so a missing or too-long file fails before the build.
+          NOTES="release-notes/${VERSION}.txt"
+          if [ ! -s "$NOTES" ]; then
+            echo "::error::Missing $NOTES. Write the release notes for users before tagging."
+            exit 1
+          fi
+          NOTES_CHARS=$(LC_ALL=C.UTF-8 wc -m < "$NOTES")
+          if [ "$NOTES_CHARS" -gt 500 ]; then
+            echo "::error::$NOTES is $NOTES_CHARS characters; Play's \"What's new\" allows 500."
+            exit 1
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::GitHub Release '$TAG' already exists. Never rebuild a public version in place; bump the patch version."
             exit 1
@@ -365,52 +378,13 @@ jobs:
             || { echo "::error::native libraries are not 16 KB aligned inside the APK"; FAILED=1; }
           exit $FAILED
 
-      - name: Generate changelog from previous published release
+      - name: Prepare release notes
         run: |
           set -e
-          # The previous *published* release, not the newest tag. A tag whose release
-          # build failed leaves an orphan tag behind (v1.9.1), and ranging from it
-          # silently drops every commit between the last real release and that tag --
-          # which is how 1.9.2's notes came to omit both crash fixes. The release being
-          # built does not exist yet at this step, so this cannot return the current tag.
-          LAST_TAG=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)
-          if [ -z "$LAST_TAG" ] || [ "$LAST_TAG" = "null" ] \
-              || ! git rev-parse -q --verify "refs/tags/$LAST_TAG" >/dev/null; then
-            RANGE="HEAD"
-            echo "No usable previous published release. Using full history."
-          else
-            RANGE="${LAST_TAG}..HEAD"
-            echo "Changelog range: $RANGE"
-          fi
-
-          RAW_LOG=$(git log --no-merges --pretty=format:"%s" $RANGE)
-          FEATS=$(echo "$RAW_LOG" | sed -nE 's/^(feat)(\([^)]*\))?:\s*/- /p')
-          FIXES=$(echo "$RAW_LOG" | sed -nE 's/^(fix)(\([^)]*\))?:\s*/- /p')
-          PERFS=$(echo "$RAW_LOG" | sed -nE 's/^(perf)(\([^)]*\))?:\s*/- /p')
-
-          BODY=""
-          if [ -n "$FEATS" ]; then
-            BODY="${BODY}"$'\n'"### Features"$'\n'"$FEATS"
-          fi
-          if [ -n "$FIXES" ]; then
-            BODY="${BODY}"$'\n'"### Fixes"$'\n'"$FIXES"
-          fi
-          if [ -n "$PERFS" ]; then
-            BODY="${BODY}"$'\n'"### Performance"$'\n'"$PERFS"
-          fi
-
-          if [ -z "$BODY" ]; then
-            LOG=$(echo "$RAW_LOG" | sed -nE 's/^/- /p')
-            if [ -z "$LOG" ]; then
-              LOG="- No notable changes."
-            fi
-            BODY="$LOG"
-          else
-            BODY=$(echo "$BODY" | sed '1{/^$/d}')
-          fi
-
+          # Same text for Play and GitHub; GitHub also gets the build details.
+          cp "release-notes/${VERSION}.txt" whatsnew.txt
           {
-            echo "$BODY"
+            cat whatsnew.txt
             echo ""
             echo "---"
             echo "**Build Info**"
@@ -418,12 +392,6 @@ jobs:
             echo "- Commit: \`$(git rev-parse --short HEAD)\`"
             echo "- Date: \`$(date +'%Y-%m-%d')\`"
           } > release_notes.md
-
-          # Play's "What's new": plain text, at most 500 characters. Whole bullets only, in
-          # the order above, so a long release drops its last lines instead of ending mid-word.
-          printf '%s\n' "$BODY" | grep '^- ' \
-            | LC_ALL=C.UTF-8 awk '{ if (n + length($0) + 1 > 500) exit; print; n += length($0) + 1 }' > whatsnew.txt || true
-          [ -s whatsnew.txt ] || echo "- Bug fixes and improvements." > whatsnew.txt
 
       - name: Upload to Play and fetch the Play-signed APK
         env:

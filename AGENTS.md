@@ -1,7 +1,8 @@
 # Commit Message Guidelines (Agent Instructions)
 
-These rules exist because release changelogs are generated from commit subjects.
-Only commit subjects with `feat`, `fix`, or `perf` become release notes.
+Release notes are hand-written (see "Release Notes" at the end); commit subjects
+no longer become release notes. Keep the format anyway: `feat`, `fix` and `perf`
+are what to read when drafting the notes.
 
 ## Required Format
 
@@ -14,11 +15,11 @@ Only commit subjects with `feat`, `fix`, or `perf` become release notes.
    - Bullet list of user-visible changes.
    - One change per line.
 
-## Types That Appear In Release Notes
+## User-Visible Types
 
 `feat`, `fix`, `perf`
 
-## Other Allowed Types (Not In Release Notes)
+## Other Allowed Types (Internal)
 
 `refactor`, `docs`, `chore`, `ci`, `test`, `style`
 
@@ -27,7 +28,7 @@ Only commit subjects with `feat`, `fix`, or `perf` become release notes.
 Use a small, relevant scope like:
 `player`, `subtitles`, `haptics`, `updates`, `ui`, `build`, `ci`
 
-## Examples (Release-Visible)
+## Examples (User-Visible)
 
 ```
 feat(updates): add in-app update modal
@@ -44,7 +45,7 @@ fix(subtitles): improve SDH detection for bracketed cues
 - reduce false positives around music-only captions
 ```
 
-## Examples (Release-Hidden)
+## Examples (Internal)
 
 ```
 chore(ci): tidy workflow env injection
@@ -59,3 +60,14 @@ refactor(player): extract seek helpers
 - No multi-paragraph prose.
 - Avoid vague summaries like "misc fixes".
 - Avoid internal-only notes unless user-visible.
+
+## Release Notes
+
+Before tagging `vX.Y.Z`, add `release-notes/X.Y.Z.txt`. CI fails the tag without it.
+
+- The same text goes to Play's "What's new" and the GitHub Release.
+- At most 500 characters (Play's limit; CI checks it).
+- Plain words for users: what they will notice, not how it was done.
+- One `- ` bullet per change. No scopes, file names or library names.
+- Draft it from `git log --no-merges <last tag>..HEAD` (`feat`/`fix`/`perf`); the owner
+  approves the wording.
