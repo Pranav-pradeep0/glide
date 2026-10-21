@@ -14,27 +14,26 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 - Play developer account: created on owner's personal Google account, in verification.
 - Done: `3da5cef` screens 4.30.0 (fixes reanimated #10734 SIGSEGV; reanimated 4.7.1 now unblocked).
 
-## RESUME HERE (state at end of 2026-10-20)
+## RESUME HERE (state at end of 2026-10-21)
 
-Everything below is committed on main and NOT pushed. Check `git log --oneline -40` and
-`git status` first.
+Pushed to origin/main 2026-10-21 on the owner's go-ahead. Done that day:
+- D4 finished: navigation 7.5 (69f1fa7), safe-area 5.10.1, flash-list 2.3.3, Kotlin 2.4.21 +
+  ACRA 5.14.2 (74af186; Gradle Metaspace raised to 1 GB for the Kotlin 2.4 plugin).
+- applicationId is now `com.glide.player` (8b0dfda); namespace stays `com.glide.app`.
+- 17919f1: release resource shrinking had stripped Stallion's project ID, token and signing key
+  (read by name via getIdentifier), so OTA never worked in release APKs. Fixed with
+  `res/raw/keep_stallion.xml` (not `keep.xml`: RN's plugin writes its own and overwrote ours).
+  Server side checked: scratchpad `stallion-check.js` replays the launch call; real creds → 200.
+- c264b75: crash dialog uses the system dialog theme (ACRA defaulted to Android 1.0 Theme.Dialog).
+  Test a crash with `adb shell am crash <pid>`; `am crash <package>` also kills the `:acra` dialog.
 
-1. **D4 dependency bumps — in progress when the session ended.** RN 0.88.0 is committed
-   (2297e02). Check `git log` for which of reanimated 4.7.1 + worklets 0.13, gesture-handler
-   3.4, navigation 7.5, safe-area 5.10.1, flash-list 2.3.3 and Kotlin 2.4 → ACRA latest landed.
-   If `git status` shows a half-done package.json/package-lock.json, restore them to HEAD
-   and `npm ci`, then resume the remaining bumps one per commit.
-2. **Package rename (owner decision): applicationId `com.glide.app` → `com.glide.player`**
-   (only one available on Play). Keep `namespace "com.glide.app"` (no file moves). Change:
-   `android/app/build.gradle` applicationId, `.github/workflows/android-ci.yml` PACKAGE,
-   `scripts/glide-trace.ps1`, `scripts/haptics-lab.js`, `scripts/verify-player-engine.sh`.
-   On the phone it installs as a separate app beside com.glide.app.
-3. **One combined phone check** (adb 4319afd2): new package launches; Stallion registers with
-   the NEW project (logcat); edge-swipe Back in the player (portrait + landscape) and seek 1–2 cm
-   in; library Back → background and resume; skipped-song toasts
-   (/sdcard/Music/GlideTest/glide-b4-noaudio.mka); crash dialog → email to
-   glidemediaplayer@gmail.com; D2 layouts at largest font; B3 background play.
-4. **Push** main when 1–3 pass.
+Next:
+1. Owner to-dos below (upload key + secrets, `npx stallion login`, Play Console app
+   com.glide.player, service account JSON, `PLAY_RELEASE_STATUS=draft`, privacy page, testers).
+2. First tag → CI tag job end to end (AAB, Play internal upload, GitHub Release APK).
+3. First signed OTA bundle → confirms Stallion on a device end to end.
+4. Uncommitted subtitle frame-rate ratio work in `src/` (not from the 2026-10-21 session): review,
+   tsc/jest, commit.
 
 Done 2026-10-20 outside the code: Worker `glide-proxy` live (old glide-ai-proxy deleted),
 new Groq/SubDL/OMDb keys, SubDL key stripped from download links. Stallion moved to a new
@@ -137,7 +136,7 @@ Done 2026-10-20: D1 b7c086b (ACRA mail+dialog, opt-in toggle; report address is 
 - [x] **D2 Accessibility:** `IconButton` real 48 dp box (hitSlop isn't measured); default
       `accessibilityRole="button"` in `Touchable`; `maxFontSizeMultiplier` on player chrome.
 - [x] **D3 Predictive back** on Android 16 / targetSdk 36: device-check player, sheets, PiP.
-- [ ] **D4 Dependency bumps:** RN 0.88, reanimated 4.7.1 + worklets 0.13, gesture-handler 3.4,
+- [x] **D4 Dependency bumps:** RN 0.88, reanimated 4.7.1 + worklets 0.13, gesture-handler 3.4,
       navigation 7.5, safe-area 5.10.1, flash-list 2.3.3. Skip feather icons 14 (unreviewed major).
 
 ## E. Owner tasks (not code)
