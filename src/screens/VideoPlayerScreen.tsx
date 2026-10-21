@@ -26,6 +26,7 @@ import AnimatedVideoView from '@/components/VideoPlayer/AnimatedVideoView';
 import { VideoHUD } from '@/components/VideoPlayer/VideoHUD';
 import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
+import { HapticMarkButtons } from '@/components/VideoPlayer/HapticMarkButtons';
 import { SnackbarHost, showSnackbar } from '@/components/ui';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
 import { UpNextCard, UP_NEXT_COUNTDOWN_MS } from '@/components/VideoPlayer/UpNextCard';
@@ -818,8 +819,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const handleToggleHaptics = useCallback(() => setHapticsEnabled(prev => !prev), []);
     const handleHapticMark = useCallback((kind: HapticMark) => {
         HapticModule.mark(kind, videoName, player.currentTimeRef.current * 1000);
-        ui.scheduleAutoHide();
-    }, [videoName, player, ui]);
+    }, [videoName, player]);
 
     const handleEnterPip = useCallback(() => {
         ui.closeAllPanels();
@@ -1408,8 +1408,12 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onEnterPip={handleEnterPip}
                     showSeekButtons={showSeekButtons}
                     seekDuration={seekDuration}
-                    onHapticMark={playMode === 'with-haptics' && hapticsEnabled ? handleHapticMark : undefined}
                 />
+            )}
+
+            {/* Haptics marks for testers, over the video at all times while haptics play */}
+            {!pipPresentationActive && !ui.state.locked && playMode === 'with-haptics' && hapticsEnabled && (
+                <HapticMarkButtons onMark={handleHapticMark} right={12 + effectiveInsets.right} />
             )}
 
             {/* Locked: a tap on the video shows this chip; only the chip unlocks */}
