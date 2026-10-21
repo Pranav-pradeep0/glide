@@ -948,3 +948,22 @@ floor 0.26 -> 0.02, plateau 0.09 -> 0.08. Most big cues peak at the loud level (
 **Not done: default strength from the device calibration.** Release builds never calibrate (the
 Lab is debug-only), so every phone plays the AIN065's curve, which on the AIN065 is its own. The
 default stays slider 0.6 until the phone test says otherwise; derive it once calibration ships.
+
+## Marks (2026-10-21)
+
+Layer 5. While playing with haptics, the player's top bar has two more buttons (shown with the
+controls): "Too much" (zap-off) and "Missed" (zap). A tap calls `HapticModule.mark`, which logs
+`mark <file name>\t<media ms>\t<kind>` (`Log.w`, GlideHaptics) and appends the same line to
+`Android/data/com.glide.player/files/haptics-marks.tsv`: outside the app's private files, so adb
+reads it from a release build, and kept until the app is uninstalled.
+
+`python -I scripts/haptics-marks.py [serial]` adds the phone's new lines to
+`.haptics-fixtures/marks.tsv`. `HapticBenchTest.bench` reports each mark as it does the creature
+attack: the 10 s before the tap (bring up the controls, then the button), felt share, bed share,
+hits, peak amplitude. A mark belongs to the film whose fixture name's parts all appear in its file
+name ("boys-s05e04" in "The.Boys.S05E04..."); one that matches none is listed, to be renamed by hand
+in marks.tsv ("Behind.Her.Eyes" is `behindeyes`). Too much wants the felt share down, missed up.
+
+**Background.** Analysis waits while no activity of the app is started (`ProcessLifecycleOwner`,
+a field read: polling the system would itself be binder traffic) and goes on where it was when the
+app is seen again, PiP included. Logs `listen paused` / `listen resumed`.

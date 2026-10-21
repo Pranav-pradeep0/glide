@@ -19,7 +19,8 @@ import org.junit.Test
  *  - loud felt: share of the film's loud scenes (subwoofer power over [SCENE_MS] within 6 dB of
  *    its 99th percentile) with anything felt. The creature attack buzzed through all of it.
  *  - opening, s: felt before the first line.
- *  - [SCENES]: named reports from testers, felt share in each.
+ *  - [SCENES]: named reports from testers, felt share in each; with [marks], the testers' "too
+ *    much" / "missed" taps on the phone, each over the [MARK_LEAD_MS] before it.
  *
  * Felt is what reaches the motor: the track at the default strength through [HapticRenderer] and
  * the reference phone's calibration (the AIN065's own), amplitude over 0. Its shape (layer 4):
@@ -70,6 +71,7 @@ class HapticBenchTest {
             if (isHeld(name)) held += row else tune += row
             println("%-22s %s".format(name.take(22) + if (isHeld(name)) "*" else "", row))
         }
+        for (m in marks()) if (films.none { m.of(it.nameWithoutExtension) }) println("   mark for no film here, name it as its .mka: ${m.film}")
         println("%-22s %s".format("tuning", tune))
         println("%-22s %s".format("held out*", held))
     }
@@ -177,10 +179,12 @@ class HapticBenchTest {
         }
 
         HapticFilmTest.dialogue(cues).firstOrNull()?.let { first -> row.opening = (0 until minOf(first.first / f, felt.size)).count { felt[it] } * f / 1000.0 }
-        for ((range, what) in SCENES[name].orEmpty()) {
+        val marked = marks().filter { it.of(name) }.map { (it.ms - MARK_LEAD_MS).coerceAtLeast(0)..it.ms to "mark ${it.kind}" }
+        for ((range, what) in SCENES[name].orEmpty() + marked) {
             val share = (range.first / 100 until range.last / 100).count { anyFelt(it * 100, it * 100 + 100) } / ((range.last - range.first) / 100.0)
             val bed = (range.first / f until range.last / f).count { track.bedAt(it * f) > 0f } / ((range.last - range.first) / f.toDouble())
-            println("   %s %d-%d s %s: %.2f felt, bed %.2f, %d hits".format(name, range.first / 1000, range.last / 1000, what, share, bed, track.events.count { it.timeMs in range }))
+            val peak = (range.first until minOf(amp.size, range.last)).maxOfOrNull { amp[it].toInt() and 0xFF } ?: 0
+            println("   %s %d-%d s %s: %.2f felt, bed %.2f, %d hits, peak amp %d".format(name, range.first / 1000, range.last / 1000, what, share, bed, track.events.count { it.timeMs in range }, peak))
         }
         return row
     }
@@ -229,5 +233,18 @@ class HapticBenchTest {
         private val SCENES = mapOf(
             "frankenstein" to listOf(223_000..265_000 to "creature attack, buzzes nonstop")
         )
+
+        /** A tap comes after what prompted it: bring up the controls, then the button. */
+        private const val MARK_LEAD_MS = 10_000
+
+        /** A mark's phone file name is its film's if it holds every part of the fixture's name ("boys-s05e04"). */
+        private class Mark(val film: String, val ms: Int, val kind: String) {
+            private val key = film.lowercase().filter { it.isLetterOrDigit() }
+            fun of(name: String) = name.split('-').all { it in key }
+        }
+
+        /** .haptics-fixtures/marks.tsv, from scripts/haptics-marks.py: file name, media ms, kind. */
+        private fun marks() = File(HapticHarness.fixturesDir(), "marks.tsv").takeIf { it.isFile }?.readLines().orEmpty()
+            .map { it.split('\t') }.filter { it.size == 3 }.map { Mark(it[0], it[1].toInt(), it[2]) }
     }
 }

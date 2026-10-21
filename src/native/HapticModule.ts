@@ -15,7 +15,12 @@ interface HapticModuleInterface {
 
     /** System UI haptic; respects the user's touch-feedback setting. */
     perform(type: UiHaptic): void;
+
+    /** A tester's mark on the film's haptics at a media time (haptics layer 5). */
+    mark(kind: HapticMark, film: string, positionMs: number): void;
 }
+
+export type HapticMark = 'too-much' | 'missed';
 
 const { HapticModule } = NativeModules;
 

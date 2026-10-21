@@ -80,6 +80,7 @@ import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 import { VideoFile, VideoSort } from '@/types';
 import type { PlayerCarry, PlayerProgressData } from '@/hooks/video-player';
 import { carriedAudio, carriedSubtitle } from '@/hooks/video-player/types';
+import HapticModule, { type HapticMark } from '@/native/HapticModule';
 
 // ============================================================================
 // TYPES
@@ -815,6 +816,10 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // The panel's switch carries the feedback.
     const handleToggleHaptics = useCallback(() => setHapticsEnabled(prev => !prev), []);
+    const handleHapticMark = useCallback((kind: HapticMark) => {
+        HapticModule.mark(kind, videoName, player.currentTimeRef.current * 1000);
+        ui.scheduleAutoHide();
+    }, [videoName, player, ui]);
 
     const handleEnterPip = useCallback(() => {
         ui.closeAllPanels();
@@ -1403,6 +1408,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onEnterPip={handleEnterPip}
                     showSeekButtons={showSeekButtons}
                     seekDuration={seekDuration}
+                    onHapticMark={playMode === 'with-haptics' && hapticsEnabled ? handleHapticMark : undefined}
                 />
             )}
 

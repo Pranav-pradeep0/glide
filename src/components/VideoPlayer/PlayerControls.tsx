@@ -21,7 +21,7 @@ import {
     PipIcon, AudioIcon, SubtitleIcon, BookmarkListIcon, VisualEnhancementIcon, OrientationLockIcon, NightModeIcon, SkipRingIcon, getResizeModeIcon, getResizeModeLabel, formatRate,
 } from './PlayerIcons';
 import { Button, Gradient, IconButton, Touchable } from '@/components/ui';
-import { haptic } from '@/native/HapticModule';
+import { haptic, type HapticMark } from '@/native/HapticModule';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { HUD_PILL } from '@/theme/colors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
@@ -479,6 +479,8 @@ interface PlayerControlsProps {
     /** Colour enhancement: used every session, so it lives on the bar. */
     videoEnhancement?: boolean;
     onToggleVideoEnhancement?: () => void;
+    /** Playing with haptics: "Too much" / "Missed" marks for the haptics bench. */
+    onHapticMark?: (kind: HapticMark) => void;
 }
 
 const NO_BOOKMARKS: number[] = [];
@@ -517,7 +519,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, chapters = NO_CHAPTERS, buffering = false, isLandscape, insets, cutouts,
     onOpenBookmarks, onOpenPlaylist, onPrevious, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
-    showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement,
+    showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement, onHapticMark,
 }) => {
 
     const dragging = useSharedValue(false);
@@ -602,6 +604,12 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 </GlyphButton>
                 {onAddBookmark && isLandscape && (
                     <IconButton icon="bookmark" onPress={onAddBookmark} accessibilityLabel="Add bookmark" onPlayer />
+                )}
+                {onHapticMark && (
+                    <>
+                        <IconButton icon="zap-off" onPress={() => { onHapticMark('too-much'); haptic('confirm'); }} accessibilityLabel="Haptics too much here" onPlayer />
+                        <IconButton icon="zap" onPress={() => { onHapticMark('missed'); haptic('confirm'); }} accessibilityLabel="Haptics missed here" onPlayer />
+                    </>
                 )}
                 {/* Portrait: ⋮ opens the same panel, and the title needs the room. */}
                 {isLandscape && (
