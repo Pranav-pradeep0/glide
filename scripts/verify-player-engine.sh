@@ -19,7 +19,7 @@ if [ -z "$URI" ]; then
   exit 2
 fi
 
-PKG=com.glide.app
+PKG=com.glide.player
 OUT="${TMPDIR:-/tmp}/glide-verify"
 mkdir -p "$OUT"
 

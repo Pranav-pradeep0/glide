@@ -18,7 +18,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const PKG = 'com.glide.app';
+const PKG = 'com.glide.player';
 const LOCAL = path.join(os.tmpdir(), 'haptics-lab');
 const adb = (...args) => execFileSync('adb', args, { encoding: 'utf8', maxBuffer: 64 << 20, env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
 
@@ -27,7 +27,7 @@ const adb = (...args) => execFileSync('adb', args, { encoding: 'utf8', maxBuffer
 /**
  * One `Recent vibrations` row:
  * `10-11 22:30:07.245 | effect | finished | duration: 1730ms | start: 22:30:07.247 | end: ... |
- *  ... | usage: MEDIA | com.glide.app (uid=..) | reason: null | played: Step=..., Step=... | original: ...`
+ *  ... | usage: MEDIA | com.glide.player (uid=..) | reason: null | played: Step=..., Step=... | original: ...`
  */
 function parseHistoryLine(line) {
     const f = line.trim().split('|').map(s => s.trim());

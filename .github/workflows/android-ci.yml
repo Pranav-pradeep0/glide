@@ -431,7 +431,7 @@ jobs:
           # A Play app that has never been published only accepts draft releases; set the
           # repository variable PLAY_RELEASE_STATUS=draft until the first rollout.
           PLAY_RELEASE_STATUS: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
-          PACKAGE: com.glide.app
+          PACKAGE: com.glide.player
         run: |
           set -euo pipefail
           if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then

@@ -129,7 +129,7 @@ android {
     }
     namespace "com.glide.app"
     defaultConfig {
-        applicationId "com.glide.app"
+        applicationId "com.glide.player"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode packageVersionCode as int

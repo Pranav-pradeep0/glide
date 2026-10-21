@@ -48,7 +48,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$package = 'com.glide.app'
+$package = 'com.glide.player'
 $tag = 'GlideVLC'
 
 if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {
