@@ -240,8 +240,8 @@ dependencies {
     // Crash reports, opt-in per crash: a dialog asks, then the user's email app sends it.
     // Nothing leaves the phone otherwise. 5.13.1, not 5.14: 5.14 is built with Kotlin 2.4,
     // which this project's 2.2 can't read.
-    implementation "ch.acra:acra-mail:5.13.1"
-    implementation "ch.acra:acra-dialog:5.13.1"
+    implementation "ch.acra:acra-mail:5.14.2"
+    implementation "ch.acra:acra-dialog:5.14.2"
 
     // computeGeometry is pure arithmetic over ints and floats, so the six resize modes --
     // the part of the engine migration the plan calls the risk peak -- can be checked on
