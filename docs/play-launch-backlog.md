@@ -42,10 +42,11 @@ and .env updated; bundle path glide-media-player/glide-media-player/glide-media-
 OTA bundles must be signed (public key in res/values/stallion.xml). Secrets backup:
 C:UsersPranavDesktopGlide-secrets-backup.txt.
 
-Owner to-dos: upload keystore (keytool, alias `upload`) + 4 ANDROID_* GitHub secrets;
-`npx stallion login` as the app account; save the Stallion private key
-(scratchpad/stallion-keys/private-key.pem) to a password manager; revoke the old Groq key and
-set a Groq spending limit; Play Console app with package **com.glide.player**; service
+Done 2026-10-21: upload key `Desktop\Glide-secrets\glide-upload.p12` (alias `upload`) + 4 ANDROID_*
+secrets; `npx stallion login`; Stallion key pair backed up in `Desktop\Glide-secrets\stallion-keys`
+(checked against stallion.xml).
+
+Owner to-dos: revoke the old Groq key and set a Groq spending limit; Play Console app with package **com.glide.player**; service
 account JSON; `PLAY_RELEASE_STATUS=draft`; privacy page; 12 testers; Console forms (Data
 safety adds Crash logs, Diagnostics, Email address — optional).
 
