@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glide privacy policy</title>
+<meta name="description" content="What the Glide media player sends off your phone, to whom, and why.">
+<style>
+  :root { --bg: #ffffff; --fg: #1a1a1a; --muted: #5c5c5c; --line: #e2e2e2; --accent: #2457c5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f0f10; --fg: #ececec; --muted: #a3a3a3; --line: #2a2a2d; --accent: #8cb0ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 36px 0 8px; }
+  p, li { margin: 0 0 10px; }
+  ul { padding-left: 22px; }
+  .meta { color: var(--muted); margin-bottom: 28px; }
+  .summary { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; margin: 0 0 8px; }
+  a { color: var(--accent); }
+  .table { overflow-x: auto; margin: 8px 0 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 10px 10px 0; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  td:first-child { font-weight: 600; white-space: nowrap; padding-right: 14px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Glide privacy policy</h1>
+<p class="meta">Last updated 21 October 2026</p>
+
+<p class="summary">Glide plays the videos and music already on your phone. There are no accounts,
+no ads and no tracking for advertising. Your media files never leave your phone. A few features
+look things up online, and this page lists each one, what it sends and where.</p>
+
+<h2>What stays on your phone</h2>
+<p>Your watch history, resume positions, settings, music queue, and the subtitles and lyrics Glide
+saves are kept only on your phone. Glide reads your videos and music to play them. It does not
+upload them. Uninstalling Glide deletes all of this.</p>
+
+<h2>What leaves your phone, and why</h2>
+<p>Requests marked “via Glide's server” go through a small server Glide runs on Cloudflare, which
+adds the service's access key and passes the request on. That server keeps no record of what
+you asked for. Its logs hold only which feature was used and whether it worked.</p>
+
+<div class="table"><table>
+<thead><tr><th>Feature</th><th>What is sent</th><th>To whom</th><th>When</th></tr></thead>
+<tbody>
+<tr><td>Subtitle search</td>
+    <td>The video's title, file name and, if known, its IMDb id</td>
+    <td>SubDL, via Glide's server. The subtitle file itself downloads straight from SubDL.</td>
+    <td>When you search for subtitles</td></tr>
+<tr><td>Haptic feedback</td>
+    <td>The video's title and file name, to find captions that describe sounds</td>
+    <td>SubDL, via Glide's server</td>
+    <td>Automatically when you play a video with haptics on</td></tr>
+<tr><td>Movie and show details</td>
+    <td>The title and year worked out from the file name. The poster image then loads straight from
+        the image host OMDb gives.</td>
+    <td>OMDb, via Glide's server</td>
+    <td>When you open a video's details</td></tr>
+<tr><td>Lyrics</td>
+    <td>The song's artist, title, album and length</td>
+    <td>LRCLIB (lrclib.net), directly</td>
+    <td>Automatically when a song plays, if “Online lyrics” is on in Settings</td></tr>
+<tr><td>Recap (AI summary)</td>
+    <td>The video's title and up to 5,000 characters of its subtitle dialogue up to where you are</td>
+    <td>Groq, an AI provider, via Glide's server</td>
+    <td>Only when you tap Recap</td></tr>
+<tr><td>Report this recap</td>
+    <td>The video's title and the recap text</td>
+    <td>Kept on Glide's server for review, then deleted after 180 days</td>
+    <td>Only when you report a recap</td></tr>
+<tr><td>App updates</td>
+    <td>An app-specific device id (Android's ANDROID_ID), the app version, phone make and model,
+        Android version, language, time zone, update events, and crash details if the app crashes</td>
+    <td>Stallion (stalliontech.io), the service that delivers Glide's in-app updates</td>
+    <td>When the app starts and when an update is installed</td></tr>
+<tr><td>Crash reports</td>
+    <td>The error details, app and Android version, and phone model</td>
+    <td>The Glide developer, by email</td>
+    <td>Only if you press Send after a crash. Your email app opens with the report so you can read it
+        first. You can turn this off in Settings.</td></tr>
+</tbody>
+</table></div>
+
+<p>Every one of these services sees your phone's IP address when it is contacted, as any website
+does. Glide's server uses it briefly to stop abuse and does not store it. Each service handles
+what it receives under its own privacy policy.</p>
+
+<h2>What Glide does not do</h2>
+<ul>
+  <li>No accounts, sign-in, contacts, location or advertising id.</li>
+  <li>No ads, and no analytics or tracking for advertising.</li>
+  <li>No selling or sharing of your data for marketing.</li>
+  <li>No uploading of your videos, music or photos.</li>
+</ul>
+
+<h2>Permissions</h2>
+<ul>
+  <li><strong>Videos and music on your device:</strong> to list and play them.</li>
+  <li><strong>Notifications:</strong> to show playback controls while media plays.</li>
+  <li><strong>Internet:</strong> for the online features listed above.</li>
+</ul>
+
+<h2>Children</h2>
+<p>Glide is not directed at children under 13 and does not knowingly collect their information.</p>
+
+<h2>Your choices</h2>
+<ul>
+  <li>Turn off online lyrics and crash report offers in Settings.</li>
+  <li>Don't use subtitle search, Recap or haptic feedback if you don't want those lookups sent.</li>
+  <li>Clear the subtitle cache in Settings, or uninstall Glide to delete everything it stored.</li>
+  <li>Email us to ask about or delete a recap report you sent.</li>
+</ul>
+
+<h2>Changes</h2>
+<p>If this policy changes, this page will be updated and the date at the top will change.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:glidemediaplayer@gmail.com">glidemediaplayer@gmail.com</a></p>
+</main>
+</body>
+</html>
