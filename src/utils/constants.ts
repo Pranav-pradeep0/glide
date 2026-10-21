@@ -43,4 +43,4 @@ export const DEFAULT_STORAGE_PATH = RNFS.ExternalStorageDirectoryPath;
 
 
 // Served by GitHub Pages from the public repo; the Play listing links the same page.
-export const PRIVACY_POLICY_URL = 'https://pranav-pradeep0.github.io/glide-public/privacy';
+export const PRIVACY_POLICY_URL = 'https://pranav-pradeep0.github.io/glide/privacy';
