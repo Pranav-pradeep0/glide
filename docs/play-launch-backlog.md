@@ -5,7 +5,7 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 
 **Decisions already made — do not reopen:**
 - Distribution: Google Play only for installs. Each tag still makes a GitHub Release in this repo
-  (`glide-public`, not being retired), carrying the changelog plus the **Play-signed universal APK**
+  (renamed `glide-public` → `glide` 2026-10-21), carrying the changelog plus the **Play-signed universal APK**
   downloaded from Play. One key: Google-generated app signing key + a new upload key in GitHub secrets.
 - Self-updater: removed (`c68a856`). No flavor split.
 - v2.5.0 testers (old `glide-key`) uninstall once. Owner deleted the old `glide-ai-proxy` Worker
@@ -47,7 +47,7 @@ secrets; `npx stallion login`; Stallion key pair backed up in `Desktop\Glide-sec
 (checked against stallion.xml).
 
 Owner to-dos: revoke the old Groq key and set a Groq spending limit; Play Console app with package **com.glide.player**; service
-account JSON; `PLAY_RELEASE_STATUS=draft`; privacy page; 12 testers; Console forms (Data
+account JSON; `PLAY_RELEASE_STATUS=draft`; 12 testers; Console forms (Data
 safety adds Crash logs, Diagnostics, Email address — optional).
 
 ## A. Play blockers (code)
@@ -149,7 +149,7 @@ Done 2026-10-20: D1 b7c086b (ACRA mail+dialog, opt-in toggle; report address is 
 - [ ] Play service account JSON → GitHub secret.
 - [ ] Rotate keys: Cloudflare login recovery, new Groq key (`wrangler secret put GROQ_API_KEY`),
       new OMDb + SubDL keys; Stallion bundle signing.
-- [ ] Privacy policy page (GitHub Pages on this repo).
+- [x] Privacy policy page: https://pranav-pradeep0.github.io/glide/privacy (docs/privacy.html, Pages from main /docs, live 2026-10-21).
 - [ ] 12 testers for the 14-day closed test.
 - [ ] Console forms: Data safety, READ_MEDIA_VIDEO declaration, FGS mediaPlayback (video),
       content rating, listing, screenshots (no copyrighted posters).
