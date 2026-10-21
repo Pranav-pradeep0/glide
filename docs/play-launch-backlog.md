@@ -27,13 +27,34 @@ Pushed to origin/main 2026-10-21 on the owner's go-ahead. Done that day:
 - c264b75: crash dialog uses the system dialog theme (ACRA defaulted to Android 1.0 Theme.Dialog).
   Test a crash with `adb shell am crash <pid>`; `am crash <package>` also kills the `:acra` dialog.
 
+Later on 2026-10-21: upload key + 4 ANDROID_* secrets, `npx stallion login`, Stallion keys backed
+up, privacy page live (https://pranav-pradeep0.github.io/glide/privacy), repo renamed `glide`,
+crash dialog icon dropped, release notes now hand-written (e41180a, see AGENTS.md "Release Notes").
+
 Next:
-1. Owner to-dos below (upload key + secrets, `npx stallion login`, Play Console app
-   com.glide.player, service account JSON, `PLAY_RELEASE_STATUS=draft`, privacy page, testers).
-2. First tag → CI tag job end to end (AAB, Play internal upload, GitHub Release APK).
-3. First signed OTA bundle → confirms Stallion on a device end to end.
-4. Uncommitted subtitle frame-rate ratio work in `src/` (not from the 2026-10-21 session): review,
-   tsc/jest, commit.
+1. Owner: revoke old Groq key + spending limit; Play Console app com.glide.player (once verified);
+   service account JSON → `PLAY_SERVICE_ACCOUNT_JSON`; `PLAY_RELEASE_STATUS=draft`; 12 testers;
+   Console forms (Data safety must match docs/privacy.html).
+2. Phone checks still unconfirmed by owner: edge-swipe Back + seek, library Back → background,
+   skipped-song toast, largest font, background play.
+3. Build the OTA tooling (plan below), then first tag (needs `release-notes/X.Y.Z.txt`).
+4. Subtitle auto-sync work landed from another session (f716436, 585a69d, db3da6f, 745629b); not
+   reviewed here. Stray `hs_err_*.log` / `replay_*.log` in `android/`: delete, add to .gitignore.
+
+## OTA plan (agreed 2026-10-21)
+
+- OTA = the live Play version's code + one cherry-picked JS fix. Never build from main: main's JS
+  may call native code the live app lacks.
+- Fix on main first; `release/X.Y` branch from tag `vX.Y.Z`; cherry-pick the fix.
+- JS-only guard: `git diff --name-only vX.Y.Z..release/X.Y -- android libs package.json
+  package-lock.json app.json` must be empty. `.env` changes are native too (baked into BuildConfig).
+- Release only to the current Play version (`release-bundle --app-version X.Y.Z`), small rollout,
+  then 100%. Older versions update through Play. Stallion drops a bundle on any versionName change
+  (`validateAppVersion` → `fallbackProd`). Auto-rollback only covers crashes before mount; later
+  crashes need `update-release --is-rolled-back true`.
+- Tag each OTA `ota/X.Y.Z.N` (not `v…`: CI treats `v` tags as Play releases).
+- To build: `scripts/ota.sh` (guard, tsc/jest, `publish-bundle --private-key`, tag) and a Settings
+  line showing the running bundle hash. Needs a Stallion CI token for CI use; local login works now.
 
 Done 2026-10-20 outside the code: Worker `glide-proxy` live (old glide-ai-proxy deleted),
 new Groq/SubDL/OMDb keys, SubDL key stripped from download links. Stallion moved to a new
