@@ -45,6 +45,9 @@ object CrashReports {
                     "(stack trace, app and Android version, phone model) for you to review first."
                 positiveButtonText = "Send"
                 negativeButtonText = "Don't send"
+                // ACRA's manifest gives the dialog Android 1.0's Theme.Dialog; use the system's.
+                resTheme = android.R.style.Theme_DeviceDefault_Dialog_Alert
+                resIcon = null
             }
             mailSender {
                 mailTo = "glidemediaplayer@gmail.com"
