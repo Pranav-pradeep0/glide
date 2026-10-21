@@ -20,6 +20,9 @@ interface FloatingSyncPanelProps {
     type: 'audio' | 'subtitle';
     value: number; // in milliseconds
     onChange: (value: number) => void;
+    /** Subtitles only: frame-rate retiming from auto sync. Nudges keep it; Undo and Reset restore it. */
+    ratio?: number;
+    onRatioChange?: (ratio: number) => void;
     onClose: () => void;
     subtitleCues?: SubtitleCue[];
     /** The selected embedded subtitle is still being read; show the actions, disabled. */
@@ -44,6 +47,8 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
     type: syncType,
     value,
     onChange,
+    ratio = 1,
+    onRatioChange,
     onClose,
     subtitleCues = [],
     subtitleCuesLoading = false,
@@ -61,7 +66,7 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
 
     // What the last Auto sync did, until the value is changed by hand. A change also gets Undo.
     const [autoNote, setAutoNote] = useState<string | null>(null);
-    const [undoTo, setUndoTo] = useState<number | null>(null);
+    const [undoTo, setUndoTo] = useState<{ value: number; ratio: number } | null>(null);
 
     const setValue = useCallback((ms: number) => {
         // One tick as the offset passes through zero.
@@ -71,9 +76,15 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
         onChange(ms);
     }, [onChange, value]);
 
+    // Reset and Undo put the retiming back too; a nudge moves the delay alone.
+    const restore = useCallback((ms: number, toRatio: number) => {
+        setValue(ms);
+        if (toRatio !== ratio) {onRatioChange?.(toRatio);}
+    }, [setValue, ratio, onRatioChange]);
+
     const handleAuto = useCallback(async () => {
         if (!onAutoSync) {return;}
-        const before = value;
+        const before = { value, ratio };
         setAutoNote(null);
         setUndoTo(null);
         const result = await onAutoSync();
@@ -83,11 +94,11 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
         setAutoNote(describeAutoSync(result));
         if (result.kind === 'synced') {
             haptic('confirm');
-            if (result.delayMs !== before) {setUndoTo(before);}
+            if (result.delayMs !== before.value || result.ratio !== before.ratio) {setUndoTo(before);}
         } else {
             haptic('reject');
         }
-    }, [onAutoSync, value]);
+    }, [onAutoSync, value, ratio]);
 
     const handleToggleSearch = useCallback(() => {
         const next = !searchMode;
@@ -103,18 +114,20 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
         setQuery(text);
         if (text.length >= 2 && subtitleCues.length > 0) {
             matchReferenceTimeRef.current = currentTimeRef.current;
-            setResults(SubtitleSyncService.findMatchingCues(subtitleCues, text, currentTimeRef.current));
+            // Cues are searched in their own time, which a frame-rate retiming pulls minutes away late in a film.
+            const cueTime = SubtitleSyncService.cueTimeAt(currentTimeRef.current, value, ratio);
+            setResults(SubtitleSyncService.findMatchingCues(subtitleCues, text, cueTime));
         } else {
             setResults([]);
         }
-    }, [subtitleCues, currentTimeRef]);
+    }, [subtitleCues, currentTimeRef, value, ratio]);
 
     const applySync = useCallback((match: MatchResult) => {
-        setValue(SubtitleSyncService.calculateOffset(match.cue, matchReferenceTimeRef.current));
+        setValue(SubtitleSyncService.calculateOffset(match.cue, matchReferenceTimeRef.current, ratio));
         setSearchMode(false);
         setQuery('');
         setResults([]);
-    }, [setValue]);
+    }, [setValue, ratio]);
 
     const cuesReady = subtitleCues.length > 0;
     const isSubtitle = syncType === 'subtitle' && (cuesReady || subtitleCuesLoading);
@@ -173,8 +186,8 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
                                 icon="rotate-ccw"
                                 iconSize={18}
                                 color={colors.textSecondary}
-                                onPress={() => setValue(0)}
-                                disabled={value === 0}
+                                onPress={() => restore(0, 1)}
+                                disabled={value === 0 && ratio === 1}
                                 accessibilityLabel="Reset to zero"
                                 onPlayer
                             />
@@ -199,7 +212,7 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
                         <View style={styles.captionRow}>
                             <Text style={[type.caption, styles.caption]} numberOfLines={2}>{caption}</Text>
                             {undoTo !== null && (
-                                <Button label="Undo" variant="ghost" onPress={() => setValue(undoTo)} accessibilityLabel="Undo auto sync" onPlayer />
+                                <Button label="Undo" variant="ghost" onPress={() => restore(undoTo.value, undoTo.ratio)} accessibilityLabel="Undo auto sync" onPlayer />
                             )}
                         </View>
 
@@ -255,7 +268,7 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
                         {results.length > 0 && (
                             <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                                 {results.map((item, index) => {
-                                    const shift = SubtitleSyncService.calculateOffset(item.cue, matchReferenceTimeRef.current);
+                                    const shift = SubtitleSyncService.calculateOffset(item.cue, matchReferenceTimeRef.current, ratio);
                                     return (
                                         <Touchable
                                             key={`${item.cue.startTime}-${index}`}

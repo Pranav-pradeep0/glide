@@ -18,6 +18,7 @@ interface UsePlayerSettingsOptions {
     showToast?: (message: string, icon?: string) => void;
     initialAudioDelay?: number;
     initialSubtitleDelay?: number;
+    initialSubtitleRatio?: number;
     /** The previous video's settings, when Next / Previous / autoplay opened this one. */
     carried?: PlayerSettings;
 }
@@ -46,6 +47,7 @@ const initialSettings: PlayerSettings = {
     // Synchronization defaults
     audioDelay: 0,
     subtitleDelay: 0,
+    subtitleRatio: 1,
 
     // Subtitle defaults
     subtitleFontSize: 20,
@@ -76,6 +78,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         showToast,
         initialAudioDelay = 0,
         initialSubtitleDelay = 0,
+        initialSubtitleRatio = 1,
         carried,
     } = options;
 
@@ -83,6 +86,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         ...(carried ?? initialSettings),
         audioDelay: initialAudioDelay,
         subtitleDelay: initialSubtitleDelay,
+        subtitleRatio: initialSubtitleRatio,
     });
 
     const sleepTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -280,6 +284,10 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         setSettings(prev => ({ ...prev, subtitleDelay: delay }));
     }, []);
 
+    const setSubtitleRatio = useCallback((ratio: number) => {
+        setSettings(prev => ({ ...prev, subtitleRatio: ratio }));
+    }, []);
+
     // Compute effective bands for player
     const audioEqualizer = useMemo(() => {
         if (!settings.equalizerEnabled) { return undefined; }
@@ -317,6 +325,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         // Synchronization
         setAudioDelay,
         setSubtitleDelay,
+        setSubtitleRatio,
     }), [
         settings,
         toggleMute, toggleRepeat,
@@ -324,7 +333,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         setSleepTimer, clearSleepTimer,
         toggleBackgroundPlay, toggleVideoEnhancement, setVideoEnhancementStrength,
         toggleEqualizer, setEqualizerPreset, setCustomEqualizerBands, setSingleBand, audioEqualizer,
-        setAudioDelay, setSubtitleDelay,
+        setAudioDelay, setSubtitleDelay, setSubtitleRatio,
     ]);
 }
 

@@ -2,6 +2,7 @@ import { MutableRefObject, useCallback, useEffect, useRef } from 'react';
 import { SubtitleCue } from '../types';
 import { SubtitleParser } from '../utils/SubtitleParser';
 import { useSubtitleCueStore } from '../store/subtitleCueStore';
+import { SubtitleSyncService } from '../services/SubtitleSyncService';
 
 /** Position events arrive every 250 ms; allow a little jitter on top. */
 const MAX_EXTRAPOLATION_S = 0.3;
@@ -11,6 +12,8 @@ export interface UseSubtitleDisplayProps {
     subtitleCues?: SubtitleCue[];
     isPlaying: boolean;
     subtitleDelay?: number; // in milliseconds
+    /** Frame-rate retiming from auto sync: a cue at c is shown at c * ratio + delay. */
+    subtitleRatio?: number;
     /** Playback rate, so interpolation between position events tracks the real clock. */
     playbackRate?: number;
     onSubtitleCueChange?: (cue: SubtitleCue | null) => void;
@@ -22,6 +25,7 @@ export function useSubtitleDisplay({
     subtitleCues = [],
     isPlaying,
     subtitleDelay = 0,
+    subtitleRatio = 1,
     playbackRate = 1,
     onSubtitleCueChange,
 }: UseSubtitleDisplayProps) {
@@ -74,7 +78,7 @@ export function useSubtitleDisplay({
         // Paused, nothing moves except a seek, so 500 ms is enough to pick that up and the
         // timer stops being a wakeup four times a second for an unchanging number.
         const intervalId = setInterval(() => {
-            const effectiveTime = readTime(isPlaying, playbackRate) - (subtitleDelay / 1000);
+            const effectiveTime = SubtitleSyncService.cueTimeAt(readTime(isPlaying, playbackRate), subtitleDelay, subtitleRatio);
             const activeCue = SubtitleParser.findActiveCue(subtitleCues, effectiveTime);
             const prev = lastDisplayCueRef.current;
             if (
@@ -88,7 +92,7 @@ export function useSubtitleDisplay({
         }, isPlaying ? 250 : 500);
 
         return () => clearInterval(intervalId);
-    }, [currentTimeRef, isPlaying, playbackRate, readTime, setCue, subtitleCues, subtitleDelay]);
+    }, [currentTimeRef, isPlaying, playbackRate, readTime, setCue, subtitleCues, subtitleDelay, subtitleRatio]);
 
     useEffect(() => {
         lastDisplayCueRef.current = null;

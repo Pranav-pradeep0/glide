@@ -291,6 +291,8 @@ export interface PlayerSettings {
     // Synchronization
     audioDelay: number;
     subtitleDelay: number;
+    /** Frame-rate retiming from auto sync: a cue at c is shown at c * ratio + delay. 1 = none. */
+    subtitleRatio: number;
 
     // Subtitle Appearance
     subtitleFontSize: number;
@@ -487,6 +489,7 @@ export interface UsePlayerSettingsReturn {
     // Synchronization Actions
     setAudioDelay: (delay: number) => void;
     setSubtitleDelay: (delay: number) => void;
+    setSubtitleRatio: (ratio: number) => void;
 
     // Computed for Player
     audioEqualizer: number[] | undefined;

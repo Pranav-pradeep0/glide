@@ -143,13 +143,16 @@ export class SubtitleSyncService {
     }
 
     /**
-     * Calculates the offset in milliseconds to sync the cue to the current time.
+     * The delay in ms that shows [cue] at [currentTime], keeping the frame-rate [ratio]:
+     * cue.startTime * ratio + delay = currentTime. Positive shows subtitles later.
      */
-    static calculateOffset(cue: SubtitleCue, currentTime: number): number {
-        // If cue is at 10s and we are at 12s, we need a 2s delay.
-        // ExoPlayer/System delay usually works such that positive = delay subtitles (show later).
-        // offset = currentTime - cueStartTime
-        return Math.round((currentTime - cue.startTime) * 1000);
+    static calculateOffset(cue: SubtitleCue, currentTime: number, ratio = 1): number {
+        return Math.round((currentTime - cue.startTime * ratio) * 1000);
+    }
+
+    /** The subtitle time shown at video time [videoTime]: a cue at c is shown at c * ratio + delay. */
+    static cueTimeAt(videoTime: number, delayMs: number, ratio = 1): number {
+        return (videoTime - delayMs / 1000) / ratio;
     }
 
 

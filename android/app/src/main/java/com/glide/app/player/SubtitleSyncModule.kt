@@ -15,6 +15,12 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
+import com.glide.app.haptic.HapticListener
+import com.glide.app.haptic.HapticPerformer
+import com.glide.app.haptic.HapticRecognizer
+import com.glide.app.haptic.HapticSounds
+import com.glide.app.haptic.HapticTrack
+import java.io.DataInputStream
 import java.io.File
 import java.nio.ByteOrder
 import java.util.Locale
@@ -30,6 +36,9 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
 
     companion object {
         const val NAME = "SubtitleSyncModule"
+
+        /** YAMNet's Speech score among a sound window's [HapticSounds.KEPT] scores. */
+        private val SPEECH = HapticSounds.KEPT.indexOf(HapticSounds.SPEECH)
 
         /**
          * No AAC dynamic range control: it narrows the gap between dialogue and the quiet around
@@ -175,6 +184,68 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                 "${"%.1f".format(Locale.US, (result?.levels?.size ?: 0) * SubtitleAligner.FRAME_S)} s"
         )
         return result
+    }
+
+    /**
+     * YAMNet's Speech level for [frames] frames from [startS] ([SubtitleAligner.scoreFrames]):
+     * from the haptics cache when it has heard this window, else heard again here (~9 s per
+     * 5-min window on a phone, against ~2 s for loudness). Null if YAMNet can't load.
+     */
+    private fun speechLevels(videoPath: String, startS: Double, frames: Int, trackIndex: Int): FloatArray? {
+        val durationS = frames * SubtitleAligner.FRAME_S
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        val cached = cachedSpeech(videoPath, startS, durationS, trackIndex)
+        val scores = cached ?: recognizeSpeech(videoPath, startS, durationS, trackIndex) ?: return null
+        android.util.Log.i(
+            NAME, "auto-sync: speech from ${if (cached != null) "haptics cache" else "yamnet"} " +
+                "window=${startS}s took=${android.os.SystemClock.elapsedRealtime() - t0}ms"
+        )
+        return SubtitleAligner.scoreFrames(scores, startS, frames)
+    }
+
+    /**
+     * Speech scores of every sound window from the haptics track cached for this file, when it
+     * is the current analyser's and covers [startS, startS + durationS) (or up to the film's end).
+     * HapticAnalysis caches a track only once the whole film is heard, but its sounds lane is
+     * zeros where YAMNet did not run, so a window with many all-zero rows counts as not covered.
+     * It is the first decodable audio track's, so another track never reads from it.
+     */
+    private fun cachedSpeech(videoPath: String, startS: Double, durationS: Double, trackIndex: Int): FloatArray? {
+        if (trackIndex > 0) return null
+        val context = reactApplicationContext
+        val track = runCatching {
+            val file = HapticPerformer.cacheFile(context, HapticPerformer.fingerprint(context, videoPath))
+            DataInputStream(file.inputStream().buffered()).use { HapticTrack.read(it) }
+        }.getOrNull()?.takeIf { it.analyzerVersion == HapticListener.VERSION } ?: return null
+        val hopS = HapticSounds.HOP_MS / 1000.0
+        val endS = minOf(startS + durationS, track.bedIntensity.size * HapticTrack.BED_FRAME_MS / 1000.0)
+        val rows = Math.ceil(startS / hopS).toInt()..Math.floor((endS - HapticSounds.WINDOW_MS / 1000.0) / hopS).toInt()
+        if (rows.isEmpty() || rows.first < 0 || rows.last >= track.sounds.size) return null
+        // ponytail: a fixed 10% share; a genuinely silent stretch only costs a fresh YAMNet pass.
+        if (rows.count { k -> track.sounds[k].all { it == 0f } } * 10 > rows.count()) return null
+        return FloatArray(track.sounds.size) { track.sounds[it][SPEECH] }
+    }
+
+    /** The window decoded again through YAMNet, as HapticAnalysis hears it: Speech score per sound window. */
+    private fun recognizeSpeech(videoPath: String, startS: Double, durationS: Double, trackIndex: Int): FloatArray? {
+        val (classify, interpreter) = HapticRecognizer.open(reactApplicationContext) ?: return null
+        try {
+            val recognizer = HapticRecognizer(classify)
+            // A sound window either side, so the first and last frames lie between two centres.
+            val margin = 1.5
+            val endUs = ((startS + durationS + margin) * 1_000_000).toLong()
+            val sink = object : PcmSink {
+                override var done = false
+                override fun add(ptsUs: Long, data: java.nio.ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
+                    if (ptsUs >= endUs) done = true
+                    if (!done && channels > 0 && rate > 0) recognizer.add(ptsUs, data, channels, rate, isFloat)
+                }
+            }
+            decodeAudio(reactApplicationContext, videoPath, sink, ((startS - margin).coerceAtLeast(0.0) * 1_000_000).toLong(), trackIndex)
+            return FloatArray(recognizer.windows.size) { recognizer.windows[it][SPEECH] }
+        } finally {
+            interpreter.close()
+        }
     }
 
     /** PCM out of compressed audio samples, into a [WindowMeter]. */
@@ -430,11 +501,17 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
 
 
     /**
-     * Decodes audio directly from [videoPath] using MediaExtractor and MediaCodec, and aligns
-     * cue times against the extracted speech band.
+     * Aligns the cues against the 300 s of audio from [windowStartS]: speech-band loudness first;
+     * where that is unsure (neither confident nor drift), YAMNet's Speech score, right more often
+     * on real films but coarser, used only if it is sure. A drift is then checked at window
+     * [secondWindowStartS] (negative: none) with the signal that found it
+     * ([SubtitleAligner.confirmRatio]): a confirmed ratio comes back confident, else it stays drift.
      */
     @ReactMethod
-    fun alignVideo(videoPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray, audioTrackIndex: Int, promise: Promise) {
+    fun alignVideo(
+        videoPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray,
+        audioTrackIndex: Int, secondWindowStartS: Double, promise: Promise,
+    ) {
         BackgroundWork.submitLong(promise) {
             try {
                 val decoded = decodeAudioWindow(videoPath, windowStartS, 300.0, audioTrackIndex)
@@ -443,20 +520,51 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                 val s = DoubleArray(starts.size()) { starts.getDouble(it) }
                 val e = DoubleArray(ends.size()) { ends.getDouble(it) }
 
-                val result = SubtitleAligner.align(decoded.levels, decoded.actualStartS, s, e)
+                var result = SubtitleAligner.align(decoded.levels, decoded.actualStartS, s, e)
+                var source = "energy"
+                var levels = decoded.levels
+                android.util.Log.i(NAME, "auto-sync: energy window=${decoded.actualStartS}s cues=${s.size} $result")
+
+                if (result?.confident != true && result?.drift != true) {
+                    speechLevels(videoPath, decoded.actualStartS, decoded.levels.size, audioTrackIndex)?.let { speech ->
+                        val r = SubtitleAligner.align(speech, decoded.actualStartS, s, e, clampDb = false)
+                        val sure = r != null && (r.drift ||
+                            (r.confident && SubtitleAligner.halvesConfirm(speech, decoded.actualStartS, s, e, r, clampDb = false)))
+                        if (sure) { result = r; source = "speech"; levels = speech }
+                        android.util.Log.i(NAME, "auto-sync: speech $r")
+                    }
+                }
+
+                if (result?.drift == true && secondWindowStartS >= 0) {
+                    val second = if (source == "energy") {
+                        decodeAudioWindow(videoPath, secondWindowStartS, 300.0, audioTrackIndex)?.let { it.levels to it.actualStartS }
+                    } else {
+                        speechLevels(videoPath, secondWindowStartS, (300.0 / SubtitleAligner.FRAME_S).toInt(), audioTrackIndex)
+                            ?.let { it to secondWindowStartS }
+                    }
+                    val confirmed = second?.let { (b, startB) ->
+                        SubtitleAligner.confirmRatio(levels, decoded.actualStartS, b, startB, s, e, clampDb = source == "energy")
+                    }
+                    // Its delayS is window A's, secondDelayS window B's.
+                    android.util.Log.i(NAME, "auto-sync: ratio check windowB=${second?.second}s $confirmed")
+                    if (confirmed != null) result = confirmed
+                }
+
+                val chosen = result
                 android.util.Log.i(
-                    NAME, "auto-sync: window=${decoded.actualStartS}s cues=${s.size} $result " +
-                        "confident=${result?.confident} drift=${result?.drift}"
+                    NAME, "auto-sync: source=$source window=${decoded.actualStartS}s cues=${s.size} $chosen " +
+                        "confident=${chosen?.confident} drift=${chosen?.drift}"
                 )
-                if (result == null) return@submitLong promise.resolve(null)
+                if (chosen == null) return@submitLong promise.resolve(null)
 
                 promise.resolve(Arguments.createMap().apply {
-                    putDouble("delayMs", result.delayS * 1000)
-                    putDouble("ratio", result.ratio)
-                    putDouble("peakZ", result.peakZ)
-                    putDouble("runnerUp", result.runnerUp)
-                    putBoolean("confident", result.confident)
-                    putBoolean("drift", result.drift)
+                    putDouble("delayMs", chosen.delayS * 1000)
+                    putDouble("ratio", chosen.ratio)
+                    putDouble("peakZ", chosen.peakZ)
+                    putDouble("runnerUp", chosen.runnerUp)
+                    putBoolean("confident", chosen.confident)
+                    putBoolean("drift", chosen.drift)
+                    putString("source", source)
                 })
             } catch (t: Throwable) {
                 promise.reject("E_ALIGN", t.message ?: "Alignment error", t)

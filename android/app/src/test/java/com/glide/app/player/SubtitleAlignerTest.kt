@@ -2,6 +2,9 @@ package com.glide.app.player
 
 import com.glide.app.player.SubtitleAligner.FRAME_S
 import com.glide.app.player.SubtitleAligner.align
+import com.glide.app.player.SubtitleAligner.confirmRatio
+import com.glide.app.player.SubtitleAligner.halvesConfirm
+import com.glide.app.player.SubtitleAligner.scoreFrames
 import com.glide.app.player.SubtitleAligner.speechLevels
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +30,9 @@ class SubtitleAlignerTest {
     private val windowStart = 1500.0
     private val windowLength = 300.0
 
+    /** Window B for [confirmRatio], 1800 s from A, as the JS side picks it (>= 1200 s away). */
+    private val secondStart = 3300.0
+
     /** Cues across the whole film, realistic lengths and gaps. */
     private fun cues(seed: Int = 1): Pair<DoubleArray, DoubleArray> {
         val rnd = Random(seed)
@@ -44,6 +50,7 @@ class SubtitleAlignerTest {
     /** Loudness where speech happens at [speechTime] of each cue interval. */
     private fun levels(
         starts: DoubleArray, ends: DoubleArray, speechTime: (Double) -> Double, seed: Int = 7,
+        windowStart: Double = this.windowStart,
     ): FloatArray {
         val rnd = Random(seed)
         val n = (windowLength / FRAME_S).roundToInt()
@@ -216,5 +223,83 @@ class SubtitleAlignerTest {
             val r = align(withBed(levels(s2, e2, { it }, seed)), windowStart, s, e)
             assertFalse("seed $seed must not be confident: $r", r?.confident ?: false)
         }
+    }
+
+    @Test
+    fun `a frame-rate drift is confirmed by a second window, at the exact ratio`() {
+        // PAL-speed subtitle on a 23.976 film, plus a delay. 25/24 is 0.1% off and fits window A
+        // almost as well; only window B tells them apart.
+        val (s, e) = cues()
+        val ratio = 25 / 23.976
+        val a = levels(s, e, { it * ratio + 1.7 })
+        val b = levels(s, e, { it * ratio + 1.7 }, seed = 8, windowStart = secondStart)
+        assertTrue(align(a, windowStart, s, e)!!.drift)
+        val r = confirmRatio(a, windowStart, b, secondStart, s, e)
+        assertNotNull(r)
+        assertEquals(ratio, r!!.ratio, 1e-9)
+        assertEquals(1.7, r.delayS, 0.05)
+        assertEquals(1.7, r.secondDelayS!!, 0.05)
+        assertTrue("a confirmed ratio is safe to apply: $r", r.confident)
+        assertFalse(r.drift)
+    }
+
+    @Test
+    fun `unrelated audio never confirms a ratio`() {
+        val (s, e) = cues(seed = 1)
+        val (s2, e2) = cues(seed = 99)
+        val ratio = 25 / 23.976
+        listOf(7, 8, 9, 10, 11).forEach { seed ->
+            val a = levels(s2, e2, { it * ratio }, seed)
+            val b = levels(s2, e2, { it * ratio }, seed + 100, windowStart = secondStart)
+            assertNull("seed $seed", confirmRatio(a, windowStart, b, secondStart, s, e))
+        }
+    }
+
+    @Test
+    fun `a plain delay is never turned into a ratio`() {
+        // 24/23.976 is 0.1% from 1: inside one window it fits a plain delay almost as well, but
+        // its delay moves 1.8 s between windows 1800 s apart.
+        val (s, e) = cues()
+        listOf(0.0, 2.0, -5.3).forEach { delay ->
+            val a = levels(s, e, { it + delay })
+            val b = levels(s, e, { it + delay }, seed = 8, windowStart = secondStart)
+            assertNull("delay $delay", confirmRatio(a, windowStart, b, secondStart, s, e))
+        }
+    }
+
+    @Test
+    fun `sound-window scores land on their centres, interpolated between`() {
+        // Window k covers [k * 0.48, k * 0.48 + 0.975) s: its centre is k * 0.48 + 0.4875.
+        val scores = FloatArray(10) { it.toFloat() }
+        val f = scoreFrames(scores, 0.0, 1000)
+        assertEquals("held before the first centre", 0f, f[0], 1e-6f)
+        assertEquals((1.0 - 0.4875) / 0.48, f[100].toDouble(), 1e-4)
+        assertEquals((2.5 - 0.4875) / 0.48, f[250].toDouble(), 1e-4)
+        assertEquals("ends at the last centre, 4.8075 s", 481, f.size)
+        assertEquals(1.0, scoreFrames(scores, 0.9675, 1)[0].toDouble(), 1e-4)
+    }
+
+    @Test
+    fun `speech scores align without the dB clamp`() {
+        // A YAMNet-like Speech score per 0.48 s window: the share of the window that is speech,
+        // plus noise, 0..1.
+        val (s, e) = cues()
+        val delay = 2.37
+        val rnd = Random(3)
+        val scores = FloatArray(((windowStart + windowLength) / 0.48).toInt() + 3) { k ->
+            val w0 = k * 0.48
+            val w1 = w0 + 0.975
+            val speech = s.indices.sumOf { i -> maxOf(0.0, minOf(w1, e[i] + delay) - maxOf(w0, s[i] + delay)) } / 0.975
+            (0.8 * speech + 0.2 * rnd.nextDouble()).toFloat().coerceIn(0f, 1f)
+        }
+        val frames = scoreFrames(scores, windowStart, (windowLength / FRAME_S).roundToInt())
+        val r = align(frames, windowStart, s, e, clampDb = false)
+        assertNotNull(r)
+        assertTrue("should be confident: $r", r!!.confident)
+        assertEquals(delay, r.delayS, 0.1)
+        assertNull("clamped to dB, a 0..1 score is flat", align(frames, windowStart, s, e))
+        // The fallback's extra bar: each half finds the delay on its own, and not a wrong one.
+        assertTrue(halvesConfirm(frames, windowStart, s, e, r, clampDb = false))
+        assertFalse(halvesConfirm(frames, windowStart, s, e, r.copy(delayS = r.delayS + 20), clampDb = false))
     }
 }

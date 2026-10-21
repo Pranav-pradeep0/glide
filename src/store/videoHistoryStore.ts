@@ -28,7 +28,7 @@ interface VideoHistoryState {
     getAllHistory: () => VideoHistoryEntry[];
     updateVideoHistory: (entry: Partial<VideoHistoryEntry> & { videoPath: string; videoName: string }) => void;
     incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number) => void;
-    updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrackId?: number, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, brightness?: number, fileSize?: number) => void;
+    updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrackId?: number, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, subtitleRatio?: number, brightness?: number, fileSize?: number) => void;
     /** Play from start / mark (un)watched: the position only, leaving when it was watched alone. */
     setWatchedPosition: (videoPath: string, videoName: string, position: number, duration: number) => void;
     setStopFrame: (videoPath: string, videoName: string, stopFrameMs: number | undefined) => void;
@@ -288,7 +288,7 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         debouncedPersist();
     },
 
-    updatePlaybackPosition: (videoPath, videoName, position, duration, audioTrackId, subtitleTrackIndex, audioDelay, subtitleDelay, brightness, fileSize) => {
+    updatePlaybackPosition: (videoPath, videoName, position, duration, audioTrackId, subtitleTrackIndex, audioDelay, subtitleDelay, subtitleRatio, brightness, fileSize) => {
         const videoId = generateVideoId(videoName, fileSize);
 
         set((state) => {
@@ -308,6 +308,7 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                     selectedSubtitleTrackId: subtitleTrackIndex,
                     audioDelay: audioDelay,
                     subtitleDelay: subtitleDelay,
+                    subtitleRatio: subtitleRatio,
                     brightness: brightness,
                     // Keep the best path: prefer file:// over content:// or http(s)://
                     videoPath: videoPath.startsWith('file://') || videoPath.startsWith('/')
@@ -335,6 +336,7 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                     selectedSubtitleTrackId: subtitleTrackIndex,
                     audioDelay: audioDelay,
                     subtitleDelay: subtitleDelay,
+                    subtitleRatio: subtitleRatio,
                     brightness: brightness,
                 });
             }

@@ -297,6 +297,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 subtitleTrackIndex: history.selectedSubtitleTrackId,
                 audioDelay: history.audioDelay,
                 subtitleDelay: history.subtitleDelay,
+                subtitleRatio: history.subtitleRatio,
                 brightness: history.brightness,
                 duration: history.duration,
             };
@@ -311,6 +312,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         subtitleTrackIndex: initialSubtitleTrackIndex,
         audioDelay: initialAudioDelay,
         subtitleDelay: initialSubtitleDelay,
+        subtitleRatio: initialSubtitleRatio,
         brightness: initialVideoBrightness,
         duration: savedDuration,
     } = useMemo(() => getResumeState(), [getResumeState]);
@@ -350,6 +352,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         onSleepTimerEnd: () => handleGoBackRef.current(),
         initialAudioDelay,
         initialSubtitleDelay,
+        initialSubtitleRatio,
         carried: carry?.settings,
     });
 
@@ -457,7 +460,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         enabled: !isNetworkStream,
         currentTimeRef: player.currentTimeRef,
         delayMs: settingsHook.settings.subtitleDelay,
+        ratio: settingsHook.settings.subtitleRatio,
         setDelay: settingsHook.setSubtitleDelay,
+        setRatio: settingsHook.setSubtitleRatio,
         showToast: bookmarksHook.showToastWithMessage,
         selectedAudioTrackIndex: tracksHook.selectedAudioTrackId,
         audioTracksLoaded: tracksHook.audioTracks.length > 0 || player.state.duration > 0,
@@ -526,6 +531,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     tracksHook.selectedSubtitleTrackIndex ?? undefined,
                     settingsHook.settings.audioDelay,
                     settingsHook.settings.subtitleDelay,
+                    settingsHook.settings.subtitleRatio,
                     brightnessMode === 'video' ? brightnessRef.current : undefined
                 );
                 persistNow();
@@ -606,6 +612,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 tracksHook.selectedSubtitleTrackIndex ?? undefined,
                 settingsHook.settings.audioDelay,
                 settingsHook.settings.subtitleDelay,
+                settingsHook.settings.subtitleRatio,
                 // Only save brightness to history if in video mode
                 brightnessMode === 'video' ? brightnessRef.current : undefined
             );
@@ -627,6 +634,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         tracksHook.selectedSubtitleTrackIndex,
         settingsHook.settings.audioDelay,
         settingsHook.settings.subtitleDelay,
+        settingsHook.settings.subtitleRatio,
         brightnessMode,
         resumePosition,
         creditsAt,
@@ -676,6 +684,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         subtitleCues: tracksHook.subtitleCues,
         isPlaying: player.state.isPlaying,
         subtitleDelay: settingsHook.settings.subtitleDelay,
+        subtitleRatio: settingsHook.settings.subtitleRatio,
         playbackRate: effectivePlaybackRate,
     });
 
@@ -1298,6 +1307,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                     type={syncPanelType}
                     value={syncPanelType === 'audio' ? settingsHook.settings.audioDelay : settingsHook.settings.subtitleDelay}
                     onChange={syncPanelType === 'audio' ? settingsHook.setAudioDelay : settingsHook.setSubtitleDelay}
+                    ratio={syncPanelType === 'subtitle' ? settingsHook.settings.subtitleRatio : undefined}
+                    onRatioChange={syncPanelType === 'subtitle' ? settingsHook.setSubtitleRatio : undefined}
                     onClose={() => setSyncPanelType(null)}
                     subtitleCues={tracksHook.subtitleCues}
                     subtitleCuesLoading={tracksHook.subtitleCuesLoading}

@@ -257,6 +257,8 @@ export interface VideoHistoryEntry {
     selectedSubtitleTrackId?: number; // Index of the subtitle track
     audioDelay?: number;
     subtitleDelay?: number;
+    /** Frame-rate retiming from auto sync; unset means 1. */
+    subtitleRatio?: number;
     brightness?: number;
 }
 

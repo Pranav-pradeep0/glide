@@ -1,5 +1,6 @@
 package com.glide.app.player
 
+import com.glide.app.haptic.HapticSounds
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -22,6 +23,9 @@ import kotlin.math.sqrt
  *    make O(cues) per lag instead of O(frames). The best lag is the delay.
  * 3. The same search at the common frame-rate ratios ([RATIOS]) catches subtitles timed for a
  *    different frame rate, whose error grows through the film and no constant delay can fix.
+ *    [confirmRatio] names the exact ratio from a second window far away.
+ *
+ * Where loudness is unsure, YAMNet's Speech score ([scoreFrames]) goes through the same [align].
  *
  * Pure arithmetic, so [SubtitleAlignerTest] runs it on the JVM. The bridge is
  * [SubtitleSyncModule].
@@ -52,6 +56,15 @@ internal object SubtitleAligner {
     const val AGREE_MIN_Z = 2.0
     const val AGREE_TOLERANCE_S = 0.25
 
+    /**
+     * [confirmRatio]: how close the two windows' delays must be at a ratio. At a ratio 0.1% off
+     * (25/24 for 25/23.976) the delay creeps 1 ms per second of film, so windows 1200 s apart
+     * find delays at least 1.2 s apart; at the right ratio they differ by the peak's jitter only.
+     * On 12 real films (scripts/subsync-bench.py) 0.4 confirmed 99-100% of 25 fps drifts with no
+     * wrong ratio; 0.25 lost a tenth of them to peak jitter.
+     */
+    const val RATIO_AGREE_S = 0.4
+
     /** Long enough to keep a line of dialogue, short enough to drop a scene's music bed. */
     const val DETREND_S = 8.0
 
@@ -69,10 +82,15 @@ internal object SubtitleAligner {
         val plainRunnerUp: Double = runnerUp,
         /** Both halves of the window found this delay on their own. */
         val agreed: Boolean = false,
+        /** A second window found the same delay at this ratio ([confirmRatio]): its delay. */
+        val secondDelayS: Double? = null,
     ) {
-        val confident get() = agreed || (peakZ >= MIN_PEAK_Z && runnerUp <= MAX_RUNNER_UP)
-        /** The best fit needs a frame-rate change, which a delay alone cannot apply. */
-        val drift get() = confident && ratio != 1.0
+        /** The peak stands out on its own, or both halves agree. */
+        private val fits get() = agreed || (peakZ >= MIN_PEAK_Z && runnerUp <= MAX_RUNNER_UP)
+        /** Safe to apply [delayS] at [ratio] as they are: a plain delay that fits, or a confirmed ratio. */
+        val confident get() = secondDelayS != null || (fits && ratio == 1.0)
+        /** The best fit needs a frame-rate change no second window has confirmed: apply nothing. */
+        val drift get() = fits && ratio != 1.0 && secondDelayS == null
     }
 
     /** 16-bit mono PCM to speech-band loudness in dB, one value per [FRAME_S]. */
@@ -115,10 +133,13 @@ internal object SubtitleAligner {
     /**
      * Where the cues ([starts]/[ends], seconds of video time) best line up with [levels], whose
      * first frame is at [windowStartS]. Null if too little cue time overlaps the audio.
+     * [clampDb] floors dB levels; off for a 0..1 score series ([scoreFrames]), which it would flatten.
      */
-    fun align(levels: FloatArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray): Result? {
+    fun align(
+        levels: FloatArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, clampDb: Boolean = true,
+    ): Result? {
         if (levels.size < 2 * (MAX_SHIFT_S / FRAME_S)) return null
-        val a = standardised(levels) ?: return null
+        val a = standardised(levels, clampDb) ?: return null
         val prefix = prefixSums(a, 0, a.size)
 
         // A plain delay wins whenever it fits. 24/23.976 is only 0.1% from 1, so inside one window
@@ -139,9 +160,9 @@ internal object SubtitleAligner {
      * [DETREND_S] -- a music bed or a loud scene lifts cues and gaps alike, and only the change
      * where speech starts and stops should score -- then standardised.
      */
-    private fun standardised(levels: FloatArray): DoubleArray? {
+    private fun standardised(levels: FloatArray, clampDb: Boolean = true): DoubleArray? {
         val n = levels.size
-        val a = DoubleArray(n) { levels[it].coerceIn(-80f, 0f).toDouble() }
+        val a = DoubleArray(n) { (if (clampDb) levels[it].coerceIn(-80f, 0f) else levels[it]).toDouble() }
         val p = prefixSums(a, 0, n)
         val half = (DETREND_S / 2 / FRAME_S).roundToInt()
         val d = DoubleArray(n) {
@@ -155,11 +176,72 @@ internal object SubtitleAligner {
         return DoubleArray(n) { (d[it] - mean) / sd }
     }
 
+    /**
+     * Which frame-rate ratio an [align] drift in window A ([levelsA] from [startA]) really is, by
+     * window B far away. Inside one window 25/23.976 and 25/24, 0.1% apart, fit about as well; at
+     * the wrong one the two windows find delays [RATIO_AGREE_S] or more apart, at the right one
+     * the same delay. Of the ratios where both peak at z >= [AGREE_MIN_Z] and runner-up <=
+     * [MAX_RUNNER_UP] with delays that agree, the one whose weaker window is strongest wins,
+     * returned with window A's delay and [Result.secondDelayS] set. Null when none agrees, and 1.0 is never tried: a plain delay is
+     * [align]'s call, and must never come back as a ratio. Pass the [clampDb] the drift was found with.
+     */
+    fun confirmRatio(
+        levelsA: FloatArray, startA: Double, levelsB: FloatArray, startB: Double,
+        starts: DoubleArray, ends: DoubleArray, clampDb: Boolean = true,
+    ): Result? {
+        if (min(levelsA.size, levelsB.size) < 2 * (MAX_SHIFT_S / FRAME_S)) return null
+        val pa = standardised(levelsA, clampDb)?.let { prefixSums(it, 0, it.size) } ?: return null
+        val pb = standardised(levelsB, clampDb)?.let { prefixSums(it, 0, it.size) } ?: return null
+        return RATIOS.drop(1).mapNotNull { q ->
+            val a = alignAt(pa, startA, starts, ends, q) ?: return@mapNotNull null
+            val b = alignAt(pb, startB, starts, ends, q) ?: return@mapNotNull null
+            val weaker = min(a.peakZ, b.peakZ)
+            // Six ratios, two low-z peaks each: a chance pair lands within RATIO_AGREE_S often
+            // enough (unrelated audio did, z 2.2, runner-up 0.94) that each peak must also stand clear.
+            if (weaker < AGREE_MIN_Z || max(a.runnerUp, b.runnerUp) > MAX_RUNNER_UP ||
+                abs(a.delayS - b.delayS) > RATIO_AGREE_S) null
+            else a.copy(secondDelayS = b.delayS) to weaker
+        }.maxByOrNull { it.second }?.first
+    }
+
+    /**
+     * YAMNet Speech scores, one per sound window (window k hears [k * HOP_MS, k * HOP_MS +
+     * WINDOW_MS) of the film, as the haptics sounds lane holds them), as up to [frames] levels
+     * [FRAME_S] apart from [windowStartS], for [align] with clampDb off. A score sits at its
+     * window's centre and frames between two centres take the straight line between them;
+     * frames before the first centre take its score, and frames past the last are left out, as
+     * where the audio ends.
+     */
+    fun scoreFrames(scores: FloatArray, windowStartS: Double, frames: Int): FloatArray {
+        if (scores.isEmpty()) return FloatArray(0)
+        val hop = HapticSounds.HOP_MS / 1000.0
+        val centre = HapticSounds.WINDOW_MS / 2000.0
+        val lastS = (scores.size - 1) * hop + centre
+        val n = min(frames, ((lastS - windowStartS) / FRAME_S).toInt() + 1).coerceAtLeast(0)
+        return FloatArray(n) {
+            val x = ((windowStartS + it * FRAME_S - centre) / hop).coerceIn(0.0, scores.size - 1.0)
+            val k = x.toInt()
+            val next = scores[min(k + 1, scores.size - 1)]
+            (scores[k] + (next - scores[k]) * (x - k)).toFloat()
+        }
+    }
+
     private fun prefixSums(a: DoubleArray, from: Int, to: Int): DoubleArray {
         val p = DoubleArray(to - from + 1)
         for (i in from until to) p[i - from + 1] = p[i - from] + a[i]
         return p
     }
+
+    /**
+     * Each half of the window, searched on its own, finds [result]'s delay. The YAMNet fallback
+     * must pass this even at a high z: on real films it matched another film's subtitle at z 10.8
+     * with halves that disagreed, while 32 of its 42 right answers had halves that agreed.
+     */
+    fun halvesConfirm(
+        levels: FloatArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, result: Result,
+        clampDb: Boolean = true,
+    ): Boolean = result.agreed ||
+        standardised(levels, clampDb)?.let { halvesAgree(it, windowStartS, starts, ends, result) } == true
 
     private fun halvesAgree(
         a: DoubleArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, plain: Result,
