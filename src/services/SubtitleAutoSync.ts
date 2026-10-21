@@ -45,17 +45,26 @@ interface NativeAlignment {
 }
 
 /**
- * A cue someone speaks. Sound descriptions ("[door slams]", "(music)") and lyrics ("♪ ... ♪")
- * are on screen while nobody talks, and would pull the alignment toward noise.
+ * Ideographs and kana, where one character is already a word ("嗯", "あ"). Explicit ranges, not
+ * \p{...}: Jest runs on Node, so a property escape Hermes reads differently would pass the tests.
+ */
+const IDEOGRAPHIC = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/;
+
+/**
+ * A cue someone speaks. Sound descriptions ("[door slams]", "(music)", Japanese "（笑）",
+ * Chinese "【音乐】") and lyrics ("♪ ... ♪", "♬") are on screen while nobody talks, and would
+ * pull the alignment toward noise.
  */
 export function isSpeechCue(cue: SubtitleCue): boolean {
     if (cue.endTime - cue.startTime > MAX_SPEECH_CUE_S || cue.endTime <= cue.startTime) {return false;}
-    if (/[♪♫]/.test(cue.text)) {return false;}
+    if (/[♪♫♬♩]/.test(cue.text)) {return false;}
     const spoken = cue.text
         .replace(/<[^>]*>|\{[^}]*\}/g, '')      // HTML and ASS override tags
-        .replace(/\[[^\]]*\]|\([^)]*\)/g, '')   // sound descriptions
-        .replace(/[\s\d.,!?'"…:;\-–—]/g, '');
-    return spoken.length >= 2;
+        // Sound descriptions, ASCII and full-width brackets alike
+        .replace(/\[[^\]]*\]|\([^)]*\)|［[^］]*］|（[^）]*）|【[^】]*】|〔[^〕]*〕/g, '')
+        // Spaces, digits and punctuation of any script: Latin, CJK, Arabic, Devanagari
+        .replace(/[\s\d.,!?'"…:;\-–—¡¿«»“”‘’„。、，！？：；「」『』・〜～‥،؛؟।॥]/g, '');
+    return spoken.length >= (IDEOGRAPHIC.test(spoken) ? 1 : 2);
 }
 
 /**

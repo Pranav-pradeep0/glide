@@ -79,12 +79,35 @@ export class SubtitleSyncService {
         });
     }
 
+    /**
+     * Lower case, no tags or punctuation of any script (Latin, CJK, Arabic, Devanagari), and
+     * every run of whitespace -- line breaks included -- one space, so words split on ' '.
+     */
     private static normalize(text: string): string {
         return text
             .toLowerCase()
-            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
-            .replace(/\s{2,}/g, ' ')
+            .replace(/<[^>]*>|\{[^}]*\}/g, '')
+            .replace(/[.,\/#!?$%\^&\*;:{}=\-_`~()'"…–—¡¿«»“”‘’„。、，！？：；「」『』（）［］【】・〜～‥،؛؟।॥]/g, '')
+            .replace(/\s+/g, ' ')
             .trim();
+    }
+
+    /**
+     * What fuzzy matching compares: words, or for scripts written without spaces (Chinese,
+     * Japanese, Thai, Lao, Khmer, Burmese) every pair of adjacent characters, since a "word"
+     * there is the whole line.
+     */
+    private static tokens(text: string): string[] {
+        if (/[฀-໿က-႟ក-៿぀-ヿ㐀-䶿一-鿿豈-﫿]/.test(text)) {
+            const chars = Array.from(text.replace(/ /g, ''));
+            return chars.slice(1).map((c, i) => chars[i] + c);
+        }
+        return text.split(' ').filter(w => w.length > 2);
+    }
+
+    /** [needle] as whole words of [hay]; both normalized, so a word boundary is a space or an end. */
+    private static wholeWords(hay: string, needle: string): boolean {
+        return ` ${hay} `.includes(` ${needle} `);
     }
 
     private static calculateScore(cueText: string, query: string, cue: SubtitleCue, currentTime: number): { score: number } {
@@ -92,6 +115,8 @@ export class SubtitleSyncService {
         const normalizedQuery = query;
 
         let bestScore = 0;
+        // A cue of only punctuation ("...") normalizes to '', which every query "includes".
+        if (!normalizedCue) { return { score: 0 }; }
 
         // 1. EXACT INCLUSION
         const cueInQuery = normalizedQuery.includes(normalizedCue);
@@ -100,13 +125,9 @@ export class SubtitleSyncService {
         if (cueInQuery || queryInCue) {
             let score = 100;
 
-            // Boundary checks
-            const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const escapedCue = normalizedCue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const boundaryRegex = new RegExp(`\\b${escapedQuery}\\b`, 'i');
-            const reverseBoundaryRegex = new RegExp(`\\b${escapedCue}\\b`, 'i');
-
-            if (boundaryRegex.test(normalizedCue) || reverseBoundaryRegex.test(normalizedQuery)) {
+            // Whole words, not part of one. Not \b: in JS it only knows ASCII letters, so it
+            // splits Hindi or Arabic mid-word and never rewarded a whole-word match there.
+            if (this.wholeWords(normalizedCue, normalizedQuery) || this.wholeWords(normalizedQuery, normalizedCue)) {
                 score += 50;
             }
 
@@ -119,8 +140,8 @@ export class SubtitleSyncService {
         }
 
         // 2. FUZZY MATCHING
-        const queryWords = normalizedQuery.split(' ').filter(w => w.length > 2);
-        const cueWords = normalizedCue.split(' ').filter(w => w.length > 2);
+        const queryWords = this.tokens(normalizedQuery);
+        const cueWords = this.tokens(normalizedCue);
 
         if (queryWords.length > 0 && cueWords.length > 0) {
             let matches = 0;

@@ -32,6 +32,40 @@ describe('isSpeechCue', () => {
         expect(isSpeechCue(cue(0, 30, 'LONDON, 1943'))).toBe(false);
         expect(isSpeechCue(cue(5, 5, 'Zero length'))).toBe(false);
     });
+
+    it('reads sound tags, lyrics and punctuation of other scripts', () => {
+        expect(isSpeechCue(cue(0, 2, '（笑）'))).toBe(false);
+        expect(isSpeechCue(cue(0, 2, '【音乐】'))).toBe(false);
+        expect(isSpeechCue(cue(0, 2, '［ドアが閉まる］'))).toBe(false);
+        expect(isSpeechCue(cue(0, 3, '♬～'))).toBe(false);
+        expect(isSpeechCue(cue(0, 2, '。。。'))).toBe(false);
+        expect(isSpeechCue(cue(0, 2, '؟!'))).toBe(false);
+        expect(isSpeechCue(cue(0, 2, '（太郎）行こう'))).toBe(true);
+        expect(isSpeechCue(cue(0, 1, '嗯'))).toBe(true);   // one ideograph is a word
+        expect(isSpeechCue(cue(0, 2, 'إلى أين أنت ذاهب؟'))).toBe(true);
+    });
+});
+
+describe('Pick a line in any script', () => {
+    const find = (cues: SubtitleCue[], query: string) =>
+        SubtitleSyncService.findMatchingCues(cues, query, 60).map(m => m.cue.text);
+
+    it('matches lines written without spaces, by characters', () => {
+        const cues = [cue(50, 52, '你要去哪里？'), cue(55, 57, '我不知道。'), cue(58, 60, 'どこへ行くの？')];
+        expect(find(cues, '你去哪里')[0]).toBe('你要去哪里？');   // a word missed, still found
+        expect(find(cues, 'どこへ行く')[0]).toBe('どこへ行くの？');
+    });
+
+    it('matches whole words in Hindi and Arabic, where \\b sees no letters', () => {
+        const cues = [cue(50, 52, 'तुम कहाँ जा रहे हो?'), cue(55, 57, 'إلى أين أنت ذاهب؟')];
+        expect(find(cues, 'कहाँ जा रहे')[0]).toBe('तुम कहाँ जा रहे हो?');
+        expect(find(cues, 'أين أنت')[0]).toBe('إلى أين أنت ذاهب؟');
+    });
+
+    it('splits words across a line break, and never matches a punctuation-only cue', () => {
+        const cues = [cue(50, 52, '...'), cue(55, 57, 'Where are you\ngoing tonight?')];
+        expect(find(cues, 'going tonight where')).toEqual(['Where are you\ngoing tonight?']);
+    });
 });
 
 describe('chooseWindow', () => {
