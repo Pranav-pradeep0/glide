@@ -72,13 +72,22 @@ class SubtitleAlignerTest {
     @Test
     fun `recovers the delay in both directions to within a frame or two`() {
         val (s, e) = cues()
-        listOf(0.0, 2.37, -7.81, 41.5).forEach { delay ->
+        listOf(0.0, 2.37, -7.81, 41.5, -95.5, 130.2).forEach { delay ->
             val r = align(levels(s, e, { it + delay }), windowStart, s, e)
             assertNotNull(r)
             assertEquals("delay $delay", delay, r!!.delayS, 0.02)
             assertTrue("delay $delay should be confident: z=${r.peakZ} runner=${r.runnerUp}", r.confident)
             assertEquals(1.0, r.ratio, 0.0)
         }
+    }
+
+    @Test
+    fun `a window a few ms short of 300 s still aligns`() {
+        // A decoder's first sample lands just after the window start, so it rarely fills 300 s.
+        val (s, e) = cues()
+        val full = levels(s, e, { it + 4.2 })
+        val r = align(full.copyOf(full.size - 3), windowStart, s, e)
+        assertEquals(4.2, r!!.delayS, 0.02)
     }
 
     @Test

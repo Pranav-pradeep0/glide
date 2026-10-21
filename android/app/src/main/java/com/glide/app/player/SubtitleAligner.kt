@@ -33,7 +33,14 @@ import kotlin.math.sqrt
 internal object SubtitleAligner {
 
     const val FRAME_S = 0.01
-    const val MAX_SHIFT_S = 60.0
+    /** On 12 real films, +/-150 s found 130 s errors with no more refusals or false matches than +/-60. */
+    const val MAX_SHIFT_S = 150.0
+
+    /**
+     * The least audio worth aligning. Not 2 * [MAX_SHIFT_S]: that is the whole 300 s window, and
+     * a decoder's first sample lands a few ms after the window starts, which would refuse them all.
+     */
+    const val MIN_AUDIO_S = 120.0
 
     /** Subtitle timed at one rate, video at another: cue times scale by these. */
     val RATIOS = doubleArrayOf(1.0, 25 / 23.976, 23.976 / 25, 25.0 / 24, 24.0 / 25, 24 / 23.976, 23.976 / 24)
@@ -138,7 +145,7 @@ internal object SubtitleAligner {
     fun align(
         levels: FloatArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, clampDb: Boolean = true,
     ): Result? {
-        if (levels.size < 2 * (MAX_SHIFT_S / FRAME_S)) return null
+        if (levels.size < MIN_AUDIO_S / FRAME_S) return null
         val a = standardised(levels, clampDb) ?: return null
         val prefix = prefixSums(a, 0, a.size)
 
@@ -189,7 +196,7 @@ internal object SubtitleAligner {
         levelsA: FloatArray, startA: Double, levelsB: FloatArray, startB: Double,
         starts: DoubleArray, ends: DoubleArray, clampDb: Boolean = true,
     ): Result? {
-        if (min(levelsA.size, levelsB.size) < 2 * (MAX_SHIFT_S / FRAME_S)) return null
+        if (min(levelsA.size, levelsB.size) < MIN_AUDIO_S / FRAME_S) return null
         val pa = standardised(levelsA, clampDb)?.let { prefixSums(it, 0, it.size) } ?: return null
         val pb = standardised(levelsB, clampDb)?.let { prefixSums(it, 0, it.size) } ?: return null
         return RATIOS.drop(1).mapNotNull { q ->

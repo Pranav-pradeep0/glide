@@ -15,13 +15,13 @@ from multiprocessing import Pool
 import numpy as np
 
 FILMS = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.haptics-fixtures', 'films')
-F, MAX_SHIFT = 0.01, 60.0
+F, MAX_SHIFT = 0.01, 150.0
 MAXLAG = round(MAX_SHIFT / F)
 RATIOS = [1.0, 25 / 23.976, 23.976 / 25, 25 / 24, 24 / 25, 24 / 23.976, 23.976 / 24]
 MIN_Z, MAX_RUNNER, GUARD, AGREE_MIN_Z, AGREE_TOL, DETREND, MIN_CUE = 6.0, 0.75, 100, 2.0, 0.25, 8.0, 20.0
 WINDOW_S, AROUND_S, MIN_SPEECH, MAX_CUE_S = 300, 900, 25, 12
 RATIO_AGREE_S, MIN_APART_S = 0.4, 1200
-DELAYS = [0, 0.8, -2.3, 6.7, -18.4, 41.2]
+DELAYS = [0, 0.8, -2.3, 6.7, -18.4, 41.2, -95.5, 130.2]
 DRIFTS = {'25/23.976': 25 / 23.976, '23.976/25': 23.976 / 25, '25/24': 25 / 24, '24/23.976': 24 / 23.976}
 NW = round(WINDOW_S / F)
 
@@ -144,7 +144,7 @@ def confident(r):
 
 def align(lv, ws, starts, ends, clip):
     """SubtitleAligner.align: plain delay; else two half-windows agreeing; else the best frame-rate ratio."""
-    a = None if len(lv) < 2 * MAXLAG else standardised(lv, clip)
+    a = None if len(lv) < round(120 / F) else standardised(lv, clip)  # SubtitleAligner.MIN_AUDIO_S
     if a is None:
         return None
     pre = prefix(a, 0, len(a))
