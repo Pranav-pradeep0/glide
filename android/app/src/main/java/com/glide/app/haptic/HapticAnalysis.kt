@@ -5,6 +5,8 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.glide.app.player.SubtitleSyncModule
 import java.io.DataInputStream
 import java.nio.ByteBuffer
@@ -17,7 +19,8 @@ import kotlin.concurrent.thread
  * and the gaps are filled after. A finished track is cached per file; a cached one is handed over at once.
  *
  * The thread runs at the lowest priority, and FFmpeg's decode thread, created from it, inherits
- * that (L2 measured it at normal priority, competing with the player).
+ * that (L2 measured it at normal priority, competing with the player). It waits while the app is
+ * out of sight: Android freezes a cached app's decode, or kills it for binder traffic, losing the work.
  *
  * Logs `listen` lines with Log.w for `scripts/haptics-lab.js listen`.
  */
@@ -126,6 +129,7 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
         var shown = t0
         var failed: Throwable? = null
         while (!cancelled) {
+            awaitShown()
             val from = nextFrom() ?: break
             val p = Piece(from, pieces.firstOrNull { it.fromMs > from }?.fromMs ?: endMs, classify?.let { HapticRecognizer(it) })
             pieces += p
@@ -136,6 +140,7 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
                 override val done get() = cancelled || jumped || p.listener.analysedMs >= p.untilMs
 
                 override fun add(ptsUs: Long, data: ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
+                    awaitShown()
                     p.listener.add(ptsUs, data, channels, rate, isFloat)
                     p.recognizer?.add(ptsUs, data, channels, rate, isFloat)
                     val at = playheadMs
@@ -176,6 +181,16 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
         // Hit times for the script to score against a fixture's truth.
         track.events.filter { it.sources and HapticTrack.LIGHT == 0 }.chunked(200).forEach { c -> Log.w(TAG, "listen events " + c.joinToString(",") { "${it.timeMs}" }) }
     }
+
+    /** Until an activity of the app is started again (PiP counts), or cancelled. A field read, no binder call. */
+    private fun awaitShown() {
+        if (shown()) return
+        Log.w(TAG, "listen paused, app in the background")
+        while (!cancelled && !shown()) Thread.sleep(500)
+        Log.w(TAG, "listen resumed")
+    }
+
+    private fun shown() = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
     private fun durationMs(): Long {
         val r = MediaMetadataRetriever()

@@ -191,6 +191,8 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation "androidx.core:core-splashscreen:1.0.1"
     implementation "androidx.palette:palette:1.0.0"
+    // Already shipped through React Native; haptics analysis waits while the app is unseen.
+    implementation "androidx.lifecycle:lifecycle-process:2.8.0"
 
     // The phase 1 playback core (com.glide.app.player) and the HDR spike. No longer
     // debug-only: the new engine ships behind a setting so it can be compared against VLC
