@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haptics Judge</title>
+<!-- Template for HapticJudgeTest (docs/haptics-decisions.md, Judge): it writes the data in for /*DATA*/. -->
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #fff; --text: #1c1c1c; --muted: #6b6b6b; --line: #e2e2de;
+  --motor: #2f6fe0; --sub: rgba(120,120,120,.28); --speech: #4f9d69; --music: #b07fd6;
+  --missed: #d64040; --faint: #e3912c; --much: #8b55d8; --nocap: #8a8a8a;
+  --strong: #d64040; --mild: #e3a22c; --none: #bdbdb8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141414; --panel: #1d1d1d; --text: #ececec; --muted: #9a9a9a; --line: #2e2e2e;
+    --sub: rgba(170,170,170,.22); --none: #555;
+  }
+}
+:root[data-theme="dark"] { --bg: #141414; --panel: #1d1d1d; --text: #ececec; --muted: #9a9a9a; --line: #2e2e2e; --sub: rgba(170,170,170,.22); --none: #555; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 20px; margin: 4px 0 2px; }
+h2 { font-size: 16px; margin: 0; }
+.muted { color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 12px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tr.sel { background: color-mix(in srgb, var(--motor) 10%, transparent); }
+tr.total td { font-weight: 600; cursor: default; }
+.bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+button.on { border-color: var(--motor); color: var(--motor); }
+canvas { display: block; width: 100%; }
+#overview { height: 44px; cursor: pointer; margin-top: 6px; }
+#detail { height: 320px; margin-top: 8px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+#flags { max-height: 360px; overflow-y: auto; margin-top: 8px; }
+.flag { display: flex; gap: 10px; padding: 5px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.flag:hover { background: color-mix(in srgb, var(--motor) 8%, transparent); }
+.flag .t { font-variant-numeric: tabular-nums; min-width: 64px; color: var(--muted); }
+.flag .k { min-width: 120px; font-weight: 600; }
+.flag .w { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Haptics Judge</h1>
+  <div class="muted">What the motor plays at Cinematic, against each film's graded sound captions and subwoofer. * held out: never tuned on.</div>
+  <div class="panel scroll"><table id="summary"></table></div>
+  <div class="panel" id="film">
+    <div class="bar"><h2 id="title"></h2><span class="muted" id="time"></span></div>
+    <canvas id="overview"></canvas>
+    <div class="bar">
+      <button id="back">◀</button><button id="fwd">▶</button>
+      <span class="muted">Window</span>
+      <button data-w="20">20 s</button><button data-w="60" class="on">1 min</button><button data-w="300">5 min</button>
+    </div>
+    <canvas id="detail"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--motor)"></i>motor</span><span><i style="background:var(--sub)"></i>subwoofer</span>
+      <span><i style="background:var(--speech)"></i>speech</span><span><i style="background:var(--music)"></i>music</span>
+      <span><i style="background:var(--strong)"></i>strong cue</span><span><i style="background:var(--mild)"></i>mild cue</span><span><i style="background:var(--none)"></i>other cue</span>
+      <span>▼ tester mark</span>
+    </div>
+    <div class="bar" id="kinds"></div>
+    <div id="flags"></div>
+  </div>
+</main>
+<script>
+const FILMS = /*DATA*/null || [];
+const KIND = { 'missed': '--missed', 'faint': '--faint', 'too much': '--much', 'loud, no caption': '--nocap' };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const clock = ms => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+let film = null, center = 0, win = 60000, shown = new Set(Object.keys(KIND));
+
+function summary() {
+  const t = document.getElementById('summary');
+  const head = '<thead><tr><th>Film</th><th>Strong cues</th><th>Missed</th><th>Faint</th><th>Mild felt</th><th>Too much</th><th>per min</th><th>Loud, no caption</th><th>Marks caught</th></tr></thead>';
+  const row = (name, s, cls) => `<tr class="${cls || ''}" data-name="${name}"><td>${name}</td><td>${s.strong}</td><td>${s.missed}</td><td>${s.faint}</td>` +
+    `<td>${s.mild ? Math.round(100 * s.mildFelt / s.mild) + '%' : ''}</td><td>${s.tooMuch}</td><td>${(s.tooMuch / Math.max(s.minutes, 1e-9)).toFixed(2)}</td>` +
+    `<td>${s.loudNoCaption}</td><td>${s.marks ? s.caught + '/' + s.marks : ''}</td></tr>`;
+  const add = (a, b) => { for (const k in b) a[k] = (a[k] || 0) + b[k]; return a; };
+  const tot = held => FILMS.filter(f => f.held === held).reduce((a, f) => add(a, f.summary), {});
+  t.innerHTML = head + '<tbody>' + FILMS.map(f => row(f.name + (f.held ? '*' : ''), f.summary)).join('') +
+    row('Tuning', tot(false), 'total') + row('Held out*', tot(true), 'total') + '</tbody>';
+  t.querySelectorAll('tbody tr:not(.total)').forEach((tr, i) => tr.onclick = () => select(FILMS[i]));
+}
+
+function select(f) {
+  film = f; center = win / 2;
+  document.querySelectorAll('#summary tbody tr').forEach((tr, i) => tr.classList.toggle('sel', FILMS[i] === f));
+  document.getElementById('title').textContent = f.name + (f.held ? '*' : '') + (f.stereo ? ' (stereo: no subwoofer)' : '');
+  const kinds = document.getElementById('kinds');
+  kinds.innerHTML = Object.keys(KIND).map(k => `<button data-k="${k}" class="${shown.has(k) ? 'on' : ''}">${k} ${f.flags.filter(x => x[2] === k).length}</button>`).join('');
+  kinds.querySelectorAll('button').forEach(b => b.onclick = () => { shown.has(b.dataset.k) ? shown.delete(b.dataset.k) : shown.add(b.dataset.k); select(film); });
+  const list = document.getElementById('flags');
+  const marks = f.marks.map(m => [m[0], m[0], 'mark ' + m[1], 0, m[2] ? 'caught by a flag' : 'not caught']);
+  const items = f.flags.filter(x => shown.has(x[2])).concat(marks).sort((a, b) => a[0] - b[0]);
+  list.innerHTML = items.map(x => `<div class="flag" data-at="${(x[0] + x[1]) / 2}"><span class="t">${clock(Math.max(0, x[0]))}</span>` +
+    `<span class="k" style="color:var(${KIND[x[2]] || '--text'})">${x[2]}${x[3] ? ' · ' + x[3] : ''}</span><span class="w">${esc(x[4])}</span></div>`).join('') ||
+    '<div class="muted">No flags shown.</div>';
+  list.querySelectorAll('.flag').forEach(d => d.onclick = () => { center = +d.dataset.at; draw(); });
+  draw();
+}
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+function canvas(id) {
+  const c = document.getElementById(id), r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
+  c.width = r.width * d; c.height = r.height * d;
+  const g = c.getContext('2d'); g.scale(d, d);
+  return [g, r.width, r.height];
+}
+
+function draw() {
+  if (!film) return;
+  center = Math.max(win / 2, Math.min(film.ms - win / 2, center));
+  document.getElementById('time').textContent = clock(center - win / 2) + ' – ' + clock(center + win / 2) + ' of ' + clock(film.ms);
+  // Overview: the motor over the whole film, flags as ticks, the window as a box.
+  let [g, w, h] = canvas('overview');
+  const step = film.step, n = film.motor.length;
+  g.fillStyle = css('--motor');
+  for (let x = 0; x < w; x++) {
+    const a = Math.floor(x / w * n), b = Math.max(a + 1, Math.floor((x + 1) / w * n));
+    let m = 0; for (let i = a; i < b; i++) m = Math.max(m, film.motor[i]);
+    if (m) g.fillRect(x, h - 4 - m / 255 * (h - 14), 1, m / 255 * (h - 14));
+  }
+  for (const f of film.flags) if (shown.has(f[2])) { g.fillStyle = css(KIND[f[2]]); g.fillRect(f[0] / film.ms * w, 0, 2, 8); }
+  g.fillStyle = css('--text');
+  for (const m of film.marks) { const x = m[0] / film.ms * w; g.beginPath(); g.moveTo(x - 4, 0); g.lineTo(x + 4, 0); g.lineTo(x, 7); g.fill(); }
+  g.strokeStyle = css('--text'); g.lineWidth = 1;
+  g.strokeRect((center - win / 2) / film.ms * w, 0.5, win / film.ms * w, h - 1);
+
+  // Detail: the window.
+  [g, w, h] = canvas('detail');
+  const t0 = center - win / 2, X = ms => (ms - t0) / win * w;
+  const ROW = [40, 22, 4], cueH = 46, cueTop = 0, plotTop = cueTop + cueH + 6, laneH = 10, plotBottom = h - 20 - 2 * laneH - 6, plotH = plotBottom - plotTop;
+  for (const f of film.flags) if (shown.has(f[2]) && f[1] > t0 && f[0] < t0 + win) {
+    g.fillStyle = css(KIND[f[2]]); g.globalAlpha = 0.14; g.fillRect(X(f[0]), plotTop, Math.max(2, X(f[1]) - X(f[0])), plotH); g.globalAlpha = 1;
+  }
+  const i0 = Math.max(0, Math.floor(t0 / step)), i1 = Math.min(n, Math.ceil((t0 + win) / step));
+  g.fillStyle = css('--sub');
+  for (let i = i0; i < i1; i++) { const v = (film.sub[i] + 40) / 52; if (v > 0) g.fillRect(X(i * step), plotBottom - v * plotH, Math.max(1, step / win * w), v * plotH); }
+  g.strokeStyle = 'rgba(128,128,128,.6)'; g.setLineDash([3, 3]); const loud = plotBottom - (40 - 6) / 52 * plotH;
+  g.beginPath(); g.moveTo(0, loud); g.lineTo(w, loud); g.stroke(); g.setLineDash([]);
+  g.fillStyle = css('--motor'); g.globalAlpha = 0.85;
+  for (let i = i0; i < i1; i++) { const v = film.motor[i] / 255; if (v) g.fillRect(X(i * step), plotBottom - v * plotH, Math.max(1, step / win * w - 0.5), v * plotH); }
+  g.globalAlpha = 1;
+  const lane = (arr, y, color) => { g.fillStyle = color; for (let i = i0; i < i1; i++) if (arr[i] > 30) { g.globalAlpha = arr[i] / 100; g.fillRect(X(i * step), y, Math.max(1, step / win * w), laneH); } g.globalAlpha = 1; };
+  lane(film.speech, plotBottom + 4, css('--speech')); lane(film.music, plotBottom + 6 + laneH, css('--music'));
+  g.font = '11px system-ui, sans-serif'; g.textBaseline = 'top';
+  for (const c of film.cues) if (c[1] > t0 && c[0] < t0 + win) {
+    const color = css(c[2] === 2 ? '--strong' : c[2] === 1 ? '--mild' : '--none'), x = X(c[0]), cw = Math.max(3, X(c[1]) - x);
+    g.fillStyle = color; g.fillRect(x, ROW[c[2]], cw, c[2] === 0 ? 3 : 4);
+    if (c[2] > 0) { g.fillStyle = css('--text'); g.save(); g.beginPath(); g.rect(x, 0, Math.max(cw, 160), h); g.clip(); g.fillText(c[3], x + 2, ROW[c[2]] + 5); g.restore(); }
+  }
+  g.strokeStyle = css('--muted'); g.setLineDash([2, 4]);
+  for (const s of film.scenes) if (s > t0 && s < t0 + win) { g.beginPath(); g.moveTo(X(s), plotTop); g.lineTo(X(s), plotBottom); g.stroke(); }
+  g.setLineDash([]); g.fillStyle = css('--text');
+  for (const m of film.marks) if (m[0] > t0 && m[0] < t0 + win) { const x = X(m[0]); g.beginPath(); g.moveTo(x - 6, plotTop); g.lineTo(x + 6, plotTop); g.lineTo(x, plotTop + 10); g.fill(); g.fillText(m[1], x + 8, plotTop); }
+  g.fillStyle = css('--muted'); g.textBaseline = 'bottom';
+  const tick = win <= 20000 ? 2000 : win <= 60000 ? 10000 : 60000;
+  for (let t = Math.ceil(t0 / tick) * tick; t < t0 + win; t += tick) g.fillText(clock(t), X(t) + 2, h - 2);
+}
+
+document.getElementById('overview').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); center = (e.clientX - r.left) / r.width * film.ms; draw(); };
+document.getElementById('back').onclick = () => { center -= win / 2; draw(); };
+document.getElementById('fwd').onclick = () => { center += win / 2; draw(); };
+document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => {
+  win = +b.dataset.w * 1000; document.querySelectorAll('[data-w]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+addEventListener('resize', draw);
+summary();
+if (FILMS.length) select(FILMS[0]);
+</script>
+</body>
+</html>

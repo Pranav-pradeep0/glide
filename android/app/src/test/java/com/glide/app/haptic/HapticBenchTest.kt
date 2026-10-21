@@ -196,7 +196,7 @@ class HapticBenchTest {
     }
 
     /** The motor's amplitude at each ms of [ms], call by call as the Performer issues them. */
-    private fun played(track: HapticTrack, ms: Int): ByteArray {
+    internal fun played(track: HapticTrack, ms: Int): ByteArray {
         val amp = ByteArray(ms)
         var from = 0
         while (true) {
@@ -213,7 +213,7 @@ class HapticBenchTest {
 
     companion object {
         /** The default slider position (src/store/appStore.ts), on the phone the curve is from. */
-        private const val CINEMATIC = 0.6f
+        internal const val CINEMATIC = 0.6f
         private const val PLATEAU_DB = 1.0
         private val CAL = HapticCalibration.DEFAULT
 
@@ -228,13 +228,13 @@ class HapticBenchTest {
         fun isHeld(name: String) = title(name) in HOLDOUT
         private val EFFECTS = HapticMeaning.EFFECTS
         /** SDH cues trail their sound; a felt start up to this much before the cue is its moment. */
-        private const val LEAD_MS = 1000
+        internal const val LEAD_MS = 1000
         /** Felt stretches closer than this are one moment (as HapticFilmTest). */
-        private const val JOIN_MS = 300
+        internal const val JOIN_MS = 300
         private const val SCENE_MS = 3000
         /** Within 6 dB of the loud level is loud (amplitude ratio). */
-        private const val LOUD = 2.0
-        private val BRACKETS = Regex("""\[[^\]]*]|\([^)]*\)""")
+        internal const val LOUD = 2.0
+        internal val BRACKETS = Regex("""\[[^\]]*]|\([^)]*\)""")
         /** Testers' reports: (span, what was wrong). */
         private val SCENES = mapOf(
             "frankenstein" to listOf(223_000..265_000 to "creature attack, buzzes nonstop")
@@ -244,13 +244,13 @@ class HapticBenchTest {
         private const val MARK_LEAD_MS = 10_000
 
         /** A mark's phone file name is its film's if it holds every part of the fixture's name ("boys-s05e04"). */
-        private class Mark(val film: String, val ms: Int, val kind: String) {
+        internal class Mark(val film: String, val ms: Int, val kind: String) {
             private val key = film.lowercase().filter { it.isLetterOrDigit() }
             fun of(name: String) = name.split('-').all { it in key }
         }
 
         /** .haptics-fixtures/marks.tsv, from scripts/haptics-marks.py: file name, media ms, kind. */
-        private fun marks() = File(HapticHarness.fixturesDir(), "marks.tsv").takeIf { it.isFile }?.readLines().orEmpty()
+        internal fun marks() = File(HapticHarness.fixturesDir(), "marks.tsv").takeIf { it.isFile }?.readLines().orEmpty()
             .map { it.split('\t') }.filter { it.size == 3 }.map { Mark(it[0], it[1].toInt(), it[2]) }
     }
 }

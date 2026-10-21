@@ -1008,3 +1008,39 @@ the 2:52 dialogue hit 59 -> 27. Not fixed: the 3:57 roar (YAMNet hears Vehicle 0
 amplitude 24 before and after); the 4:05 and 4:15 too-much marks stay ~60, now half of a real
 moment; 5:17 rose 62 -> 113 (q 0.28 at 5:08, thump and door sounds; which second the tap meant is
 unknown); 62:26 has no loud bass or effect sound in the 10 s before it under any setting.
+
+## Judge (2026-10-21)
+
+A tester's two buttons, made by script over every film at every second: `HapticJudgeTest`, run by
+`scripts/glide-analyse.sh`, which also adds films (`scripts/haptics-ingest.py`: the English audio,
+the file's own SDH track or SubDL's, YAMNet, the subtitles moved onto the dialogue when the fit is
+sure, r >= 0.3; with a video, its scene cuts). It plays each film at Cinematic as the bench does and
+writes `.haptics-fixtures/report/index.html` (from `scripts/haptics-report.html`): every film's
+counts, and a timeline of captions, subwoofer, speech, music, motor and flags with a clickable list.
+
+**Truth.** Every bracketed SDH description in the 11 films (2021 distinct, 5272 cues) graded once by
+Claude from its words: strong (should clearly buzz: explosions, gunfire, crashes, slams, thunder,
+roars, revving), mild (a light tap fits, silence too: doors, knocks, thuds, growls, gun cocking),
+none (voices, music, ambience, soft sounds). 66 strong, 197 mild. Kept in
+`.haptics-fixtures/cue-grades.tsv`; texts not in it fall back to `HapticMeaning`'s words and are
+listed in `cue-ungraded.txt` to grade. Changed from the first pass by the marks: firecrackers strong;
+electrical buzzing and crackling mild (the 61 min lab scene was marked missed).
+
+**Flags.** Missed: a strong cue with nothing felt. Faint: felt, never at amplitude 96 (under a loud
+scene 50-80 was marked missed). Too much: a moment felt at 40 or more touching no strong or mild cue,
+loud bass or not (an uncaptioned bass hit between two lines was marked too much, 2:52). Loud, no
+caption: the subwoofer at the film's loud level, nothing felt, YAMNet hearing neither speech nor
+music: a hint only (with speech and music allowed it fired 51 times in Anora, all score).
+
+**Against the 13 marks, on the engine they were made on** (before Contrast): 10 caught. Not caught:
+4:36 (growls, graded mild), 61:23 (tapped 3 s before the "[electrical explosion]" caption, during
+"[crackling]"), 62:26 (no caption, no loud sound). On that engine 98 of 118 strong cues were faint.
+
+| Judge, Cinematic | Strong | Missed | Faint | Mild felt | Too much/min | Marks still flagged |
+|---|---|---|---|---|---|---|
+| Tuning, before Contrast | 118 | 20 | 98 | 0.61 | 1.24 | 10 of 13 |
+| Tuning, Contrast | 119 | 22 | 70 | 0.60 | 1.14 | 5 of 13 |
+| Held out, before Contrast | 32 | 10 | 22 | 0.32 | 0.79 | |
+| Held out, Contrast | 32 | 10 | 17 | 0.31 | 0.59 | |
+
+Next by this measure: strong cues with nothing felt (32 of 151), then too much (~1/min).
