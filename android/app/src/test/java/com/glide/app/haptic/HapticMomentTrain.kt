@@ -193,7 +193,7 @@ class HapticMomentTrain {
          * breaks, guns and explosions, thunder and fire, engines and vehicles. Chosen from the
          * class names, not from the films.
          */
-        private val EFFECT = setOf(
+        internal val EFFECT = setOf(
             74, 104, 105, // growling, roaring cats, roar
             59, 348, 352, 353, 413, 431, 432, 433, 434, 435, 437, 439, 454, 455, 460, 461, 462, 463, 464, 466, 472, 478, 483, 487, // impacts and breaks
             420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, // explosions, guns, booms

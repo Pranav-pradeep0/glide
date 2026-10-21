@@ -18,9 +18,10 @@ import org.junit.Test
  *
  *  - missed: a strong cue with nothing felt from [LEAD_MS] before it to its end.
  *  - faint: felt, but never at [NOTICE_AMP]: under a loud scene, testers called that missed.
- *  - too much: a moment felt at [TOO_MUCH_AMP] or more touching no strong or mild cue. Loud bass
- *    is no excuse: SDH captions the sounds that matter, and an uncaptioned bass hit 20 dB over its
- *    scene was marked too much (2:52 in Frankenstein).
+ *  - too much: a moment felt at [TOO_MUCH_AMP] or more touching no strong or mild cue, where YAMNet
+ *    hears no effect class at [HEARD_EFFECT]. Loud bass is no excuse (an uncaptioned bass hit 20 dB
+ *    over its scene was marked too much, 2:52 in Frankenstein, YAMNet hearing no effect over 0.11);
+ *    a clear effect is (captions leave out most of an action scene's booms and thumps).
  *  - loud, no caption: the subwoofer at the film's loud level, no cue near, nothing felt, and YAMNet
  *    hearing neither speech nor music (under them it was the score: Anora 51 of 51). Captions leave
  *    sounds out, so this one is a hint, not a verdict.
@@ -102,6 +103,12 @@ class HapticJudgeTest {
             return listOfNotNull("speech".takeIf { speech > 0.3f }, "music".takeIf { music > 0.3f }).joinToString(" and ").ifEmpty { "other sound" }
         }
 
+        // YAMNet's surest effect class: captions leave effects out, a clear one is no mistake to feel.
+        fun effect(r: IntRange): Float {
+            val ks = r.first.coerceAtLeast(0) / HapticSounds.HOP_MS..minOf(sounds.size - 1, r.last / HapticSounds.HOP_MS + 1)
+            return ks.maxOfOrNull { k -> HapticMomentTrain.EFFECT.maxOf { sounds[k][it] } } ?: 0f
+        }
+
         // Each sound cue's grade: its strongest bracket. -1 is a line with no sound tag.
         fun grade(text: String) = BRACKETS.findAll(text).map { it.value.drop(1).dropLast(1).trim().lowercase() }.filter { it.isNotEmpty() }
             .maxOfOrNull { t ->
@@ -132,7 +139,7 @@ class HapticJudgeTest {
             while (j < pk.size && j - end < JOIN_MS / 100) if (pk[j++] > 0) end = j
             val r = i * 100 until end * 100
             val p = (i until end).maxOf { pk[it] }
-            if (p >= TOO_MUCH_AMP && physical.none { r.first < it.last && it.first < r.last }) flags += Flag(r.first, r.last, "too much", p, heard(r))
+            if (p >= TOO_MUCH_AMP && physical.none { r.first < it.last && it.first < r.last } && effect(r) < HEARD_EFFECT) flags += Flag(r.first, r.last, "too much", p, heard(r))
             i = end
         }
         // Loud stretches of the subwoofer (1 s apart or less is one), uncaptioned and unfelt.
@@ -198,6 +205,7 @@ class HapticJudgeTest {
         private const val NOTICE_AMP = 96
         /** ponytail: the faintest buzz counted as too much; the first too-much marks were at 56-66. */
         private const val TOO_MUCH_AMP = 40
+        private const val HEARD_EFFECT = 0.3f
         private const val STEP_MS = 250
     }
 }

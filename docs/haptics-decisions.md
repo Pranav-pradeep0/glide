@@ -1044,3 +1044,35 @@ music: a hint only (with speech and music allowed it fired 51 times in Anora, al
 | Held out, Contrast | 32 | 10 | 17 | 0.31 | 0.59 | |
 
 Next by this measure: strong cues with nothing felt (32 of 151), then too much (~1/min).
+
+## What the judge found next (2026-10-21)
+
+**Too much, a second witness.** Of the 945 too-much flags on the tuning films, 75% sat on loud bass
+with YAMNet hearing an effect: boom 77, explosion 62, thump 53, roaring 45, gunshot 39, smash,
+shatter, door. Captions leave most of an action scene's effects out, so those were the judge's
+mistakes. Now an uncaptioned moment where one of the moment model's effect classes
+(`HapticMomentTrain.EFFECT`) scores 0.3 or more is not too much. At the three too-much marks YAMNet
+heard no effect over 0.11. The marks are still caught 10 of 13 on the engine they were made on.
+
+| Judge | Missed | Faint | Too much/min | Held-out missed | Faint | Too much/min |
+|---|---|---|---|---|---|---|
+| Before Contrast | 20 | 99 | 0.84 | 10 | 22 | 0.60 |
+| **Contrast** | 22 | 70 | 0.69 | 10 | 17 | 0.37 |
+
+**Missed and faint strong cues, by cause** (tuning films, 92): the moment score half sure, 0.06-0.25
+(44: roars heard as Vehicle, explosions under music, engines); under both gates (31: door slams,
+glass, thunder, revving 10-25 dB under the film's loud bass); felt but weak (14); score under 0.06
+(3). Traced (Spider-Man 2301 s, "[OBJECTS SHATTER]", score 0.46): the bass is 18 dB under the
+loud level and the Listener heard no onset at all, light or weighty. High sounds without bass give
+the engine nothing to play: a gate the moment score opens (6-15 dB) and sparing sure moments from
+the flicker rule changed nothing (missed 22 =, too much +0.02). Not kept. That needs a high-band
+onset in the Listener (a VERSION bump), its own step.
+
+**The ramp is a trade.** 0.06-0.2 or 0.05-0.15 brings tuning misses 22 -> 18 -> 15 for too much 0.69
+-> 1.58 -> 1.97 a minute; held-out misses stay 10 in every setting. Kept 0.06-0.25 ^1.5.
+
+**Training on the grades.** The moment model learned from the graded cues instead of
+`HapticMeaning`'s words: strong only, left-out AUC 0.84 (0.79 on the words); strong or mild, 0.80.
+Each with its ramp refitted, at equal too much they miss as many: strong only, 0.02-0.1: missed
+21 / 11 held out, too much 0.57 / 0.30; strong or mild, 0.05-0.25: 20 / 10, 0.74 / 0.41. Within
+the noise of 32 held-out strong cues, and new `KEPT` classes mean re-analysing every film. Not kept.
