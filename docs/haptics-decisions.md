@@ -1076,3 +1076,41 @@ onset in the Listener (a VERSION bump), its own step.
 Each with its ramp refitted, at equal too much they miss as many: strong only, 0.02-0.1: missed
 21 / 11 held out, too much 0.57 / 0.30; strong or mild, 0.05-0.25: 20 / 10, 0.74 / 0.41. Within
 the noise of 32 held-out strong cues, and new `KEPT` classes mean re-analysing every film. Not kept.
+
+## High band (2026-10-22)
+
+**Why strong cues went unfelt.** Of the 33 missed strong cues (all films), 24 were hit tags
+(`[glass shatters]`, `[door slams]`, `[thunderclap]`, `[Firecracker]`, `[GUNS FIRING]`) with no
+Listener onset within 1 s, light or weighty: a tag keeps any onset near it, so one there is felt.
+The mix's onset rule wants 10 dB over the 50 ms before and over the 1.5 s scene. Steady bass fills
+the mix's energy, so a high sound barely moves it; and in a busy scene the jump is small against
+the scene (Spider-Man 2301 s "[OBJECTS SHATTER]": 24 dB over the moment before above 2 kHz, 8 dB
+over a scene of "[CLANKING]"; 4 dB in the mix). The other 9 are rumbles, engines and roars: no
+onset to give.
+
+**Change.** The Listener runs the same onset rule a second time over the band above 2 kHz
+(`HIGH_HZ`, 4th-order high-pass), needing 6 dB over the scene (`HIGH_SCENE`) instead of 10. Its
+onsets are light, as loud as the mix is there, and kept only where the mix found none within 50 ms
+(`merged`). Light onsets are played only where a hit tag names them, so with no tag nothing
+changes. Listener VERSION 14. ~19 more onsets a minute in the raw track (Spider-Man +39 KB).
+`HapticMomentTrain` learns only from windows with something near the film's loud level, light
+onsets included, so it saw more windows: same `KEPT`, weights shifted, left-out AUC 0.806.
+
+| Judge / bench, Cinematic | Missed | Faint | Too much/min | Cues | Big | Stray/min | Held-out missed | Faint | Too much/min | Cues | Big |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Before | 22 | 70 | 0.69 | 0.727 | 0.905 | 2.38 | 10 | 17 | 0.37 | 0.50 | 0.857 |
+| High band, 10 dB over the scene | 15 | 72 | 0.69 | 0.777 | 0.921 | 2.38 | 7 | 19 | 0.37 | 0.64 | 0.929 |
+| Same, retrained | 14 | 73 | 0.68 | 0.779 | 0.926 | 2.38 | 7 | 19 | 0.37 | 0.64 | 0.929 |
+| **6 dB over the scene, retrained** | **11** | 76 | **0.68** | **0.803** | **0.942** | 2.39 | **7** | 19 | **0.37** | **0.64** | **0.929** |
+
+Held out moved only with the high band itself (the 6 dB step was neutral there). Faint rises
+because missed cues become felt: a tag plays its onset at the preset's softest hit (0.25). Still
+missed: thunder rumbling, engines revving, roars (no onset; the moment score is unsure,
+0.04-0.18), Anora's gunfire "on TV" and Us's "gunshots on stereo" (a song, rightly still).
+
+**Tried, not kept: light onsets without a tag.** Played wherever the moment gain is full: nothing
+changed (missed 14 =). Wherever it is over 0: missed 14 =, too much 0.69 -> 0.76, held out 0.37
+-> 0.41.
+
+**Phone:** not yet measured. The high-pass adds two biquads per sample to the four the Listener
+runs; every cached film is re-analysed once (VERSION 14).

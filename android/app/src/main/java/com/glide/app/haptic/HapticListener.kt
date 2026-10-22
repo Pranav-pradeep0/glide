@@ -18,7 +18,9 @@ import kotlin.math.tan
  *   (under 12% in the clips); rumble and engines have 25-90%.
  * - Hits: onsets in 1 ms blocks of the mix. A hit is a jump in energy over both the moment just
  *   before and the scene's recent level, so an impact over dialogue counts but a sentence starting
- *   after a pause doesn't. Its time is the first block of the rise.
+ *   after a pause doesn't. Its time is the first block of the rise. The same rule over the band
+ *   above [HIGH_HZ] finds glass, door slams and gunshots that steady bass hides in the mix
+ *   (docs/haptics-decisions.md, High band); kept as light where the mix found nothing.
  * - Body: level of the mix below [BODY_HZ] per bed frame, unweighted. An engine revs up through
  *   100-2000 Hz (Us, [engine revs]: 1-15% of it below 100 Hz), where the bed fades out; the
  *   moment score reads it ([HapticDirector.listened]).
@@ -37,6 +39,8 @@ class HapticListener {
     private lateinit var lowB: Biquad
     private lateinit var bodyA: Biquad
     private lateinit var bodyB: Biquad
+    private lateinit var highA: Biquad
+    private lateinit var highB: Biquad
 
     // Mix state.
     private var prev = 0f
@@ -57,24 +61,19 @@ class HapticListener {
     private val energy = DoubleArray(RING)
     private val diff = DoubleArray(RING)
     private val lowE = DoubleArray(RING)
+    private val highE = DoubleArray(RING)
     private var blockL = 0.0
+    private var blockH = 0.0
     private var blocks = 0 // completed blocks
     private var evaluated = 0 // next block to judge
-    private var beforeSum = 0.0
-    private var contextSum = 0.0
-
-    // A rise being followed: first block above the threshold, its reference level, best ratio.
-    private var riseAt = -1
-    private var riseRef = 0.0
-    private var riseBest = 0.0
-    private var riseLoud = 0.0
-    private var riseCtx = 0.0
-    private var quietUntil = 0
+    private val mixOnsets = Onsets(energy, high = false)
+    private val highOnsets = Onsets(highE, high = true)
 
     private var bed = FloatArray(1 shl 12)
     private var bedSize = 0
     private var body = FloatArray(1 shl 12)
     private val events = ArrayList<HapticTrack.Event>()
+    private val highEvents = ArrayList<HapticTrack.Event>()
 
     /** Media time analysed so far. */
     val analysedMs get() = if (rate == 0) 0 else startMs + ((evaluated.toLong() * block * 1000) / rate).toInt()
@@ -103,7 +102,21 @@ class HapticListener {
 
     fun track(fingerprint: HapticTrack.Fingerprint): HapticTrack {
         val frames = minOf(bedSize, analysedMs / HapticTrack.BED_FRAME_MS)
-        return HapticTrack(VERSION, fingerprint, bed.copyOf(frames), FloatArray(frames), events.toList(), body.copyOf(frames))
+        return HapticTrack(VERSION, fingerprint, bed.copyOf(frames), FloatArray(frames), merged(), body.copyOf(frames))
+    }
+
+    /** The mix's onsets and, in time order among them, the high band's with none of the mix's within [REFRACTORY]. */
+    private fun merged(): List<HapticTrack.Event> {
+        val out = ArrayList<HapticTrack.Event>(events.size + highEvents.size)
+        var k = 0
+        for (h in highEvents) {
+            while (k < events.size && events[k].timeMs <= h.timeMs) out += events[k++]
+            val prev = events.getOrNull(k - 1)?.let { h.timeMs - it.timeMs < REFRACTORY } == true
+            val next = events.getOrNull(k)?.let { it.timeMs - h.timeMs < REFRACTORY } == true
+            if (!prev && !next) out += h
+        }
+        while (k < events.size) out += events[k++]
+        return out
     }
 
     private fun start(ptsUs: Long, rate: Int) {
@@ -116,12 +129,16 @@ class HapticListener {
         lowB = Biquad(rate, BED_HZ, 1.3066)
         bodyA = Biquad(rate, BODY_HZ, 0.5412)
         bodyB = Biquad(rate, BODY_HZ, 1.3066)
+        highA = Biquad(rate, HIGH_HZ, 0.5412, highPass = true)
+        highB = Biquad(rate, HIGH_HZ, 1.3066, highPass = true)
         repeat(startMs / HapticTrack.BED_FRAME_MS) { pushBed(0f, 0f) }
     }
 
     private fun sample(x: Float) {
         val low = lowB.run(lowA.run(x.toDouble()))
         val b = bodyB.run(bodyA.run(x.toDouble()))
+        val h = highB.run(highA.run(x.toDouble()))
+        blockH += h * h
         frameB += b * b
         frameE += low * low
         blockL += low * low
@@ -150,92 +167,119 @@ class HapticListener {
             energy[blocks and MASK] = blockE / block
             diff[blocks and MASK] = blockD / block
             lowE[blocks and MASK] = blockL / block
+            highE[blocks and MASK] = blockH / block
             blockL = 0.0
+            blockH = 0.0
             blocks++
             blockE = 0.0
             blockD = 0.0
             inBlock = 0
-            while (evaluated + LOOK < blocks) judge(evaluated++)
+            while (evaluated + LOOK < blocks) {
+                mixOnsets.judge(evaluated)
+                highOnsets.judge(evaluated++)
+            }
         }
     }
 
     private fun e(i: Int) = if (i < 0) 0.0 else energy[i and MASK]
 
-    /** Decides block [j]; blocks up to j + LOOK are known. */
-    private fun judge(j: Int) {
-        beforeSum += e(j - 1) - e(j - 1 - BEFORE)
-        // Mean amplitude, squared: steady sound reads as its level, one loud click hardly moves it.
-        contextSum += sqrt(e(j - 1)) - sqrt(e(j - 1 - CONTEXT))
-        // The loudest window soon after: a boom builds for ~20 ms, by then "before" holds its start.
+    /** Mean energy of the loudest [AFTER] blocks of [ring] starting within [PEAK_WITHIN] of [j]. */
+    private fun loudest(ring: DoubleArray, j: Int): Double {
         var window = 0.0
-        for (i in j until j + AFTER) window += e(i)
-        var after = window
+        for (i in j until j + AFTER) window += ring[i and MASK]
+        var best = window
         for (k in j + 1..j + PEAK_WITHIN) {
-            window += e(k + AFTER - 1) - e(k - 1)
-            after = maxOf(after, window)
+            window += ring[(k + AFTER - 1) and MASK] - ring[(k - 1) and MASK]
+            best = maxOf(best, window)
         }
-        after /= AFTER
-        val context = contextSum / CONTEXT
-        val ref = maxOf(beforeSum / BEFORE, context * context, FLOOR)
-        val ratio = after / ref
-        val rising = ratio > RATIO && after > MIN_ENERGY
-        if (riseAt < 0) {
-            if (!rising || j < quietUntil) return
-            riseAt = j
-            riseRef = ref
-            riseCtx = context * context
-            riseBest = 0.0
-        }
-        if (ratio > riseBest) {
-            riseBest = ratio
-            riseLoud = after
-        }
-        if (rising && j - riseAt < MAX_RISE) return
-        emit(j)
+        return best / AFTER
     }
 
-    /** Places the rise followed since [riseAt], judged up to block [j], and keeps it if it's a hit. */
-    private fun emit(j: Int) {
-        // The first block that clearly rose: the window above finds the hit, this finds its start.
-        val end = j + AFTER + PEAK_WITHIN
-        var peak = 0.0
-        for (i in riseAt until end) peak = maxOf(peak, e(i))
-        val gate = maxOf(riseRef * RISE, peak * 0.05)
-        var at = riseAt
-        while (at < end - AFTER && e(at) <= gate) at++
-        riseAt = -1
-        quietUntil = at + REFRACTORY
+    /** Onsets over one lane of block energies: the mix, or the band over [HIGH_HZ] ([high]). */
+    private inner class Onsets(private val lane: DoubleArray, private val high: Boolean) {
+        private var beforeSum = 0.0
+        private var contextSum = 0.0
 
-        // A hit has weight, or is far above a scene we have heard: the rest are kept as light, for a
-        // subtitle to confirm. Dialogue and these mixes'
-        // music have almost nothing below 100 Hz; impacts, explosions and sub hits do.
-        var low = 0.0
-        var all = 0.0
-        for (i in at until at + WEIGHT_MS) {
-            low += lowE[i and MASK]
-            all += e(i)
-        }
-        val weighty = low >= WEIGHT_SHARE * all
-        val standsOut = j >= CONTEXT && riseLoud >= ALONE * riseCtx
-        val light = !weighty && !standsOut
+        // A rise being followed: first block above the threshold, its reference level, best ratio.
+        private var riseAt = -1
+        private var riseRef = 0.0
+        private var riseBest = 0.0
+        private var riseLoud = 0.0
+        private var riseCtx = 0.0
+        private var quietUntil = 0
 
-        var es = 0.0
-        var ds = 0.0
-        for (i in at until at + AFTER) {
-            es += e(i)
-            ds += diff[i and MASK]
+        private fun l(i: Int) = if (i < 0) 0.0 else lane[i and MASK]
+
+        /** Decides block [j]; blocks up to j + LOOK are known. */
+        fun judge(j: Int) {
+            beforeSum += l(j - 1) - l(j - 1 - BEFORE)
+            // Mean amplitude, squared: steady sound reads as its level, one loud click hardly moves it.
+            contextSum += sqrt(l(j - 1)) - sqrt(l(j - 1 - CONTEXT))
+            // The loudest window soon after: a boom builds for ~20 ms, by then "before" holds its start.
+            val after = loudest(lane, j)
+            val context = contextSum / CONTEXT
+            val ref = maxOf(beforeSum / BEFORE, (if (high) HIGH_SCENE else 1.0) * context * context, FLOOR)
+            val ratio = after / ref
+            val rising = ratio > RATIO && after > MIN_ENERGY
+            if (riseAt < 0) {
+                if (!rising || j < quietUntil) return
+                riseAt = j
+                riseRef = ref
+                riseCtx = context * context
+                riseBest = 0.0
+            }
+            if (ratio > riseBest) {
+                riseBest = ratio
+                riseLoud = after
+            }
+            if (rising && j - riseAt < MAX_RISE) return
+            emit(j)
         }
-        val loudness = 10 * log10(riseLoud + 1e-12) // dBFS of the loudest 10 ms
-        val hz = sqrt(ds / es.coerceAtLeast(1e-12)) * rate / (2 * PI) // RMS frequency of the attack
-        val sharpness = ((ln(hz / 50) / ln(4000.0 / 50)).toFloat()).coerceIn(0f, 1f)
-        events += HapticTrack.Event(
-            timeMs = startMs + ((at.toLong() * block * 1000) / rate).toInt(),
-            intensity = ((loudness + 40) / 40).toFloat().coerceIn(0f, 1f),
-            sharpness = sharpness,
-            lengthMs = lengthMs(sharpness),
-            decayMs = decayMs(sharpness),
-            sources = HapticTrack.SOURCE_AUDIO or if (light) HapticTrack.LIGHT else 0
-        )
+
+        /** Places the rise followed since [riseAt], judged up to block [j], and keeps it if it's a hit. */
+        private fun emit(j: Int) {
+            // The first block that clearly rose: the window above finds the hit, this finds its start.
+            val end = j + AFTER + PEAK_WITHIN
+            var peak = 0.0
+            for (i in riseAt until end) peak = maxOf(peak, l(i))
+            val gate = maxOf(riseRef * RISE, peak * 0.05)
+            var at = riseAt
+            while (at < end - AFTER && l(at) <= gate) at++
+            riseAt = -1
+            quietUntil = at + REFRACTORY
+
+            // A hit has weight, or is far above a scene we have heard: the rest are kept as light, for a
+            // subtitle to confirm. Dialogue and these mixes'
+            // music have almost nothing below 100 Hz; impacts, explosions and sub hits do. The high
+            // band's are all light, and as loud as the mix is there.
+            var low = 0.0
+            var all = 0.0
+            for (i in at until at + WEIGHT_MS) {
+                low += lowE[i and MASK]
+                all += e(i)
+            }
+            val weighty = !high && low >= WEIGHT_SHARE * all
+            val standsOut = !high && j >= CONTEXT && riseLoud >= ALONE * riseCtx
+            val light = !weighty && !standsOut
+
+            var es = 0.0
+            var ds = 0.0
+            for (i in at until at + AFTER) {
+                es += e(i)
+                ds += diff[i and MASK]
+            }
+            val loudness = 10 * log10((if (high) loudest(energy, at) else riseLoud) + 1e-12) // dBFS of the loudest 10 ms
+            val hz = sqrt(ds / es.coerceAtLeast(1e-12)) * rate / (2 * PI) // RMS frequency of the attack
+            val sharpness = ((ln(hz / 50) / ln(4000.0 / 50)).toFloat()).coerceIn(0f, 1f)
+            (if (high) highEvents else events) += HapticTrack.Event(
+                timeMs = startMs + ((at.toLong() * block * 1000) / rate).toInt(),
+                intensity = ((loudness + 40) / 40).toFloat().coerceIn(0f, 1f),
+                sharpness = sharpness,
+                lengthMs = lengthMs(sharpness),
+                decayMs = decayMs(sharpness),
+                sources = HapticTrack.SOURCE_AUDIO or if (light) HapticTrack.LIGHT else 0
+            )
+        }
     }
 
     private fun bedLevel(rms: Double): Float {
@@ -252,8 +296,8 @@ class HapticListener {
         bed[bedSize++] = v
     }
 
-    /** RBJ low-pass, doubles: at 100 Hz of 48 kHz the poles sit too near 1 for floats. */
-    internal class Biquad(rate: Int, hz: Double, q: Double) {
+    /** RBJ low-pass (or high-pass), doubles: at 100 Hz of 48 kHz the poles sit too near 1 for floats. */
+    internal class Biquad(rate: Int, hz: Double, q: Double, highPass: Boolean = false) {
         private val b0: Double
         private val b1: Double
         private val a1: Double
@@ -266,8 +310,8 @@ class HapticListener {
         init {
             val k = tan(PI * hz / rate)
             val norm = 1 / (1 + k / q + k * k)
-            b0 = k * k * norm
-            b1 = 2 * b0
+            b0 = if (highPass) norm else k * k * norm
+            b1 = if (highPass) -2 * b0 else 2 * b0
             a1 = 2 * (k * k - 1) * norm
             a2 = (1 - k / q + k * k) * norm
         }
@@ -284,7 +328,7 @@ class HapticListener {
 
     companion object {
         /** Bump when the output changes: cached tracks are rebuilt. */
-        const val VERSION = 12
+        const val VERSION = 14
 
         /** A hit's pulse and tail from its sharpness: bright and short, dull and long (decision L5). */
         fun lengthMs(sharpness: Float) = (80 - 50 * sharpness).roundToInt()
@@ -292,6 +336,7 @@ class HapticListener {
 
         const val BED_HZ = 100.0
         const val BODY_HZ = 300.0
+        const val HIGH_HZ = 2000.0
         private const val BED_FLOOR_DB = -45.0
         private const val SHARE_FRAMES = 20 // 200 ms
         private const val SHARE_FROM = 0.15 // no bed at or below this share of the sound
@@ -310,6 +355,7 @@ class HapticListener {
         private const val RISE = 4.0 // a block 6 dB over the reference starts the hit
         private const val WEIGHT_SHARE = 0.15
         private const val ALONE = 316.0 // 25 dB over the scene
+        private const val HIGH_SCENE = 0.4 // the high band needs 6 dB over the scene, not 10
         private const val MIN_ENERGY = 1e-5 // -50 dBFS: hiss rising out of digital silence isn't a hit
         private const val FLOOR = 1e-7
         private const val RING = 2048
