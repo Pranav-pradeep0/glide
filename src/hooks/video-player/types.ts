@@ -111,7 +111,10 @@ export function matchCarriedTrack(
 ): number {
     const language = knownLanguage(want.language);
     if (!language) {
-        return want.ordinal < tracks.length ? want.ordinal : -1;
+        // A position only means something among untagged tracks too (episodes of one rip). Into
+        // a tagged file it picked whatever sat there: Anora's first track is a commentary.
+        const untagged = tracks.every(t => !knownLanguage(t.language));
+        return untagged && want.ordinal < tracks.length ? want.ordinal : -1;
     }
     const same = tracks.flatMap((t, i) => (knownLanguage(t.language) === language ? [i] : []));
     return same.find(i => tracks[i].title === want.title) ?? same[0] ?? -1;

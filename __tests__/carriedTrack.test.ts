@@ -28,6 +28,10 @@ describe('matchCarriedTrack', () => {
         expect(matchCarriedTrack(untagged, { language: 'und', ordinal: 1 })).toBe(1);
         expect(matchCarriedTrack(untagged, { ordinal: 5 })).toBe(-1);
     });
+
+    it('does not carry an untagged position into tagged tracks', () => {
+        expect(matchCarriedTrack(tracks, { language: 'und', ordinal: 0 })).toBe(-1);
+    });
 });
 
 describe('carriedSubtitle', () => {
