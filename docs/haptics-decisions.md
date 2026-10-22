@@ -1114,3 +1114,19 @@ changed (missed 14 =). Wherever it is over 0: missed 14 =, too much 0.69 -> 0.76
 
 **Phone:** not yet measured. The high-pass adds two biquads per sample to the four the Listener
 runs; every cached film is re-analysed once (VERSION 14).
+
+## Roars and faint cues (2026-10-22)
+
+**The 3:57 roar** (Frankenstein, the 240 s missed mark). Windows 237.1-239.5 s: bass 2 dB under the
+film's loud level and 7 dB over the last 3 s, YAMNet hearing Vehicle 0.2-0.5, Train, Siren,
+Emergency vehicle 0.42; moment score 0.10-0.11, motor peak 16-25. The hit at 241.9 s (score 0.08,
+Speech and Music) plays at 57: the too-much mark at 245 s. Allowing three more vehicle classes by
+name (Emergency vehicle, Rail transport, Subway) to the trainer: none kept, left-out AUC 0.806 =.
+Not kept. Siren classes were left out: they are not something a viewer points at, and adding them
+because YAMNet mishears roars would be choosing classes from the films.
+
+**Faint strong cues, by cause** (94, all films): 56 kept by a caption, most at amplitude 59, the
+preset's softest hit (0.25) that an onset under the gate gets; 38 by the moment score, roars,
+engines and thunder at 0.06-0.25 with the bass near the film's loud level. The first is a feel
+question the judge can't answer: its noticeable line (96) is a guess, and the same tags carry
+mild cues (knocks), where a light tap fits. Waits for the phone feedback on Contrast.
