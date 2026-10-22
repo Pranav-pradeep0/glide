@@ -95,14 +95,28 @@ export function useSubtitleAutoSync({
         }
     }, [enabled, cues, videoPath, currentTimeRef, setDelay, setRatio, showToast]);
 
+    // A frame-rate ratio belongs to the subtitle it was worked out for: another one starts at 1,
+    // else a correctly timed track drifts ~2.5 min an hour and is never "untouched" to auto sync.
+    // The first cues keep the ratio saved for this video.
+    const ratioRef = useRef(ratio);
+    ratioRef.current = ratio;
+    const shownCues = useRef<SubtitleCue[] | null>(null);
+    useEffect(() => {
+        if (cues.length === 0) {return;}
+        if (shownCues.current && shownCues.current !== cues && ratioRef.current !== 1) {setRatio(1);}
+        shownCues.current = cues;
+    }, [cues, setRatio]);
+
     const attempted = useRef<SubtitleCue[] | null>(null);
     useEffect(() => {
         if (!enabled || !isExternal || cues.length === 0 || !untouched) {return;}
         if (audioTracksLoaded === false) {return;}
+        // A run for the previous subtitle is still going; this effect runs again when it ends.
+        if (running) {return;}
         if (attempted.current === cues) {return;}
         attempted.current = cues;
         run(false);
-    }, [enabled, isExternal, cues, untouched, audioTracksLoaded, run]);
+    }, [enabled, isExternal, cues, untouched, audioTracksLoaded, running, run]);
 
     return { runAutoSync: () => run(true), autoSyncRunning: running };
 }
