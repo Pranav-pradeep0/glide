@@ -95,16 +95,14 @@ object HapticDirector {
         val bed = FloatArray(v.size) { i ->
             if (v[i] <= 0f || level[i] <= bedGate) 0f else preset.bedGain * kneed(v[i], bedLow, film.bedRef)
         }
+        val bedSalience = salience(film.level, film.recent, film.bedRef, film.bedTop)
+        for (i in bed.indices) bed[i] *= bedSalience[i]
+        // On the film's own sound, before meaning: a flicker is the same with or without labels.
+        dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, film.weighty.filter { it.intensity >= hitGate })
         // What the sound is: score, logos, ambience and dialogue fade out, what a viewer would
         // point at stays. Without labels (the model didn't load) everything plays.
         val moment = moments(raw, film)
         fun at(ms: Int) = moment?.getOrElse(ms / HapticTrack.BED_FRAME_MS) { 0f } ?: 1f
-        // A sure moment isn't faded for being steady: an explosion sequence at the film's loud level
-        // stood 2 dB over its last 3 s and played 4 s of nothing (a "missed" mark, 87:07 in Frankenstein).
-        val bedSalience = salience(film.level, film.recent, film.bedRef, film.bedTop)
-        for (i in bed.indices) bed[i] *= maxOf(bedSalience[i], moment?.get(i) ?: 0f)
-        // On the film's own sound, before meaning: a flicker is the same with or without labels.
-        dropFlickers(bed, level, bedGate + FLICKER_DB / BED_DB, film.weighty.filter { it.intensity >= hitGate })
         if (moment != null) for (i in bed.indices) bed[i] *= moment[i]
         // A moment above the bed's 100 Hz (an engine revving, 100-2000 Hz) follows the body (below
         // 300 Hz), gated on the film's own loud body as the bed is on its loud bass and faded the

@@ -1130,30 +1130,3 @@ preset's softest hit (0.25) that an onset under the gate gets; 38 by the moment 
 engines and thunder at 0.06-0.25 with the bass near the film's loud level. The first is a feel
 question the judge can't answer: its noticeable line (96) is a guess, and the same tags carry
 mild cues (knocks), where a light tap fits. Waits for the phone feedback on Contrast.
-
-## Sure moments aren't steady (2026-10-22)
-
-**Phone, VERSION 14 build** (AIN065): Frankenstein analysed whole in 102 s (152 min, classify 20 s,
-one piece); SDH tags reached the Director after ~10 s; phone calls match the PC's amplitudes. 13
-new marks (26 in all): roars 3:33-4:35 missed again (motor 24-55), and explosions at 5:05, 87:00
-and 89:50 missed though they peaked at 109-143.
-
-**Cause.** In the explosion sequences YAMNet hears Explosion and Boom 0.4-0.7, the moment score is
-sure (0.22-0.30) and the bass sits at the film's loud level, but the motor played a quarter of the
-time: 87:07-87:12, nothing. The steady fade (Two timescales) needs 4 dB over the last 3 s, and
-these stood 2 dB over it; its exemption is only for bass over the 99th percentile. The fade came
-before the moment score, as a sound-only guard against the creature attack's buzz; now the two
-multiply and a sure, sustained explosion fades for being steady.
-
-**Change.** The bed's steady fade is at least the moment gain (`max(salience, moment)`): a sure
-moment plays through, an unsure one must still stand out of its last 3 s.
-
-| Judge / bench | Missed | Faint | Too much/min | Big | Stray/min | Loud felt | Held-out missed | Too much/min | Big | Stray | Loud |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Before | 11 | 76 | 0.68 | 0.942 | 2.39 | 0.22 | 7 | 0.37 | 0.929 | 1.32 | 0.07 |
-| **Sure moments play through** | **10** | **71** | **0.65** | **0.958** | **2.31** | 0.34 | **6** | **0.32** | **1.000** | **1.26** | 0.09 |
-
-Missed marks felt 0.19 -> 0.40 (89:40-89:50 0.26 -> 0.80, peak 155); too-much marks 0.11 -> 0.23,
-from the 233-243 s window, which overlaps the roar marked missed at 238.5 s. Creature attack 0.17
--> 0.33 felt (0.66 when it was reported as nonstop). Loud scenes felt rises: that measure was the
-guard against nonstop buzz, and these marks ask for the loud scenes that are real moments.
