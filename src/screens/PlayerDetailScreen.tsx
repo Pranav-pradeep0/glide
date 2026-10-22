@@ -110,7 +110,7 @@ export default function PlayerDetailScreen() {
         <View style={styles.actions}>
             <Button label="Play" icon="play" variant="primary" size="lg" onPress={() => navigateToPlayer(false)} />
             {hapticsEnabled && (
-                <Button label="Play with haptics" size="lg" onPress={() => navigateToPlayer(true)} />
+                <Button label="Play with haptics" badge="Experimental" size="lg" onPress={() => navigateToPlayer(true)} />
             )}
         </View>
     );

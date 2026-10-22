@@ -432,6 +432,7 @@ export default function SettingsScreen() {
                     <ListRow
                         icon="activity"
                         title="Haptic feedback"
+                        badge="Experimental"
                         caption="Rumbles with loud scenes and deep sounds"
                         toggle={{ value: hapticSettings.enabled, onChange: toggleHaptics }}
                     />
