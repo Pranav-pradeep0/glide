@@ -103,6 +103,8 @@ type RouteParams = {
     videoSort?: VideoSort;
     /** Opened by next/previous while in PiP, where the resume prompt can't be answered. */
     fromPip?: boolean;
+    /** Opened by Previous: the screen slides in from the left. */
+    previous?: boolean;
 };
 
 type Props = {
@@ -988,6 +990,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 videoSort,
                 carry: carryRef.current,
                 fromPip: isInPipMode,
+                previous: true,
             });
         }
     }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode]);

@@ -307,12 +307,14 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                             name="VideoPlayer"
                             layout={playerLayout}
                             getComponent={() => require('@/screens/VideoPlayerScreen').default}
-                            options={{
+                            options={({ route }) => ({
                                 headerShown: false,
                                 animation: 'slide_from_right',
+                                // Previous replaces the screen too; 'pop' plays the slide backwards.
+                                animationTypeForReplace: route.params?.previous ? 'pop' : 'push',
                                 animationDuration: 200,
                                 gestureEnabled: false,
-                            }}
+                            })}
                         />
                         <Stack.Screen
                             name="Search"

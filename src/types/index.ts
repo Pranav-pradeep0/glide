@@ -157,6 +157,8 @@ export type RootStackParamList = {
         playAll?: boolean;
         // The folder screen's order, so Next / Previous / the playlist follow it
         videoSort?: VideoSort;
+        // Opened by Previous: the screen slides in from the left
+        previous?: boolean;
     };
     AlbumVideos: {
         albumTitle: string;
