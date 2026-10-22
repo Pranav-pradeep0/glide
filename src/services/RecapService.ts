@@ -10,6 +10,7 @@ export class RecapService {
     private static readonly MIN_DIALOGUE_LINES = 4;
     private static readonly MIN_DIALOGUE_WORDS = 40;
     private static readonly MIN_DIALOGUE_DURATION_SECONDS = 12;
+    private static readonly SCENE_GAP_SECONDS = 8;
 
     /**
      * High-level entry point to get dialogue for recap.
@@ -102,8 +103,14 @@ export class RecapService {
         let wordCount = 0;
         let durationSeconds = 0;
         const processedCues: string[] = [];
+        let lastEnd = Infinity;
 
         for (const cue of relevantCues) {
+            // A long silence usually means a cut; a blank line tells the model a new scene began.
+            if (cue.startTime - lastEnd > this.SCENE_GAP_SECONDS && processedCues.length > 0) {
+                processedCues.push('');
+            }
+            lastEnd = cue.endTime;
             // Remove HTML-like tags
             let text = cue.text.replace(/<[^>]*>/g, '');
             // Remove bracketed noise like [MUSIC], (SIGHS), [Door Slams]
@@ -120,7 +127,8 @@ export class RecapService {
 
         if (processedCues.length === 0) { return null; }
 
-        let dialogue = processedCues.join(' ');
+        // One cue per line: line breaks are the only hint of who is speaking.
+        let dialogue = processedCues.join('\n');
 
         // Limit to roughly 1000-1200 tokens (~5000 characters)
         // We take the LATEST part if it's too long, but try to cut at a sentence boundary
