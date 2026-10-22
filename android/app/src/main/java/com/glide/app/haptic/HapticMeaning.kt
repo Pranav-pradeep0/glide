@@ -13,9 +13,19 @@ object HapticMeaning {
     /** What a viewer would point at: SDH cues of these kinds should be felt (HapticBenchTest's truth). */
     val EFFECTS = setOf(Kind.SHARP, Kind.HEAVY, Kind.ENGINE, Kind.ROAR)
 
+    /**
+     * How a viewer feels an effect: strong (explosions, gunfire, roars, slams, thunder, revving),
+     * light (a tap fits: knocks, thuds, clangs, growls), none (a fire crackling, heartbeats, an
+     * engine stopping). Against the 2021 graded caption texts (`.haptics-fixtures/cue-grades.tsv`,
+     * HapticMeaningTest): 66 of 67 strong read strong, 6 light ones too, no none text reads strong
+     * and 15 of 1756 read light (docs/haptics-decisions.md, Events).
+     * Crackling is light, as the tester marked the lab scene's electricity missed; a fire's isn't.
+     */
+    enum class Weight { STRONG, LIGHT, NONE }
+
     data class Cue(val startMs: Int, val endMs: Int, val text: String)
 
-    data class Tag(val startMs: Int, val endMs: Int, val kind: Kind)
+    data class Tag(val startMs: Int, val endMs: Int, val kind: Kind, val weight: Weight = Weight.LIGHT)
 
     // First match wins: "[thunderclap]" is heavy, not sharp; "[pluto snarling, banging]" a hit.
     private val KINDS = listOf(
@@ -29,12 +39,21 @@ object HapticMeaning {
     private val BRACKETS = Regex("""\[([^\]]*)]|\(([^)]*)\)""")
     private val MARKUP = Regex("""<[^>]*>|\{[^}]*\}""")
 
-    /** Each cue's tags, in cue order; a cue with several sounds gives several tags. */
+    private val STRONG = Regex("""\b(roar(s|ing|ed)?\b|shatter|(glass|window|bottle) break|breaking (glass|window|bottle)|explo|gunfire|gunshot|guns? fir|rifles? fir|firecracker|crash|slam|thunder|rumbl|rev(s|ving|ved)?\b|accelerat|surge|heavy (splash|thud)|loud thud)""")
+    private val NONE = Regex("""\b((fire|static) crackl|static|heartbeat|snaps fingers|fingers snapping|imitating|(stops|shuts off|turns off)\b|stops growling)""")
+
+    /** Each cue's tags, in cue order; a cue with several sounds gives several tags, the strongest weight of each kind. */
     fun tags(cues: List<Cue>): List<Tag> = cues.flatMap { cue ->
         val text = cue.text.replace(MARKUP, "").lowercase()
-        val kinds = BRACKETS.findAll(text).mapNotNull { m -> kindOf(m.value) }.toMutableList()
-        if ('♪' in text || '♫' in text) kinds += Kind.MUSIC // lyrics between notes
-        kinds.distinct().map { Tag(cue.startMs, cue.endMs, it) }
+        val kinds = BRACKETS.findAll(text).mapNotNull { m -> kindOf(m.value)?.let { it to weightOf(m.value) } }.toMutableList()
+        if ('♪' in text || '♫' in text) kinds += Kind.MUSIC to Weight.NONE // lyrics between notes
+        kinds.groupBy({ it.first }) { it.second }.map { (kind, ws) -> Tag(cue.startMs, cue.endMs, kind, ws.minOf { it }) }
+    }
+
+    private fun weightOf(tag: String) = when {
+        NONE.containsMatchIn(tag) -> Weight.NONE
+        STRONG.containsMatchIn(tag) -> Weight.STRONG
+        else -> Weight.LIGHT
     }
 
     private fun kindOf(tag: String): Kind? = KINDS.firstOrNull { it.second.containsMatchIn(tag) }?.first

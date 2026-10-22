@@ -53,7 +53,6 @@ import {
     usePlayerHUD,
     usePlayerGestures,
     usePlayerTracks,
-    hasSoundTag,
     usePlayerBookmarks,
     usePlayerSettings,
     usePlayerRecap,
@@ -435,9 +434,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         defaultAudioLanguage: defaultAudioLanguage,
     });
 
-    // Only cues that can carry a sound tag cross the bridge; native reads the tags (HapticMeaning).
+    // Every cue crosses the bridge: native reads the tags (HapticMeaning) and fits the lines to the
+    // film's speech so the captions name the right sounds (HapticCaptions).
     const hapticCues = useMemo(() => tracksHook.hapticCues
-        .filter(c => hasSoundTag(c.text))
         .map(c => ({ startMs: Math.round(c.startTime * 1000), endMs: Math.round(c.endTime * 1000), text: c.text })),
     [tracksHook.hapticCues]);
 

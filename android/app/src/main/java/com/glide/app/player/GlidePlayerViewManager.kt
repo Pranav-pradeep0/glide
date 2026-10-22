@@ -50,7 +50,7 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
     @ReactProp(name = "haptics", defaultBoolean = false)
     fun setHaptics(view: GlidePlayerView, enabled: Boolean) = view.setHaptics(enabled)
 
-    /** [{startMs, endMs, text}] of the SDH subtitle's tagged cues; empty or null for none. */
+    /** [{startMs, endMs, text}] of the SDH subtitle, every cue; empty or null for none. */
     @ReactProp(name = "hapticCues")
     fun setHapticCues(view: GlidePlayerView, cues: ReadableArray?) = view.setHapticCues(
         (0 until (cues?.size() ?: 0)).mapNotNull { i ->

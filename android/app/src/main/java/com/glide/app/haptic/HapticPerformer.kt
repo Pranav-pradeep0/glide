@@ -85,12 +85,36 @@ class HapticPerformer(private val context: Context) {
     }
 
     /**
-     * The film's subtitle tags (Phase 5, [HapticMeaning]), at any time: a cached track is published
-     * only once, so the one already here is directed again, off the haptics thread.
+     * The film's SDH subtitle cues ([HapticMeaning]), at any time: a cached track is published only
+     * once, so the one already here is directed again, off the haptics thread. Their tags direct
+     * as they are until [HapticCaptions] puts the lines on the film's speech.
      */
-    fun setTags(tags: List<HapticMeaning.Tag>) {
-        this.tags = tags
+    fun setCues(cues: List<HapticMeaning.Cue>) {
+        synchronized(fitLock) {
+            this.cues = cues
+            fitFrom = 0
+            fitted = cues.isEmpty()
+        }
+        tags = HapticMeaning.tags(cues)
         redirect()
+    }
+
+    private val fitLock = Any()
+    private var cues: List<HapticMeaning.Cue> = emptyList()
+    private var fitFrom = 0 // sound window the next caption fit starts from
+    private var fitted = true
+
+    /** The tags to direct [r] with: once enough is analysed, the cues moved onto its speech. */
+    private fun alignedTags(r: HapticTrack): List<HapticMeaning.Tag> = synchronized(fitLock) {
+        if (!fitted) HapticCaptions.fit(cues, r, fitFrom)?.let { fit ->
+            fitFrom = fit.nextWindow
+            Log.w(TAG, "captions delay=${fit.delayMs} next=${fit.nextWindow}")
+            fit.delayMs?.let { d ->
+                fitted = true
+                tags = HapticMeaning.tags(HapticCaptions.shifted(cues, d))
+            }
+        }
+        tags
     }
 
     /** Subtle / Cinematic / Intense (Phase 6), at any time: the track playing is directed again. */
@@ -115,7 +139,7 @@ class HapticPerformer(private val context: Context) {
 
     private fun direct(r: HapticTrack, opening: Int) {
         val t0 = SystemClock.elapsedRealtime()
-        val tg = tags
+        val tg = alignedTags(r)
         val p = preset
         val s = strength
         val t = HapticDirector.direct(r, tg, p, s)

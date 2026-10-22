@@ -126,7 +126,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var audioDelayMs = 0
     private var audioDelayProcessor: AudioDelayProcessor? = null
     private var haptics: HapticPerformer? = null
-    private var hapticTags: List<HapticMeaning.Tag> = emptyList()
+    private var hapticCues: List<HapticMeaning.Cue> = emptyList()
     private var hapticPreset = HapticDirector.Preset.CINEMATIC
     private var hapticStrength = 1f
     /** Container chapters (title, start ms): a credits one says where Up next goes. */
@@ -692,14 +692,14 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             haptics = null
             return
         }
-        haptics = HapticPerformer(context).also { h -> h.setTags(hapticTags); h.setPreset(hapticPreset); h.setStrength(hapticStrength); sourceUri?.takeIf { player != null }?.let { h.open(it) } }
+        haptics = HapticPerformer(context).also { h -> h.setCues(hapticCues); h.setPreset(hapticPreset); h.setStrength(hapticStrength); sourceUri?.takeIf { player != null }?.let { h.open(it) } }
         syncHaptics(hard = true)
     }
 
-    /** The film's subtitle cues with sound tags, for the Director (haptics Phase 5). */
+    /** The film's SDH subtitle cues for the Director, its lines too: they put the captions on the film's speech. */
     fun setHapticCues(cues: List<HapticMeaning.Cue>) {
-        hapticTags = HapticMeaning.tags(cues)
-        haptics?.setTags(hapticTags)
+        hapticCues = cues
+        haptics?.setCues(cues)
     }
 
     /** Subtle / Cinematic / Intense (haptics Phase 6), live. */

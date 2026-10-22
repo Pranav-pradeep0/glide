@@ -295,8 +295,11 @@ class HapticFilmTest {
          * heavier with labels, none with the rule off); [HapticBenchTest] is the yardstick now.
          * Subwoofer correlation and loud LFE under music or voice: the moment score fades bass a
          * viewer wouldn't point at (a score's braams, ambience), which these count as missed.
+         * Untagged hits under music or voice: "audio only" is now the no-labels fallback, another
+         * design, and the moment score's sure events fall in fights under [screams] (Spider-Man
+         * 2.3 -> 2.6/min); [HapticJudgeTest]'s too-much seconds and the testers' marks judge it.
          */
-        private val INFO = setOf("subwoofer correlation", "MUSIC, loud LFE felt", "VOICE, loud LFE felt", "MUSIC bed", "VOICE bed", "dialogue FP/min", "active share", "felt moments/min", "opening felt, s", "tagged hits, bed or hit", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
+        private val INFO = setOf("MUSIC untagged hits/min", "VOICE untagged hits/min", "subwoofer correlation", "MUSIC, loud LFE felt", "VOICE, loud LFE felt", "MUSIC bed", "VOICE bed", "dialogue FP/min", "active share", "felt moments/min", "opening felt, s", "tagged hits, bed or hit", "hits", "mean hit strength", "longest felt run, s","hits lost under the bed", "dialogue bed share", "tagged hits, raw onset", "LFE-only correlation", "subwoofer, whole film", "MUSIC, quiet LFE felt", "VOICE, quiet LFE felt")
 
         private val TIME = Regex("""(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)""")
         private val TAG = Regex("""[\[(♪#*]""")

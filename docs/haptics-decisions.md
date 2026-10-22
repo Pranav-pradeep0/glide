@@ -1130,3 +1130,83 @@ preset's softest hit (0.25) that an onset under the gate gets; 38 by the moment 
 engines and thunder at 0.06-0.25 with the bass near the film's loud level. The first is a feel
 question the judge can't answer: its noticeable line (96) is a guess, and the same tags carry
 mild cues (knocks), where a light tap fits. Waits for the phone feedback on Contrast.
+
+## Events (2026-10-22)
+
+**Why the rules stopped.** On the phone (VERSION 14) the explosion fix of the same day (a sure
+moment isn't faded for being steady) played an explosion sequence as one 6 s wall, marked too much;
+the same spot with a gap had been marked missed. It was reverted. The tester's 33 marks over three
+sessions (two more were taps while seeking, dropped) said one thing throughout: a faint buzz is
+never right. A roar at amplitude 16-55 was marked missed, music and crowds at 15-45 too much. And
+the buzz swelled in 0.5-1 s after its sound, as the moment gain ramped up with 0.48 s windows
+growing surer (vibrator calls were on time, 0-2 ms). The Director had become ~10 stacked rules,
+each made for one report (gates, knee, two timescales, flickers, moment ramp, body path, logo,
+caption snap, softest hit). The judge counted buzz stretches (merging buzzes into a wall read as
+less) and excused anything YAMNet heard as an effect: it called that fix "less too much".
+
+**Yardstick first** (`HapticJudgeTest`). Not clear: a strong cue never at amplitude 96 for 100 ms.
+Too much: seconds per minute felt outside strong and mild cues, no YAMNet excuse. Faint: seconds
+under 96. On time: felt starts within 100 ms after a sound starts. Marks pass or fail: missed if
+nothing is clearly felt in the 6 s before the tap, too much if more than 100 ms is felt in the 3 s
+before it. On the engine they were made on, 21 of 22 missed and 11 of 11 too-much marks fail: the
+judge agrees with the tester.
+
+**What decides a design.** Strong cues with a sound start near them (an onset, or a 6 dB jump of
+the bass or body): 112 of 119 tuning, 23 of 32 held out. The moment score alone, at a sure
+threshold, finds 47% of strong cues (25% held out) for 0.7 false events a minute: it can't lead.
+Every missed roar and explosion the tester marked has a caption.
+
+**Design** (`HapticDirector`, rewritten). A film is felt as events, each clearly felt or absent.
+- What: an SDH caption names it. `HapticMeaning.Weight` reads strong (explosions, gunfire, roars,
+  slams, thunder, rumbling, revving), light (knocks, thuds, clangs, growls, crackling) or none
+  (a fire crackling, heartbeats, an engine stopping): against the graded texts 66 of 67 strong
+  read strong, no none text reads strong. A strong caption takes the loudest start from 1 s
+  before it to its end, and every start within 6 dB of it (its blasts); a light one, one tap.
+  Without a caption the moment score adds a strong event where it is sure ([Preset.sure]) and
+  the start is within 10 dB of the film's loud level.
+- When: at the start itself (`attacks`): every onset to the ms, and bass or body jumps with no
+  onset near. An onset gets a hit; a swell only follows its sound.
+- How strong: strong from intensity 0.82 (amplitude ~110 at Cinematic) at 20 dB under the film's
+  loud level to 1 (~137) at it, over it dB for dB; it follows the lane that rose most until 10 dB
+  under its peak, the next event, or its caption's end (1.5 s for the moment score's). Light: one
+  100 ms tap at 0.74 (~100).
+- Presets: Subtle, strong captions only; Cinematic, light captions and the score at 0.3;
+  Intense, the score at 0.2. Strength is unchanged.
+- No labels (the model didn't load): the Phase 4 rules, weighty onsets within 9 dB of the film's
+  loud hits and swells within 9 dB of its loud bass; the generated clips pass on it.
+- Captions on the phone (`HapticCaptions`): every cue now crosses the bridge, and the lines are fit
+  to the track's own Speech score with the player's subtitle sync (`SubtitleAligner`), on a fully
+  analysed 300 s window, accepted only when sure. In-sync films read 0.1-0.3 s early (YAMNet's
+  windows smear speech), so fits under 0.5 s move nothing; shifts of 2, -1.5 and 8 s come back to
+  within 0.3 s (`HapticCaptionsTest`, Frankenstein and Us).
+- Kept: strength, `listened` and the moment model (unchanged), the logo rule for the score's events.
+
+| Judge, Cinematic | Not clear | Too much s/min | Faint s/min | On time | Missed marks | Too-much marks | Held-out not clear | Too much | Faint |
+|---|---|---|---|---|---|---|---|---|---|
+| Before | 87 of 119 | 1.04 | 1.18 | 68% | 1 / 22 | 0 / 11 | 26 of 32 | 0.43 | 0.46 |
+| **Events** | **6 of 119** | **0.28** | **0.22** | **100%** | **15 / 22** | **8 / 11** | **6 of 32** | **0.10** | **0.07** |
+
+The sure threshold, chosen on the tuning films:
+
+| Score's events at | Too much s/min (held out) | Missed marks | Too-much marks |
+|---|---|---|---|
+| none | 0.01 (0.00) | 14 | 8 |
+| 0.4 | 0.13 (0.05) | 14 | 8 |
+| **0.3** | **0.28 (0.10)** | **15** | **8** |
+| 0.25 | 0.45 (0.15) | 16 | 8 |
+| 0.2 | 0.71 (0.25) | 16 | 7 |
+
+The bench, old truth: stray moments 2.39 -> 0.26/min (held out 1.32 -> 0.10), loud scenes felt
+0.22 -> 0.08; big cues felt 0.94 -> 0.91, the new misses being cues the grades call none (fire
+crackling, heartbeats, an engine shutting off). `HapticFilmTest`: untagged hits under music and
+voice are information now (its "audio only" is the no-labels fallback, another design).
+
+**Marks still failing.** Missed: uncaptioned stretches the score is unsure of (86:44-86:50 and
+89:44-89:50 explosions under score at 0.10-0.15, 5:15), the lab scene's uncaptioned
+"[machinery powering down]" and 61:18-61:24, and 3:43 (tapped too much 0.15 s before). Too much:
+a light tap for "[chains clanking]" (86:24), and 4:22 and 4:35, whose 3 s look-back holds a roar
+and a growl marked missed in the same breath. Caption-less moments need a better sound model
+(the part this design keeps swappable); the conflicting pairs need marks on another film.
+
+**Not done:** the strength of strong and light events is the phone's to set (constants marked);
+`CLEAR_AMP` (96) with it.
