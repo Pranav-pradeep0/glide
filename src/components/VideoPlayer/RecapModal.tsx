@@ -93,7 +93,7 @@ export const RecapModal: React.FC<RecapModalProps> = ({
                                 ))}
                             </Animated.Text>
                             <Text style={styles.disclosure}>
-                                Written by AI from the subtitles. It can be wrong or give things away.
+                                Written by AI from the subtitles. It can be wrong or contain spoilers.
                             </Text>
                             <Pressable
                                 onPress={() => report(recapText)}
