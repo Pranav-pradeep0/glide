@@ -22,6 +22,7 @@ import { RootStackParamList } from '../types';
 import { ImdbIcon, RottenTomatoesIcon } from '../components/VideoPlayer/PlayerIcons';
 import { Button, Gradient, IconButton } from '@/components/ui';
 import { metrics, type } from '@/theme/theme';
+import { IS_TV } from '@/utils/tv';
 
 type DetailRouteProp = RouteProp<RootStackParamList, 'PlayerDetail'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -109,7 +110,7 @@ export default function PlayerDetailScreen() {
     const actions = (
         <View style={styles.actions}>
             <Button label="Play" icon="play" variant="primary" size="lg" onPress={() => navigateToPlayer(false)} />
-            {hapticsEnabled && (
+            {hapticsEnabled && !IS_TV && (
                 <Button label="Play with haptics" badge="Experimental" size="lg" onPress={() => navigateToPlayer(true)} />
             )}
         </View>
@@ -117,14 +118,15 @@ export default function PlayerDetailScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <IconButton
+            {/* The remote has its own Back, and leaving this out makes Play the first thing D-pad focus finds. */}
+            {!IS_TV && <IconButton
                 icon="chevron-left"
                 iconSize={22}
                 onPress={() => navigation.goBack()}
                 accessibilityLabel="Back"
                 fill={colors.card}
                 style={[styles.floatingBack, { top: insets.top + 4 }]}
-            />
+            />}
 
             {/* Hero behind the content. In portrait it rises at half the scroll speed and fades, with
                 the fade pinned to its own bottom edge, so the picture's edge never slides across it. */}
@@ -186,6 +188,7 @@ export default function PlayerDetailScreen() {
                     // Transparent in portrait: a solid block here would cut a hard edge across the hero's fade.
                     { backgroundColor: isLandscape ? colors.background : 'transparent', minHeight: isLandscape ? height : height * 0.6 },
                     isLandscape && [styles.contentLandscape, { paddingTop: insets.top + metrics.space.xl }],
+                    IS_TV && styles.contentTv,
                 ]}>
                     <Text style={[type.title, styles.movieTitle, { color: colors.text }]}>
                         {movieDetails?.Title ?? videoName}
@@ -280,6 +283,8 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     contentLandscape: { marginLeft: '40%' },
+    // TV overscan: clear of the right edge.
+    contentTv: { paddingRight: 48 },
 
     movieTitle: { marginBottom: metrics.space.sm },
     metaBlock: { gap: metrics.space.sm },

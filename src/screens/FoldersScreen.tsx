@@ -7,7 +7,7 @@ import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { SkeletonList } from '@/components/Skeleton';
 import { IconButton, SortButton, Touchable } from '@/components/ui';
-import { EmptyState, ListHeader, getRelativeTime, joinMeta } from '@/components/VideoRow';
+import { EmptyState, ListHeader, getRelativeTime, joinMeta, listContentStyle } from '@/components/VideoRow';
 import { RootStackParamList, VideoFolder } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbums } from '@/hooks/useMediaService';
@@ -15,10 +15,11 @@ import { useThumbnail } from '@/hooks/useThumbnails';
 import { usePermissionStore } from '@/store/permissionStore';
 import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { metrics, type } from '@/theme/theme';
+import { IS_TV } from '@/utils/tv';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const GRID_HALF_GAP = metrics.space.sm / 2 + 2;
+const GRID_HALF_GAP = metrics.grid.halfGap;
 
 type ViewMode = 'grid' | 'list';
 type SortByOption = 'name' | 'count';
@@ -45,6 +46,8 @@ function Cover({ path, style }: { path?: string; style: object }) {
 interface AlbumItemProps {
     item: VideoFolder;
     onPress: () => void;
+    /** TV: the first folder takes the D-pad focus. */
+    preferFocus?: boolean;
 }
 
 /**
@@ -58,7 +61,7 @@ function getFolderMeta(item: VideoFolder) {
     };
 }
 
-const AlbumGridCard = React.memo(({ item, onPress }: AlbumItemProps) => {
+const AlbumGridCard = React.memo(({ item, onPress, preferFocus }: AlbumItemProps) => {
     const { colors } = useTheme();
     const folder = useMemo(() => getFolderMeta(item), [item]);
     return (
@@ -66,6 +69,7 @@ const AlbumGridCard = React.memo(({ item, onPress }: AlbumItemProps) => {
             style={styles.gridCard}
             scaleTo={0.98}
             onPress={onPress}
+            preferFocus={preferFocus}
             accessibilityRole="button"
             accessibilityLabel={`${item.title}, ${videoCount(item.count)}`}
         >
@@ -78,7 +82,7 @@ const AlbumGridCard = React.memo(({ item, onPress }: AlbumItemProps) => {
     );
 });
 
-const AlbumListItem = React.memo(({ item, onPress }: AlbumItemProps) => {
+const AlbumListItem = React.memo(({ item, onPress, preferFocus }: AlbumItemProps) => {
     const { colors } = useTheme();
     const folder = useMemo(() => getFolderMeta(item), [item]);
     return (
@@ -87,6 +91,7 @@ const AlbumListItem = React.memo(({ item, onPress }: AlbumItemProps) => {
             scaleTo={0.98}
             stateLayer
             onPress={onPress}
+            preferFocus={preferFocus}
             accessibilityRole="button"
             accessibilityLabel={`${item.title}, ${videoCount(item.count)}`}
         >
@@ -108,7 +113,8 @@ export default function FoldersScreen() {
     const { albums, loading, refetch } = useAlbums();
     const videoAccess = usePermissionStore((s) => s.video.access);
 
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
+    // Cards on a TV: bigger targets, and the D-pad moves across as well as down.
+    const [viewMode, setViewMode] = useState<ViewMode>(IS_TV ? 'grid' : 'list');
     const [sortBy, setSortBy] = useState<SortByOption>('name');
     const flashListRef = useRef<any>(null);
 
@@ -136,11 +142,11 @@ export default function FoldersScreen() {
 
     const grid = viewMode === 'grid';
 
-    const renderAlbum = useCallback(({ item }: { item: VideoFolder }) => (
+    const renderAlbum = useCallback(({ item, index }: { item: VideoFolder; index: number }) => (
         <View style={grid ? styles.gridCell : styles.listCell}>
             {grid
-                ? <AlbumGridCard item={item} onPress={() => handleAlbumPress(item)} />
-                : <AlbumListItem item={item} onPress={() => handleAlbumPress(item)} />}
+                ? <AlbumGridCard item={item} onPress={() => handleAlbumPress(item)} preferFocus={index === 0} />
+                : <AlbumListItem item={item} onPress={() => handleAlbumPress(item)} preferFocus={index === 0} />}
         </View>
     ), [grid, handleAlbumPress]);
 
@@ -194,12 +200,9 @@ export default function FoldersScreen() {
                             data={sortedAlbums}
                             renderItem={renderAlbum}
                             keyExtractor={(item: VideoFolder) => item.id || item.title}
-                            numColumns={grid ? 2 : 1}
+                            numColumns={grid ? metrics.grid.columns : 1}
                             key={`${viewMode}-${sortBy}`}
-                            contentContainerStyle={{
-                                paddingHorizontal: grid ? metrics.gutter - GRID_HALF_GAP : metrics.gutter - metrics.space.sm,
-                                paddingBottom: metrics.space.xxl,
-                            }}
+                            contentContainerStyle={listContentStyle(grid)}
                             refreshControl={
                                 <RefreshControl
                                     refreshing={loading}
@@ -258,7 +261,8 @@ const styles = StyleSheet.create({
     rowCover: { width: 88, height: 56 },
     rowInfo: { flex: 1, gap: 2 },
     gridCell: { flex: 1, paddingHorizontal: GRID_HALF_GAP, paddingBottom: metrics.space.lg },
-    gridCard: { flex: 1 },
+    // The radius only shapes the focus ring and tint.
+    gridCard: { flex: 1, borderRadius: metrics.radius.sm },
     gridCover: { width: '100%', aspectRatio: 16 / 10 },
     gridInfo: { paddingTop: metrics.space.sm, paddingLeft: 2, gap: 2 },
 });

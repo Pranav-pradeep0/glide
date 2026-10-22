@@ -46,6 +46,7 @@ import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { haptic } from '@/native/HapticModule';
 import { metrics, motion, playerTheme, type, Theme } from '@/theme/theme';
+import { IS_TV } from '@/utils/tv';
 
 export type IconName = React.ComponentProps<typeof Feather>['name'];
 
@@ -66,19 +67,41 @@ export interface TouchableProps extends Omit<PressableProps, 'style' | 'children
     scaleTo?: number;
     /** Android ripple over the content, clipped to the touchable's shape. For rows. */
     stateLayer?: boolean;
+    /** Focus ring inside the edge instead of 2 dp outside it; rows by default (they sit edge to edge, in groups that clip). */
+    focusRingInside?: boolean;
+    /** TV: take the D-pad focus when it mounts, e.g. a screen's first item. Only once, see below. */
+    preferFocus?: boolean;
+    /** False for a touchable that draws its own focused look (the TV side rail); the TV focus tint stays. */
+    focusRing?: boolean;
     onPlayer?: boolean;
 }
 
-/** The one pressable. Long-press gets the system long-press haptic. A button to TalkBack unless told otherwise. */
+/**
+ * The one pressable. Long-press gets the system long-press haptic. A button to TalkBack unless told otherwise.
+ *
+ * D-pad and keyboard: Android focuses it and OK / Enter clicks it (onPress). Focused, it has a
+ * 3 dp ring in the accent; on a TV also the ripple's focus tint and, for cards and buttons, a
+ * slight grow. Touch never focuses it, so phones look the same as before.
+ */
 export function Touchable({
-    style, children, scaleTo = motion.pressScale, stateLayer = false, onPlayer,
-    onPressIn, onPressOut, onLongPress, disabled, accessibilityRole = 'button', ...rest
+    style, children, scaleTo = motion.pressScale, stateLayer = false, focusRingInside = stateLayer, preferFocus, focusRing = true, onPlayer,
+    onPressIn, onPressOut, onLongPress, onFocus, onBlur, disabled, accessibilityRole = 'button', ...rest
 }: TouchableProps) {
     const { colors } = useUiTheme(onPlayer);
     const pressed = useSharedValue(0);
+    const focus = useSharedValue(0);
+    // React state, not only the shared value: the ring is a style that only exists while focused,
+    // so unfocused touchables (all of them, on a phone) carry no outline at all.
+    const [focused, setFocused] = useState(false);
+    // Spent on the first blur. FlashList reuses a cell's view for other rows, and the first row
+    // scrolling back into a reused cell must not pull focus to itself again.
+    const [wantsFocus, setWantsFocus] = useState(true);
+    const grow = IS_TV && scaleTo !== 1 && !stateLayer ? metrics.focus.tvScale : 1;
+    // On a TV every touchable gets the ripple: its focused state is the M3 focus state layer.
+    const ripple = stateLayer || IS_TV;
 
     const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: 1 - (1 - scaleTo) * pressed.value }],
+        transform: [{ scale: (1 - (1 - scaleTo) * pressed.value) * (1 + (grow - 1) * focus.value) }],
     }));
 
     return (
@@ -86,9 +109,21 @@ export function Touchable({
             {...rest}
             // Foreground, so it draws over the row's own fill and art. Its mask is a rectangle;
             // overflow hidden clips it (and the content) to the borderRadius.
-            android_ripple={stateLayer ? { color: colors.pressed, foreground: true } : undefined}
+            android_ripple={ripple ? { color: colors.pressed, foreground: true } : undefined}
+            hasTVPreferredFocus={(IS_TV && preferFocus && wantsFocus) || undefined}
             accessibilityRole={accessibilityRole}
             disabled={disabled}
+            onFocus={e => {
+                setFocused(true);
+                focus.value = withTiming(1, { duration: motion.fadeIn });
+                onFocus?.(e);
+            }}
+            onBlur={e => {
+                setFocused(false);
+                setWantsFocus(false);
+                focus.value = withTiming(0, { duration: motion.fadeIn });
+                onBlur?.(e);
+            }}
             onPressIn={e => {
                 pressed.value = withSpring(1, motion.press);
                 onPressIn?.(e);
@@ -101,7 +136,14 @@ export function Touchable({
                 haptic('longPress');
                 onLongPress(e);
             })}
-            style={[style, stateLayer && styles.clip, animatedStyle, disabled && styles.disabled]}
+            style={[
+                style,
+                ripple && styles.clip,
+                // The outline is drawn with the view's background, so its own overflow clip doesn't cut it.
+                focused && focusRing && [focusRingInside ? styles.ringInside : styles.ringOutside, { outlineColor: colors.primary }],
+                animatedStyle,
+                disabled && styles.disabled,
+            ]}
         >
             {children}
         </AnimatedPressable>
@@ -145,6 +187,7 @@ export function IconButton({
             onPress={onPress}
             disabled={disabled}
             scaleTo={0.9}
+            focusRingInside
             onPlayer={onPlayer}
             accessibilityLabel={accessibilityLabel}
             accessibilityState={{ disabled: !!disabled, selected: active }}
@@ -182,6 +225,8 @@ interface ButtonProps {
     block?: boolean;
     /** Small pill after the label, e.g. "Experimental". */
     badge?: string;
+    /** TV: take the D-pad focus on mount (Touchable's `preferFocus`). */
+    preferFocus?: boolean;
     onPlayer?: boolean;
     accessibilityLabel?: string;
     style?: StyleProp<ViewStyle>;
@@ -189,7 +234,7 @@ interface ButtonProps {
 
 export function Button({
     label, onPress, variant = 'secondary', icon, loading, disabled, size = 'md', block, badge,
-    onPlayer, accessibilityLabel, style,
+    preferFocus, onPlayer, accessibilityLabel, style,
 }: ButtonProps) {
     const { colors } = useUiTheme(onPlayer);
     const bg = variant === 'primary' ? colors.primary : variant === 'ghost' ? 'transparent' : colors.fill;
@@ -202,6 +247,7 @@ export function Button({
         <Touchable
             onPress={onPress}
             disabled={disabled || loading}
+            preferFocus={preferFocus}
             onPlayer={onPlayer}
             hitSlop={size === 'md' ? 4 : 0}
             accessibilityRole="button"
@@ -356,10 +402,12 @@ interface SwitchProps {
     onPlayer?: boolean;
     disabled?: boolean;
     accessibilityLabel?: string;
+    /** False inside a row that toggles as a whole, so the D-pad doesn't stop twice. */
+    focusable?: boolean;
 }
 
 /** Accent track, sprung thumb, toggle haptic. Use inside a ListRow (`toggle`) where possible. */
-export function Switch({ value, onValueChange, onPlayer, disabled, accessibilityLabel }: SwitchProps) {
+export function Switch({ value, onValueChange, onPlayer, disabled, accessibilityLabel, focusable }: SwitchProps) {
     const { colors } = useUiTheme(onPlayer);
     const progress = useSharedValue(value ? 1 : 0);
 
@@ -373,21 +421,24 @@ export function Switch({ value, onValueChange, onPlayer, disabled, accessibility
     const onStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
 
     return (
-        <Pressable
+        <Touchable
             onPress={() => {
                 haptic(value ? 'toggleOff' : 'toggleOn');
                 onValueChange(!value);
             }}
             disabled={disabled}
+            focusable={focusable}
             hitSlop={10}
+            scaleTo={1}
+            onPlayer={onPlayer}
             accessibilityRole="switch"
             accessibilityLabel={accessibilityLabel}
             accessibilityState={{ checked: value, disabled: !!disabled }}
-            style={[styles.switchTrack, { backgroundColor: colors.fillStrong }, disabled && styles.disabled]}
+            style={[styles.switchTrack, { backgroundColor: colors.fillStrong }]}
         >
             <Animated.View style={[StyleSheet.absoluteFill, styles.switchOn, { backgroundColor: colors.primary }, onStyle]} />
             <Animated.View style={[styles.switchThumb, { backgroundColor: value ? colors.onPrimary : colors.textSecondary }, thumbStyle]} />
-        </Pressable>
+        </Touchable>
     );
 }
 
@@ -458,10 +509,12 @@ interface ListRowProps {
     disabled?: boolean;
     /** Small pill after the title, e.g. "Experimental". */
     badge?: string;
+    /** TV: take the D-pad focus on mount (Touchable's `preferFocus`). A selected row does by itself. */
+    preferFocus?: boolean;
 }
 
 export function ListRow({
-    title, caption, icon, value, chevron, toggle, selected, destructive, onPress, onPlayer, trailing, disabled, badge,
+    title, caption, icon, value, chevron, toggle, selected, destructive, onPress, onPlayer, trailing, disabled, badge, preferFocus,
 }: ListRowProps) {
     const { colors } = useUiTheme(onPlayer);
     const fg = destructive ? colors.error : colors.text;
@@ -488,7 +541,15 @@ export function ListRow({
             {!!value && <Text style={[type.body, styles.rowValue, { color: colors.textSecondary }]} numberOfLines={1}>{value}</Text>}
             {trailing}
             {toggle && (
-                <Switch value={toggle.value} onValueChange={toggle.onChange} onPlayer={onPlayer} disabled={disabled} accessibilityLabel={withBadge(title, badge)} />
+                <Switch
+                    value={toggle.value}
+                    onValueChange={toggle.onChange}
+                    onPlayer={onPlayer}
+                    disabled={disabled}
+                    accessibilityLabel={withBadge(title, badge)}
+                    // TV: the row is the one focus stop. Phones keep it, as TalkBack's separate switch.
+                    focusable={!IS_TV}
+                />
             )}
             {selected && <Feather name="check" size={20} color={colors.primary} />}
             {chevron && <Feather name="chevron-right" size={18} color={colors.textTertiary} />}
@@ -503,6 +564,8 @@ export function ListRow({
             disabled={disabled}
             scaleTo={1}
             stateLayer
+            // The current choice in a picker sheet is where the D-pad starts.
+            preferFocus={preferFocus ?? selected}
             onPlayer={onPlayer}
             accessibilityRole={toggle ? 'switch' : 'button'}
             accessibilityLabel={withBadge(title, badge)}
@@ -701,7 +764,8 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
         <Modal transparent visible onRequestClose={onBack ?? onClose} statusBarTranslucent navigationBarTranslucent animationType="none">
             <GestureHandlerRootView style={styles.flex}>
                 <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }, scrimStyle]}>
-                    <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+                    {/* Touch only: on a TV it would be the first focus stop, and Back closes anyway. */}
+                    <Pressable style={StyleSheet.absoluteFill} onPress={onClose} focusable={!IS_TV} accessibilityRole="button" accessibilityLabel="Close" />
                 </Animated.View>
                 <Animated.View
                     onLayout={e => {
@@ -729,7 +793,8 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
                     <GestureDetector gesture={drag}>
                         <View style={styles.sheetGrip}>
                             <View style={[styles.handle, { backgroundColor: colors.fillStrong }]} />
-                            {!!title && <SheetHeader title={title} onBack={onBack} onClose={onClose} onPlayer={onPlayer} />}
+                            {/* No close button on a TV: Back closes, and focus starts on the content instead of on X. */}
+                            {!!title && <SheetHeader title={title} onBack={onBack} onClose={IS_TV ? undefined : onClose} onPlayer={onPlayer} />}
                         </View>
                     </GestureDetector>
                     {children}
@@ -979,13 +1044,13 @@ export function DialogHost() {
     return (
         <Modal transparent visible onRequestClose={close} statusBarTranslucent navigationBarTranslucent animationType="none">
             <View style={[styles.dialogScrim, { backgroundColor: colors.scrim }]}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close" />
+                <Pressable style={StyleSheet.absoluteFill} onPress={close} focusable={!IS_TV} accessibilityRole="button" accessibilityLabel="Close" />
                 <Animated.View
                     entering={FadeIn.duration(motion.fadeIn)}
                     accessibilityViewIsModal
                     style={[styles.dialog, { backgroundColor: colors.cardElevated }]}
                 >
-                    <SheetHeader title={dialog.title} onClose={dismiss && close} />
+                    <SheetHeader title={dialog.title} onClose={IS_TV ? undefined : dismiss && close} />
                     {!!dialog.message && <Text style={[type.body, { color: colors.textSecondary }]}>{dialog.message}</Text>}
                     <View style={styles.dialogActions}>
                         {dialog.actions.map(a => (
@@ -995,6 +1060,8 @@ export function DialogHost() {
                                 size="lg"
                                 variant={a.style === 'cancel' ? 'secondary' : a.style === 'destructive' ? 'destructive' : 'primary'}
                                 onPress={() => press(a)}
+                                // TV: start on the safe choice (cancel), else the first.
+                                preferFocus={a === (dismiss ?? dialog.actions[0])}
                                 style={styles.flex}
                             />
                         ))}
@@ -1022,11 +1089,15 @@ const styles = StyleSheet.create({
     dialogActions: { flexDirection: 'row', gap: metrics.space.sm },
     disabled: { opacity: 0.38 },
     clip: { overflow: 'hidden' },
+    ringOutside: { outlineWidth: metrics.focus.ring, outlineOffset: 2 },
+    ringInside: { outlineWidth: metrics.focus.ring, outlineOffset: -metrics.focus.ring },
     block: { alignSelf: 'stretch' },
 
     iconButtonTarget: {
         width: metrics.touch,
         height: metrics.touch,
+        // Rounds the focus ring, drawn just outside the 40 dp circle.
+        borderRadius: metrics.radius.pill,
         alignItems: 'center',
         justifyContent: 'center',
     },

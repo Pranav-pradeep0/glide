@@ -29,6 +29,7 @@ import { useTheme } from '../hooks/useTheme';
 import PlaybackIcon from '../components/onboarding/PlaybackIcon';
 import FeatureShowcaseIcon from '../components/onboarding/FeatureShowcaseIcon';
 import PrivacyIcon from '../components/onboarding/PrivacyIcon';
+import { IS_TV } from '../utils/tv';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BTN_H = 52;
@@ -41,6 +42,8 @@ const TOTAL = 3;
 const LAST = TOTAL - 1;
 const ICON_FRAME_W = 340;
 const ICON_FRAME_H = 200;
+/** TV overscan: keep the buttons off the bottom edge (Android TV's 5%, 27 dp). */
+const TV_FOOTER_PAD = 27;
 
 // ─── Worklet helpers ──────────────────────────────────────────────────────────
 function clamp01(t: number): number {
@@ -82,7 +85,8 @@ const SLIDES: SlideData[] = [
         title: 'Simple & Fast',
         tagline: 'Easy controls and quick settings.',
         bullets: [
-            'Smooth gesture controls',
+            // A TV has a remote, not gestures.
+            ...(IS_TV ? [] : ['Smooth gesture controls']),
             'Customizable subtitles',
             'Fast and responsive',
         ],
@@ -93,19 +97,21 @@ const SLIDES: SlideData[] = [
         tagline: 'Experimental features for a better viewing experience.',
         bullets: [
             'Color enhancement',
-            'Haptic movie playback',
+            // TV has no haptics. Feature indexes still line up: haptics was the last.
+            ...(IS_TV ? [] : ['Haptic movie playback']),
             'Automatic subtitle sync',
         ],
     },
     {
         id: '3',
         title: 'Safe and Private',
-        tagline: 'Your videos and music stay yours.',
+        // TV is videos only for now.
+        tagline: IS_TV ? 'Your videos stay yours.' : 'Your videos and music stay yours.',
         bullets: [
             // Not "no analytics": Stallion sends crash reports, and subtitle and lyrics
             // lookups send titles. The privacy policy (Settings > About) lists them.
             'No accounts, no ads, free forever',
-            'Your videos and music never leave your phone',
+            IS_TV ? 'Your videos never leave your TV' : 'Your videos and music never leave your phone',
         ],
     },
 ];
@@ -190,7 +196,7 @@ const SlideItem = React.memo<SlideItemProps>(
                             {item.tagline}
                         </Text>
                     </View>
-                    <View style={slideStyles.bulletsContainer}>
+                    <View style={[slideStyles.bulletsContainer, IS_TV && slideStyles.bulletsTv]}>
                         {item.bullets.map((bullet, i) => {
                             const isSlide2 = item.id === '2';
                             const highlighted = isSlide2 && i <= activeFeatureIndex;
@@ -454,6 +460,60 @@ const MergingCTA = React.memo<MergingCTAProps>(({
 );
 MergingCTA.displayName = 'MergingCTA';
 
+// ─── TvCTA ────────────────────────────────────────────────────────────────────
+interface TvCTAProps {
+    isLastSlide: boolean;
+    onNext: () => void;
+    onSkip: () => void;
+    primaryColor: string;
+    onPrimaryColor: string;
+    textColor: string;
+    borderColor: string;
+}
+
+/**
+ * TV: plain buttons for the remote. MergingCTA keeps faded-out buttons mounted, which D-pad
+ * focus would still land on. Next stays the same view through to Get Started, so focus stays put.
+ * Next comes first in the tree (drawn on the right by row-reverse), so Android's default focus
+ * also picks it if hasTVPreferredFocus fires before the view is attached.
+ */
+function TvCTA({ isLastSlide, onNext, onSkip, primaryColor, onPrimaryColor, textColor, borderColor }: TvCTAProps) {
+    return (
+        <View style={ctaStyles.tvRow}>
+            <TvButton
+                label={isLastSlide ? 'Get Started' : 'Next'}
+                onPress={onNext}
+                fill={primaryColor}
+                color={onPrimaryColor}
+                edge={primaryColor}
+                ring={textColor}
+                preferred
+            />
+            {!isLastSlide && (
+                <TvButton label="Skip" onPress={onSkip} fill="transparent" color={textColor} edge={borderColor} ring={textColor} />
+            )}
+        </View>
+    );
+}
+
+function TvButton({ label, onPress, fill, color, edge, ring, preferred }: {
+    label: string; onPress: () => void; fill: string; color: string; edge: string; ring: string; preferred?: boolean;
+}) {
+    const [focused, setFocused] = useState(false);
+    return (
+        <Pressable
+            onPress={onPress}
+            hasTVPreferredFocus={preferred}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            accessibilityRole="button"
+            style={[ctaStyles.btn, ctaStyles.tvBtn, { backgroundColor: fill, borderColor: focused ? ring : edge }, focused && ctaStyles.tvFocused]}
+        >
+            <Text style={[ctaStyles.label, { color }]}>{label}</Text>
+        </Pressable>
+    );
+}
+
 // ─── OnboardingScreen ─────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
     const theme = useTheme();
@@ -479,7 +539,8 @@ export default function OnboardingScreen() {
     const isScrollingRef = useRef(false);
 
     const responsiveContentTopPadding = useMemo(
-        () => Math.max(56, Math.min(90, Math.round(screenHeight * 0.11))),
+        // A 16:9 TV is ~540 dp tall: the slide needs all of it.
+        () => (IS_TV ? 0 : Math.max(56, Math.min(90, Math.round(screenHeight * 0.11)))),
         [screenHeight],
     );
 
@@ -499,6 +560,13 @@ export default function OnboardingScreen() {
         // Read the latest index directly from the ref — never from a potentially
         // stale closure over `currentIndex` state.
         const idx = pendingIndexRef.current;
+
+        // TV shows one slide at a time, no list to scroll.
+        if (IS_TV && idx < LAST) {
+            pendingIndexRef.current = idx + 1;
+            setCurrentIndex(idx + 1);
+            return;
+        }
 
         if (idx < LAST) {
             const nextIdx = idx + 1;
@@ -585,7 +653,12 @@ export default function OnboardingScreen() {
 
     return (
         <View style={[screenStyles.container, { backgroundColor: theme.colors.background }]}>
-            <FlatList
+            {/* TV: no swiping with a remote, so the buttons step through the slides. */}
+            {IS_TV ? (
+                <View key={currentIndex} style={screenStyles.container}>
+                    {renderItem({ item: SLIDES[currentIndex], index: currentIndex })}
+                </View>
+            ) : <FlatList
                 ref={flatListRef}
                 data={SLIDES}
                 renderItem={renderItem}
@@ -601,16 +674,26 @@ export default function OnboardingScreen() {
                 initialNumToRender={2}
                 maxToRenderPerBatch={2}
                 removeClippedSubviews
-            />
+            />}
 
-            <View style={[screenStyles.footer, { paddingHorizontal: FOOTER_PAD }]}>
+            <View style={[screenStyles.footer, { paddingHorizontal: FOOTER_PAD }, IS_TV && screenStyles.footerTv]}>
                 <Pagination
                     total={TOTAL}
                     currentIndex={currentIndex}
                     activeColor={theme.colors.text}
                     inactiveColor={theme.colors.border}
                 />
-                <MergingCTA
+                {IS_TV ? (
+                    <TvCTA
+                        isLastSlide={currentIndex === LAST}
+                        onNext={handleNext}
+                        onSkip={handleSkip}
+                        primaryColor={theme.colors.primary}
+                        onPrimaryColor={theme.dark ? theme.colors.background : '#FFFFFF'}
+                        textColor={theme.colors.text}
+                        borderColor={theme.colors.border}
+                    />
+                ) : <MergingCTA
                     isLastSlide={currentIndex === LAST}
                     onNext={handleNext}
                     onSkip={handleSkip}
@@ -619,7 +702,7 @@ export default function OnboardingScreen() {
                     textColor={theme.colors.text}
                     borderColor={theme.colors.border}
                     dark={theme.dark}
-                />
+                />}
             </View>
         </View>
     );
@@ -642,6 +725,7 @@ const slideStyles = StyleSheet.create({
     taglineWrap: { minHeight: 40, width: '100%', justifyContent: 'center', marginBottom: 14 },
     tagline: { fontSize: 15, fontStyle: 'italic', textAlign: 'center', lineHeight: 21 },
     bulletsContainer: { width: '100%', minHeight: 118, paddingLeft: 8, marginBottom: 12 },
+    bulletsTv: { minHeight: 0 },
     bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
     bulletDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 12, marginTop: 8 },
     bulletText: { fontSize: 14, lineHeight: 20 },
@@ -698,6 +782,9 @@ const ctaStyles = StyleSheet.create({
     btnPressed: {
         opacity: 0.78,
     },
+    tvRow: { flexDirection: 'row-reverse', justifyContent: 'center', gap: GAP * 2 },
+    tvBtn: { width: 220, borderWidth: 3 },
+    tvFocused: { transform: [{ scale: 1.06 }] },
 });
 
 const screenStyles = StyleSheet.create({
@@ -709,4 +796,5 @@ const screenStyles = StyleSheet.create({
         justifyContent: 'flex-end',
         paddingBottom: 48,
     },
+    footerTv: { height: FOOTER_HEIGHT - 48 + TV_FOOTER_PAD, paddingBottom: TV_FOOTER_PAD },
 });

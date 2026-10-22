@@ -11,7 +11,8 @@ import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { playerColors } from '@/theme/colors';
-import { metrics, type } from '@/theme/theme';
+import { metrics, type, TV_SCALE } from '@/theme/theme';
+import { IS_TV } from '@/utils/tv';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
 import { Button, Gradient, IconButton, IconName, showDialog, showSnackbar, Touchable } from '@/components/ui';
@@ -180,6 +181,8 @@ interface VideoItemProps<T> {
     highlight?: string;
     onPress: (item: T) => void;
     onMore: (item: T) => void;
+    /** TV: take the D-pad focus on mount; pass it to a list's first item. */
+    preferFocus?: boolean;
 }
 
 /** What a list renders each row with; `VideoRow` and `VideoCard` are interchangeable. */
@@ -192,7 +195,7 @@ function useItemText(name: string, meta: string) {
     }, [name, meta]);
 }
 
-function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore }: VideoItemProps<T>) {
+function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore, preferFocus }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     return (
@@ -201,6 +204,7 @@ function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumb
             onLongPress={() => onMore(item)}
             scaleTo={0.98}
             stateLayer
+            preferFocus={preferFocus}
             accessibilityRole="button"
             accessibilityLabel={`Play ${text.title}`}
             accessibilityHint={text.meta}
@@ -218,13 +222,14 @@ function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumb
                 color={colors.textTertiary}
                 onPress={() => onMore(item)}
                 accessibilityLabel={`More options for ${text.title}`}
+                style={IS_TV && styles.rowMoreTv}
             />
         </Touchable>
     );
 }
 export const VideoRow = React.memo(VideoRowBase) as VideoItemComponent;
 
-function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore }: VideoItemProps<T>) {
+function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore, preferFocus }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     return (
@@ -232,6 +237,7 @@ function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thum
             onPress={() => onPress(item)}
             onLongPress={() => onMore(item)}
             scaleTo={0.98}
+            preferFocus={preferFocus}
             accessibilityRole="button"
             accessibilityLabel={`Play ${text.title}`}
             accessibilityHint={text.meta}
@@ -245,14 +251,18 @@ function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thum
                         <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={1}>{text.meta}</Text>
                     )}
                 </View>
-                <IconButton
-                    icon="more-vertical"
-                    iconSize={16}
-                    color={colors.textTertiary}
-                    onPress={() => onMore(item)}
-                    accessibilityLabel={`More options for ${text.title}`}
-                    style={styles.gridMore}
-                />
+                {/* Not on a TV: inside the card it would be a second D-pad stop between every two
+                    cards. Options there are in list view, Right from a row. */}
+                {!IS_TV && (
+                    <IconButton
+                        icon="more-vertical"
+                        iconSize={16}
+                        color={colors.textTertiary}
+                        onPress={() => onMore(item)}
+                        accessibilityLabel={`More options for ${text.title}`}
+                        style={styles.gridMore}
+                    />
+                )}
             </View>
         </Touchable>
     );
@@ -262,7 +272,7 @@ export const VideoCard = React.memo(VideoCardBase) as VideoItemComponent;
 // ============= HERO =============
 
 /** The one thing you were just watching, full width, with the picture doing the work. */
-export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnailTime, onPress, onMore }: VideoItemProps<T>) {
+export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnailTime, onPress, onMore, preferFocus }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     const { thumbnail } = useThumbnail(path, thumbnailTime);
@@ -271,6 +281,7 @@ export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnai
             onPress={() => onPress(item)}
             onLongPress={() => onMore(item)}
             scaleTo={0.985}
+            preferFocus={preferFocus}
             accessibilityRole="button"
             accessibilityLabel={`Resume ${text.title}`}
             accessibilityHint={text.meta}
@@ -351,7 +362,9 @@ export function VideoItemCell({ grid, children }: { grid: boolean; children: Rea
 /** FlashList contentContainerStyle for either view mode. */
 export const listContentStyle = (grid: boolean, bottom = 0) => ({
     paddingHorizontal: grid ? metrics.gutter - GRID_HALF_GAP : metrics.gutter - metrics.space.sm,
-    paddingBottom: metrics.space.xxl + bottom,
+    // TV: room for the first row's focus ring and grow, which the list would otherwise clip.
+    paddingTop: IS_TV ? metrics.space.md : 0,
+    paddingBottom: metrics.space.xxl + bottom + metrics.overscanY,
 });
 
 // ============= HEADER + EMPTY =============
@@ -403,12 +416,12 @@ export function EmptyState({
         <View style={styles.empty}>
             <Feather name={icon} size={48} color={colors.textTertiary} />
             <Text style={[type.body, styles.emptyText, { color: colors.textSecondary }]}>{text}</Text>
-            {action && onAction && <Button label={action} variant="primary" onPress={onAction} />}
+            {action && onAction && <Button label={action} variant="primary" onPress={onAction} preferFocus />}
         </View>
     );
 }
 
-const GRID_HALF_GAP = metrics.space.sm / 2 + 2;
+const GRID_HALF_GAP = metrics.grid.halfGap;
 
 const styles = StyleSheet.create({
     row: {
@@ -426,10 +439,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     rowThumb: { width: 128, height: 72 },
-    gridCard: { flex: 1 },
+    // The radius only shapes the focus ring and tint; the card has no fill of its own.
+    gridCard: { flex: 1, borderRadius: metrics.radius.sm },
     gridThumb: { width: '100%', aspectRatio: 16 / 9 },
     gridInfo: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: metrics.space.sm, paddingLeft: 2 },
     gridMore: { marginTop: -12, marginRight: -12 },
+    // Pokes 1 dp past the row: Android's focus search only moves Right to a view whose right
+    // edge is past the focused one's, and the row would otherwise share its edge.
+    rowMoreTv: { marginRight: -1 },
     track: {
         height: 3,
         backgroundColor: 'rgba(255, 255, 255, 0.25)',
@@ -488,12 +505,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: metrics.gutter,
-        paddingTop: metrics.space.lg,
+        paddingTop: metrics.space.lg + metrics.overscanY,
         paddingBottom: metrics.space.sm,
         gap: metrics.space.sm,
     },
-    appBar: { paddingTop: metrics.space.xs },
-    appBarTitle: { fontSize: 18, lineHeight: 24, fontWeight: '600' },
+    appBar: { paddingTop: metrics.space.xs + metrics.overscanY },
+    appBarTitle: { fontSize: 18 * TV_SCALE, lineHeight: 24 * TV_SCALE, fontWeight: '600' },
     back: { marginLeft: -12 },
     headerText: { flex: 1 },
     // Holds the IconButton height even when empty, so a header doesn't jump as its buttons come and go.

@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useMemo, useRef, useState } from 'react';
 import {
     StyleSheet,
     View,
@@ -7,9 +7,12 @@ import {
     ScrollView,
     ActivityIndicator,
     useWindowDimensions,
+    type HostInstance,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Button, SheetHeader } from '@/components/ui';
+import { useTvFocusScope } from '@/hooks/video-player/useTvRemote';
+import { IS_TV } from '@/utils/tv';
 import { PLAYER_BACKDROP } from '@/theme/colors';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { parseEmphasis } from '@/utils/markdownEmphasis';
@@ -48,6 +51,13 @@ export const RecapModal: React.FC<RecapModalProps> = memo(({
     const [reported, setReported] = useState<{ text: string; status: 'sending' | 'sent' | 'failed' } | null>(null);
     const reportStatus = reported && reported.text === recapText ? reported.status : null;
     const spans = useMemo(() => (recapText ? parseEmphasis(recapText) : []), [recapText]);
+    // D-pad focus: the same ring the shared Touchable draws.
+    const [reportFocused, setReportFocused] = useState(false);
+
+    // TV: the remote starts on Resume and stays in here until it closes.
+    const overlayRef = useRef<HostInstance>(null);
+    const resumeRef = useRef<HostInstance>(null);
+    useTvFocusScope(overlayRef, visible, resumeRef);
 
     if (!visible) {return null;}
 
@@ -63,12 +73,15 @@ export const RecapModal: React.FC<RecapModalProps> = memo(({
 
     return (
         <Animated.View
+            ref={overlayRef}
             style={styles.overlay}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}
             accessibilityViewIsModal
         >
             <Pressable
+                focusable={!IS_TV}
+                accessible={!IS_TV}
                 style={StyleSheet.absoluteFill}
                 onPress={onClose}
                 accessibilityRole="button"
@@ -98,7 +111,9 @@ export const RecapModal: React.FC<RecapModalProps> = memo(({
                             disabled={reportStatus === 'sending' || reportStatus === 'sent'}
                             hitSlop={metrics.space.sm}
                             accessibilityRole="button"
-                            style={styles.reportRow}
+                            onFocus={() => setReportFocused(true)}
+                            onBlur={() => setReportFocused(false)}
+                            style={[styles.reportRow, reportFocused && styles.focused]}
                         >
                             <Text style={styles.reportText}>
                                 {reportStatus === 'sent' ? 'Reported. Thanks.'
@@ -110,14 +125,16 @@ export const RecapModal: React.FC<RecapModalProps> = memo(({
                     </ScrollView>
                 )}
 
-                <Button
-                    label={showLoading ? 'Skip and resume' : 'Resume'}
-                    variant="primary"
-                    size="lg"
-                    icon="play"
-                    onPress={onResume}
-                    onPlayer
-                />
+                <View ref={resumeRef} collapsable={false}>
+                    <Button
+                        label={showLoading ? 'Skip and resume' : 'Resume'}
+                        variant="primary"
+                        size="lg"
+                        icon="play"
+                        onPress={onResume}
+                        onPlayer
+                    />
+                </View>
             </View>
         </Animated.View>
     );
@@ -151,6 +168,7 @@ const styles = StyleSheet.create({
     recapText: { ...type.body, color: colors.text, fontSize: 16, lineHeight: 24 },
     disclosure: { ...type.caption, color: colors.textSecondary, marginTop: metrics.space.md },
     reportRow: { alignSelf: 'flex-start', minHeight: 48, justifyContent: 'center' },
+    focused: { outlineWidth: metrics.focus.ring, outlineOffset: 2, outlineColor: colors.primary, borderRadius: metrics.radius.sm },
     reportText: { ...type.caption, color: colors.textSecondary, textDecorationLine: 'underline' },
     bold: { fontWeight: '700' },
     italic: { fontStyle: 'italic' },

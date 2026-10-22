@@ -10,6 +10,7 @@ import com.swmansion.rnscreens.fragment.restoration.RNScreensFragmentFactory
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactApplication
 import com.glide.app.audio.AudioVolumeModule
+import com.glide.app.player.TvRemoteModule
 
 /**
  * Base activity for Glide React Native activities.
@@ -133,6 +134,10 @@ open class GlideBaseActivity : ReactActivity() {
         /** Whether a Glide window is in PiP, whichever Activity React is following. */
         val inPip: Boolean get() = pip?.isInPictureInPictureMode == true
     }
+
+    /** The TV remote in the video player; it leaves every key alone unless the player asked. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        TvRemoteModule.dispatch(this, event) || super.dispatchKeyEvent(event)
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {

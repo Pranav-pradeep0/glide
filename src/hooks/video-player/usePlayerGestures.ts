@@ -21,6 +21,7 @@ import {
 import type { PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
 import { haptic } from '@/native/HapticModule';
 import { VideoOrientationService } from '@/services/VideoOrientationService';
+import { IS_TV } from '@/utils/tv';
 
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
 
@@ -506,7 +507,8 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         const speedGestures = Gesture.Race(speedRightGesture, speedLeftGesture);
 
         // Vertical pan gestures (brightness left, volume right)
-        const verticalGestures = Gesture.Exclusive(brightnessGesture, volumeGesture);
+        // No brightness swipe on a TV: the set has its own picture settings.
+        const verticalGestures = IS_TV ? volumeGesture : Gesture.Exclusive(brightnessGesture, volumeGesture);
 
         // All pan gestures (horizontal seek, vertical brightness/volume)
         // Note: zoomPanGesture is REMOVED from here to be simultaneous with Pinch

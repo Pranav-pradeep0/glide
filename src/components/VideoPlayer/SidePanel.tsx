@@ -1,12 +1,14 @@
 // components/VideoPlayer/SidePanel.tsx
-import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, useWindowDimensions, type HostInstance } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SHEET_EXIT_MS, SheetHeader } from '@/components/ui';
 import { PLAYER_BACKDROP, playerColors } from '@/theme/colors';
 import { metrics, motion } from '@/theme/theme';
+import { useTvFocusScope } from '@/hooks/video-player/useTvRemote';
+import { IS_TV } from '@/utils/tv';
 
 /**
  * The open panel's back arrow, for the player screen's hardware Back: it steps back a page
@@ -51,6 +53,19 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
             : withTiming(0, { duration: SHEET_EXIT_MS });
     }, [visible, progress]);
 
+    // TV: a closed panel is only invisible, and the remote's focus would still find its rows.
+    // Out of the layout once it has slid away. Focus goes in when it opens, to the first row.
+    const [tvGone, setTvGone] = useState(IS_TV && !visible);
+    useEffect(() => {
+        if (!IS_TV) { return; }
+        if (visible) { setTvGone(false); return; }
+        const timer = setTimeout(() => setTvGone(true), SHEET_EXIT_MS);
+        return () => clearTimeout(timer);
+    }, [visible]);
+    const panelRef = useRef<HostInstance>(null);
+    const bodyRef = useRef<HostInstance>(null);
+    useTvFocusScope(panelRef, visible, bodyRef);
+
     const backRef = useContext(PanelBackContext);
     useEffect(() => {
         if (!backRef || !visible || !onBack) { return; }
@@ -89,8 +104,11 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
 
     return (
         <>
-            <Animated.View style={[styles.backdrop, backdropStyle]} pointerEvents={visible ? 'auto' : 'none'}>
+            <Animated.View style={[styles.backdrop, IS_TV && (tvGone ? styles.gone : styles.shown), backdropStyle]} pointerEvents={visible ? 'auto' : 'none'}>
                 <Pressable
+                    // TV: a full-screen button would take the remote's focus; Back closes instead.
+                    focusable={!IS_TV}
+                    accessible={!IS_TV}
                     style={StyleSheet.absoluteFill}
                     onPress={onClose}
                     accessibilityRole="button"
@@ -99,6 +117,7 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
             </Animated.View>
 
             <Animated.View
+                ref={panelRef}
                 onLayout={landscape ? undefined : e => { travel.value = e.nativeEvent.layout.height; }}
                 // Every key set in both orientations: a key one of them dropped would keep its
                 // value from before the rotation (a portrait height in a landscape panel).
@@ -120,6 +139,7 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
                             maxHeight: windowHeight * 0.9,
                             ...styles.sheetPadding,
                         },
+                    IS_TV && (tvGone ? styles.gone : styles.shown),
                     panelStyle,
                 ]}
                 pointerEvents={visible ? 'auto' : 'none'}
@@ -132,6 +152,8 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
                     </View>
                 </GestureDetector>
                 <View
+                    ref={bodyRef}
+                    collapsable={false}
                     style={[
                         styles.body,
                         landscape
@@ -153,6 +175,8 @@ const styles = StyleSheet.create({
         zIndex: 100,
     },
     panel: { position: 'absolute', zIndex: 101 },
+    gone: { display: 'none' },
+    shown: { display: 'flex' },
     side: {
         top: 0,
         bottom: 0,

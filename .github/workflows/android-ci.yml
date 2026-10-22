@@ -378,6 +378,29 @@ jobs:
             || { echo "::error::native libraries are not 16 KB aligned inside the APK"; FAILED=1; }
           exit $FAILED
 
+      - name: Verify Android TV compatibility
+        run: |
+          set -e
+          # The same bundle is the TV app. Play hides it from TVs if it has no TV launcher entry
+          # or banner, or requires hardware a TV lacks (declared, or implied by a permission).
+          AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
+          BADGING=$("$AAPT2" dump badging "$CHECK_APK")
+          FAILED=0
+          grep -q 'leanback-launchable-activity:' <<< "$BADGING" \
+            || { echo "::error::no LEANBACK_LAUNCHER activity; the app won't show on Android TV"; FAILED=1; }
+          grep -q "banner='" <<< "$BADGING" \
+            || { echo "::error::no android:banner; Android TV requires one"; FAILED=1; }
+          for feature in android.hardware.touchscreen android.hardware.faketouch android.hardware.telephony \
+                         android.hardware.camera android.hardware.camera.any android.hardware.nfc \
+                         android.hardware.location.gps android.hardware.microphone \
+                         android.hardware.sensor.accelerometer android.hardware.screen.portrait; do
+            if grep -Eq "^\s*uses-(implied-)?feature: name='$feature'" <<< "$BADGING"; then
+              echo "::error::requires $feature, which TVs don't have; declare it android:required=\"false\""
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
       - name: Prepare release notes
         run: |
           set -e

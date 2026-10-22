@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV home-screen banner (320x180dp): the launcher icon's wings and a "Glide"
+     wordmark, drawn as stroked paths, on the launcher icon's background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="@color/ic_launcher_background"
+        android:pathData="M0,0h320v180h-320z" />
+    <group android:translateX="-6">
+        <!-- Wings, as in ic_launcher_foreground. -->
+        <group android:scaleX="0.6" android:scaleY="0.6" android:translateX="18" android:translateY="30">
+            <path android:pathData="M30 40 L160 100 L50 100 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:startX="30"
+                        android:startY="40"
+                        android:endX="160"
+                        android:endY="100"
+                        android:type="linear">
+                        <item android:offset="0.0" android:color="#FFFFFFFF"/>
+                        <item android:offset="1.0" android:color="#FFE0E0E0"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
+            <path android:pathData="M60 108 L160 104 L50 160 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:startX="60"
+                        android:startY="108"
+                        android:endX="160"
+                        android:endY="160"
+                        android:type="linear">
+                        <item android:offset="0.0" android:color="#FFB0B0B0"/>
+                        <item android:offset="1.0" android:color="#FF808080"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+        <!-- Wordmark: G, l, i (stem and dot), d, e. Baseline y=110. -->
+        <path
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="9"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M172.6,72.4 A22,22 0 1 0 179,88 L162,88 M194,62 L194,110 M209,82 L209,110 M209,68 L209,68.1 M219,96 A14,14 0 1 0 247,96 A14,14 0 1 0 219,96 M247,62 L247,110 M263,96 L291,96 A14,14 0 1 0 286.9,105.9" />
+    </group>
+</vector>

@@ -23,6 +23,7 @@ import {
 } from '@/components/VideoRow';
 import { metrics } from '@/theme/theme';
 import { isFinished } from '@/utils/playbackResume';
+import { IS_TV } from '@/utils/tv';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'grid' | 'list';
@@ -151,7 +152,8 @@ export default function RecentsScreen() {
             : getRelativeTime(item.lastWatchedTime),
     ), [sortBy]);
 
-    const renderItem = useCallback(({ item }: { item: VideoHistoryEntry }) => {
+    // TV starts on Continue watching, or the first video when there is none.
+    const renderItem = useCallback(({ item, index }: { item: VideoHistoryEntry; index: number }) => {
         const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
         return (
             <VideoItemCell grid={grid}>
@@ -165,10 +167,11 @@ export default function RecentsScreen() {
                     thumbnailTime={item.stopFrameMs}
                     onPress={handleVideoPress}
                     onMore={handleOpenOptions}
+                    preferFocus={!hero && index === 0}
                 />
             </VideoItemCell>
         );
-    }, [grid, metaFor, handleVideoPress, handleOpenOptions]);
+    }, [grid, metaFor, handleVideoPress, handleOpenOptions, hero]);
 
     if (!isHydrated) {
         return (
@@ -193,6 +196,7 @@ export default function RecentsScreen() {
                         thumbnailTime={hero.stopFrameMs}
                         onPress={handleVideoPress}
                         onMore={handleOpenOptions}
+                        preferFocus
                     />
                 </>
             )}
@@ -255,15 +259,18 @@ export default function RecentsScreen() {
                         </>
                     )}
                 </ListHeader>
-                <Segmented options={KINDS} value={kind} onChange={setKind} position={kindPosition} style={styles.kindRow} />
+                {/* TV is videos only for now: no music page. */}
+                {!IS_TV && <Segmented options={KINDS} value={kind} onChange={setKind} position={kindPosition} style={styles.kindRow} />}
             </View>
 
-            <Pager
-                index={KINDS.findIndex(k => k.key === kind)}
-                onIndexChange={i => setKind(KINDS[i].key)}
-                position={kindPosition}
-                pages={[renderVideos, renderMusic]}
-            />
+            {IS_TV ? <View style={styles.container}>{renderVideos()}</View> : (
+                <Pager
+                    index={KINDS.findIndex(k => k.key === kind)}
+                    onIndexChange={i => setKind(KINDS[i].key)}
+                    position={kindPosition}
+                    pages={[renderVideos, renderMusic]}
+                />
+            )}
 
             <VideoOptionsBottomSheet
                 visible={optionsVisible}

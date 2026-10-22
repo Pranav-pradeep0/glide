@@ -1,15 +1,28 @@
 // src/theme/theme.ts
 
 import { TextStyle } from 'react-native';
+import { IS_TV } from '@/utils/tv';
 import { lightColors, darkColors, playerColors, ColorScheme } from './colors';
+
+/**
+ * Type size on a TV against a phone. A TV dp is about a quarter smaller to the eye from the
+ * sofa than a phone dp in the hand, so text grows by that much. 1 on phones.
+ */
+export const TV_SCALE = IS_TV ? 1.2 : 1;
 
 export const metrics = {
     /** Minimum touch target. */
     touch: 48,
     /** Cap on system font scaling for text drawn over video, so large fonts don't break the overlay. */
     playerFontScale: 1.3,
-    /** Screen side padding. */
-    gutter: 16,
+    /** Screen side padding. On a TV, the 5% overscan margin some sets still crop. */
+    gutter: IS_TV ? 48 : 16,
+    /** Extra top and bottom margin for TV overscan; 0 on phones. */
+    overscanY: IS_TV ? 27 : 0,
+    /** Card grids: columns, and half the gap between cards. TVs get bigger cards with room to grow into on focus. */
+    grid: { columns: IS_TV ? 3 : 2, halfGap: IS_TV ? 12 : 6 },
+    /** Focus indicator: ring width, and how much a focused card grows on a TV. */
+    focus: { ring: 3, tvScale: 1.05 },
     space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
     /**
      * xs badges · sm thumbnails · md snackbars · lg panels and HUD pills ·
@@ -18,7 +31,15 @@ export const metrics = {
     radius: { xs: 4, sm: 8, md: 12, lg: 16, card: 20, sheet: 28, pill: 999 },
 };
 
-export const type = {
+const forTv = <T extends Record<string, TextStyle>>(styles: T): T => (IS_TV
+    ? Object.fromEntries(Object.entries(styles).map(([key, s]) => [key, {
+        ...s,
+        fontSize: s.fontSize && s.fontSize * TV_SCALE,
+        lineHeight: s.lineHeight && s.lineHeight * TV_SCALE,
+    }])) as T
+    : styles);
+
+export const type = forTv({
     /** Screen titles. */
     title: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5 },
     /** Section headers in a list ("Continue watching"). */
@@ -36,7 +57,7 @@ export const type = {
     readout: { fontSize: 22, fontWeight: '500', fontVariant: ['tabular-nums'] },
     /** Large tabular number, like the sync offset. */
     hero: { fontSize: 30, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
-} satisfies Record<string, TextStyle>;
+} satisfies Record<string, TextStyle>);
 
 /**
  * M3 standard motion springs (mass 1, damping = 2ζ√k). Use these, nothing ad hoc.

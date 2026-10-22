@@ -11,7 +11,8 @@ class GlidePlayerPackage : ReactPackage {
     override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> =
         listOf(
             SubtitleSyncModule(context),
-            MediaStoreVideoModule(context)
+            MediaStoreVideoModule(context),
+            TvRemoteModule(context)
         )
 
     override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> =

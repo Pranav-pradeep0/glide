@@ -17,7 +17,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { metrics } from '@/theme/theme';
 
 const { space, radius } = metrics;
-const GRID_HALF_GAP = space.sm / 2 + 2; // as in VideoRow / MusicScreen grids
+const GRID_HALF_GAP = metrics.grid.halfGap; // as in VideoRow / MusicScreen grids
 
 interface Shape {
     /** The artwork bone. */
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, overflow: 'hidden' },
     grid: { flexDirection: 'row', flexWrap: 'wrap' },
     row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-    cell: { width: '50%', paddingHorizontal: GRID_HALF_GAP, paddingBottom: space.lg, gap: space.sm },
+    cell: { width: `${100 / metrics.grid.columns}%`, paddingHorizontal: GRID_HALF_GAP, paddingBottom: space.lg, gap: space.sm },
     lines: { gap: 2 },
     rowLines: { flex: 1 },
     title: { height: 12, marginVertical: 4, borderRadius: radius.xs },

@@ -26,6 +26,8 @@ export { usePlayerSettings } from './usePlayerSettings';
 export { useShakeControl, ShakeDetector } from './useShakeControl';
 export { usePlayerRecap } from './usePlayerRecap';
 export { useResumePlayback } from './useResumePlayback';
+export { useTvRemote, useTvFocusScope, tvFocus, tvSeekTarget } from './useTvRemote';
+export type { TvKeyEvent, TvKeyMode } from './useTvRemote';
 
 // Types and utilities
 export * from './types';

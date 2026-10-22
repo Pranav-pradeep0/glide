@@ -20,6 +20,7 @@ import {
 } from '@/components/VideoRow';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { metrics, type } from '@/theme/theme';
+import { IS_TV } from '@/utils/tv';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AlbumVideosRouteProp = RouteProp<RootStackParamList, 'AlbumVideos'>;
@@ -43,7 +44,8 @@ export default function AlbumVideosScreen() {
     const [sort, setSort] = useState<VideoSort>();
     const { videos, order, loading, loadingMore, hasMore, loadMore } = useAlbumVideos(albumTitle, bucketId, sort);
     const videoAccess = usePermissionStore((s) => s.video.access);
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
+    // Cards on a TV: bigger targets, and the D-pad moves across as well as down.
+    const [viewMode, setViewMode] = useState<ViewMode>(IS_TV ? 'grid' : 'list');
     const [selectedVideo, setSelectedVideo] = useState<VideoFile | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
 
@@ -98,7 +100,7 @@ export default function AlbumVideosScreen() {
 
     const grid = viewMode === 'grid';
 
-    const renderItem = useCallback(({ item }: { item: VideoFile }) => {
+    const renderItem = useCallback(({ item, index }: { item: VideoFile; index: number }) => {
         const entry = getHistoryEntry(item);
         const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
         return (
@@ -112,6 +114,7 @@ export default function AlbumVideosScreen() {
                     progress={progressOf(entry?.duration, entry?.lastPausedPosition)}
                     onPress={handleVideoPress}
                     onMore={handleOpenOptions}
+                    preferFocus={index === 0}
                 />
             </VideoItemCell>
         );
@@ -149,7 +152,7 @@ export default function AlbumVideosScreen() {
                     renderItem={renderItem}
                     extraData={history}
                     keyExtractor={(item: VideoFile) => item.path}
-                    numColumns={grid ? 2 : 1}
+                    numColumns={grid ? metrics.grid.columns : 1}
                     key={viewMode}
                     onEndReachedThreshold={0.5}
                     onEndReached={() => {

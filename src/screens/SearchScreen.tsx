@@ -26,6 +26,7 @@ import { Loader } from '@/components/Loader';
 import { metrics, type } from '@/theme/theme';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { IconButton } from '@/components/ui';
+import { IS_TV } from '@/utils/tv';
 import {
     EmptyState, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
     deleteVideo, joinMeta, listContentStyle, shareVideo,
@@ -126,7 +127,7 @@ export default function SearchScreen() {
     if (videoAccess === 'denied') {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-                <View style={styles.bar}>
+                <View style={[styles.bar, IS_TV && styles.barTv]}>
                     <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
                 </View>
                 <PermissionGate kind="video" />
@@ -144,7 +145,7 @@ export default function SearchScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-            <View style={styles.bar}>
+            <View style={[styles.bar, IS_TV && styles.barTv]}>
                 <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
                 <View style={[styles.searchField, { backgroundColor: theme.colors.cardElevated }]}>
                     <Feather name="search" size={18} color={theme.colors.textSecondary} />
@@ -231,6 +232,8 @@ const styles = StyleSheet.create({
         paddingVertical: metrics.space.sm,
         gap: metrics.space.xs,
     },
+    // TV overscan: clear of the screen edges.
+    barTv: { paddingHorizontal: 48 },
     searchField: {
         flex: 1,
         flexDirection: 'row',

@@ -1,9 +1,11 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { StyleSheet, Text, View, type HostInstance } from 'react-native';
 import Feather from '@react-native-vector-icons/feather';
 import { Button } from '@/components/ui';
 import { metrics, playerTheme, type } from '@/theme/theme';
 import { describePlayerError } from '@/utils/playerErrors';
+import { useTvFocusScope } from '@/hooks/video-player/useTvRemote';
+import { IS_TV } from '@/utils/tv';
 
 const { colors } = playerTheme;
 
@@ -17,13 +19,16 @@ interface Props {
 /** Sits over the video, outside the auto-hiding controls, so it stays until acted on. */
 export function PlayerErrorCard({ code, onRetry, onNext, onClose }: Props) {
     const { title, body } = describePlayerError(code);
+    // TV: the remote stays on the card's buttons until it goes.
+    const cardRef = useRef<HostInstance>(null);
+    useTvFocusScope(cardRef, true);
     return (
         <View style={styles.wrap} pointerEvents="box-none">
-            <View style={styles.card} accessibilityRole="alert">
+            <View ref={cardRef} style={styles.card} accessibilityRole="alert">
                 <Feather name="alert-circle" size={28} color={colors.text} />
                 <Text style={[type.heading, styles.title]}>{title}</Text>
                 <Text style={[type.body, styles.body]}>{body}</Text>
-                <Text style={[type.caption, styles.code]} selectable>{code}</Text>
+                <Text style={[type.caption, styles.code]} selectable={!IS_TV}>{code}</Text>
                 <View style={styles.actions}>
                     <Button label="Close" onPress={onClose} onPlayer />
                     {onNext && <Button label="Next video" onPress={onNext} onPlayer />}

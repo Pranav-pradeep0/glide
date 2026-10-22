@@ -1,5 +1,7 @@
-import React, { memo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { memo, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, type HostInstance } from 'react-native';
+import { useTvFocusScope } from '@/hooks/video-player/useTvRemote';
+import { IS_TV } from '@/utils/tv';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Button, SheetHeader } from '@/components/ui';
 import { PLAYER_BACKDROP } from '@/theme/colors';
@@ -51,6 +53,11 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
     onRecap,
     onClose,
 }) => {
+    // TV: the remote starts on Resume and stays in here until it closes.
+    const overlayRef = useRef<HostInstance>(null);
+    const resumeRef = useRef<HostInstance>(null);
+    useTvFocusScope(overlayRef, visible, resumeRef);
+
     if (!visible) {return null;}
 
     const formattedRemaining = remainingTime !== undefined ? formatVerboseTime(remainingTime) : '';
@@ -61,6 +68,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
 
     return (
         <Animated.View
+            ref={overlayRef}
             style={styles.overlay}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}
@@ -68,6 +76,8 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
         >
             {/* Same as the close button: dismissing never starts playback. */}
             <Pressable
+                focusable={!IS_TV}
+                accessible={!IS_TV}
                 style={StyleSheet.absoluteFill}
                 onPress={onClose}
                 accessibilityRole="button"
@@ -76,7 +86,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
             <View style={styles.card}>
                 <SheetHeader title="Continue watching" onClose={onClose} onPlayer />
 
-                <View style={styles.valueBox} accessible accessibilityLabel={`Resume from ${formattedResumeTime}. ${caption}`}>
+                <View style={styles.valueBox} accessible={!IS_TV} accessibilityLabel={`Resume from ${formattedResumeTime}. ${caption}`}>
                     <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
                         {formattedResumeTime}
                     </Text>
@@ -97,7 +107,9 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
                             />
                         )}
                     </View>
-                    <Button label="Resume" variant="primary" size="lg" icon="play" onPress={onResume} onPlayer />
+                    <View ref={resumeRef} collapsable={false}>
+                        <Button label="Resume" variant="primary" size="lg" icon="play" onPress={onResume} onPlayer />
+                    </View>
                 </View>
             </View>
         </Animated.View>

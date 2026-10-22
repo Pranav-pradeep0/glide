@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, type TextInputInstance, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, type TextInputInstance, ScrollView, type HostInstance } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import Feather from '@react-native-vector-icons/feather';
 import { Button, IconButton, Touchable } from '@/components/ui';
@@ -9,6 +9,7 @@ import { SubtitleCue } from '../types';
 import { SubtitleSyncService, MatchResult } from '../services/SubtitleSyncService';
 import type { AutoSyncResult } from '../services/SubtitleAutoSync';
 import { describeAutoSync } from '../hooks/video-player/useSubtitleAutoSync';
+import { useTvFocusScope } from '../hooks/video-player/useTvRemote';
 
 const { colors } = playerTheme;
 
@@ -60,6 +61,9 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = memo(({
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<MatchResult[]>([]);
     const inputRef = useRef<TextInputInstance>(null);
+    // TV: the remote moves into the panel while it is open, and back where it was after.
+    const panelRef = useRef<HostInstance>(null);
+    useTvFocusScope(panelRef, true);
     // Matching and offset calculation must use the same playback instant. Playback keeps
     // moving while the user reviews the matches.
     const matchReferenceTimeRef = useRef(0);
@@ -164,6 +168,7 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = memo(({
 
     return (
         <Animated.View
+            ref={panelRef}
             style={styles.container}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}

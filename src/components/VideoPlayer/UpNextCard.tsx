@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Image, StyleSheet, Text, View, type HostInstance } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut, useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { Feather } from '@react-native-vector-icons/feather';
@@ -8,6 +8,7 @@ import { ProgressLine, prettyTitle, progressOf } from '@/components/VideoRow';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
+import { useTvFocusScope } from '@/hooks/video-player/useTvRemote';
 
 const { colors } = playerTheme;
 
@@ -46,6 +47,9 @@ export function UpNextCard({ name, path, endsAt, inCredits, onPlay, onDismiss, b
         return progressOf(entry?.duration, entry?.lastPausedPosition);
     });
     const { title, detail } = prettyTitle(name);
+    // TV: the remote goes to Play next while the card shows; Back (the screen's) dismisses it.
+    const cardRef = useRef<HostInstance>(null);
+    useTvFocusScope(cardRef, !!onPlay);
 
     const left = useSharedValue(0);
     useEffect(() => {
@@ -94,6 +98,7 @@ export function UpNextCard({ name, path, endsAt, inCredits, onPlay, onDismiss, b
 
     return (
         <Animated.View
+            ref={cardRef}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}
             style={[styles.card, { right: right + metrics.gutter }, liftStyle]}

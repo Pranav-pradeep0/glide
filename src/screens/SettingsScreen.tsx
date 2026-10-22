@@ -39,6 +39,7 @@ import pkg from '../../package.json';
 import { NATIVE_API_LEVEL } from '@/native/GlideNative';
 import { ACTIVE_RELEASE_HASH } from 'react-native-stallion';
 import { useNavigation } from '@react-navigation/native';
+import { IS_TV } from '@/utils/tv';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types';
 
@@ -106,7 +107,7 @@ const FontSizeSliderControl = React.memo(({ fontSizeSV, onFinalChange }: {
     return (
         <SliderRow
             title="Size"
-            caption="Pinch subtitles in the player to resize"
+            caption={IS_TV ? undefined : 'Pinch subtitles in the player to resize'}
             valueText={`${Math.round(displaySize)} px`}
             minimumValue={12}
             maximumValue={40}
@@ -307,7 +308,7 @@ export default function SettingsScreen() {
                 />
             )}
             <ScrollView
-                contentContainerStyle={[styles.content, { paddingTop: insets.top + metrics.space.lg }]}
+                contentContainerStyle={[styles.content, IS_TV && styles.contentTv, { paddingTop: insets.top + metrics.space.lg }]}
                 keyboardShouldPersistTaps="handled"
             >
                 <Text style={[type.title, styles.title, { color: colors.text }]} accessibilityRole="header">Settings</Text>
@@ -315,17 +316,19 @@ export default function SettingsScreen() {
                 <SectionLabel title="Playback" />
                 <ListGroup>
                     <ListRow
+                        preferFocus
                         icon="skip-forward"
                         title="Auto-play next"
                         caption="Next video in the folder"
                         toggle={{ value: settings.autoPlayNext, onChange: setAutoPlayNext }}
                     />
-                    <ListRow
+                    {/* TV is videos only for now, so music settings stay on phones. */}
+                    {!IS_TV && <ListRow
                         icon="music"
                         title="Online lyrics"
                         caption="Fetch lyrics from LRCLIB when not found locally"
                         toggle={{ value: settings.onlineLyricsEnabled, onChange: setOnlineLyricsEnabled }}
-                    />
+                    />}
                     <ListRow
                         icon="fast-forward"
                         title="Seek buttons"
@@ -358,7 +361,8 @@ export default function SettingsScreen() {
                         title="Dark mode"
                         toggle={{ value: settings.darkMode, onChange: toggleDarkMode }}
                     />
-                    <ListRow
+                    {/* A TV has no screen brightness to set, nor a phone's picture-in-picture. */}
+                    {!IS_TV && <ListRow
                         icon="sun"
                         title="Same brightness for all videos"
                         caption="Otherwise each video keeps its own"
@@ -366,17 +370,19 @@ export default function SettingsScreen() {
                             value: settings.brightnessMode === 'global',
                             onChange: (val) => setBrightnessMode(val ? 'global' : 'video'),
                         }}
-                    />
-                    <ListRow
+                    />}
+                    {!IS_TV && <ListRow
                         icon="minimize-2"
                         title="System brightness in picture-in-picture"
                         toggle={{
                             value: settings.pipBrightnessMode === 'system',
                             onChange: (val) => setPipBrightnessMode(val ? 'system' : 'player'),
                         }}
-                    />
+                    />}
                 </ListGroup>
 
+                {/* Shaking and vibration need a phone in hand. */}
+                {!IS_TV && <>
                 <SectionLabel title="Gestures & haptics" />
                 <ListGroup>
                     <ListRow
@@ -465,6 +471,7 @@ export default function SettingsScreen() {
                         />
                     )}
                 </ListGroup>
+                </>}
 
                 <SectionLabel title="Subtitles" />
                 <ListGroup>
@@ -562,7 +569,7 @@ export default function SettingsScreen() {
                         title="Version"
                         // The JS version alone can't tell an OTA from a new APK; the native level can.
                         value={`${pkg.version} (${NATIVE_API_LEVEL})${ACTIVE_RELEASE_HASH ? ` · OTA ${ACTIVE_RELEASE_HASH.slice(0, 7)}` : ''}`}
-                        onPress={__DEV__ ? () => { if (++versionTaps.current % 7 === 0) navigation.navigate('HapticsLab'); } : undefined}
+                        onPress={__DEV__ && !IS_TV ? () => { if (++versionTaps.current % 7 === 0) navigation.navigate('HapticsLab'); } : undefined}
                     />
                     <ListRow
                         icon="send"
@@ -574,7 +581,7 @@ export default function SettingsScreen() {
                         icon="shield"
                         title="Privacy policy"
                         chevron
-                        onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => {})}
+                        onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => showSnackbar({ text: PRIVACY_POLICY_URL }))}
                     />
                     <ListRow
                         icon="file-text"
@@ -650,6 +657,8 @@ const Gap = () => <View style={styles.languageGap} />;
 const styles = StyleSheet.create({
     flex: { flex: 1 },
     content: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl },
+    // TV overscan: keep rows clear of the screen edges.
+    contentTv: { paddingHorizontal: 48 },
     title: { marginBottom: metrics.space.sm, paddingHorizontal: metrics.space.xs },
     gap: { marginTop: metrics.space.sm },
     regular: { fontWeight: '400' },

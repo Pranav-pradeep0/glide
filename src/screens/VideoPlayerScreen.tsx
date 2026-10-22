@@ -8,6 +8,7 @@ import {
     AppStateStatus,
     AppState,
     NativeModules,
+    type HostInstance,
 } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -58,6 +59,10 @@ import {
     usePlayerSettings,
     usePlayerRecap,
     useResumePlayback,
+    useTvRemote,
+    tvSeekTarget,
+    tvFocus,
+    type TvKeyEvent,
     ShakeDetector,
     formatTime,
     PLAYER_CONSTANTS,
@@ -65,6 +70,7 @@ import {
     UsePlayerTracksReturn,
 } from '@/hooks/video-player';
 import type { PlayerLoadData } from '@/hooks/video-player/types';
+import { IS_TV } from '@/utils/tv';
 import { useSubtitleDisplay } from '@/hooks/useSubtitleDisplay';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 
@@ -114,6 +120,8 @@ type Props = {
 
 /** How long Skip intro / Skip recap shows on its own once the chapter starts. */
 const SKIP_PROMPT_SECONDS = 8;
+/** The seek bar stays up this long after a remote seek, so taps in a row read as one. */
+const TV_SEEK_LINGER_MS = 800;
 
 // ============================================================================
 // COMPONENT
@@ -383,7 +391,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // matters: the native controller hides everything except the video surface
     // when PiP opens, so blocking PiP while the controls are up would just mean
     // swipe-to-home does nothing for a few seconds after the user taps.
-    const pipEnabled = isScreenFocused
+    const pipEnabled = !IS_TV && isScreenFocused
         && player.state.isPlaying
         && !player.state.paused;
     const pipPresentationActive = isInPipMode;
@@ -1236,13 +1244,16 @@ export default function VideoPlayerScreen({ route }: Props) {
             if (syncPanelType) { setSyncPanelType(null); return true; }
             if (anyPanelOpen(ui.state) && panelBack.current) { panelBack.current(); return true; }
             if (anyPanelOpen(ui.state)) { closeAllPanels(); return true; }
+            // TV: Up next holds the remote's focus, and the controls go before the video does.
+            if (IS_TV && upNextShown) { setUpNext(null); return true; }
+            if (IS_TV && ui.state.controlsVisible && !ui.state.locked) { hideControls(); return true; }
             handleGoBack();
             return true;
         });
         return () => backHandler.remove();
     }, [
         handleGoBack, isInPipMode, isExternalOpen, syncPanelType, closeAllPanels, ui.state, recapVisible,
-        closeRecap, resumeModalVisible, closeResumeModal,
+        closeRecap, resumeModalVisible, closeResumeModal, upNextShown, hideControls,
     ]);
 
     // Navigation beforeRemove
@@ -1258,6 +1269,90 @@ export default function VideoPlayerScreen({ route }: Props) {
     useEffect(() => {
         setAutoHideBlocked(displayPaused || scrubbing);
     }, [displayPaused, scrubbing, setAutoHideBlocked]);
+
+    // ========================================================================
+    // TV REMOTE
+    // ========================================================================
+
+    const screenRef = useRef<HostInstance>(null);
+    const playButtonRef = useRef<HostInstance>(null);
+    const seekBarRef = useRef<HostInstance>(null);
+
+    // Left / Right (and fast forward / rewind) scrub the way a swipe does: the seek bar shows in
+    // its scrubbing state, frames follow, and the seek lands on release.
+    const tvSeekRef = useRef<{ target: number; linger: ReturnType<typeof setTimeout> | null } | null>(null);
+    useEffect(() => () => { if (tvSeekRef.current?.linger) { clearTimeout(tvSeekRef.current.linger); } }, []);
+    const tvSeekStep = (direction: 1 | -1, repeat: number) => {
+        const duration = player.state.duration;
+        if (duration <= 0) { return; }
+        const { swipeSeekStart, seekTime, swipeSeeking } = gestures.sharedValues;
+        let seek = tvSeekRef.current;
+        if (!seek) {
+            const start = player.currentTimeRef.current;
+            swipeSeekStart.value = start;
+            seekTime.value = start;
+            swipeSeeking.value = true;
+            seek = tvSeekRef.current = { target: start, linger: null };
+        }
+        if (seek.linger) { clearTimeout(seek.linger); seek.linger = null; }
+        if (!player.isScrubbingShared.value) { player.setIsSeeking(true); }
+        seek.target = tvSeekTarget(seek.target, direction, repeat, duration);
+        seekTime.value = seek.target;
+        player.previewSeek(seek.target);
+        scheduleAutoHide();
+    };
+    const tvSeekEnd = () => {
+        const seek = tvSeekRef.current;
+        if (!seek || seek.linger) { return; }
+        player.commitSeek(seek.target);
+        scheduleAutoHide();
+        seek.linger = setTimeout(() => {
+            gestures.sharedValues.swipeSeeking.value = false;
+            tvSeekRef.current = null;
+        }, TV_SEEK_LINGER_MS);
+    };
+
+    const handleTvKey = (e: TvKeyEvent) => {
+        if (!e.consumed) {
+            // Play / pause went to the media session; moving focus keeps the controls up.
+            if (e.key === 'playPause') {
+                if (!controlsShown) { tvFocus(playButtonRef); }
+                showControls();
+            } else if (controlsShown) {
+                scheduleAutoHide();
+            }
+            return;
+        }
+        const direction = e.key === 'left' || e.key === 'rewind' ? -1
+            : e.key === 'right' || e.key === 'fastForward' ? 1 : 0;
+        if (direction !== 0) {
+            if (e.action === 'down') { tvSeekStep(direction, e.repeat); } else { tvSeekEnd(); }
+            return;
+        }
+        if (e.action !== 'down' || e.repeat > 0) { return; }
+        if (e.key === 'center') {
+            handleTogglePlayPause();
+            tvFocus(playButtonRef);
+        } else if (e.key === 'up') {
+            showControls();
+            tvFocus(playButtonRef);
+        } else if (e.key === 'down') {
+            showControls();
+            tvFocus(seekBarRef);
+        } else if (e.key === 'next' && !isNetworkStream) {
+            handleNext();
+        } else if (e.key === 'previous' && !isNetworkStream) {
+            handlePrevious();
+        }
+    };
+
+    useTvRemote({
+        mode: !isScreenFocused || isInPipMode ? 'off' : controlsShown ? 'focus' : 'hidden',
+        screenRef,
+        seekBarRef,
+        homeRef: playButtonRef,
+        onKey: handleTvKey,
+    });
 
     const bookmarkTimes = useMemo(() => bookmarksHook.bookmarks.map(b => b.timestamp), [bookmarksHook.bookmarks]);
 
@@ -1285,7 +1380,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     return (
         <PanelBackContext.Provider value={panelBack}>
-        <View style={styles.container}>
+        <View ref={screenRef} style={styles.container}>
             {/* Video with gestures */}
             <GestureDetector gesture={gestures.composedGesture}>
                 <View style={styles.video}>
@@ -1335,7 +1430,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
 
 
-            {shakeEnabled && (
+            {shakeEnabled && !IS_TV && (
                 <ShakeDetector
                     onShake={handleShakeAction}
                     shakeThreshold={shakeThreshold}
@@ -1436,23 +1531,25 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onNext={!isNetworkStream && hasNext ? handleNext : undefined}
                     onJumpBackward={handleJumpBackward}
                     onJumpForward={handleJumpForward}
-                    onLockScreen={ui.lock}
+                    onLockScreen={IS_TV ? undefined : ui.lock}
                     nightModeActive={nightMode}
                     onToggleNightMode={toggleNightMode}
                     muted={settingsHook.settings.muted}
                     onToggleMute={settingsHook.toggleMute}
                     orientationLocked={orientationLocked}
-                    onToggleOrientationLock={handleToggleOrientationLock}
+                    onToggleOrientationLock={IS_TV ? undefined : handleToggleOrientationLock}
                     onToggleResizeMode={handleToggleResizeMode}
                     resizeMode={settingsHook.settings.resizeMode}
-                    onEnterPip={handleEnterPip}
+                    onEnterPip={IS_TV ? undefined : handleEnterPip}
                     showSeekButtons={showSeekButtons}
                     seekDuration={seekDuration}
+                    playRef={playButtonRef}
+                    seekBarRef={seekBarRef}
                 />
             )}
 
             {/* Haptics marks for testers, over the video at all times while haptics play */}
-            {!pipPresentationActive && !ui.state.locked && playMode === 'with-haptics' && hapticsEnabled && (
+            {!pipPresentationActive && !ui.state.locked && !IS_TV && playMode === 'with-haptics' && hapticsEnabled && (
                 <HapticMarkButtons onMark={handleHapticMark} right={12 + effectiveInsets.right} />
             )}
 
@@ -1514,9 +1611,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onSetResizeMode={settingsHook.setResizeMode}
                     isLandscape={isLandscape}
                     insets={effectiveInsets}
-                    enableHaptics={playMode === 'with-haptics'}
+                    enableHaptics={!IS_TV && playMode === 'with-haptics'}
                     shakeEnabled={shakeEnabled}
-                    onToggleShake={handleToggleShake}
+                    onToggleShake={IS_TV ? undefined : handleToggleShake}
                     shakeAction={shakeAction}
                     onSelectShakeAction={setShakeAction}
                     seekDuration={seekDuration}
@@ -1527,8 +1624,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onToggleNightMode={toggleNightMode}
                     backgroundPlayEnabled={settingsHook.settings.backgroundPlayEnabled}
                     onToggleBackgroundPlay={handleToggleBackgroundPlay}
-                    hapticsEnabled={playMode === 'with-haptics' ? hapticsEnabled : undefined}
-                    onToggleHaptics={playMode === 'with-haptics' ? handleToggleHaptics : undefined}
+                    hapticsEnabled={!IS_TV && playMode === 'with-haptics' ? hapticsEnabled : undefined}
+                    onToggleHaptics={!IS_TV && playMode === 'with-haptics' ? handleToggleHaptics : undefined}
                     onSetVideoEnhancementStrength={settingsHook.setVideoEnhancementStrength}
                     audioValue={tracksHook.audioTracksForSelector.find(t => t.index === tracksHook.selectedAudioTrackId)?.title}
                     subtitleValue={tracksHook.subtitleTracksForSelector.find(t => t.index === tracksHook.selectedSubtitleTrackIndex)?.title ?? 'Off'}

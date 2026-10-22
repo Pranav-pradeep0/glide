@@ -1,5 +1,5 @@
 import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, type HostInstance } from 'react-native';
 import { Feather } from '@react-native-vector-icons/feather';
 import { EdgeInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -26,6 +26,7 @@ import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { HUD_PILL } from '@/theme/colors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
 import { crossesMark, nearestMark } from '@/utils/seekMarks';
+import { IS_TV } from '@/utils/tv';
 
 const { colors } = playerTheme;
 
@@ -174,13 +175,17 @@ interface SeekBarProps {
     onSeekStart: () => void;
     onSeek: (val: number) => void;
     onSeekComplete: (val: number) => void;
+    /** TV: the bar takes remote focus here; Left / Right on it scrub (TvRemoteModule). */
+    focusRef?: React.RefObject<HostInstance | null>;
 }
 
 const SeekBar: React.FC<SeekBarProps> = ({
     currentTime, duration, isScrubbing, seekPreviewTime, grow, dragging, swipeSeeking, swipeSeekStart,
     screenReader, onStepBackward, onStepForward,
-    bookmarks, chapters, durationSeconds, buffering, onSeekStart, onSeek, onSeekComplete,
+    bookmarks, chapters, durationSeconds, buffering, onSeekStart, onSeek, onSeekComplete, focusRef,
 }) => {
+    // Remote focus: a ring around the thumb, as on the other controls.
+    const [tvFocused, setTvFocused] = useState(false);
     // Dragging over a bookmark or a chapter start ticks the same way.
     const marks = useMemo(() => [...bookmarks, ...chapters.map(c => c.start)], [bookmarks, chapters]);
     const bubbleWidth = chapters.length > 0 ? CHAPTER_BUBBLE_WIDTH : BUBBLE_WIDTH;
@@ -215,7 +220,7 @@ const SeekBar: React.FC<SeekBarProps> = ({
         return [0, ...cuts, 1];
     }, [chapters, durationSeconds]);
     const thumbStyle = useAnimatedStyle(() => {
-        const size = 14 + 6 * grow.value;
+        const size = (tvFocused ? 22 : 14) + 6 * grow.value;
         return {
             width: size,
             height: size,
@@ -223,7 +228,7 @@ const SeekBar: React.FC<SeekBarProps> = ({
             left: `${progress.value * 100}%`,
             transform: [{ translateX: -size / 2 }],
         };
-    });
+    }, [tvFocused]);
     const bubbleStyle = useAnimatedStyle(() => {
         const half = bubbleWidth / 2;
         let offset = -half;
@@ -319,6 +324,10 @@ const SeekBar: React.FC<SeekBarProps> = ({
     return (
         <GestureDetector gesture={pan}>
             <Animated.View
+                ref={focusRef}
+                focusable={IS_TV || undefined}
+                onFocus={IS_TV ? () => setTvFocused(true) : undefined}
+                onBlur={IS_TV ? () => setTvFocused(false) : undefined}
                 style={[styles.seekBar, readinessStyle]}
                 onLayout={(e) => { trackWidth.value = e.nativeEvent.layout.width; }}
                 hitSlop={{ top: 16, bottom: 16 }}
@@ -359,7 +368,7 @@ const SeekBar: React.FC<SeekBarProps> = ({
                         style={[styles.dot, { left: `${(t / durationSeconds) * 100}%` }]}
                     />
                 ))}
-                <Animated.View style={[styles.thumb, thumbStyle]} pointerEvents="none" />
+                <Animated.View style={[styles.thumb, tvFocused && styles.thumbFocused, thumbStyle]} pointerEvents="none" />
             </Animated.View>
         </GestureDetector>
     );
@@ -463,14 +472,15 @@ interface PlayerControlsProps {
     onNext?: () => void;
     onJumpBackward: () => void;
     onJumpForward: () => void;
-    onLockScreen: () => void;
+    /** Absent on TV, as are rotation lock and PiP: phone-only. */
+    onLockScreen?: () => void;
     /** Night mode and mute lead the bottom row; the lock has the left edge to itself. */
     nightModeActive?: boolean;
     onToggleNightMode?: () => void;
     muted?: boolean;
     onToggleMute?: () => void;
     orientationLocked: boolean;
-    onToggleOrientationLock: () => void;
+    onToggleOrientationLock?: () => void;
     onToggleResizeMode: () => void;
     resizeMode: string;
     onEnterPip?: () => void;
@@ -479,6 +489,9 @@ interface PlayerControlsProps {
     /** Colour enhancement: used every session, so it lives on the bar. */
     videoEnhancement?: boolean;
     onToggleVideoEnhancement?: () => void;
+    /** Where the TV remote puts focus: Up and OK on Play, Down on the seek bar. */
+    playRef?: React.RefObject<HostInstance | null>;
+    seekBarRef?: React.RefObject<HostInstance | null>;
 }
 
 const NO_BOOKMARKS: number[] = [];
@@ -518,6 +531,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     onOpenBookmarks, onOpenPlaylist, onPrevious, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
     showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement,
+    playRef, seekBarRef,
 }) => {
 
     const dragging = useSharedValue(false);
@@ -626,7 +640,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
 
             {/* Lock, alone on the left edge (clear of a landscape camera cutout), vertically centred where the thumb rests */}
             {/* Portrait has no side room (the centre row reaches the edges), so its lock is in the tools row. */}
-            {isLandscape && (
+            {isLandscape && onLockScreen && (
                 <Animated.View style={[styles.rail, { left: metrics.space.xs + edge('left', railMiddle - 24, railMiddle + 24) }, othersStyle]} pointerEvents="box-none">
                     {/* Small and bare, as it always was: an 18 px glyph about 20 dp from the edge. */}
                     <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
@@ -638,14 +652,17 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 {showSeekButtons && (
                     <SkipButton seconds={seekDuration} onPress={onJumpBackward} />
                 )}
-                <Touchable onPress={onTogglePlayPause} onPlayer scaleTo={0.9} style={styles.play} accessibilityRole="button" accessibilityLabel={paused ? 'Play' : 'Pause'}>
-                    <Animated.View style={[styles.glyphLayer, playGlyphStyle]}>
-                        <Feather name="play" size={46} color={colors.text} />
-                    </Animated.View>
-                    <Animated.View style={[styles.glyphLayer, pauseGlyphStyle]}>
-                        <Feather name="pause" size={46} color={colors.text} />
-                    </Animated.View>
-                </Touchable>
+                {/* The TV remote's focus target: kept as a view, so it can be found to focus Play inside it. */}
+                <View ref={playRef} collapsable={false}>
+                    <Touchable onPress={onTogglePlayPause} onPlayer scaleTo={0.9} style={styles.play} accessibilityRole="button" accessibilityLabel={paused ? 'Play' : 'Pause'}>
+                        <Animated.View style={[styles.glyphLayer, playGlyphStyle]}>
+                            <Feather name="play" size={46} color={colors.text} />
+                        </Animated.View>
+                        <Animated.View style={[styles.glyphLayer, pauseGlyphStyle]}>
+                            <Feather name="pause" size={46} color={colors.text} />
+                        </Animated.View>
+                    </Touchable>
+                </View>
                 {showSeekButtons && (
                     <SkipButton forward seconds={seekDuration} onPress={onJumpForward} />
                 )}
@@ -692,6 +709,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                     onSeekStart={onSeekStart}
                     onSeek={onSeek}
                     onSeekComplete={onSeekComplete}
+                    focusRef={seekBarRef}
                 />
 
                 <Animated.View style={[styles.tools, othersStyle]}>
@@ -706,7 +724,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                             style={styles.previous}
                         />
                     )}
-                    {!isLandscape && (
+                    {!isLandscape && onLockScreen && (
                         <IconButton icon="lock" iconSize={18} onPress={onLockScreen} accessibilityLabel="Lock screen" onPlayer />
                     )}
                     {onToggleNightMode && (
@@ -728,9 +746,11 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                         </GlyphButton>
                     )}
                     <View style={styles.flex} />
-                    <GlyphButton onPress={onToggleOrientationLock} label="Lock rotation" active={orientationLocked}>
-                        {c => <OrientationLockIcon size={20} color={c} locked={orientationLocked} />}
-                    </GlyphButton>
+                    {onToggleOrientationLock && (
+                        <GlyphButton onPress={onToggleOrientationLock} label="Lock rotation" active={orientationLocked}>
+                            {c => <OrientationLockIcon size={20} color={c} locked={orientationLocked} />}
+                        </GlyphButton>
+                    )}
                     {/* Icon and name, like Next: the current mode is readable without cycling through them. */}
                     <Touchable
                         onPress={onToggleResizeMode}
@@ -859,6 +879,7 @@ const styles = StyleSheet.create({
         borderColor: HUD_PILL,
     },
     thumb: { position: 'absolute', left: 0, backgroundColor: colors.primary },
+    thumbFocused: { borderWidth: 3, borderColor: colors.text },
     bubble: {
         position: 'absolute',
         left: 0,
