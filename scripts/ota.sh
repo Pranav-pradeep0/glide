@@ -41,3 +41,6 @@ echo
 echo "Published ota/$ver.$n ($hash). Release to v$ver only, small rollout first:"
 echo "  npx stallion release-bundle --project-id \"\$STALLION_PROJECT_ID\" --ci-token \"\$STALLION_CI_TOKEN\" \\"
 echo "    --hash $hash --app-version $ver --release-note \"$note\""
+echo "A new release starts at 0% rollout; raise it (10, then 100):"
+echo "  npx stallion update-release --project-id \"\$STALLION_PROJECT_ID\" --ci-token \"\$STALLION_CI_TOKEN\" \\"
+echo "    --hash $hash --rollout-percent 10"
