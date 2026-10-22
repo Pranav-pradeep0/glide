@@ -16,8 +16,8 @@ Started 2026-10-23 on branch `tv` (worktree `C:\glide-tv`).
 ## Where the code lives
 
 - Branch `tv`, in its own worktree `C:\glide-tv`, so `C:\glide` stays on `main` for the 2.6.0
-  phone release. `C:\glide-tv\node_modules` is a junction to `C:\glide\node_modules`; run
-  `npm ci` in the worktree instead if a TV-only dependency is ever added.
+  phone release. The worktree has its own `node_modules` (`npm ci`); a junction to the main
+  checkout's breaks Metro's release bundle.
 - **After `v2.6.0` is tagged,** merge `tv` into `main` and continue on `main` (owner commits on
   `main`). TV code is gated by `IS_TV`, so phones never reach it. Delete the worktree after the
   merge (`git worktree remove ../glide-tv`).
@@ -107,11 +107,11 @@ Results, open issues and the device checklist: see **Status** below.
 
 ## Status
 
-**2026-10-23: Phase 1 written, not yet run on a device.** tsc clean, jest 33 suites pass. No
-APK built from `tv` yet: the player agent saw the JS bundle step fail in the worktree on a
-metro/@babel/runtime resolution error (likely the node_modules junction), so the first build may
-need `npm ci` inside `C:\glide-tv` instead of the junction. After building, run the CI step
-"Verify Android TV compatibility" commands locally against the APK.
+**2026-10-23: Phase 1 written, not yet run on a device.** tsc clean, jest 33 suites pass. The
+TV APK builds (`assembleRelease -PallowDebugSigning=true`) and passes the CI "Verify Android TV
+compatibility" check locally. The worktree has its own `node_modules` (`npm ci`): the junction
+to `C:\glide
+ode_modules` broke Metro's bundle step.
 
 Built:
 - **Focus:** ring + TV grow + focus tint in `Touchable`; `preferFocus` (TV-only, released after
