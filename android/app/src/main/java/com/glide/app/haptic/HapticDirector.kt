@@ -72,6 +72,8 @@ object HapticDirector {
     // ponytail: a fixed window catches one or two logos; stacked studio logos run longer.
     private const val LOGO_MS = 15_000
     private const val SPEECH = 0.5f // YAMNet's Speech score over this is someone speaking
+    private const val JUMP_DB = 6f // a level this far over its last 3 s is a sound starting
+    internal const val ATTACK_GAP_MS = 300
 
     // The Listener's dB scales: bed 0..1 is -45..0 dB, hit 0..1 is -40..0 dBFS.
     private const val BED_DB = 45f
@@ -201,6 +203,26 @@ object HapticDirector {
             val a = maxOf(0, i + 1 - RECENT_FRAMES)
             ((s[i + 1] - s[a]) / (i + 1 - a)).toFloat()
         }
+    }
+
+    /**
+     * Where sounds start, in media ms: every Listener onset (the mix's and the high band's), and
+     * every frame where the bass or the body jumps [JUMP_DB] over its last 3 s: a roar or an engine
+     * swells with no sharp onset. One per [ATTACK_GAP_MS], the earliest. 94% of the strong SDH cues
+     * of the tuning films have one (docs/haptics-decisions.md, Events).
+     */
+    internal fun attacks(raw: HapticTrack, film: Film): IntArray {
+        val f = HapticTrack.BED_FRAME_MS
+        val times = sortedSetOf<Int>()
+        raw.events.forEach { times += it.timeMs }
+        fun jumps(level: FloatArray, recent: FloatArray) {
+            for (i in level.indices) if ((level[i] - recent[i]) * BED_DB >= JUMP_DB) times += i * f
+        }
+        jumps(film.level, film.recent)
+        if (raw.body.isNotEmpty()) smoothed(raw.body).let { jumps(it, recent(it)) }
+        val out = ArrayList<Int>()
+        for (t in times) if (out.isEmpty() || t - out.last() >= ATTACK_GAP_MS) out += t
+        return out.toIntArray()
     }
 
     /**

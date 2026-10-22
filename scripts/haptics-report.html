@@ -84,7 +84,7 @@ let film = null, center = 0, win = 60000, shown = new Set(Object.keys(KIND));
 
 function summary() {
   const t = document.getElementById('summary');
-  const head = '<thead><tr><th>Film</th><th>Strong cues</th><th>Missed</th><th>Faint</th><th>Mild felt</th><th>Too much</th><th>per min</th><th>Loud, no caption</th><th>Marks caught</th></tr></thead>';
+  const head = '<thead><tr><th>Film</th><th>Strong cues</th><th>Missed</th><th>Faint</th><th>Mild felt</th><th>Too much, s</th><th>s per min</th><th>Loud, no caption</th><th>Marks passed</th></tr></thead>';
   const row = (name, s, cls) => `<tr class="${cls || ''}" data-name="${name}"><td>${name}</td><td>${s.strong}</td><td>${s.missed}</td><td>${s.faint}</td>` +
     `<td>${s.mild ? Math.round(100 * s.mildFelt / s.mild) + '%' : ''}</td><td>${s.tooMuch}</td><td>${(s.tooMuch / Math.max(s.minutes, 1e-9)).toFixed(2)}</td>` +
     `<td>${s.loudNoCaption}</td><td>${s.marks ? s.caught + '/' + s.marks : ''}</td></tr>`;

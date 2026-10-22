@@ -17,16 +17,23 @@ import org.junit.Test
  * its subwoofer feed:
  *
  *  - missed: a strong cue with nothing felt from [LEAD_MS] before it to its end.
- *  - faint: felt, but never at [NOTICE_AMP]: under a loud scene, testers called that missed.
- *  - too much: a moment felt at [TOO_MUCH_AMP] or more touching no strong or mild cue, where YAMNet
- *    hears no effect class at [HEARD_EFFECT]. Loud bass is no excuse (an uncaptioned bass hit 20 dB
- *    over its scene was marked too much, 2:52 in Frankenstein, YAMNet hearing no effect over 0.11);
- *    a clear effect is (captions leave out most of an action scene's booms and thumps).
+ *  - faint: felt, but never at [CLEAR_AMP]. Testers call that missed (a roar at 16-55, an
+ *    explosion with gaps), so the headline "not clear" counts both.
+ *  - too much: seconds felt per minute touching no strong or mild cue. Counted in time, not
+ *    stretches (merging buzzes into one long one read as less), and with no excuse for what YAMNet
+ *    hears: a buzz the judge excused as "an effect" was marked too much on the phone.
+ *  - faint s/min: seconds the motor runs under [CLEAR_AMP]: neither still nor clearly felt, it was
+ *    marked missed on real moments and too much on the rest.
+ *  - on time: share of felt starts (after [JOIN_MS] still) within [ON_TIME_MS] after a sound
+ *    starts ([HapticDirector.attacks]): a buzz that swells in after its sound reads as late.
  *  - loud, no caption: the subwoofer at the film's loud level, no cue near, nothing felt, and YAMNet
  *    hearing neither speech nor music (under them it was the score: Anora 51 of 51). Captions leave
  *    sounds out, so this one is a hint, not a verdict.
  *
- * A testers' mark (`marks.tsv`) is caught when a flag of its kind lies in the 10 s before it. Writes
+ * Testers' marks (`marks.tsv`) are pass/fail: a missed mark passes if something is clearly felt in
+ * the [MISSED_LOOK_MS] before the tap, a too-much mark if no more than [TOO_MUCH_MAX_MS] of the
+ * [TOO_MUCH_LOOK_MS] before it is felt: any buzz there is the complaint (the buttons sit over the
+ * video, so taps come quickly). Writes
  * `.haptics-fixtures/report/index.html` from `scripts/haptics-report.html`. Run by
  * `scripts/glide-analyse.sh`. Prints only.
  */
@@ -34,15 +41,20 @@ class HapticJudgeTest {
     private class Flag(val from: Int, val to: Int, val kind: String, val peak: Int, val what: String)
 
     private class Sum(var strong: Int = 0, var missed: Int = 0, var faint: Int = 0, var mild: Int = 0, var mildFelt: Int = 0,
-                      var tooMuch: Int = 0, var minutes: Double = 0.0, var loudNoCaption: Int = 0, var marks: Int = 0, var caught: Int = 0) {
+                      var tooMuch: Int = 0, var minutes: Double = 0.0, var loudNoCaption: Int = 0, var marks: Int = 0, var caught: Int = 0,
+                      var tooMuchMs: Long = 0, var faintMs: Long = 0, var starts: Int = 0, var onTime: Int = 0,
+                      var missedMarks: Int = 0, var missedPass: Int = 0, var muchMarks: Int = 0, var muchPass: Int = 0) {
         operator fun plusAssign(o: Sum) {
             strong += o.strong; missed += o.missed; faint += o.faint; mild += o.mild; mildFelt += o.mildFelt
             tooMuch += o.tooMuch; minutes += o.minutes; loudNoCaption += o.loudNoCaption; marks += o.marks; caught += o.caught
+            tooMuchMs += o.tooMuchMs; faintMs += o.faintMs; starts += o.starts; onTime += o.onTime
+            missedMarks += o.missedMarks; missedPass += o.missedPass; muchMarks += o.muchMarks; muchPass += o.muchPass
         }
 
-        override fun toString() = "%6d %6d %5d %5.2f %8d %7.2f %8d %7s".format(
-            strong, missed, faint, mildFelt / mild.coerceAtLeast(1).toDouble(), tooMuch, tooMuch / minutes.coerceAtLeast(1e-9), loudNoCaption,
-            if (marks == 0) "" else "$caught/$marks"
+        override fun toString() = "%6d %9d %5.2f %8.2f %7.2f %7.0f%% %8d %7s %7s".format(
+            strong, missed + faint, mildFelt / mild.coerceAtLeast(1).toDouble(), tooMuchMs / 1000.0 / minutes.coerceAtLeast(1e-9),
+            faintMs / 1000.0 / minutes.coerceAtLeast(1e-9), 100.0 * onTime / starts.coerceAtLeast(1), loudNoCaption,
+            if (missedMarks == 0) "" else "$missedPass/$missedMarks", if (muchMarks == 0) "" else "$muchPass/$muchMarks"
         )
     }
 
@@ -58,7 +70,7 @@ class HapticJudgeTest {
         val tune = Sum()
         val held = Sum()
         val data = mutableListOf<String>()
-        println("%-22s %6s %6s %5s %5s %8s %7s %8s %7s".format("film", "strong", "missed", "faint", "mild", "too much", "per min", "loud, no", "marks"))
+        println("%-22s %6s %9s %5s %8s %7s %8s %8s %7s %7s".format("film", "strong", "not clear", "mild", "much s/m", "faint", "on time", "loud, no", "missed", "much"))
         for (file in films) {
             val name = file.nameWithoutExtension
             // Plain subtitles (Blast's) name no sounds: every buzz would read as too much.
@@ -90,7 +102,8 @@ class HapticJudgeTest {
         val d = film.load(file)
         val sounds = film.sounds(File(dir, "$name.sounds"))
         val cues = HapticFilmTest.cues(File(dir, "$name.srt").readText())
-        val track = HapticDirector.direct(d.raw.withSounds(sounds.map(HapticSounds::features)), HapticMeaning.tags(cues), strength = HapticDirector.strength(CINEMATIC))
+        val raw = d.raw.withSounds(sounds.map(HapticSounds::features))
+        val track = HapticDirector.direct(raw, HapticMeaning.tags(cues), strength = HapticDirector.strength(CINEMATIC))
         val amp = HapticBenchTest().played(track, d.ms)
         val pk = IntArray((d.ms + 99) / 100) { i -> (i * 100 until minOf(amp.size, i * 100 + 100)).maxOfOrNull { amp[it].toInt() and 0xFF } ?: 0 }
         fun peak(r: IntRange) = (r.first.coerceAtLeast(0) / 100..minOf(pk.size - 1, r.last / 100)).maxOfOrNull { pk[it] } ?: 0
@@ -124,13 +137,14 @@ class HapticJudgeTest {
         for ((c, g) in graded) {
             val p = peak(span(c))
             when (g) {
-                2 -> { sum.strong++; if (p == 0) flags += Flag(span(c).first, span(c).last, "missed", 0, c.text) else if (p < NOTICE_AMP) flags += Flag(span(c).first, span(c).last, "faint", p, c.text) }
+                2 -> { sum.strong++; if (p == 0) flags += Flag(span(c).first, span(c).last, "missed", 0, c.text) else if (p < CLEAR_AMP) flags += Flag(span(c).first, span(c).last, "faint", p, c.text) }
                 1 -> { sum.mild++; if (p > 0) sum.mildFelt++ }
             }
         }
         val physical = graded.filter { it.second >= 1 }.map { span(it.first) }
         val captioned = graded.map { span(it.first) }
-        // Felt moments, stretches closer than JOIN_MS joined.
+        // Felt moments, stretches closer than JOIN_MS joined: too much is their felt time outside
+        // every strong or mild cue.
         var i = 0
         while (i < pk.size) {
             if (pk[i] == 0) { i++; continue }
@@ -139,8 +153,22 @@ class HapticJudgeTest {
             while (j < pk.size && j - end < JOIN_MS / 100) if (pk[j++] > 0) end = j
             val r = i * 100 until end * 100
             val p = (i until end).maxOf { pk[it] }
-            if (p >= TOO_MUCH_AMP && physical.none { r.first < it.last && it.first < r.last } && effect(r) < HEARD_EFFECT) flags += Flag(r.first, r.last, "too much", p, heard(r))
+            val outside = r.count { ms -> ms < amp.size && amp[ms].toInt() != 0 && physical.none { ms in it } }
+            if (outside > 0) { sum.tooMuchMs += outside; flags += Flag(r.first, r.last, "too much", p, heard(r) + if (effect(r) >= HEARD_EFFECT) ", YAMNet hears an effect" else "") }
             i = end
+        }
+        for (a in amp) { val v = a.toInt() and 0xFF; if (v in 1 until CLEAR_AMP) sum.faintMs++ }
+        val attacks = HapticDirector.attacks(raw, HapticDirector.Film(raw))
+        var still = JOIN_MS
+        var k0 = 0
+        for (ms in amp.indices) {
+            if (amp[ms].toInt() == 0) { still++; continue }
+            if (still >= JOIN_MS) {
+                sum.starts++
+                while (k0 < attacks.size && attacks[k0] < ms - ON_TIME_MS) k0++
+                if (k0 < attacks.size && attacks[k0] <= ms + ON_TIME_EARLY_MS) sum.onTime++
+            }
+            still = 0
         }
         // Loud stretches of the subwoofer (1 s apart or less is one), uncaptioned and unfelt.
         if (subTop > 0) {
@@ -158,15 +186,22 @@ class HapticJudgeTest {
         flags.sortBy { it.from }
         sum.missed = flags.count { it.kind == "missed" }
         sum.faint = flags.count { it.kind == "faint" }
-        sum.tooMuch = flags.count { it.kind == "too much" }
+        sum.tooMuch = (sum.tooMuchMs / 1000).toInt()
         sum.loudNoCaption = flags.count { it.kind == "loud, no caption" }
 
         val marks = HapticBenchTest.marks().filter { it.of(name) }.map { m ->
-            val kinds = if (m.kind == "missed") setOf("missed", "faint", "loud, no caption") else setOf("too much")
-            val caught = flags.any { it.kind in kinds && it.from < m.ms + 1000 && it.to > m.ms - 10_000 }
+            val pass = if (m.kind == "missed") {
+                sum.missedMarks++
+                (m.ms - MISSED_LOOK_MS..m.ms + 500).count { it in amp.indices && (amp[it].toInt() and 0xFF) >= CLEAR_AMP } >= CLEAR_MIN_MS
+            } else {
+                sum.muchMarks++
+                (m.ms - TOO_MUCH_LOOK_MS until m.ms).count { it in amp.indices && amp[it].toInt() != 0 } <= TOO_MUCH_MAX_MS
+            }
+            if (pass) { if (m.kind == "missed") sum.missedPass++ else sum.muchPass++ }
             sum.marks++
-            if (caught) sum.caught++
-            "[${m.ms},${str(m.kind)},$caught]"
+            if (pass) sum.caught++
+            println("   mark %-9s %7.1f s %s".format(m.kind, m.ms / 1000.0, if (pass) "pass" else "FAIL"))
+            "[${m.ms},${str(m.kind)},$pass]"
         }
 
         // The timeline at STEP_MS: motor peak, subwoofer dB against the loud level, speech and music.
@@ -198,14 +233,17 @@ class HapticJudgeTest {
         val GRADES = listOf("none", "mild", "strong")
         private const val MUSIC = 132 // YAMNet's Music class
         /**
-         * ponytail: one level for "noticeable"; the first marks put it over 80 (felt at 50-80 under
-         * a loud scene was called missed), while 56 on dialogue was called too much. Learn it per
-         * scene loudness once more marks come in.
+         * ponytail: one level for "clearly felt"; marks called 16-80 missed. Set by the phone
+         * strength test once it is run.
          */
-        private const val NOTICE_AMP = 96
-        /** ponytail: the faintest buzz counted as too much; the first too-much marks were at 56-66. */
-        private const val TOO_MUCH_AMP = 40
+        private const val CLEAR_AMP = 96
+        private const val CLEAR_MIN_MS = 100
         private const val HEARD_EFFECT = 0.3f
+        private const val ON_TIME_MS = 100
+        private const val ON_TIME_EARLY_MS = 30
+        private const val MISSED_LOOK_MS = 6000
+        private const val TOO_MUCH_LOOK_MS = 3000
+        private const val TOO_MUCH_MAX_MS = 100
         private const val STEP_MS = 250
     }
 }
