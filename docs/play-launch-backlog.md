@@ -14,7 +14,37 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 - Play developer account: created on owner's personal Google account, in verification.
 - Done: `3da5cef` screens 4.30.0 (fixes reanimated #10734 SIGSEGV; reanimated 4.7.1 now unblocked).
 
-## RESUME HERE (state at end of 2026-10-21)
+## RESUME HERE (state at end of 2026-10-22)
+
+**Not pushed:** ~30 local commits (2026-10-22 work below + another session's haptics commits).
+Push only on the owner's go-ahead.
+
+Done 2026-10-22:
+- Subtitle auto-sync (f716436 585a69d db3da6f 745629b) reviewed: math fine; cb61aae fixes the
+  ratio carrying to another subtitle and a subtitle loaded mid-run never syncing. Still open
+  (minor): no cancel of sync work on player close (`SubtitleSyncModule.kt:515`); late second
+  window can fall past the audio at 23.976/25 (`SubtitleAutoSync.ts:102`); Hangul missing and
+  non-ASCII digits counted as speech (`SubtitleAutoSync.ts:51,66`).
+- Audio track across Next/Previous: `usePlayerCore` dropped the track language (3316027), so
+  every carry matched by position; 55295fc stops an untagged position landing on a tagged file
+  (Anora's first track is a commentary). Verified on device with Anora, Blast, Bethlehem.
+- 0da0e4e stray-text error in `ListRow` icon rows; 59150dc Previous slides in from the left;
+  555a3fc Recap line says "contain spoilers". `.gitignore` JVM crash dumps (f20974a).
+- OTA tooling: `scripts/ota.sh` + Settings Version shows `· OTA <hash>` (3e55ebc, 9a9d0d4,
+  8b87dc5). Proven end to end on the phone: published, released to 2.5.0, applied on 2nd open,
+  then rolled back. **A new release starts at 0% rollout** (`update-release --rollout-percent`).
+  `STALLION_CI_TOKEN` is in the Desktop secrets backup; project id in `.env`. The owner allowed
+  `npx stallion release-bundle *` / `update-release *` in Claude permissions (run them as a
+  plain command, no pipes, or the rule doesn't match).
+- Phone now has a debug-signed release build of main (2.5.0). Debug builds: start Metro with
+  `CI=true npx react-native start` (its file watcher times out on this repo), `adb reverse
+  tcp:8081 tcp:8081`. Release builds strip Log.d and console.log; use the debug build to trace.
+- `C:\glide-promo`: Remotion 4.0.537 + Remotion skills for a store promo video (open Claude there).
+
+Next: push (owner OK); owner Play Console tasks (below); store screenshots (hide own videos
+with `.nomedia` + rescan, use Blender open movies); first tag needs `release-notes/X.Y.Z.txt`.
+
+## State at end of 2026-10-21
 
 Pushed to origin/main 2026-10-21 on the owner's go-ahead. Done that day:
 - D4 finished: navigation 7.5 (69f1fa7), safe-area 5.10.1, flash-list 2.3.3, Kotlin 2.4.21 +
@@ -37,9 +67,8 @@ Next:
    Console forms (Data safety must match docs/privacy.html).
 2. Phone checks still unconfirmed by owner: edge-swipe Back + seek, library Back → background,
    skipped-song toast, largest font, background play.
-3. Build the OTA tooling (plan below), then first tag (needs `release-notes/X.Y.Z.txt`).
-4. Subtitle auto-sync work landed from another session (f716436, 585a69d, db3da6f, 745629b); not
-   reviewed here. Stray `hs_err_*.log` / `replay_*.log` in `android/`: delete, add to .gitignore.
+3. ~~Build the OTA tooling~~ (done 2026-10-22), then first tag (needs `release-notes/X.Y.Z.txt`).
+4. ~~Review subtitle auto-sync; stray crash logs~~ (done 2026-10-22).
 
 ## OTA plan (agreed 2026-10-21)
 
@@ -53,8 +82,9 @@ Next:
   (`validateAppVersion` → `fallbackProd`). Auto-rollback only covers crashes before mount; later
   crashes need `update-release --is-rolled-back true`.
 - Tag each OTA `ota/X.Y.Z.N` (not `v…`: CI treats `v` tags as Play releases).
-- To build: `scripts/ota.sh` (guard, tsc/jest, `publish-bundle --private-key`, tag) and a Settings
-  line showing the running bundle hash. Needs a Stallion CI token for CI use; local login works now.
+- Built 2026-10-22: `scripts/ota.sh "note"` in a worktree of `release/X.Y` (guard, `npm ci`,
+  tsc/jest, signed `publish-bundle`, tag `ota/X.Y.Z.N`), then the printed `release-bundle` and
+  `update-release --rollout-percent` commands. The app applies a bundle on its second launch.
 
 Done 2026-10-20 outside the code: Worker `glide-proxy` live (old glide-ai-proxy deleted),
 new Groq/SubDL/OMDb keys, SubDL key stripped from download links. Stallion moved to a new
