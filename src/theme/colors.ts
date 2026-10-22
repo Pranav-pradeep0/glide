@@ -80,3 +80,34 @@ export const PLAYER_BACKDROP = playerColors.scrim;
 export const HUD_PILL = 'rgba(0, 0, 0, 0.6)';
 
 export type ColorScheme = typeof lightColors;
+
+const luminance = (hex: string) => {
+    const lin = (i: number) => {
+        const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * lin(1) + 0.7152 * lin(3) + 0.0722 * lin(5);
+};
+
+const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+};
+
+/**
+ * A cover colour usable as text or an icon on `bg` (both `#RRGGBB`): mixed toward white on a dark
+ * background, black on a light one, until it reaches 4.5:1. Dark covers otherwise vanish.
+ */
+export function readableOn(color: string, bg: string): string {
+    const hex = /^#[0-9a-f]{6}$/i;
+    if (!hex.test(color) || !hex.test(bg)) return color;
+    const target = luminance(bg) < 0.5 ? 255 : 0;
+    let out = color;
+    for (let t = 0.1; contrast(out, bg) < 4.5 && t <= 1; t += 0.1) {
+        out = '#' + [1, 3, 5].map(i => {
+            const c = parseInt(color.slice(i, i + 2), 16);
+            return Math.round(c + (target - c) * t).toString(16).padStart(2, '0');
+        }).join('');
+    }
+    return out;
+}

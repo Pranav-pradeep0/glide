@@ -40,6 +40,7 @@ import { useAlbumPalette } from '@/hooks/useAlbumArt';
 import { LyricsService } from '@/services/LyricsService';
 import { Chip, Gradient, IconButton, ListGroup, ListRow, Sheet, Touchable } from '@/components/ui';
 import { metrics, motion, type } from '@/theme/theme';
+import { readableOn } from '@/theme/colors';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { LyricLine } from '@/types';
 import { haptic } from '@/native/HapticModule';
@@ -138,7 +139,10 @@ export default function NowPlayingScreen() {
         currentTrack?.uri
     );
     const artworkUri = currentTrack?.artworkUri || fetchedArt;
-    const accentColor = primaryColor || colors.primary;
+    // The play button fills with the raw cover colour (onPrimaryColor is picked for it); text and
+    // icons use a version lightened or darkened enough to read on the screen.
+    const accentFill = primaryColor || colors.primary;
+    const accentColor = readableOn(accentFill, dark ? colors.cardElevated : colors.background);
 
     // View toggles and sheets
     const [showQueue, setShowQueue] = useState(false);
@@ -346,8 +350,8 @@ export default function NowPlayingScreen() {
     // Responsive artwork sizing
     const artSize = useMemo(() => {
         const availableWidth = windowWidth - metrics.gutter * 2;
-        const maxArtHeight = windowHeight * 0.38;
-        return Math.min(availableWidth, maxArtHeight, 330);
+        const maxArtHeight = windowHeight * 0.42;
+        return Math.min(availableWidth, maxArtHeight);
     }, [windowWidth, windowHeight]);
 
     // Everything is clipped above a bottom edge that moves from the screen bottom (open) to the
@@ -516,6 +520,7 @@ export default function NowPlayingScreen() {
                                 icon="moon"
                                 onPress={() => setShowSleepTimer(true)}
                                 active={isSleepTimerActive}
+                                activeColor={accentColor}
                                 accessibilityLabel="Sleep timer"
                                 iconSize={20}
                             />
@@ -586,6 +591,7 @@ export default function NowPlayingScreen() {
                                 icon="shuffle"
                                 onPress={toggleShuffle}
                                 active={shuffle}
+                                activeColor={accentColor}
                                 accessibilityLabel="Shuffle"
                                 iconSize={20}
                             />
@@ -601,7 +607,7 @@ export default function NowPlayingScreen() {
                             {/* Play/Pause FAB with real spinner when buffering */}
                             <Touchable
                                 onPress={togglePlayPause}
-                                style={[styles.playFab, { backgroundColor: accentColor }]}
+                                style={[styles.playFab, { backgroundColor: accentFill }]}
                                 accessibilityRole="button"
                                 accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
                                 scaleTo={0.94}
@@ -632,11 +638,12 @@ export default function NowPlayingScreen() {
                                     icon="repeat"
                                     onPress={toggleRepeatMode}
                                     active={repeatMode !== 'off'}
+                                    activeColor={accentColor}
                                     accessibilityLabel={`Repeat mode: ${repeatMode}`}
                                     iconSize={20}
                                 />
                                 {repeatMode === 'one' && (
-                                    <View style={[styles.repeatBadge, { backgroundColor: accentColor, borderColor: colors.background }]}>
+                                    <View style={[styles.repeatBadge, { backgroundColor: accentFill, borderColor: colors.background }]}>
                                         <Text style={[styles.repeatBadgeText, { color: onPrimaryColor || colors.onPrimary }]}>1</Text>
                                     </View>
                                 )}
@@ -644,12 +651,12 @@ export default function NowPlayingScreen() {
                         </View>
 
                         {/* Bottom Row: Actions & Queue Trigger */}
-                        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, metrics.space.sm) }]}>
+                        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + metrics.space.lg }]}>
                             <IconButton
                                 icon="heart"
                                 onPress={handleToggleFavorite}
                                 active={isFavorite}
-                                color={isFavorite ? colors.primary : colors.textSecondary}
+                                activeColor={accentColor}
                                 accessibilityLabel="Toggle favorite"
                                 iconSize={20}
                             />
@@ -670,6 +677,7 @@ export default function NowPlayingScreen() {
                                 icon="file-text"
                                 onPress={() => setShowLyrics(!showLyrics)}
                                 active={showLyrics}
+                                activeColor={accentColor}
                                 accessibilityLabel="Toggle lyrics"
                                 iconSize={20}
                             />
@@ -869,7 +877,7 @@ const styles = StyleSheet.create({
         gap: 2,
     },
     infoArea: {
-        paddingVertical: metrics.space.xs,
+        paddingBottom: metrics.space.lg,
     },
     titleRow: {
         alignItems: 'center',
@@ -900,7 +908,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: metrics.space.sm,
+        paddingVertical: metrics.space.lg,
         paddingHorizontal: metrics.space.xs,
     },
     playFab: {
@@ -922,7 +930,7 @@ const styles = StyleSheet.create({
         width: 16,
         height: 16,
         borderRadius: 8,
-        // Ringed so it stays legible on the solid "on" circle when the accent is the same colour.
+        // Ringed so it stays legible over the repeat glyph, which is the same accent colour.
         borderWidth: 1.5,
         alignItems: 'center',
         justifyContent: 'center',
@@ -935,7 +943,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingTop: metrics.space.xs,
+        paddingTop: metrics.space.sm,
     },
     queueButton: {
         flexDirection: 'row',

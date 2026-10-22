@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, View, type LayoutChangeEvent, type ViewProps } from 'react-native';
 import Feather from '@react-native-vector-icons/feather';
 import Animated, {
@@ -106,6 +106,13 @@ export function QueueList({ items, currentIndex, accentColor, canReorder, onPlay
 
     const setAutoScroll = useCallback((on: boolean) => autoScroll.setActive(on), [autoScroll]);
 
+    // Open on the current song. Not initialScrollIndex: it skips rendering the rows above it,
+    // and a queue too short to scroll never fires the scroll that would fill them in.
+    const [startIndex] = useState(() => items.findIndex((item) => item.index === currentIndex));
+    useEffect(() => {
+        if (startIndex > 0) { listRef.current?.scrollToIndex({ index: startIndex, animated: false }); }
+    }, [listRef, startIndex]);
+
     const CellRendererComponent = useCallback(
         (props: CellProps) => <QueueCell {...props} drag={stableDrag} background={colors.cardElevated} />,
         [stableDrag, colors.cardElevated],
@@ -118,7 +125,6 @@ export function QueueList({ items, currentIndex, accentColor, canReorder, onPlay
                 data={items}
                 onScroll={onScroll}
                 keyExtractor={(item) => `${item.track.id}-${item.index}`}
-                initialScrollIndex={Math.max(0, items.findIndex((item) => item.index === currentIndex))}
                 getItemLayout={(_, index) => ({ length: ROW, offset: ROW * index, index })}
                 CellRendererComponent={CellRendererComponent}
                 renderItem={({ item, index }) => (
