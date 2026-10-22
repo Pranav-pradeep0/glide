@@ -5,8 +5,9 @@ import { FlashList } from '@shopify/flash-list';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { RootStackParamList, VideoHistoryEntry } from '@/types';
-import { Loader } from '@/components/Loader';
+import { SkeletonList } from '@/components/Skeleton';
 import { findMissingHistory, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { MediaService } from '@/services/MediaService';
 import { FileService } from '@/services/FileService';
@@ -15,6 +16,7 @@ import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { IconButton, Segmented, showDialog, SortButton } from '@/components/ui';
 import { RecentMusicList } from '@/components/RecentMusicList';
+import { Pager } from '@/components/Pager';
 import {
     AmbientBackdrop, ContinueCard, EmptyState, ListHeader, SectionTitle, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
     deleteVideo, getRelativeTime, joinMeta, listContentStyle, progressOf, shareVideo, timeLabel,
@@ -67,6 +69,9 @@ export default function RecentsScreen() {
     const relinkMoved = useVideoHistoryStore(s => s.relinkMoved);
 
     const [kind, setKind] = useState<RecentsKind>('videos');
+    // 0 on Videos, 1 on Music, in between mid-swipe.
+    const kindPosition = useSharedValue(0);
+    const backdropStyle = useAnimatedStyle(() => ({ opacity: 1 - kindPosition.value }));
     const [refreshing, setRefreshing] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('list');
     const [sortBy, setSortBy] = useState<SortByOption>('recent');
@@ -166,7 +171,12 @@ export default function RecentsScreen() {
     }, [grid, metaFor, handleVideoPress, handleOpenOptions]);
 
     if (!isHydrated) {
-        return <Loader fullScreen />;
+        return (
+            <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+                <ListHeader title="Recents" />
+                <SkeletonList kind={grid ? 'videoCard' : 'video'} />
+            </View>
+        );
     }
 
     const header = (
@@ -191,9 +201,41 @@ export default function RecentsScreen() {
         </View>
     );
 
+    const renderVideos = () => (history.length === 0 ? (
+        <EmptyState
+            text="Nothing watched yet"
+            action="Browse videos"
+            onAction={() => navigation.navigate('MainTabs', { screen: 'Folders' })}
+        />
+    ) : (
+        <FlashList
+            data={rest}
+            renderItem={renderItem}
+            keyExtractor={(item: VideoHistoryEntry) => item.videoPath}
+            numColumns={grid ? 2 : 1}
+            key={`${viewMode}-${sortBy}`}
+            extraData={sortBy}
+            ListHeaderComponent={header}
+            contentContainerStyle={listContentStyle(grid)}
+            refreshControl={
+                <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    tintColor={theme.colors.primary}
+                    colors={[theme.colors.primary]}
+                    progressBackgroundColor={theme.colors.cardElevated}
+                />
+            }
+            showsVerticalScrollIndicator={false}
+        />
+    ));
+    const renderMusic = () => <RecentMusicList />;
+
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {kind === 'videos' && <AmbientBackdrop path={hero?.videoPath} thumbnailTime={hero?.stopFrameMs} />}
+            <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]} pointerEvents="none">
+                <AmbientBackdrop path={hero?.videoPath} thumbnailTime={hero?.stopFrameMs} />
+            </Animated.View>
             <View style={{ paddingTop: insets.top }}>
                 <ListHeader title="Recents">
                     {kind === 'videos' && (
@@ -213,38 +255,15 @@ export default function RecentsScreen() {
                         </>
                     )}
                 </ListHeader>
-                <Segmented options={KINDS} value={kind} onChange={setKind} style={styles.kindRow} />
+                <Segmented options={KINDS} value={kind} onChange={setKind} position={kindPosition} style={styles.kindRow} />
             </View>
 
-            {kind === 'music' ? (
-                <RecentMusicList />
-            ) : history.length === 0 ? (
-                <EmptyState
-                    text="Nothing watched yet"
-                    action="Browse videos"
-                    onAction={() => navigation.navigate('MainTabs', { screen: 'Folders' })}
-                />
-            ) : (
-                <FlashList
-                    data={rest}
-                    renderItem={renderItem}
-                    keyExtractor={(item: VideoHistoryEntry) => item.videoPath}
-                    numColumns={grid ? 2 : 1}
-                    key={`${viewMode}-${sortBy}`}
-                    extraData={sortBy}
-                    ListHeaderComponent={header}
-                    contentContainerStyle={listContentStyle(grid)}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={handleRefresh}
-                            tintColor={theme.colors.primary}
-                            colors={[theme.colors.primary]}
-                        />
-                    }
-                    showsVerticalScrollIndicator={false}
-                />
-            )}
+            <Pager
+                index={KINDS.findIndex(k => k.key === kind)}
+                onIndexChange={i => setKind(KINDS[i].key)}
+                position={kindPosition}
+                pages={[renderVideos, renderMusic]}
+            />
 
             <VideoOptionsBottomSheet
                 visible={optionsVisible}

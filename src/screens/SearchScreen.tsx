@@ -201,6 +201,7 @@ export default function SearchScreen() {
                             onRefresh={handleRefresh}
                             tintColor={theme.colors.primary}
                             colors={[theme.colors.primary]}
+                            progressBackgroundColor={theme.colors.cardElevated}
                         />
                     }
                     showsVerticalScrollIndicator={false}

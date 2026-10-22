@@ -7,11 +7,11 @@ import { useTheme } from '../hooks/useTheme';
 import { Feather } from '@react-native-vector-icons/feather';
 import { DeepLinkService } from '../services/DeepLinkService';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, { Easing, interpolateColor, SharedValue, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Button, DialogHost, Touchable, SnackbarHost, useSnackbarClearance } from '@/components/ui';
 import { ErrorBoundary } from '../../ErrorBoundary';
 import { SystemBars } from 'react-native-edge-to-edge';
-import { metrics, type } from '@/theme/theme';
+import { metrics, motion, type } from '@/theme/theme';
 import { useActivityBackButton } from './useActivityBackButton';
 
 // The four tabs are what the first frame needs, so they are imported.
@@ -69,6 +69,10 @@ function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
     const { colors } = useTheme();
     const tabBarHeight = TAB_HEIGHT + insets.bottom;
     const onBarLayout = useSnackbarClearance();
+    // Set on the tap itself, so the indicator moves on the UI thread while JS is still busy
+    // rendering the tab it opens; navigation then confirms it.
+    const selected = useSharedValue(state.index);
+    useEffect(() => { selected.value = state.index; }, [state.index, selected]);
     // Slides down out of the way as Now Playing opens and back up as it collapses, its top edge
     // tracking the player's bottom edge, so the player never covers the tabs.
     const slideStyle = useAnimatedStyle(() => ({
@@ -93,32 +97,23 @@ function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const focused = state.index === index;
-                    const label = options.title ?? route.name;
                     const onPress = () => {
                         const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
                         if (!focused && !event.defaultPrevented) {
+                            selected.value = index;
                             navigation.navigate(route.name, route.params);
                         }
                     };
                     return (
-                        <Touchable
+                        <TabItem
                             key={route.key}
+                            label={options.title ?? route.name}
+                            icon={options.tabBarIcon}
+                            focused={focused}
+                            index={index}
+                            selected={selected}
                             onPress={onPress}
-                            scaleTo={1}
-                            accessibilityRole="tab"
-                            accessibilityLabel={label}
-                            accessibilityState={{ selected: focused }}
-                            style={styles.tab}
-                        >
-                            <View style={styles.pill}>
-                                {/* Mounted fresh with its colour: Fabric drops borderRadius when a background is added to an existing view. */}
-                                {focused && <View style={[styles.pillFill, { backgroundColor: colors.primaryContainer }]} />}
-                                {options.tabBarIcon?.({ focused, color: focused ? colors.primary : colors.textSecondary, size: 24 })}
-                            </View>
-                            <Text style={[type.caption, styles.label, { color: focused ? colors.text : colors.textSecondary }]}>
-                                {label}
-                            </Text>
-                        </Touchable>
+                        />
                     );
                 })}
             </Animated.View>
@@ -126,11 +121,82 @@ function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
     );
 }
 
+const PILL = { width: 56, height: 32 };
+
+interface TabItemProps {
+    label: string;
+    icon: BottomTabBarProps['descriptors'][string]['options']['tabBarIcon'];
+    focused: boolean;
+    index: number;
+    selected: SharedValue<number>;
+    onPress: () => void;
+}
+
+// M3: the indicator grows with emphasized-decelerate easing; the old one just fades.
+const GROW = { duration: 200, easing: Easing.bezier(0.05, 0.7, 0.1, 1) };
+const SHRINK = { duration: 100 };
+
+/**
+ * M3 navigation bar item: the active indicator grows out from the icon's centre and the
+ * label colour follows it; the icon swaps to its selected colouring at once.
+ */
+function TabItem({ label, icon, focused, index, selected, onPress }: TabItemProps) {
+    const { colors } = useTheme();
+    const active = useSharedValue(focused ? 1 : 0);
+    useAnimatedReaction(
+        () => selected.value === index,
+        (on, was) => {
+            if (on !== was) { active.value = withTiming(on ? 1 : 0, on ? GROW : SHRINK); }
+        },
+    );
+
+    // Width, not scaleX, so the ends stay round as it grows.
+    const pillStyle = useAnimatedStyle(() => {
+        const width = PILL.width * active.value;
+        return { width, left: (PILL.width - width) / 2, opacity: Math.min(1, active.value * 3) };
+    });
+    const labelStyle = useAnimatedStyle(() => ({
+        color: interpolateColor(active.value, [0, 1], [colors.textSecondary, colors.text]),
+    }));
+
+    return (
+        <Touchable
+            onPress={onPress}
+            scaleTo={1}
+            accessibilityRole="tab"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: focused }}
+            style={styles.tab}
+        >
+            <View style={styles.pill}>
+                {/* Always mounted with its colour: Fabric drops borderRadius when a background is added to an existing view. */}
+                <Animated.View style={[styles.pillFill, { backgroundColor: colors.primaryContainer }, pillStyle]} />
+                {/* The glyph takes a plain colour, so both colourings are mounted and one shows. */}
+                <TabIcon selected={selected} index={index} showWhenSelected={false}>
+                    {icon?.({ focused: false, color: colors.textSecondary, size: 24 })}
+                </TabIcon>
+                <TabIcon selected={selected} index={index} showWhenSelected>
+                    {icon?.({ focused: true, color: colors.primary, size: 24 })}
+                </TabIcon>
+            </View>
+            <Animated.Text style={[type.caption, styles.label, labelStyle]}>{label}</Animated.Text>
+        </Touchable>
+    );
+}
+
+function TabIcon({ selected, index, showWhenSelected, children }: {
+    selected: SharedValue<number>; index: number; showWhenSelected: boolean; children: React.ReactNode;
+}) {
+    const style = useAnimatedStyle(() => ({ opacity: (selected.value === index) === showWhenSelected ? 1 : 0 }));
+    return <Animated.View style={[styles.tabIcon, style]}>{children}</Animated.View>;
+}
+
 function MainTabs() {
     return (
         <Tab.Navigator
             tabBar={renderTabBar}
-            screenOptions={{ headerShown: false, lazy: true, freezeOnBlur: true }}
+            // Fade, M3's fade-through for top-level destinations; the bar and mini player sit outside the scenes.
+            screenOptions={{ headerShown: false, lazy: true, freezeOnBlur: true, animation: 'fade' }}
         >
             <Tab.Screen
                 name="Folders"
@@ -374,8 +440,9 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
 const styles = StyleSheet.create({
     tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
     tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: metrics.space.xs },
-    pill: { width: 56, height: 32, alignItems: 'center', justifyContent: 'center' },
-    pillFill: { ...StyleSheet.absoluteFill, borderRadius: 16 },
+    pill: { ...PILL, alignItems: 'center', justifyContent: 'center' },
+    pillFill: { position: 'absolute', top: 0, bottom: 0, borderRadius: PILL.height / 2 },
+    tabIcon: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
     label: { fontWeight: '500' },
     playerCrash: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: metrics.space.xl, gap: metrics.space.md },
     playerCrashDetail: { textAlign: 'center' },

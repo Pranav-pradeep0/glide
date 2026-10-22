@@ -2,7 +2,7 @@
  * Glide's building blocks. Every screen and the player use these, so press feedback,
  * motion and shape are the same everywhere.
  *
- *  - Touchable: the one pressable. Springs to 0.97 and lays a state layer on press.
+ *  - Touchable: the one pressable. Springs to 0.97 on press; rows ripple instead.
  *  - IconButton, Button, Chip: actions. The accent (`primary`) marks one main action per surface.
  *  - ListGroup + ListRow + Switch: Android 16 style grouped rows (settings, panels).
  *  - Sheet: bottom sheet with drag-to-dismiss. SortButton opens one.
@@ -28,7 +28,10 @@ import {
 } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import Animated, {
+    AnimatedStyle,
     FadeIn,
+    SharedValue,
+    interpolateColor,
     makeMutable,
     runOnJS,
     useAnimatedStyle,
@@ -57,11 +60,11 @@ export function useUiTheme(onPlayer?: boolean): Theme {
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export interface TouchableProps extends Omit<PressableProps, 'style' | 'children'> {
-    style?: StyleProp<ViewStyle>;
+    style?: StyleProp<AnimatedStyle<ViewStyle>>;
     children?: React.ReactNode;
-    /** Scale while pressed; 1 turns it off (full-width rows use the state layer only). */
+    /** Scale while pressed; 1 turns it off (full-width rows use the ripple only). */
     scaleTo?: number;
-    /** Tint laid over the content while pressed. */
+    /** Android ripple over the content, clipped to the touchable's shape. For rows. */
     stateLayer?: boolean;
     onPlayer?: boolean;
 }
@@ -77,11 +80,13 @@ export function Touchable({
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: 1 - (1 - scaleTo) * pressed.value }],
     }));
-    const layerStyle = useAnimatedStyle(() => ({ opacity: pressed.value }));
 
     return (
         <AnimatedPressable
             {...rest}
+            // Foreground, so it draws over the row's own fill and art. Its mask is a rectangle;
+            // overflow hidden clips it (and the content) to the borderRadius.
+            android_ripple={stateLayer ? { color: colors.pressed, foreground: true } : undefined}
             accessibilityRole={accessibilityRole}
             disabled={disabled}
             onPressIn={e => {
@@ -96,15 +101,9 @@ export function Touchable({
                 haptic('longPress');
                 onLongPress(e);
             })}
-            style={[style, animatedStyle, disabled && styles.disabled]}
+            style={[style, stateLayer && styles.clip, animatedStyle, disabled && styles.disabled]}
         >
             {children}
-            {stateLayer && (
-                <Animated.View
-                    pointerEvents="none"
-                    style={[StyleSheet.absoluteFill, styles.layer, { backgroundColor: colors.pressed }, layerStyle]}
-                />
-            )}
         </AnimatedPressable>
     );
 }
@@ -123,8 +122,10 @@ interface IconButtonProps {
     /** Circle colour; overrides `variant`. Put backgrounds here, not in `style` (that's the 48 dp box). */
     fill?: string;
     disabled?: boolean;
-    /** On (a toggle that is switched on): inverted glyph on a solid accent circle, like a selected Chip. */
+    /** A toggle: on is the glyph in `activeColor` with a dot under it, off is a dimmed glyph. */
     active?: boolean;
+    /** Glyph and dot colour while on; the theme accent by default. */
+    activeColor?: string;
     onPlayer?: boolean;
     style?: StyleProp<ViewStyle>;
 }
@@ -135,9 +136,10 @@ interface IconButtonProps {
  */
 export function IconButton({
     icon, onPress, accessibilityLabel, variant = 'plain', iconSize = 22, color,
-    fill, disabled, active, onPlayer, style,
+    fill, disabled, active, activeColor, onPlayer, style,
 }: IconButtonProps) {
     const { colors } = useUiTheme(onPlayer);
+    const on = activeColor ?? colors.primary;
     return (
         <Touchable
             onPress={onPress}
@@ -150,10 +152,15 @@ export function IconButton({
         >
             <View style={[
                 styles.iconButton,
-                { backgroundColor: active ? colors.primary : fill ?? (variant === 'filled' ? colors.fill : undefined) },
+                { backgroundColor: fill ?? (variant === 'filled' ? colors.fill : undefined) },
             ]}>
-                <Feather name={icon} size={iconSize} color={active ? colors.onPrimary : color ?? colors.text} />
+                <Feather
+                    name={icon}
+                    size={iconSize}
+                    color={active ? on : color ?? (active === false ? colors.textSecondary : colors.text)}
+                />
             </View>
+            {active && <View style={[styles.iconButtonDot, { backgroundColor: on }]} />}
         </Touchable>
     );
 }
@@ -173,13 +180,15 @@ interface ButtonProps {
     size?: 'md' | 'lg';
     /** Stretch to the parent's width. */
     block?: boolean;
+    /** Small pill after the label, e.g. "Experimental". */
+    badge?: string;
     onPlayer?: boolean;
     accessibilityLabel?: string;
     style?: StyleProp<ViewStyle>;
 }
 
 export function Button({
-    label, onPress, variant = 'secondary', icon, loading, disabled, size = 'md', block,
+    label, onPress, variant = 'secondary', icon, loading, disabled, size = 'md', block, badge,
     onPlayer, accessibilityLabel, style,
 }: ButtonProps) {
     const { colors } = useUiTheme(onPlayer);
@@ -196,7 +205,7 @@ export function Button({
             onPlayer={onPlayer}
             hitSlop={size === 'md' ? 4 : 0}
             accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel ?? label}
+            accessibilityLabel={accessibilityLabel ?? withBadge(label, badge)}
             accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
             style={[
                 styles.button,
@@ -210,9 +219,25 @@ export function Button({
                 ? <ActivityIndicator size="small" color={fg} />
                 : icon && <Feather name={icon} size={17} color={fg} />}
             <Text maxFontSizeMultiplier={onPlayer ? metrics.playerFontScale : undefined} style={[type.label, { color: fg }]} numberOfLines={1}>{label}</Text>
+            {!!badge && <Badge label={badge} onPlayer={onPlayer} />}
         </Touchable>
     );
 }
+
+// ---------------------------------------------------------------------------
+// Badge
+
+/** A small muted pill beside a label, e.g. "Experimental". Not announced by itself: pass it to `withBadge`. */
+function Badge({ label, onPlayer }: { label: string; onPlayer?: boolean }) {
+    const { colors } = useUiTheme(onPlayer);
+    return (
+        <View style={[styles.badge, { backgroundColor: colors.primaryContainer }]} importantForAccessibility="no-hide-descendants">
+            <Text maxFontSizeMultiplier={metrics.playerFontScale} style={[styles.badgeText, { color: colors.textSecondary }]}>{label.toUpperCase()}</Text>
+        </View>
+    );
+}
+
+const withBadge = (label: string, badge?: string) => (badge ? `${label}, ${badge}` : label);
 
 // ---------------------------------------------------------------------------
 // Chip
@@ -227,10 +252,19 @@ interface ChipProps {
     style?: StyleProp<ViewStyle>;
 }
 
-/** One option in a set. Selected is the accent pill; the rest are translucent. */
+/** One option in a set. Selected is the accent pill; the rest are translucent. The fill crossfades between them. */
 export function Chip({ label, selected, onPress, icon, onPlayer, accessibilityLabel, style }: ChipProps) {
     const { colors } = useUiTheme(onPlayer);
-    const fg = selected ? colors.onPrimary : colors.text;
+    const on = useSharedValue(selected ? 1 : 0);
+    useEffect(() => {
+        on.value = withTiming(selected ? 1 : 0, { duration: motion.fadeIn });
+    }, [selected, on]);
+    const fillStyle = useAnimatedStyle(() => ({
+        backgroundColor: interpolateColor(on.value, [0, 1], [colors.fill, colors.primary]),
+    }));
+    const textStyle = useAnimatedStyle(() => ({
+        color: interpolateColor(on.value, [0, 1], [colors.text, colors.onPrimary]),
+    }));
     return (
         <Touchable
             onPress={onPress}
@@ -240,10 +274,10 @@ export function Chip({ label, selected, onPress, icon, onPlayer, accessibilityLa
             accessibilityRole="button"
             accessibilityLabel={accessibilityLabel ?? label}
             accessibilityState={{ selected: !!selected }}
-            style={[styles.chip, { backgroundColor: selected ? colors.primary : colors.fill }, style]}
+            style={[styles.chip, fillStyle, style]}
         >
-            {icon && <Feather name={icon} size={14} color={fg} />}
-            <Text style={[type.label, styles.chipText, { color: fg }]} numberOfLines={1}>{label}</Text>
+            {icon && <Feather name={icon} size={14} color={selected ? colors.onPrimary : colors.text} />}
+            <Animated.Text style={[type.label, styles.chipText, textStyle]} numberOfLines={1}>{label}</Animated.Text>
         </Touchable>
     );
 }
@@ -255,35 +289,62 @@ interface SegmentedProps<K extends string> {
     options: { key: K; label: string }[];
     value: K;
     onChange: (key: K) => void;
+    /** Fractional selected index driven from outside, e.g. a Pager's swipe; the indicator follows it. */
+    position?: SharedValue<number>;
     onPlayer?: boolean;
     style?: StyleProp<ViewStyle>;
 }
 
-/** Tabs within one surface. The chosen segment is solid accent, like a selected Chip. */
-export function Segmented<K extends string>({ options, value, onChange, onPlayer, style }: SegmentedProps<K>) {
+const SEGMENTED = { inset: 3, gap: 2 };
+
+/** Tabs within one surface. The chosen segment is a solid accent pill that slides between them. */
+export function Segmented<K extends string>({ options, value, onChange, position, onPlayer, style }: SegmentedProps<K>) {
     const { colors } = useUiTheme(onPlayer);
+    const index = options.findIndex(o => o.key === value);
+    const sprung = useSharedValue(index);
+    useEffect(() => {
+        sprung.value = withSpring(index, motion.spatial);
+    }, [index, sprung]);
+    const at = position ?? sprung;
+
+    const [width, setWidth] = useState(0);
+    const segment = (width - SEGMENTED.inset * 2 - SEGMENTED.gap * (options.length - 1)) / options.length;
+    const indicatorStyle = useAnimatedStyle(() => ({
+        width: segment,
+        transform: [{ translateX: at.value * (segment + SEGMENTED.gap) }],
+    }));
+
     return (
-        <View style={[styles.segmented, { backgroundColor: colors.fill }, style]} accessibilityRole="tablist">
-            {options.map((o) => {
-                const selected = o.key === value;
-                return (
-                    <Touchable
-                        key={o.key}
-                        onPress={() => onChange(o.key)}
-                        scaleTo={1}
-                        onPlayer={onPlayer}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected }}
-                        style={[styles.segment, selected && { backgroundColor: colors.primary }]}
-                    >
-                        <Text style={[type.label, { color: selected ? colors.onPrimary : colors.textSecondary }]} numberOfLines={1}>
-                            {o.label}
-                        </Text>
-                    </Touchable>
-                );
-            })}
+        <View
+            style={[styles.segmented, { backgroundColor: colors.fill }, style]}
+            onLayout={e => setWidth(e.nativeEvent.layout.width)}
+            accessibilityRole="tablist"
+        >
+            {/* Mounted once the width is known, with its colour: Fabric drops borderRadius when a background is added to an existing view. */}
+            {width > 0 && <Animated.View style={[styles.segmentIndicator, { backgroundColor: colors.primary }, indicatorStyle]} />}
+            {options.map((o, i) => (
+                <Touchable
+                    key={o.key}
+                    onPress={() => onChange(o.key)}
+                    scaleTo={1}
+                    onPlayer={onPlayer}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: i === index }}
+                    style={styles.segment}
+                >
+                    <SegmentLabel label={o.label} index={i} at={at} on={colors.onPrimary} off={colors.textSecondary} />
+                </Touchable>
+            ))}
         </View>
     );
+}
+
+/** Takes the accent's text colour as the indicator passes under it. */
+function SegmentLabel({ label, index, at, on, off }: { label: string; index: number; at: SharedValue<number>; on: string; off: string }) {
+    const style = useAnimatedStyle(() => ({
+        color: interpolateColor(Math.max(0, 1 - Math.abs(at.value - index)), [0, 1], [off, on]),
+    }));
+    return <Animated.Text style={[type.label, style]} numberOfLines={1}>{label}</Animated.Text>;
 }
 
 // ---------------------------------------------------------------------------
@@ -395,10 +456,12 @@ interface ListRowProps {
     /** Anything else on the right. */
     trailing?: React.ReactNode;
     disabled?: boolean;
+    /** Small pill after the title, e.g. "Experimental". */
+    badge?: string;
 }
 
 export function ListRow({
-    title, caption, icon, value, chevron, toggle, selected, destructive, onPress, onPlayer, trailing, disabled,
+    title, caption, icon, value, chevron, toggle, selected, destructive, onPress, onPlayer, trailing, disabled, badge,
 }: ListRowProps) {
     const { colors } = useUiTheme(onPlayer);
     const fg = destructive ? colors.error : colors.text;
@@ -416,13 +479,16 @@ export function ListRow({
                 </View>
             )}
             <View style={styles.rowText}>
-                <Text style={[type.row, styles.rowTitle, { color: fg }]} numberOfLines={2}>{title}</Text>
+                <View style={styles.rowTitleLine}>
+                    <Text style={[type.row, styles.rowTitle, { color: fg }]} numberOfLines={2}>{title}</Text>
+                    {!!badge && <Badge label={badge} onPlayer={onPlayer} />}
+                </View>
                 {!!caption && <Text style={[type.caption, { color: colors.textSecondary }]}>{caption}</Text>}
             </View>
             {!!value && <Text style={[type.body, styles.rowValue, { color: colors.textSecondary }]} numberOfLines={1}>{value}</Text>}
             {trailing}
             {toggle && (
-                <Switch value={toggle.value} onValueChange={toggle.onChange} onPlayer={onPlayer} disabled={disabled} accessibilityLabel={title} />
+                <Switch value={toggle.value} onValueChange={toggle.onChange} onPlayer={onPlayer} disabled={disabled} accessibilityLabel={withBadge(title, badge)} />
             )}
             {selected && <Feather name="check" size={20} color={colors.primary} />}
             {chevron && <Feather name="chevron-right" size={18} color={colors.textTertiary} />}
@@ -439,7 +505,7 @@ export function ListRow({
             stateLayer
             onPlayer={onPlayer}
             accessibilityRole={toggle ? 'switch' : 'button'}
-            accessibilityLabel={title}
+            accessibilityLabel={withBadge(title, badge)}
             accessibilityHint={caption}
             accessibilityState={toggle ? { checked: toggle.value } : { selected: !!selected }}
             style={styles.row}
@@ -567,6 +633,9 @@ interface SheetProps {
     maxHeight?: number;
 }
 
+/** Sheets and player panels leave quicker than they arrive. */
+export const SHEET_EXIT_MS = 200;
+
 /**
  * Bottom sheet: scrim fade, spring up, drag the handle or header down to dismiss.
  * Stays mounted while animating out. 640 dp max width, centred on tablets and landscape.
@@ -579,32 +648,47 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
     const [mounted, setMounted] = useState(visible);
     const offset = useSharedValue(windowHeight);
     const sheetHeight = useSharedValue(windowHeight);
+    // Each open waits for the sheet's own height, so the spring starts at its edge and the
+    // scrim with it, not a window's height below.
+    const measured = useRef(false);
+    const windowHeightRef = useRef(windowHeight);
+    windowHeightRef.current = windowHeight;
 
-    const unmount = useCallback(() => setMounted(false), []);
+    const unmount = useCallback(() => {
+        measured.current = false;
+        offset.value = windowHeightRef.current;
+        setMounted(false);
+    }, [offset]);
 
     useEffect(() => {
         if (visible) {
             setMounted(true);
-            offset.value = withSpring(0, motion.spatial);
-        } else if (mounted) {
-            offset.value = withTiming(sheetHeight.value, { duration: motion.fadeOut }, done => {
+            // Reopened while closing: still laid out, so no onLayout will start it.
+            if (measured.current) { offset.value = withSpring(0, motion.spatial); }
+        } else {
+            offset.value = withTiming(sheetHeight.value, { duration: SHEET_EXIT_MS }, done => {
                 if (done) { runOnJS(unmount)(); }
             });
         }
-    }, [visible, mounted, offset, sheetHeight, unmount]);
+    }, [visible, offset, sheetHeight, unmount]);
 
-    const drag = Gesture.Pan()
-        .activeOffsetY(8)
-        .onUpdate(e => {
-            offset.value = Math.max(0, e.translationY);
-        })
-        .onEnd(e => {
-            if (e.translationY > sheetHeight.value * 0.3 || e.velocityY > 900) {
-                runOnJS(onClose)();
-            } else {
-                offset.value = withSpring(0, motion.spatial);
-            }
-        });
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+    const drag = React.useMemo(() => {
+        const close = () => onCloseRef.current();
+        return Gesture.Pan()
+            .activeOffsetY(8)
+            .onUpdate(e => {
+                offset.value = Math.max(0, e.translationY);
+            })
+            .onEnd(e => {
+                if (e.translationY > sheetHeight.value * 0.3 || e.velocityY > 900) {
+                    runOnJS(close)();
+                } else {
+                    offset.value = withSpring(0, motion.spatial);
+                }
+            });
+    }, [offset, sheetHeight]);
 
     const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: offset.value }] }));
     const scrimStyle = useAnimatedStyle(() => ({
@@ -620,7 +704,15 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
                     <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
                 </Animated.View>
                 <Animated.View
-                    onLayout={e => { sheetHeight.value = e.nativeEvent.layout.height; }}
+                    onLayout={e => {
+                        const height = e.nativeEvent.layout.height;
+                        sheetHeight.value = height;
+                        if (visible && !measured.current) {
+                            measured.current = true;
+                            offset.value = height;
+                            offset.value = withSpring(0, motion.spatial);
+                        }
+                    }}
                     accessibilityViewIsModal
                     style={[
                         styles.sheet,
@@ -929,7 +1021,7 @@ const styles = StyleSheet.create({
     },
     dialogActions: { flexDirection: 'row', gap: metrics.space.sm },
     disabled: { opacity: 0.38 },
-    layer: { borderRadius: 4 },
+    clip: { overflow: 'hidden' },
     block: { alignSelf: 'stretch' },
 
     iconButtonTarget: {
@@ -938,6 +1030,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    iconButtonDot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2 },
     iconButton: {
         width: 40,
         height: 40,
@@ -964,7 +1057,14 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     chipText: { fontVariant: ['tabular-nums'] },
-    segmented: { flexDirection: 'row', padding: 3, borderRadius: metrics.radius.pill, gap: 2 },
+    segmented: { flexDirection: 'row', padding: SEGMENTED.inset, borderRadius: metrics.radius.pill, gap: SEGMENTED.gap },
+    segmentIndicator: {
+        position: 'absolute',
+        top: SEGMENTED.inset,
+        bottom: SEGMENTED.inset,
+        left: SEGMENTED.inset,
+        borderRadius: metrics.radius.pill,
+    },
     segment: {
         flex: 1,
         minHeight: 36,
@@ -992,7 +1092,10 @@ const styles = StyleSheet.create({
         gap: metrics.space.lg,
     },
     rowText: { flex: 1, gap: 2 },
-    rowTitle: { fontWeight: '400' },
+    rowTitle: { fontWeight: '400', flexShrink: 1 },
+    rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm },
+    badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: metrics.radius.pill },
+    badgeText: { fontSize: 10, lineHeight: 14, fontWeight: '600', letterSpacing: 0.5 },
     /** Long values ("English - EAC3 6ch") truncate instead of squeezing the title. */
     rowValue: { maxWidth: '50%', textAlign: 'right' },
 

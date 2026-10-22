@@ -20,7 +20,7 @@ export function Loader({ size = 'medium', text, fullScreen = true }: LoaderProps
             accessibilityRole="progressbar"
             accessibilityLabel={text ?? 'Loading'}
         >
-            <ActivityIndicator size="small" color={colors.primary} />
+            <ActivityIndicator size={size === 'large' ? 'large' : 'small'} color={colors.primary} />
             {text && (
                 <Text style={[size === 'large' ? type.body : type.caption, styles.text, { color: colors.textSecondary }]}>
                     {text}

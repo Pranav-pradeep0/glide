@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
-import { Loader } from '@/components/Loader';
+import { SkeletonList } from '@/components/Skeleton';
 import { IconButton, SortButton, Touchable } from '@/components/ui';
 import { EmptyState, ListHeader, getRelativeTime, joinMeta } from '@/components/VideoRow';
 import { RootStackParamList, VideoFolder } from '@/types';
@@ -145,7 +145,12 @@ export default function FoldersScreen() {
     ), [grid, handleAlbumPress]);
 
     if (videoAccess === 'unknown' || (loading && albums.length === 0 && videoAccess !== 'denied')) {
-        return <Loader />;
+        return (
+            <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+                <ListHeader title="Videos" />
+                <SkeletonList kind={grid ? 'folderCard' : 'folder'} />
+            </View>
+        );
     }
 
     const isEmpty = sortedAlbums.length === 0;

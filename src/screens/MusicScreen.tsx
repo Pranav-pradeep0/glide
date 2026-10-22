@@ -4,6 +4,7 @@ import {
     Image,
     RefreshControl,
     ScrollView,
+    ScrollViewInstance,
     StyleSheet,
     Text,
     TextInput,
@@ -27,10 +28,19 @@ import { TrackOptionsSheet } from '@/components/TrackOptionsSheet';
 import { TrackRow } from '@/components/TrackRow';
 import { metrics, type } from '@/theme/theme';
 import { AudioAlbum, AudioArtist, AudioFolder, AudioTrack, RootStackParamList } from '@/types';
-import { Loader } from '@/components/Loader';
+import { SkeletonList } from '@/components/Skeleton';
+import { Pager } from '@/components/Pager';
 import { letterJumpIndex } from '@/utils/alphabetIndex';
 
 type LibraryTab = 'tracks' | 'albums' | 'artists' | 'folders' | 'favorites';
+/** In page order. */
+const TABS: { key: LibraryTab; label: string }[] = [
+    { key: 'tracks', label: 'Tracks' },
+    { key: 'albums', label: 'Albums' },
+    { key: 'artists', label: 'Artists' },
+    { key: 'folders', label: 'Folders' },
+    { key: 'favorites', label: 'Favorites' },
+];
 type TrackSortBy = 'title' | 'artist' | 'dateAdded' | 'duration';
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -61,6 +71,17 @@ function sortTracks(list: AudioTrack[], sortBy: TrackSortBy): AudioTrack[] {
         sorted.sort((a, b) => b.duration - a.duration);
     }
     return sorted;
+}
+
+function filterTracks(list: AudioTrack[], query: string): AudioTrack[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+        (t) =>
+            t.title.toLowerCase().includes(q) ||
+            t.artist.toLowerCase().includes(q) ||
+            t.album.toLowerCase().includes(q)
+    );
 }
 
 // Album card thumbnail with lazy artwork hook
@@ -122,6 +143,17 @@ export default function MusicScreen() {
     const favoriteIds = useFavoritesStore((s) => s.favoriteIds);
 
     const flashListRef = useRef<any>(null);
+    const chipsRef = useRef<ScrollViewInstance>(null);
+    const chipsWidth = useRef(0);
+    const chipFrames = useRef<{ x: number; width: number }[]>([]);
+
+    // Keeps the active chip in view (centred where the row allows) as a swipe changes it.
+    useEffect(() => {
+        const frame = chipFrames.current[TABS.findIndex((t) => t.key === activeTab)];
+        if (frame) {
+            chipsRef.current?.scrollTo({ x: Math.max(0, frame.x + frame.width / 2 - chipsWidth.current / 2), animated: true });
+        }
+    }, [activeTab]);
 
     const loadData = useCallback(async (forceRefresh = false) => {
         setLoading(true);
@@ -172,27 +204,16 @@ export default function MusicScreen() {
         [sortedTracks, selectedFolder]
     );
 
-    // Fast linear filter without expensive re-sorting on every keystroke
-    const displayedTracks = useMemo(() => {
-        let baseList = sortedTracks;
-        if (activeTab === 'favorites') {
-            baseList = sortedTracks.filter((t) => favoriteSet.has(t.id));
-        } else if (activeTab === 'folders' && selectedFolder) {
-            baseList = sortedFolderTracks;
-        }
-
-        const q = searchQuery.trim().toLowerCase();
-        if (!q) {
-            return baseList;
-        }
-
-        return baseList.filter(
-            (t) =>
-                t.title.toLowerCase().includes(q) ||
-                t.artist.toLowerCase().includes(q) ||
-                t.album.toLowerCase().includes(q)
-        );
-    }, [sortedTracks, sortedFolderTracks, favoriteSet, activeTab, selectedFolder, searchQuery]);
+    // Fast linear filters without expensive re-sorting on every keystroke. Each page has its
+    // own list: a swipe shows the next page's songs before it becomes the active tab.
+    const shownTracks = useMemo(() => filterTracks(sortedTracks, searchQuery), [sortedTracks, searchQuery]);
+    const shownFavorites = useMemo(
+        () => filterTracks(sortedTracks.filter((t) => favoriteSet.has(t.id)), searchQuery),
+        [sortedTracks, favoriteSet, searchQuery]
+    );
+    const shownFolderTracks = useMemo(() => filterTracks(sortedFolderTracks, searchQuery), [sortedFolderTracks, searchQuery]);
+    // The songs a tap plays through: the open folder's, or the active page's.
+    const displayedTracks = selectedFolder ? shownFolderTracks : activeTab === 'favorites' ? shownFavorites : shownTracks;
 
     // Filter albums
     const displayedAlbums = useMemo(() => {
@@ -217,8 +238,7 @@ export default function MusicScreen() {
 
     // Play all / Shuffle handler
     const handlePlayAll = useCallback(
-        async (shuffleMode = false) => {
-            const list = displayedTracks;
+        async (list: AudioTrack[], shuffleMode = false) => {
             if (list.length === 0) return;
             const source =
                 activeTab === 'favorites'
@@ -236,7 +256,7 @@ export default function MusicScreen() {
                 await playQueue(list, 0, source);
             }
         },
-        [displayedTracks, playQueue, activeTab, selectedFolder]
+        [playQueue, activeTab, selectedFolder]
     );
 
     // Track click: tap playing song opens Now Playing instead of restarting
@@ -262,12 +282,12 @@ export default function MusicScreen() {
     const handleLetterPress = useCallback(
         (letter: string) => {
             if (!letterKey) return;
-            const targetIndex = letterJumpIndex(displayedTracks, letter, letterKey);
+            const targetIndex = letterJumpIndex(shownTracks, letter, letterKey);
             if (targetIndex >= 0) {
                 flashListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
             }
         },
-        [displayedTracks, letterKey]
+        [shownTracks, letterKey]
     );
 
     // Track row renderer
@@ -407,6 +427,128 @@ export default function MusicScreen() {
             <EmptyState icon={icon} text={`No ${things} found`} action="Refresh" onAction={() => loadData(true)} />
         );
 
+    const counts: Record<LibraryTab, number> = {
+        tracks: tracks.length,
+        albums: albums.length,
+        artists: artists.length,
+        folders: folders.length,
+        favorites: favoriteIds.length,
+    };
+
+    // The spinner's own disc is white by default, which hides a white dark-theme spinner.
+    const refreshControl = (
+        <RefreshControl
+            refreshing={loading}
+            onRefresh={() => loadData(true)}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.cardElevated}
+        />
+    );
+    const listContent = { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl * 2 };
+
+    // Songs with Play All / Shuffle / Sort above them: all songs, favourites, or the open folder's.
+    const renderTrackPage = (list: AudioTrack[], page: 'tracks' | 'favorites' | 'folder') => {
+        if (list.length === 0) {
+            return page === 'favorites' && !search
+                ? <EmptyState icon="heart" text="No favorite songs yet" />
+                : renderEmpty('music', 'songs');
+        }
+        return (
+            <>
+                <View style={styles.actionBar}>
+                    <Text style={[type.caption, { color: colors.textSecondary }]}>
+                        {list.length} song{list.length !== 1 ? 's' : ''}
+                    </Text>
+                    <View style={styles.actionButtons}>
+                        <SortButton
+                            options={SORT_OPTIONS}
+                            value={sortBy}
+                            onChange={(key) => setSortBy(key)}
+                            title="Sort Tracks"
+                        />
+                        <Button label="Play All" onPress={() => handlePlayAll(list, false)} icon="play" size="md" />
+                        <Button label="Shuffle" onPress={() => handlePlayAll(list, true)} icon="shuffle" variant="secondary" size="md" />
+                    </View>
+                </View>
+                <View style={styles.listContainerWithScroller}>
+                    <FlashList
+                        ref={page === 'tracks' ? flashListRef : undefined}
+                        data={list}
+                        renderItem={renderTrackItem}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={listContent}
+                        refreshControl={refreshControl}
+                        showsVerticalScrollIndicator={false}
+                    />
+
+                    {/* A–Z Fast Scroller Column */}
+                    {page === 'tracks' && letterKey && !searchQuery && list.length > 20 && (
+                        <View style={styles.alphabetIndexCol}>
+                            {ALPHABET.map((letter) => (
+                                <Touchable
+                                    key={letter}
+                                    onPress={() => handleLetterPress(letter)}
+                                    scaleTo={0.9}
+                                    style={styles.alphabetItem}
+                                >
+                                    <Text style={[styles.alphabetText, { color: colors.textSecondary }]}>
+                                        {letter}
+                                    </Text>
+                                </Touchable>
+                            ))}
+                        </View>
+                    )}
+                </View>
+            </>
+        );
+    };
+
+    const renderAlbumsPage = () =>
+        displayedAlbums.length === 0 ? (
+            renderEmpty('disc', 'albums')
+        ) : (
+            <FlashList
+                data={displayedAlbums}
+                renderItem={renderAlbumItem}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                contentContainerStyle={{ ...listContent, paddingHorizontal: metrics.gutter - GRID_HALF_GAP }}
+                refreshControl={refreshControl}
+                showsVerticalScrollIndicator={false}
+            />
+        );
+
+    const renderArtistsPage = () =>
+        displayedArtists.length === 0 ? (
+            renderEmpty('user', 'artists')
+        ) : (
+            <FlashList
+                data={displayedArtists}
+                renderItem={renderArtistItem}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={listContent}
+                refreshControl={refreshControl}
+                showsVerticalScrollIndicator={false}
+            />
+        );
+
+    const renderFoldersPage = () =>
+        selectedFolder ? (
+            renderTrackPage(shownFolderTracks, 'folder')
+        ) : displayedFolders.length === 0 ? (
+            renderEmpty('folder', 'folders')
+        ) : (
+            <FlashList
+                data={displayedFolders}
+                renderItem={renderFolderItem}
+                keyExtractor={(item) => item.path}
+                contentContainerStyle={listContent}
+                refreshControl={refreshControl}
+                showsVerticalScrollIndicator={false}
+            />
+        );
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
@@ -453,190 +595,54 @@ export default function MusicScreen() {
                 )}
             </View>
 
-            {/* Segmented Tabs (Tracks, Albums, Artists, Folders, Favorites) */}
+            {/* Sub-tab chips; they follow the pager below. */}
             {!selectedFolder && (
                 <ScrollView
+                    ref={chipsRef}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.tabChipsScroll}
                     contentContainerStyle={styles.tabChipsRow}
+                    onLayout={(e) => { chipsWidth.current = e.nativeEvent.layout.width; }}
                 >
-                    <Chip
-                        label={`Tracks (${tracks.length})`}
-                        selected={activeTab === 'tracks'}
-                        onPress={() => setActiveTab('tracks')}
-                    />
-                    <Chip
-                        label={`Albums (${albums.length})`}
-                        selected={activeTab === 'albums'}
-                        onPress={() => setActiveTab('albums')}
-                    />
-                    <Chip
-                        label={`Artists (${artists.length})`}
-                        selected={activeTab === 'artists'}
-                        onPress={() => setActiveTab('artists')}
-                    />
-                    <Chip
-                        label={`Folders (${folders.length})`}
-                        selected={activeTab === 'folders'}
-                        onPress={() => setActiveTab('folders')}
-                    />
-                    <Chip
-                        label={`Favorites (${favoriteIds.length})`}
-                        selected={activeTab === 'favorites'}
-                        onPress={() => setActiveTab('favorites')}
-                    />
+                    {TABS.map((t, i) => (
+                        <View
+                            key={t.key}
+                            onLayout={(e) => { chipFrames.current[i] = e.nativeEvent.layout; }}
+                        >
+                            <Chip
+                                label={`${t.label} (${counts[t.key]})`}
+                                selected={activeTab === t.key}
+                                onPress={() => setActiveTab(t.key)}
+                            />
+                        </View>
+                    ))}
                 </ScrollView>
-            )}
-
-            {/* Quick Actions Bar (Play All / Shuffle / Sort) */}
-            {(activeTab === 'tracks' || activeTab === 'favorites' || selectedFolder) && displayedTracks.length > 0 && (
-                <View style={styles.actionBar}>
-                    <Text style={[type.caption, { color: colors.textSecondary }]}>
-                        {displayedTracks.length} song{displayedTracks.length !== 1 ? 's' : ''}
-                    </Text>
-                    <View style={styles.actionButtons}>
-                        <SortButton
-                            options={SORT_OPTIONS}
-                            value={sortBy}
-                            onChange={(key) => setSortBy(key)}
-                            title="Sort Tracks"
-                        />
-                        <Button
-                            label="Play All"
-                            onPress={() => handlePlayAll(false)}
-                            icon="play"
-                            size="md"
-                        />
-                        <Button
-                            label="Shuffle"
-                            onPress={() => handlePlayAll(true)}
-                            icon="shuffle"
-                            variant="secondary"
-                            size="md"
-                        />
-                    </View>
-                </View>
             )}
 
             {/* Main Content Area */}
             {loading && tracks.length === 0 ? (
-                <Loader />
-            ) : activeTab === 'tracks' || activeTab === 'favorites' || selectedFolder ? (
-                displayedTracks.length === 0 ? (
-                    activeTab === 'favorites' && !search ? (
-                        <EmptyState icon="heart" text="No favorite songs yet" />
-                    ) : (
-                        renderEmpty('music', 'songs')
-                    )
-                ) : (
-                    <View style={styles.listContainerWithScroller}>
-                        {/* Each tab's list gets its own key: FlashList keeps column and size
-                            measurements, so reusing one instance across a 2-column grid and
-                            1-column lists leaves gaps where the old grid's cells were. */}
-                        <FlashList
-                            key={selectedFolder ? 'folder-tracks' : activeTab}
-                            ref={flashListRef}
-                            data={displayedTracks}
-                            renderItem={renderTrackItem}
-                            keyExtractor={(item) => item.id}
-                            contentContainerStyle={{
-                                paddingHorizontal: metrics.gutter,
-                                paddingBottom: metrics.space.xxl * 2,
-                            }}
-                            refreshControl={
-                                <RefreshControl
-                                    refreshing={loading}
-                                    onRefresh={() => loadData(true)}
-                                    tintColor={colors.primary}
-                                    colors={[colors.primary]}
-                                />
-                            }
-                            showsVerticalScrollIndicator={false}
-                        />
-
-                        {/* A–Z Fast Scroller Column */}
-                        {activeTab === 'tracks' && letterKey && !searchQuery && displayedTracks.length > 20 && (
-                            <View style={styles.alphabetIndexCol}>
-                                {ALPHABET.map((letter) => (
-                                    <Touchable
-                                        key={letter}
-                                        onPress={() => handleLetterPress(letter)}
-                                        scaleTo={0.9}
-                                        style={styles.alphabetItem}
-                                    >
-                                        <Text style={[styles.alphabetText, { color: colors.textSecondary }]}>
-                                            {letter}
-                                        </Text>
-                                    </Touchable>
-                                ))}
-                            </View>
-                        )}
-                    </View>
-                )
-            ) : activeTab === 'albums' && displayedAlbums.length === 0 ? (
-                renderEmpty('disc', 'albums')
-            ) : activeTab === 'albums' ? (
-                <FlashList
-                    key="albums"
-                    data={displayedAlbums}
-                    renderItem={renderAlbumItem}
-                    keyExtractor={(item) => item.id}
-                    numColumns={2}
-                    contentContainerStyle={{
-                        paddingHorizontal: metrics.gutter - GRID_HALF_GAP,
-                        paddingBottom: metrics.space.xxl * 2,
-                    }}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={loading}
-                            onRefresh={() => loadData(true)}
-                            tintColor={colors.primary}
-                        />
+                <SkeletonList
+                    kind={
+                        selectedFolder || activeTab === 'tracks' || activeTab === 'favorites' ? 'track'
+                            : activeTab === 'albums' ? 'album'
+                            : activeTab === 'artists' ? 'artist'
+                            : 'musicFolder'
                     }
-                    showsVerticalScrollIndicator={false}
                 />
-            ) : activeTab === 'artists' && displayedArtists.length === 0 ? (
-                renderEmpty('user', 'artists')
-            ) : activeTab === 'artists' ? (
-                <FlashList
-                    key="artists"
-                    data={displayedArtists}
-                    renderItem={renderArtistItem}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={{
-                        paddingHorizontal: metrics.gutter,
-                        paddingBottom: metrics.space.xxl * 2,
-                    }}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={loading}
-                            onRefresh={() => loadData(true)}
-                            tintColor={colors.primary}
-                        />
-                    }
-                    showsVerticalScrollIndicator={false}
-                />
-            ) : displayedFolders.length === 0 ? (
-                renderEmpty('folder', 'folders')
             ) : (
-                <FlashList
-                    key="folders"
-                    data={displayedFolders}
-                    renderItem={renderFolderItem}
-                    keyExtractor={(item) => item.path}
-                    contentContainerStyle={{
-                        paddingHorizontal: metrics.gutter,
-                        paddingBottom: metrics.space.xxl * 2,
-                    }}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={loading}
-                            onRefresh={() => loadData(true)}
-                            tintColor={colors.primary}
-                        />
-                    }
-                    showsVerticalScrollIndicator={false}
+                <Pager
+                    index={TABS.findIndex((t) => t.key === activeTab)}
+                    onIndexChange={(i) => setActiveTab(TABS[i].key)}
+                    // Inside a folder the chips are gone and back leaves the folder; a swipe would strand it.
+                    scrollEnabled={!selectedFolder}
+                    pages={[
+                        () => renderTrackPage(shownTracks, 'tracks'),
+                        renderAlbumsPage,
+                        renderArtistsPage,
+                        renderFoldersPage,
+                        () => renderTrackPage(shownFavorites, 'favorites'),
+                    ]}
                 />
             )}
 
