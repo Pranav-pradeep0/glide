@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
+import React, { memo } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Button, SheetHeader } from '@/components/ui';
 import { PLAYER_BACKDROP } from '@/theme/colors';
@@ -37,7 +37,8 @@ interface ResumeModalProps {
     onClose: () => void;
 }
 
-export const ResumeModal: React.FC<ResumeModalProps> = ({
+/** In the player's own window like RecapModal, and mounted throughout so its fade-out plays. Back is the screen's. */
+export const ResumeModal: React.FC<ResumeModalProps> = memo(({
     visible,
     formattedResumeTime,
     remainingTime,
@@ -59,61 +60,55 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     ].filter(Boolean).join(' · ');
 
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="none"
-            onRequestClose={onClose}
-            statusBarTranslucent
-            navigationBarTranslucent
+        <Animated.View
+            style={styles.overlay}
+            entering={FadeIn.duration(motion.fadeIn)}
+            exiting={FadeOut.duration(motion.fadeOut)}
+            accessibilityViewIsModal
         >
-            <View style={styles.overlay}>
-                {/* Same as the close button: dismissing never starts playback. */}
-                <Pressable
-                    style={StyleSheet.absoluteFill}
-                    onPress={onClose}
-                    accessibilityRole="button"
-                    accessibilityLabel="Close"
-                />
-                <Animated.View
-                    entering={FadeIn.duration(motion.fadeIn)}
-                    exiting={FadeOut.duration(motion.fadeOut)}
-                    style={styles.card}
-                >
-                    <SheetHeader title="Continue watching" onClose={onClose} onPlayer />
+            {/* Same as the close button: dismissing never starts playback. */}
+            <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+            />
+            <View style={styles.card}>
+                <SheetHeader title="Continue watching" onClose={onClose} onPlayer />
 
-                    <View style={styles.valueBox} accessible accessibilityLabel={`Resume from ${formattedResumeTime}. ${caption}`}>
-                        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-                            {formattedResumeTime}
-                        </Text>
-                        {!!caption && <Text style={styles.caption} numberOfLines={2}>{caption}</Text>}
-                    </View>
+                <View style={styles.valueBox} accessible accessibilityLabel={`Resume from ${formattedResumeTime}. ${caption}`}>
+                    <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+                        {formattedResumeTime}
+                    </Text>
+                    {!!caption && <Text style={styles.caption} numberOfLines={2}>{caption}</Text>}
+                </View>
 
-                    <View style={styles.actions}>
-                        <View style={styles.secondaryRow}>
-                            <Button label="Start over" onPress={onRestart} onPlayer style={styles.flex} />
-                            {showRecapOption && (
-                                <Button
-                                    label="Recap"
-                                    onPress={onRecap}
-                                    loading={isGeneratingRecap || recapChecking}
-                                    accessibilityLabel="Recap what happened so far"
-                                    onPlayer
-                                    style={styles.flex}
-                                />
-                            )}
-                        </View>
-                        <Button label="Resume" variant="primary" size="lg" icon="play" onPress={onResume} onPlayer />
+                <View style={styles.actions}>
+                    <View style={styles.secondaryRow}>
+                        <Button label="Start over" onPress={onRestart} onPlayer style={styles.flex} />
+                        {showRecapOption && (
+                            <Button
+                                label="Recap"
+                                onPress={onRecap}
+                                loading={isGeneratingRecap || recapChecking}
+                                accessibilityLabel="Recap what happened so far"
+                                onPlayer
+                                style={styles.flex}
+                            />
+                        )}
                     </View>
-                </Animated.View>
+                    <Button label="Resume" variant="primary" size="lg" icon="play" onPress={onResume} onPlayer />
+                </View>
             </View>
-        </Modal>
+        </Animated.View>
     );
-};
+});
+
+ResumeModal.displayName = 'ResumeModal';
 
 const styles = StyleSheet.create({
     overlay: {
-        flex: 1,
+        ...StyleSheet.absoluteFill,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: PLAYER_BACKDROP,

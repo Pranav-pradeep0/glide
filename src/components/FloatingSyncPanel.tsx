@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { memo, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, type TextInputInstance, ScrollView } from 'react-native';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import Feather from '@react-native-vector-icons/feather';
 import { Button, IconButton, Touchable } from '@/components/ui';
 import { haptic } from '@/native/HapticModule';
@@ -43,7 +43,7 @@ const formatMatchTime = (seconds: number) => {
     return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
-export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
+export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = memo(({
     type: syncType,
     value,
     onChange,
@@ -167,7 +167,6 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
             style={styles.container}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}
-            layout={LinearTransition.springify().mass(motion.spatial.mass).stiffness(motion.spatial.stiffness).damping(motion.spatial.damping)}
             pointerEvents="box-none"
         >
             <View style={styles.card}>
@@ -299,7 +298,9 @@ export const FloatingSyncPanel: React.FC<FloatingSyncPanelProps> = ({
             </View>
         </Animated.View>
     );
-};
+});
+
+FloatingSyncPanel.displayName = 'FloatingSyncPanel';
 
 const styles = StyleSheet.create({
     flex: { flex: 1 },

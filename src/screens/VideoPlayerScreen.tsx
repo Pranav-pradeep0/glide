@@ -23,6 +23,7 @@ import { currentActivityName, finishCurrentActivity, usePipModeListener } from '
 
 // Components
 import AnimatedVideoView from '@/components/VideoPlayer/AnimatedVideoView';
+import { PanelBackContext } from '@/components/VideoPlayer/SidePanel';
 import { VideoHUD } from '@/components/VideoPlayer/VideoHUD';
 import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
@@ -236,6 +237,9 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // UI and HUD hooks (needed by handlers below)
     const ui = usePlayerUI(orientationLocked, carry?.screenLocked);
+    // Stable across renders, unlike `ui` itself (new with every state change): handlers built on
+    // these keep the memoised controls and panels from re-rendering.
+    const { showControls, scheduleAutoHide, hideControls, openPanel, closePanel, closeAllPanels } = ui;
     const hud = usePlayerHUD();
 
     // ========================================================================
@@ -245,6 +249,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const [scrubbing, setScrubbing] = React.useState(false);
     /** Audio/Subtitles/Playlist/Bookmarks opened from the Playback panel get a back arrow to it. */
     const [openedFromPlayback, setOpenedFromPlayback] = React.useState(false);
+    const panelBack = useRef<(() => void) | null>(null);
     const [syncPanelType, setSyncPanelType] = React.useState<'audio' | 'subtitle' | null>(null);
     const [basePlaybackRate, setBasePlaybackRate] = React.useState(carry?.playbackRate ?? 1.0);
     const [temporaryHoldRate, setTemporaryHoldRate] = React.useState<number | null>(null);
@@ -259,9 +264,9 @@ export default function VideoPlayerScreen({ route }: Props) {
             VideoOrientationService.disableAuto();
             setOrientationLocked(true);
         }
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [orientationLocked, ui]);
+        showControls();
+        scheduleAutoHide();
+    }, [orientationLocked, scheduleAutoHide, showControls]);
 
     // ========================================================================
     // NIGHT MODE STATE
@@ -272,9 +277,9 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const toggleNightMode = useCallback(() => {
         setNightMode(prev => !prev);
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [ui]);
+        showControls();
+        scheduleAutoHide();
+    }, [scheduleAutoHide, showControls]);
 
     // Haptics State (User toggle)
     const [hapticsEnabled, setHapticsEnabled] = React.useState(carry?.hapticsEnabled ?? true);
@@ -386,7 +391,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // Hide controls when entering PIP mode (simple effect, no state toggling)
     useEffect(() => {
         if (isInPipMode) {
-            ui.hideControls();
+            hideControls();
 
             // Handle brightness for PiP
             if (pipBrightnessMode === 'system') {
@@ -745,9 +750,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         } else {
             navigation.goBack();
         }
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [navigation, exitPlayer, isExternalOpen, ui]);
+        showControls();
+        scheduleAutoHide();
+    }, [navigation, exitPlayer, isExternalOpen, scheduleAutoHide, showControls]);
     handleGoBackRef.current = handleGoBack;
 
     // Next / Previous / autoplay / a playlist pick remount the screen; this keeps the session.
@@ -787,7 +792,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     }, [videoEnhancement, toggleVideoEnhancement, playerHandleError]);
 
     const handlePlayVideo = useCallback((video: VideoFile) => {
-        ui.closeAllPanels();
+        closeAllPanels();
         // @ts-ignore
         navigation.replace('VideoPlayer', {
             videoPath: video.path,
@@ -799,7 +804,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             videoSort,
             carry: carryRef.current,
         });
-    }, [navigation, ui, albumName, routeBucketId, playMode, playAll, videoSort]);
+    }, [navigation, albumName, routeBucketId, playMode, playAll, videoSort, closeAllPanels]);
 
     // ========================================================================
     // CONTROL HANDLERS
@@ -812,9 +817,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         // Update settings and show HUD
         settingsHook.setResizeMode(nextMode);
         hud.showResizeHUD(nextMode);
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [settingsHook, hud, ui]);
+        showControls();
+        scheduleAutoHide();
+    }, [settingsHook, hud, scheduleAutoHide, showControls]);
 
     // The panel's switch carries the feedback.
     const handleToggleHaptics = useCallback(() => setHapticsEnabled(prev => !prev), []);
@@ -823,16 +828,16 @@ export default function VideoPlayerScreen({ route }: Props) {
     }, [videoName, player]);
 
     const handleEnterPip = useCallback(() => {
-        ui.closeAllPanels();
-        ui.hideControls();
+        closeAllPanels();
+        hideControls();
         player.videoRef.current?.enterPictureInPicture();
-    }, [player, ui]);
+    }, [player, closeAllPanels, hideControls]);
 
     const handleTogglePlayPause = useCallback(() => {
         player.togglePlayPause();
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [player, ui]);
+        showControls();
+        scheduleAutoHide();
+    }, [player, scheduleAutoHide, showControls]);
 
     const handleSlidingStart = useCallback(() => {
         setScrubbing(true);
@@ -849,8 +854,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         player.commitSeek(val);
         hud.hideSeekHUD();
         setScrubbing(false);
-        ui.showControls();
-    }, [player, hud, ui]);
+        showControls();
+    }, [player, hud, showControls]);
 
     // Jump handlers
     const handleJumpBackward = useCallback(() => {
@@ -874,9 +879,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         }
         gestures.sharedValues.seekTime.value = newTime;
         hud.showSeekHUD(newTime, 'backward', null, false);
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [player, hud, gestures, ui, seekDuration]);
+        showControls();
+        scheduleAutoHide();
+    }, [player, hud, gestures, seekDuration, scheduleAutoHide, showControls]);
 
     const handleJumpForward = useCallback(() => {
         // If HUD is already showing seek, use its value as base for accumulation
@@ -897,20 +902,20 @@ export default function VideoPlayerScreen({ route }: Props) {
         }
         gestures.sharedValues.seekTime.value = newTime;
         hud.showSeekHUD(newTime, 'forward', null, false);
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [player, hud, gestures, ui, seekDuration]);
+        showControls();
+        scheduleAutoHide();
+    }, [player, hud, gestures, seekDuration, scheduleAutoHide, showControls]);
 
     // ========================================================================
     // QUICK SETTINGS HANDLERS (Memoized)
     // ========================================================================
 
-    const handleQSClose = useCallback(() => ui.closePanel('quickSettings'), [ui]);
+    const handleQSClose = useCallback(() => closePanel('quickSettings'), [closePanel]);
     // openPanel closes the Playback panel; these remember where to go back to.
     const openFromPlayback = useCallback((panel: 'playlist' | 'audioSelector' | 'subtitleSelector' | 'bookmarkPanel') => {
         setOpenedFromPlayback(true);
-        ui.openPanel(panel);
-    }, [ui]);
+        openPanel(panel);
+    }, [openPanel]);
     const handleQSOpenPlaylist = useCallback(() => openFromPlayback('playlist'), [openFromPlayback]);
     const handleQSOpenAudio = useCallback(() => openFromPlayback('audioSelector'), [openFromPlayback]);
     const handleQSOpenSubtitle = useCallback(() => openFromPlayback('subtitleSelector'), [openFromPlayback]);
@@ -922,30 +927,55 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const handleToggleAudio = useCallback(() => {
         setOpenedFromPlayback(false);
-        ui.openPanel('audioSelector');
-    }, [ui]);
+        openPanel('audioSelector');
+    }, [openPanel]);
 
     const handleToggleSubtitle = useCallback(() => {
         setOpenedFromPlayback(false);
-        ui.openPanel('subtitleSelector');
-    }, [ui]);
+        openPanel('subtitleSelector');
+    }, [openPanel]);
 
     const handleAddBookmark = useCallback(() => {
         bookmarksHook.addBookmark();
-        ui.scheduleAutoHide();
-    }, [bookmarksHook, ui]);
+        scheduleAutoHide();
+    }, [bookmarksHook, scheduleAutoHide]);
 
     const handleToggleBookmarkPanel = useCallback(() => {
         setOpenedFromPlayback(false);
-        ui.openPanel('bookmarkPanel');
-    }, [ui]);
+        openPanel('bookmarkPanel');
+    }, [openPanel]);
     const handleTogglePlaylist = useCallback(() => {
         setOpenedFromPlayback(false);
-        ui.openPanel('playlist');
-    }, [ui]);
+        openPanel('playlist');
+    }, [openPanel]);
 
-    const handleToggleQuickSettings = useCallback(() => ui.openPanel('quickSettings'), [ui]);
-    const handleBackToPlayback = useCallback(() => ui.openPanel('quickSettings'), [ui]);
+    const handleToggleQuickSettings = useCallback(() => openPanel('quickSettings'), [openPanel]);
+    const handleBackToPlayback = useCallback(() => openPanel('quickSettings'), [openPanel]);
+
+    // Overlay handlers, stable so a rotation (or any render) leaves the memoised panels alone.
+    const handlePlaylistClose = useCallback(() => closePanel('playlist'), [closePanel]);
+    const handleAudioSelectorClose = useCallback(() => closePanel('audioSelector'), [closePanel]);
+    const handleSubtitleSelectorClose = useCallback(() => closePanel('subtitleSelector'), [closePanel]);
+    const handleBookmarkPanelClose = useCallback(() => closePanel('bookmarkPanel'), [closePanel]);
+    const handleSyncPanelClose = useCallback(() => setSyncPanelType(null), []);
+    const handleOpenSyncPanel = useCallback((type: 'audio' | 'subtitle') => {
+        setSyncPanelType(type);
+        closeAllPanels();
+    }, [closeAllPanels]);
+    const { setEqualizerPreset, setCustomEqualizerBands } = settingsHook;
+    const handleResetEqualizer = useCallback(() => {
+        setEqualizerPreset('flat');
+        setCustomEqualizerBands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    }, [setEqualizerPreset, setCustomEqualizerBands]);
+    const handleToggleShake = useCallback(() => setShakeEnabled(!shakeEnabled), [setShakeEnabled, shakeEnabled]);
+    const playerPlay = player.play;
+    const handleRecapResume = useCallback(() => {
+        closeRecap();
+        playerPlay();
+    }, [closeRecap, playerPlay]);
+    const handleResumeResume = useCallback(() => handleResumeModalAction('resume'), [handleResumeModalAction]);
+    const handleResumeRestart = useCallback(() => handleResumeModalAction('restart'), [handleResumeModalAction]);
+    const handleResumeRecap = useCallback(() => handleResumeModalAction('recap'), [handleResumeModalAction]);
 
     // The panel shows the value; the hold chip is for the hold gesture.
     const handlePlaybackRateChange = useCallback((rate: number) => {
@@ -955,9 +985,9 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const handleToggleBackgroundPlay = useCallback(() => {
         settingsHook.toggleBackgroundPlay();
-        ui.showControls();
-        ui.scheduleAutoHide();
-    }, [settingsHook, ui]);
+        showControls();
+        scheduleAutoHide();
+    }, [settingsHook, scheduleAutoHide, showControls]);
 
     // ========================================================================
     // PLAYLIST NAVIGATION
@@ -979,7 +1009,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         if (!hasPrevious) {return;}
         const prevVideo = albumVideos[currentVideoIndex - 1];
         if (prevVideo) {
-            ui.closeAllPanels();
+            closeAllPanels();
             navigation.replace('VideoPlayer', {
                 videoPath: prevVideo.path,
                 videoName: prevVideo.name,
@@ -993,13 +1023,13 @@ export default function VideoPlayerScreen({ route }: Props) {
                 previous: true,
             });
         }
-    }, [hasPrevious, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode]);
+    }, [hasPrevious, albumVideos, currentVideoIndex, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode, closeAllPanels]);
 
     const handleNext = useCallback(() => {
         if (!hasNext) {return;}
         const nextVideo = albumVideos[currentVideoIndex + 1];
         if (nextVideo) {
-            ui.closeAllPanels();
+            closeAllPanels();
             navigation.replace('VideoPlayer', {
                 videoPath: nextVideo.path,
                 videoName: nextVideo.name,
@@ -1012,7 +1042,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 fromPip: isInPipMode,
             });
         }
-    }, [hasNext, albumVideos, currentVideoIndex, ui, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode]);
+    }, [hasNext, albumVideos, currentVideoIndex, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode, closeAllPanels]);
 
     const handleShakeAction = useCallback(() => {
         if (shakeAction === 'play_pause') {
@@ -1198,15 +1228,22 @@ export default function VideoPlayerScreen({ route }: Props) {
             if (isExternalOpen && front !== undefined && front !== 'VideoPlayerActivity') {
                 return false;
             }
-            // Portrait panels are Modals and take Back themselves; landscape side panels and
-            // the floating sync panel are plain views, so Back closes them here.
+            // Panels, the sync panel, Recap and Continue watching are all views in this window,
+            // not Modals, so Back closes them here, topmost first. An open panel with a back
+            // arrow (a sub-page, or opened from Playback) steps back like the arrow does.
+            if (recapVisible) { closeRecap(); return true; }
+            if (resumeModalVisible) { closeResumeModal(); return true; }
             if (syncPanelType) { setSyncPanelType(null); return true; }
-            if (anyPanelOpen(ui.state)) { ui.closeAllPanels(); return true; }
+            if (anyPanelOpen(ui.state) && panelBack.current) { panelBack.current(); return true; }
+            if (anyPanelOpen(ui.state)) { closeAllPanels(); return true; }
             handleGoBack();
             return true;
         });
         return () => backHandler.remove();
-    }, [handleGoBack, isInPipMode, isExternalOpen, syncPanelType, ui]);
+    }, [
+        handleGoBack, isInPipMode, isExternalOpen, syncPanelType, closeAllPanels, ui.state, recapVisible,
+        closeRecap, resumeModalVisible, closeResumeModal,
+    ]);
 
     // Navigation beforeRemove
     useEffect(() => {
@@ -1247,6 +1284,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     return (
+        <PanelBackContext.Provider value={panelBack}>
         <View style={styles.container}>
             {/* Video with gestures */}
             <GestureDetector gesture={gestures.composedGesture}>
@@ -1316,7 +1354,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onChange={syncPanelType === 'audio' ? settingsHook.setAudioDelay : settingsHook.setSubtitleDelay}
                     ratio={syncPanelType === 'subtitle' ? settingsHook.settings.subtitleRatio : undefined}
                     onRatioChange={syncPanelType === 'subtitle' ? settingsHook.setSubtitleRatio : undefined}
-                    onClose={() => setSyncPanelType(null)}
+                    onClose={handleSyncPanelClose}
                     subtitleCues={tracksHook.subtitleCues}
                     subtitleCuesLoading={tracksHook.subtitleCuesLoading}
                     currentTimeRef={player.currentTimeRef}
@@ -1454,8 +1492,9 @@ export default function VideoPlayerScreen({ route }: Props) {
             )}
 
             {/* Quick settings panel */}
-            {!pipPresentationActive && ui.state.quickSettingsOpen && (
+            {!pipPresentationActive && (
                 <QuickSettingsPanel
+                    visible={ui.state.quickSettingsOpen}
                     onClose={handleQSClose}
                     playbackRate={basePlaybackRate}
                     onPlaybackRateChange={handlePlaybackRateChange}
@@ -1477,7 +1516,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     insets={effectiveInsets}
                     enableHaptics={playMode === 'with-haptics'}
                     shakeEnabled={shakeEnabled}
-                    onToggleShake={() => setShakeEnabled(!shakeEnabled)}
+                    onToggleShake={handleToggleShake}
                     shakeAction={shakeAction}
                     onSelectShakeAction={setShakeAction}
                     seekDuration={seekDuration}
@@ -1500,7 +1539,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             {!pipPresentationActive && !isNetworkStream && (
                 <PlaylistPanel
                     visible={ui.state.playlistOpen}
-                    onClose={() => ui.closePanel('playlist')}
+                    onClose={handlePlaylistClose}
                     onBack={openedFromPlayback ? handleBackToPlayback : undefined}
                     currentVideoPath={videoPath}
                     onPlayVideo={handlePlayVideo}
@@ -1513,10 +1552,10 @@ export default function VideoPlayerScreen({ route }: Props) {
 
             {/* Track selectors */}
             <View style={styles.modalPortalWrapper} pointerEvents="box-none">
-                {!pipPresentationActive && ui.state.audioSelectorOpen && (
+                {!pipPresentationActive && (
                     <TrackSelector
                         visible={ui.state.audioSelectorOpen}
-                        onClose={() => ui.closePanel('audioSelector')}
+                        onClose={handleAudioSelectorClose}
                         onBack={openedFromPlayback ? handleBackToPlayback : undefined}
                         tracks={tracksHook.audioTracksForSelector}
                         selectedTrackIndex={tracksHook.selectedAudioTrackId}
@@ -1528,20 +1567,14 @@ export default function VideoPlayerScreen({ route }: Props) {
                         onSelectPreset={settingsHook.setEqualizerPreset}
                         equalizerBands={settingsHook.settings.customEqualizerBands}
                         onSetEqualizerBand={settingsHook.setSingleBand}
-                        onResetEqualizer={() => {
-                            settingsHook.setEqualizerPreset('flat');
-                            settingsHook.setCustomEqualizerBands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-                        }}
-                        onOpenSyncPanel={(type) => {
-                            setSyncPanelType(type);
-                            ui.closeAllPanels();
-                        }}
+                        onResetEqualizer={handleResetEqualizer}
+                        onOpenSyncPanel={handleOpenSyncPanel}
                     />
                 )}
-                {!pipPresentationActive && ui.state.subtitleSelectorOpen && (
+                {!pipPresentationActive && (
                     <TrackSelector
                         visible={ui.state.subtitleSelectorOpen}
-                        onClose={() => ui.closePanel('subtitleSelector')}
+                        onClose={handleSubtitleSelectorClose}
                         onBack={openedFromPlayback ? handleBackToPlayback : undefined}
                         tracks={tracksHook.subtitleTracksForSelector}
                         selectedTrackIndex={tracksHook.selectedSubtitleTrackIndex}
@@ -1552,10 +1585,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         currentExternalName={tracksHook.currentExternalName || undefined}
                         videoName={videoName}
                         imdbId={imdbId}
-                        onOpenSyncPanel={(type) => {
-                            setSyncPanelType(type);
-                            ui.closeAllPanels();
-                        }}
+                        onOpenSyncPanel={handleOpenSyncPanel}
                     />
                 )}
             </View>
@@ -1571,7 +1601,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     visible={ui.state.bookmarkPanelOpen}
                     bookmarks={bookmarksHook.bookmarks}
                     currentTime={player.currentTimeShared}
-                    onClose={() => ui.closePanel('bookmarkPanel')}
+                    onClose={handleBookmarkPanelClose}
                     onBack={openedFromPlayback ? handleBackToPlayback : undefined}
                     onSelectBookmark={bookmarksHook.jumpToBookmark}
                     onDeleteBookmark={bookmarksHook.deleteBookmark}
@@ -1580,16 +1610,13 @@ export default function VideoPlayerScreen({ route }: Props) {
                 />
             )}
 
-            {/* AI Recap Modal */}
+            {/* AI Recap: mounted throughout, so it fades out */}
             {!pipPresentationActive && !isNetworkStream && (
-                <View style={styles.modalPortalWrapper} pointerEvents="box-none">
+                <View style={styles.overlayWrapper} pointerEvents="box-none">
                     <RecapModal
                         visible={recapVisible}
                         onClose={closeRecap}
-                        onResume={() => {
-                            closeRecap();
-                            player.play();
-                        }}
+                        onResume={handleRecapResume}
                         recapText={recapText}
                         videoName={cleanTitle || albumName || videoName}
                         isLoading={isGeneratingRecap}
@@ -1598,9 +1625,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                 </View>
             )}
 
-            {/* Resume Modal */}
+            {/* Continue watching: mounted throughout, so it fades out */}
             {!pipPresentationActive && !isNetworkStream && (
-                <View style={styles.modalPortalWrapper} pointerEvents="box-none">
+                <View style={styles.overlayWrapper} pointerEvents="box-none">
                     <ResumeModal
                         visible={resumeModalVisible}
                         formattedResumeTime={resumeModalData?.formattedTime || ''}
@@ -1609,9 +1636,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                         showRecapOption={!!resumeModalData?.showRecap}
                         isGeneratingRecap={isGeneratingRecap}
                         recapChecking={!!resumeModalData?.recapChecking}
-                        onResume={() => handleResumeModalAction('resume')}
-                        onRestart={() => handleResumeModalAction('restart')}
-                        onRecap={() => handleResumeModalAction('recap')}
+                        onResume={handleResumeResume}
+                        onRestart={handleResumeRestart}
+                        onRecap={handleResumeRecap}
                         onClose={closeResumeModal}
                     />
                 </View>
@@ -1629,6 +1656,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             {/* Above everything, clear of the seek bar and tools row when they show */}
             {!pipPresentationActive && <SnackbarHost bottomOffset={controlsShown ? 96 : 0} />}
         </View>
+        </PanelBackContext.Provider>
     );
 }
 
@@ -1652,6 +1680,12 @@ const styles = StyleSheet.create({
         // Above PlayerControls (10): zIndex only orders siblings, so the wrapper itself needs it.
         zIndex: 50,
         elevation: 10,
+    },
+    // Recap and Continue watching sit over the panels too, as the Modals they replace did.
+    overlayWrapper: {
+        ...StyleSheet.absoluteFill,
+        zIndex: 200,
+        elevation: 20,
     },
 });
 

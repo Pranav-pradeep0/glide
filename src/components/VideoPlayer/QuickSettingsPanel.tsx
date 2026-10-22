@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Animated, { SlideInLeft, SlideInRight, SlideOutLeft, SlideOutRight } from 'react-native-reanimated';
@@ -45,6 +45,7 @@ type Page = 'main' | 'display' | 'sleep' | 'shake';
 const PAGE_TITLES: Record<Page, string> = { main: 'Playback', display: 'Display', sleep: 'Sleep timer', shake: 'Shake to control' };
 
 interface QuickSettingsPanelProps {
+    visible: boolean;
     onClose: () => void;
     playbackRate: number;
     onPlaybackRateChange: (rate: number) => void;
@@ -120,23 +121,20 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
     const setHapticStrength = useAppStore((state) => state.setHapticStrength);
     const toggleHaptics = useAppStore((state) => state.toggleHaptics);
 
-    const [shown, setShown] = useState(false);
     const [page, setPage] = useState<Page>('main');
     const navigated = useRef(false);
-    const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
     const lastRate = useRef(props.playbackRate);
 
-    useEffect(() => {
-        setShown(true);
-        return () => clearTimeout(closeTimer.current);
-    }, []);
-
-    // Stay mounted for the exit animation, then let the screen unmount us.
-    const { onClose } = props;
-    const close = useCallback(() => {
-        setShown(false);
-        closeTimer.current = setTimeout(onClose, motion.fadeOut);
-    }, [onClose]);
+    // Every open starts on the main page, with no slide: a sub-page left while closed.
+    const { visible } = props;
+    const [wasVisible, setWasVisible] = useState(visible);
+    if (visible !== wasVisible) {
+        setWasVisible(visible);
+        if (visible) {
+            navigated.current = false;
+            setPage('main');
+        }
+    }
 
     const goTo = (next: Page) => {
         navigated.current = true;
@@ -293,6 +291,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                     <ListRow
                         icon="zap"
                         title="Haptics"
+                        badge="Experimental"
                         toggle={{ value: hapticsOn, onChange: toggleHapticsRow }}
                         onPlayer
                     />
@@ -403,9 +402,9 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
 
     return (
         <SidePanel
-            visible={shown}
+            visible={visible}
             title={PAGE_TITLES[page]}
-            onClose={close}
+            onClose={props.onClose}
             onBack={page === 'main' ? undefined : () => setPage('main')}
         >
             <View style={styles.pages}>
@@ -419,7 +418,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                         {renderMain()}
                     </Animated.View>
                 ) : (
-                    <Animated.View key="sub" style={styles.page} entering={PAGE_IN} exiting={PAGE_BACK_OUT}>
+                    <Animated.View key="sub" style={styles.page} entering={PAGE_IN} exiting={visible ? PAGE_BACK_OUT : undefined}>
                         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
                             {renderSub()}
                         </ScrollView>

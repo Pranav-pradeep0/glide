@@ -96,19 +96,23 @@ export function useResumePlayback({
         onPause();
     }, [onPause]);
 
+    // The screen passes fresh closures each render; a ref keeps this handler (and the modal's memo) stable.
+    const actionsRef = useRef({ onPlay, onRestartPersist, onSeekToStart, onRecap });
+    actionsRef.current = { onPlay, onRestartPersist, onSeekToStart, onRecap };
     const handleResumeModalAction = useCallback((action: 'resume' | 'restart' | 'recap') => {
+        const actions = actionsRef.current;
         if (action === 'resume') {
             setResumeModalVisible(false);
-            onPlay();
+            actions.onPlay();
         } else if (action === 'restart') {
-            onRestartPersist();
+            actions.onRestartPersist();
             setResumeModalVisible(false);
-            onSeekToStart();
-            onPlay();
+            actions.onSeekToStart();
+            actions.onPlay();
         } else if (action === 'recap') {
-            onRecap();
+            actions.onRecap();
         }
-    }, [onPlay, onRestartPersist, onSeekToStart, onRecap]);
+    }, []);
 
     return {
         resumeModalVisible,

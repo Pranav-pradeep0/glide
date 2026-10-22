@@ -249,30 +249,40 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         };
     }, []);
 
-    useEffect(() => {
+    // Reset while rendering the open (or close), not in an effect after it: an effect's
+    // setStates would commit a second render as the panel starts sliding in.
+    const [wasVisible, setWasVisible] = useState(visible);
+    if (visible !== wasVisible) {
+        setWasVisible(visible);
+        setDownloadingId(null);
         if (visible) {
             setActiveTab(defaultTab);
             setAudioTab('tracks');
-            setDownloadingId(null);
             setNotice(null);
-            hasAutoSearchedRef.current = false;
         } else {
             setSearchQuery('');
             setIsSearching(false);
-            setDownloadingId(null);
             setOptionsOpen(false);
-            // Abort anything still running when the modal closes
+        }
+    }
+    const [shownTab, setShownTab] = useState(activeTab);
+    if (activeTab !== shownTab) {
+        setShownTab(activeTab);
+        setOptionsOpen(false);
+        setNotice(null);
+    }
+
+    useEffect(() => {
+        if (visible) {
+            hasAutoSearchedRef.current = false;
+        } else {
+            // Abort anything still running when the panel closes
             searchAbortRef.current?.abort();
             searchAbortRef.current = null;
             downloadAbortRef.current?.abort();
             downloadAbortRef.current = null;
         }
-    }, [visible, defaultTab]);
-
-    useEffect(() => {
-        setOptionsOpen(false);
-        setNotice(null);
-    }, [activeTab]);
+    }, [visible]);
 
     // Auto-fetch subtitles when Online tab opens
     useEffect(() => {

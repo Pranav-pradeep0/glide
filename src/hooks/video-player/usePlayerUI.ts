@@ -213,16 +213,20 @@ export function usePlayerUI(orientationLocked: boolean, startLocked = false): Us
         setState(prev => ({ ...prev, ...closedPanels, [panelStateKeys[panel]]: true }));
     }, [cancelAutoHide]);
 
+    // Read through a ref, so the close handlers the panels get stay the same across renders.
+    const controlsVisibleRef = useRef(state.controlsVisible);
+    controlsVisibleRef.current = state.controlsVisible;
+
     const closePanel = useCallback((panel: PanelType) => {
         lastInteractionTimeRef.current = Date.now();
         setState(prev => ({ ...prev, [panelStateKeys[panel]]: false }));
-        if (state.controlsVisible) {armAutoHide();}
-    }, [state.controlsVisible, armAutoHide]);
+        if (controlsVisibleRef.current) {armAutoHide();}
+    }, [armAutoHide]);
 
     const closeAllPanels = useCallback(() => {
         setState(prev => ({ ...prev, ...closedPanels }));
-        if (state.controlsVisible) {armAutoHide();}
-    }, [state.controlsVisible, armAutoHide]);
+        if (controlsVisibleRef.current) {armAutoHide();}
+    }, [armAutoHide]);
 
     return useMemo(() => ({
         state,
