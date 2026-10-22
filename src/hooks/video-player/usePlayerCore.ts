@@ -390,7 +390,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         if (data.audioTracks && data.audioTracks.length > 0 && onAudioTracksLoaded) {
             const tracks = data.audioTracks
                 .filter(t => t.id !== -1)
-                .map(t => ({ id: t.id, name: t.name || `Track ${t.id}`, isSelected: Boolean(t.isSelected) }));
+                // language too: without it every carried track looked untagged and matched by position.
+                .map(t => ({ id: t.id, name: t.name || `Track ${t.id}`, language: t.language, isSelected: Boolean(t.isSelected) }));
             if (__DEV__) {console.log('[LOAD] audioTracks:', tracks.map(t => `${t.name}${t.isSelected ? ' (selected)' : ''}`).join(', '));}
             onAudioTracksLoaded(tracks);
         }
