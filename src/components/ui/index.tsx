@@ -412,7 +412,8 @@ export function ListRow({
         <>
             {icon && (
                 <View>
-                    <Feather name={icon} size={20} color={destructive ? colors.error : colors.textSecondary} />                </View>
+                    <Feather name={icon} size={20} color={destructive ? colors.error : colors.textSecondary} />
+                </View>
             )}
             <View style={styles.rowText}>
                 <Text style={[type.row, styles.rowTitle, { color: fg }]} numberOfLines={2}>{title}</Text>
