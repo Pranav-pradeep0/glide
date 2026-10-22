@@ -11,6 +11,9 @@ export class RecapService {
     private static readonly MIN_DIALOGUE_WORDS = 40;
     private static readonly MIN_DIALOGUE_DURATION_SECONDS = 12;
     private static readonly SCENE_GAP_SECONDS = 8;
+    private static readonly MAX_LOOKBACK_SECONDS = 20 * 60;
+    /** Matches MAX_DIALOGUE_CHARS in the proxy (~1200 tokens). */
+    private static readonly MAX_DIALOGUE_CHARS = 5000;
 
     /**
      * High-level entry point to get dialogue for recap.
@@ -37,15 +40,6 @@ export class RecapService {
         }
 
         return stats.dialogue;
-    }
-
-    /**
-     * Extracts dialogue from the last few minutes (e.g., 5 mins) before the resume position.
-     * Balanced for quality and token usage.
-     */
-    static getRecentDialogue(cues: SubtitleCue[], resumePosition: number, windowSeconds: number = 300): string {
-        const stats = this.getRecentDialogueStats(cues, resumePosition, windowSeconds);
-        return stats?.dialogue || '';
     }
 
     static async getRecapEligibility(
@@ -87,59 +81,61 @@ export class RecapService {
         return cues && cues.length > 0 ? cues : null;
     }
 
+    /**
+     * One line per speaker turn. SDH speaker labels are kept ("[Harlander] Thank you." becomes
+     * "Harlander: Thank you."): they are the only way the model can tell who said what.
+     * Sound labels like [thunder rumbles] or (SIGHS) are dropped.
+     */
+    static cleanCue(raw: string): string[] {
+        return raw
+            .replace(/<[^>]*>/g, '')
+            .replace(/[[(]([A-Z][a-z][\w.'-]*(?:\s[A-Z][\w.'-]*){0,2})[\])]\s*(?=[^\s[(])/g, '$1: ')
+            .replace(/\[[^\]]*\]|\([^)]*\)/g, '')
+            .split(/(?:^|\s)-\s+/) // "- Are you ill? - Thank you." is two speakers
+            .map(s => s.replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+    }
+
+    /**
+     * Walks back from the pause until the proxy's character cap is full, so a quiet or
+     * music-heavy stretch still gets enough story. The cost cap is the same either way.
+     */
     private static getRecentDialogueStats(
         cues: SubtitleCue[],
-        resumePosition: number,
-        windowSeconds: number = 300
+        resumePosition: number
     ): { dialogue: string; lineCount: number; wordCount: number; durationSeconds: number } | null {
-        const startTime = Math.max(0, resumePosition - windowSeconds);
-        const relevantCues = cues.filter(
-            cue => cue.startTime >= startTime && cue.startTime <= resumePosition
-        );
-
-        if (relevantCues.length === 0) { return null; }
+        const earliest = resumePosition - this.MAX_LOOKBACK_SECONDS;
+        const recent = cues.filter(cue => cue.startTime >= earliest && cue.startTime <= resumePosition);
 
         let lineCount = 0;
         let wordCount = 0;
         let durationSeconds = 0;
-        const processedCues: string[] = [];
-        let lastEnd = Infinity;
+        let chars = 0;
+        const lines: string[] = []; // newest first, reversed at the end
+        let nextStart = Infinity;
 
-        for (const cue of relevantCues) {
+        for (let i = recent.length - 1; i >= 0; i--) {
+            const cue = recent[i];
+            const turns = this.cleanCue(cue.text);
+            if (turns.length === 0) { continue; }
+
+            const size = turns.join('\n').length + 1;
+            if (chars + size > this.MAX_DIALOGUE_CHARS) { break; }
+
             // A long silence usually means a cut; a blank line tells the model a new scene began.
-            if (cue.startTime - lastEnd > this.SCENE_GAP_SECONDS && processedCues.length > 0) {
-                processedCues.push('');
+            if (nextStart - cue.endTime > this.SCENE_GAP_SECONDS && lines.length > 0) {
+                lines.push('');
             }
-            lastEnd = cue.endTime;
-            // Remove HTML-like tags
-            let text = cue.text.replace(/<[^>]*>/g, '');
-            // Remove bracketed noise like [MUSIC], (SIGHS), [Door Slams]
-            text = text.replace(/\[[^\]]*\]|\([^)]*\)/g, '');
-            text = text.trim();
-
-            if (!text) { continue; }
-
-            processedCues.push(text);
+            nextStart = cue.startTime;
+            lines.push(...turns.reverse());
+            chars += size;
             lineCount += 1;
             durationSeconds += Math.max(0, cue.endTime - cue.startTime);
-            wordCount += text.split(/\s+/).filter(Boolean).length;
+            wordCount += turns.join(' ').split(/\s+/).length;
         }
 
-        if (processedCues.length === 0) { return null; }
-
-        // One cue per line: line breaks are the only hint of who is speaking.
-        let dialogue = processedCues.join('\n');
-
-        // Limit to roughly 1000-1200 tokens (~5000 characters)
-        // We take the LATEST part if it's too long, but try to cut at a sentence boundary
-        if (dialogue.length > 5000) {
-            const truncated = dialogue.substring(dialogue.length - 5000);
-            // Find first space to avoid cutting a word
-            const firstSpace = truncated.indexOf(' ');
-            dialogue = firstSpace !== -1 ? truncated.substring(firstSpace).trim() : truncated;
-        }
-
-        return { dialogue, lineCount, wordCount, durationSeconds };
+        if (lineCount === 0) { return null; }
+        return { dialogue: lines.reverse().join('\n'), lineCount, wordCount, durationSeconds };
     }
 
     private static isDialogueSufficient(stats: { lineCount: number; wordCount: number; durationSeconds: number }): boolean {

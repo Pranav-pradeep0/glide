@@ -31,22 +31,32 @@ function parseSrt(text) {
     });
 }
 
-// ponytail: mirrors RecapService.getRecentDialogueStats by hand; import it if the two drift.
-function recentDialogue(cues, resume, windowSeconds = 300) {
-    const out = [];
-    let lastEnd = Infinity;
-    for (const cue of cues.filter(c => c.startTime >= resume - windowSeconds && c.startTime <= resume)) {
-        if (cue.startTime - lastEnd > 8 && out.length > 0) {out.push('');}
-        lastEnd = cue.endTime;
-        const text = cue.text.replace(/<[^>]*>/g, '').replace(/\[[^\]]*\]|\([^)]*\)/g, '').trim();
-        if (text) {out.push(text);}
+// ponytail: mirrors RecapService.cleanCue / getRecentDialogueStats by hand (that file pulls in
+// native modules); __tests__/recapDialogue.test.ts pins the real behaviour. Keep the two in step.
+const cleanCue = raw => raw
+    .replace(/<[^>]*>/g, '')
+    .replace(/[[(]([A-Z][a-z][\w.'-]*(?:\s[A-Z][\w.'-]*){0,2})[\])]\s*(?=[^\s[(])/g, '$1: ')
+    .replace(/\[[^\]]*\]|\([^)]*\)/g, '')
+    .split(/(?:^|\s)-\s+/)
+    .map(s => s.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+function recentDialogue(cues, resume) {
+    const recent = cues.filter(c => c.startTime >= resume - 1200 && c.startTime <= resume);
+    const lines = [];
+    let chars = 0;
+    let nextStart = Infinity;
+    for (let i = recent.length - 1; i >= 0; i--) {
+        const turns = cleanCue(recent[i].text);
+        if (!turns.length) {continue;}
+        const size = turns.join('\n').length + 1;
+        if (chars + size > 5000) {break;}
+        if (nextStart - recent[i].endTime > 8 && lines.length) {lines.push('');}
+        nextStart = recent[i].startTime;
+        lines.push(...turns.reverse());
+        chars += size;
     }
-    let dialogue = out.join('\n');
-    if (dialogue.length > 5000) {
-        const cut = dialogue.substring(dialogue.length - 5000);
-        dialogue = cut.substring(Math.max(0, cut.indexOf(' '))).trim();
-    }
-    return dialogue;
+    return lines.reverse().join('\n');
 }
 
 function problems(recap, dialogue, title) {
@@ -57,7 +67,7 @@ function problems(recap, dialogue, title) {
     if (sentences > 3) {found.push(`${sentences} sentences`);}
     if (/^(previously|in this scene|recap)/i.test(recap)) {found.push('preamble');}
     if (/subtitle|dialogue|\bAI\b|the scene|last line|the pause/i.test(recap)) {found.push('mentions the source');}
-    if (/["“](\S+\s+){3,}\S+["”]/.test(recap)) {found.push('quotes a line');}
+    if (/["“]([^\s"“”]+\s+){3,}[^\s"“”]+["”]/.test(recap)) {found.push('quotes a line');}
     if (/^[#*-]|\n/.test(recap)) {found.push('formatting');}
     // A capitalised word mid-sentence that the subtitles and title never use is probably invented.
     const known = `${dialogue} ${title}`.toLowerCase();
@@ -72,7 +82,7 @@ let failures = 0;
 for (const [n, file] of files.entries()) {
     if (n > 0) {await new Promise(r => setTimeout(r, 11000));} // proxy allows 6 recaps a minute per IP
     const cues = parseSrt(readFileSync(file, 'utf8'));
-    const resume = cues[cues.length - 1].endTime / 2;
+    const resume = Number(process.env.RESUME_SECONDS) || cues[cues.length - 1].endTime / 2;
     const title = basename(file, '.srt');
     const dialogue = recentDialogue(cues, resume);
     const res = await fetch(`${base}/v1/recap`, {
