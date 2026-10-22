@@ -4,6 +4,7 @@
 # (it reinstalls node_modules from the release lock):
 #   git worktree add ../glide-ota release/X.Y && ../glide-ota/scripts/ota.sh "Fix subtitle sync on long films"
 # Publishes and tags ota/X.Y.Z.N; promoting to users is a separate, printed step.
+# STALLION_PROJECT_ID is in .env; STALLION_CI_TOKEN is in the Desktop secrets backup.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -38,4 +39,5 @@ git push origin "ota/$ver.$n"
 
 echo
 echo "Published ota/$ver.$n ($hash). Release to v$ver only, small rollout first:"
-echo "  npx stallion release-bundle --hash $hash --app-version $ver --release-note \"$note\""
+echo "  npx stallion release-bundle --project-id \"\$STALLION_PROJECT_ID\" --ci-token \"\$STALLION_CI_TOKEN\" \\"
+echo "    --hash $hash --app-version $ver --release-note \"$note\""
