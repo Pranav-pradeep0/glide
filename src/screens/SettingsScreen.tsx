@@ -37,6 +37,7 @@ import { metrics, playerTheme, type } from '@/theme/theme';
 import { AppSettings, ShakeAction } from '../types';
 import pkg from '../../package.json';
 import { NATIVE_API_LEVEL } from '@/native/GlideNative';
+import { ACTIVE_RELEASE_HASH } from 'react-native-stallion';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types';
@@ -559,7 +560,7 @@ export default function SettingsScreen() {
                         icon="info"
                         title="Version"
                         // The JS version alone can't tell an OTA from a new APK; the native level can.
-                        value={`${pkg.version} (${NATIVE_API_LEVEL})`}
+                        value={`${pkg.version} (${NATIVE_API_LEVEL})${ACTIVE_RELEASE_HASH ? ` · OTA ${ACTIVE_RELEASE_HASH.slice(0, 7)}` : ''}`}
                         onPress={__DEV__ ? () => { if (++versionTaps.current % 7 === 0) navigation.navigate('HapticsLab'); } : undefined}
                     />
                     <ListRow
