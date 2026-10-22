@@ -4,7 +4,7 @@ import { RecapService } from '../src/services/RecapService';
 jest.mock('../src/utils/constants', () => ({ AI_PROXY_URL: '', RECAP_AVAILABLE: false }));
 jest.mock('../src/services/SubtitleCueStore', () => ({ SubtitleCueStore: {} }));
 
-const cue = (startTime: number, text: string) => ({ startTime, endTime: startTime + 2, text });
+const cue = (startTime: number, text: string) => ({ index: 0, startTime, endTime: startTime + 2, text });
 
 describe('RecapService.cleanCue', () => {
     it('keeps speaker labels and splits dashed turns', () => {
