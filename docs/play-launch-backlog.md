@@ -14,7 +14,20 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 - Play developer account: created on owner's personal Google account, in verification.
 - Done: `3da5cef` screens 4.30.0 (fixes reanimated #10734 SIGSEGV; reanimated 4.7.1 now unblocked).
 
-## RESUME HERE (state at end of 2026-10-22)
+## RESUME HERE (state at end of 2026-10-23)
+
+- v2.6.0: version bumped, pushed, tagged. CI keeps the AAB as a workflow artifact (no
+  `PLAY_SERVICE_ACCOUNT_JSON` yet): upload it to Closed testing by hand. `PLAY_RELEASE_STATUS=draft` set.
+- Store listing done: 7 captioned screenshots, feature graphic, 512 icon, text (owner's Desktop
+  `glide-play-screenshots`). Closed test: all countries; needs 12+ testers opted in for 14 days.
+- Folders sort by Newest (e0bad70); Music action bar fits (bdfd85a).
+- **Bug, not fixed:** the library does not refresh after a folder rename or a copy made outside
+  Glide until a manual refresh, though `MediaStoreVideoModule` observes MediaStore and
+  `MediaService.notifyChanged` reloads lists. Check over adb whether the observer fires at all.
+- Still open: revoke the old Groq key + spending limit; delete the stale January repo secrets
+  (`GROQ_*`, `OMDB_*`, `SUBDL_*`, now Worker-side); Console forms (Data safety, permissions).
+
+## State at end of 2026-10-22
 
 **Not pushed:** ~30 local commits (2026-10-22 work below + another session's haptics commits).
 Push only on the owner's go-ahead.
