@@ -665,7 +665,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                 <ListGroup inset onPlayer>
                     <ListRow
                         title="Volume leveler"
-                        caption="Quieter action, clearer voices"
+                        caption="Action and dialogue at the same volume"
                         toggle={{ value: !!props.volumeLeveler, onChange: () => props.onToggleVolumeLeveler?.() }}
                         onPlayer
                     />

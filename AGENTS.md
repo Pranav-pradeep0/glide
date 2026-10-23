@@ -71,3 +71,17 @@ Before tagging `vX.Y.Z`, add `release-notes/X.Y.Z.txt`. CI fails the tag without
 - One `- ` bullet per change. No scopes, file names or library names.
 - Draft it from `git log --no-merges <last tag>..HEAD` (`feat`/`fix`/`perf`); the owner
   approves the wording.
+
+## Android TV
+
+The TV version is the same app (`IS_TV` from `src/utils/tv.ts` gates TV-only code). Plan and
+guidance: `docs/android-tv.md` on the `tv` branch (worktree `C:\glide-tv`) until it merges into
+`main`, then in `docs/`.
+
+- While the `tv` branch exists: after committing user-visible work on `main`, merge it into `tv`
+  (`git merge main` in `C:\glide-tv`) or remind the owner to. Resolve conflicts keeping both the
+  phone change and the TV behaviour.
+- Every UI change must work with a TV remote: reachable with the D-pad, with a visible focus state
+  (the shared primitives in `src/components/ui` give this). Touch-only features (gestures,
+  haptics, PiP, rotation) are hidden on TV with `IS_TV`.
+- Never branch TV behaviour on screen size; phones must behave exactly as before.
