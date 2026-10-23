@@ -457,18 +457,23 @@ export default function MusicScreen() {
         return (
             <>
                 <View style={styles.actionBar}>
-                    <Text style={[type.caption, { color: colors.textSecondary }]}>
-                        {list.length} song{list.length !== 1 ? 's' : ''}
-                    </Text>
                     <View style={styles.actionButtons}>
+                        <Button label="Play All" onPress={() => handlePlayAll(list, false)} icon="play" size="md" />
+                        <Button label="Shuffle" onPress={() => handlePlayAll(list, true)} icon="shuffle" variant="secondary" size="md" />
+                    </View>
+                    <View style={styles.sortGroup}>
+                        {/* The Tracks chip already shows the count; elsewhere it gives way to the buttons. */}
+                        {page !== 'tracks' && (
+                            <Text style={[type.caption, styles.count, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {list.length} song{list.length !== 1 ? 's' : ''}
+                            </Text>
+                        )}
                         <SortButton
                             options={SORT_OPTIONS}
                             value={sortBy}
                             onChange={(key) => setSortBy(key)}
                             title="Sort Tracks"
                         />
-                        <Button label="Play All" onPress={() => handlePlayAll(list, false)} icon="play" size="md" />
-                        <Button label="Shuffle" onPress={() => handlePlayAll(list, true)} icon="shuffle" variant="secondary" size="md" />
                     </View>
                 </View>
                 <View style={styles.listContainerWithScroller}>
@@ -698,8 +703,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        // Keeps the buttons off the sort group when the row is full.
+        gap: metrics.space.sm,
         paddingHorizontal: metrics.gutter,
         paddingVertical: metrics.space.sm,
+    },
+    count: { flexShrink: 1 },
+    // Play All / Shuffle lead; the sort (and count) sit at the right edge.
+    sortGroup: {
+        flexShrink: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: metrics.space.xs,
     },
     actionButtons: {
         flexDirection: 'row',
