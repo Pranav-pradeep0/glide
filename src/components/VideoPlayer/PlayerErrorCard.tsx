@@ -24,7 +24,7 @@ export function PlayerErrorCard({ code, onRetry, onNext, onClose }: Props) {
     useTvFocusScope(cardRef, true);
     return (
         <View style={styles.wrap} pointerEvents="box-none">
-            <View ref={cardRef} style={styles.card} accessibilityRole="alert">
+            <View ref={cardRef} collapsable={false} style={styles.card} accessibilityRole="alert">
                 <Feather name="alert-circle" size={28} color={colors.text} />
                 <Text style={[type.heading, styles.title]}>{title}</Text>
                 <Text style={[type.body, styles.body]}>{body}</Text>

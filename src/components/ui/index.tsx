@@ -674,7 +674,8 @@ export function SheetHeader({ title, onClose, onBack, right, onPlayer }: SheetHe
             </Text>
             <View style={styles.headerRight}>
                 {right}
-                {onClose && (
+                {/* TV: Back closes it; an X would only be one more stop for the remote. */}
+                {onClose && !IS_TV && (
                     <IconButton icon="x" iconSize={20} color={colors.textSecondary} onPress={onClose} accessibilityLabel="Close" onPlayer={onPlayer} />
                 )}
             </View>

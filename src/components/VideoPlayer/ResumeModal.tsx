@@ -69,6 +69,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
     return (
         <Animated.View
             ref={overlayRef}
+            collapsable={false}
             style={styles.overlay}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}

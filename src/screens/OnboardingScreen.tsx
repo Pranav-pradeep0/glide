@@ -507,7 +507,7 @@ function TvButton({ label, onPress, fill, color, edge, ring, preferred }: {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             accessibilityRole="button"
-            style={[ctaStyles.btn, ctaStyles.tvBtn, { backgroundColor: fill, borderColor: focused ? ring : edge }, focused && ctaStyles.tvFocused]}
+            style={[ctaStyles.btn, ctaStyles.tvBtn, { backgroundColor: fill, borderColor: edge }, focused && [ctaStyles.tvFocused, { outlineColor: ring }]]}
         >
             <Text style={[ctaStyles.label, { color }]}>{label}</Text>
         </Pressable>
@@ -784,7 +784,8 @@ const ctaStyles = StyleSheet.create({
     },
     tvRow: { flexDirection: 'row-reverse', justifyContent: 'center', gap: GAP * 2 },
     tvBtn: { width: 220, borderWidth: 3 },
-    tvFocused: { transform: [{ scale: 1.06 }] },
+    // Outline outside the edge with a gap, so it shows on the filled Next too (a border in `ring` vanished there).
+    tvFocused: { transform: [{ scale: 1.06 }], outlineWidth: 3, outlineOffset: 3 },
 });
 
 const screenStyles = StyleSheet.create({

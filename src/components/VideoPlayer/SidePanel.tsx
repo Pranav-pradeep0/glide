@@ -118,6 +118,7 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
 
             <Animated.View
                 ref={panelRef}
+                collapsable={false}
                 onLayout={landscape ? undefined : e => { travel.value = e.nativeEvent.layout.height; }}
                 // Every key set in both orientations: a key one of them dropped would keep its
                 // value from before the rotation (a portrait height in a landscape panel).

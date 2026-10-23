@@ -40,6 +40,7 @@ export function PermissionGate({ kind }: { kind: MediaKind }) {
                 label={blocked ? 'Open settings' : 'Allow access'}
                 icon={blocked ? 'settings' : 'unlock'}
                 variant="primary"
+                preferFocus
                 onPress={() => request(kind)}
             />
         </View>

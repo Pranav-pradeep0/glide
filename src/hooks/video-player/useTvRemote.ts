@@ -67,7 +67,8 @@ export function tvFocus(ref: RefObject<unknown>) {
 
 /**
  * While `open`, focus stays inside `ref`'s view; it starts on `focusRef` (or the first focusable
- * view inside `ref`). The view must not be flattened away: give a plain View collapsable={false}.
+ * view inside `ref`). Give the view collapsable={false}, even with a background: without it Fabric
+ * mounts its children into an ancestor, so nothing is "inside" it and focus can't be kept there.
  */
 export function useTvFocusScope(ref: RefObject<unknown>, open: boolean, focusRef?: RefObject<unknown>) {
     useEffect(() => {

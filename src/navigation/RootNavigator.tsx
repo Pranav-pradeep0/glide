@@ -6,13 +6,14 @@ import { useAppStore } from '../store/appStore';
 import { useTheme } from '../hooks/useTheme';
 import { Feather } from '@react-native-vector-icons/feather';
 import { DeepLinkService } from '../services/DeepLinkService';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type HostInstance } from 'react-native';
 import Animated, { Easing, interpolateColor, SharedValue, useAnimatedReaction, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { Button, DialogHost, Touchable, SnackbarHost, useSnackbarClearance } from '@/components/ui';
 import { ErrorBoundary } from '../../ErrorBoundary';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { metrics, motion, type } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
+import { tvFocus } from '@/hooks/video-player/useTvRemote';
 import { useActivityBackButton } from './useActivityBackButton';
 
 // The four tabs are what the first frame needs, so they are imported.
@@ -80,7 +81,21 @@ function SideRail({ state, descriptors, navigation }: BottomTabBarProps) {
     // Moving between items blurs one before focusing the next; counting keeps the drawer open across it.
     const focusCount = useRef(0);
     const expanded = useSharedValue(0);
-    const onFocusChange = useCallback((delta: 1 | -1) => {
+    // Left from the page lands on whichever item is level with the focused card; entering, focus
+    // goes on to the current tab's item. A blur and the next item's focus arrive together, so
+    // "inside" is only cleared a frame after a blur that no rail focus followed.
+    // ponytail: frame timing; if an entry is ever missed, Android's guess stands (still usable).
+    const activeRef = useRef<HostInstance>(null);
+    const inside = useRef(false);
+    const leaving = useRef(0);
+    const onFocusChange = useCallback((delta: 1 | -1, isActive: boolean) => {
+        if (delta === 1) {
+            cancelAnimationFrame(leaving.current);
+            if (!inside.current && !isActive) { tvFocus(activeRef); }
+            inside.current = true;
+        } else {
+            leaving.current = requestAnimationFrame(() => { inside.current = false; });
+        }
         focusCount.current = Math.max(0, focusCount.current + delta);
         expanded.value = withSpring(focusCount.current > 0 ? 1 : 0, motion.spatial);
     }, [expanded]);
@@ -101,8 +116,8 @@ function SideRail({ state, descriptors, navigation }: BottomTabBarProps) {
                         }
                     };
                     return (
+                        <View key={route.key} ref={focused ? activeRef : undefined} collapsable={false}>
                         <RailItem
-                            key={route.key}
                             label={options.title ?? route.name}
                             icon={options.tabBarIcon}
                             focused={focused}
@@ -112,6 +127,7 @@ function SideRail({ state, descriptors, navigation }: BottomTabBarProps) {
                             onPress={onPress}
                             onFocusChange={onFocusChange}
                         />
+                        </View>
                     );
                 })}
             </Animated.View>
@@ -120,7 +136,7 @@ function SideRail({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 function RailItem({ label, icon, focused, index, selected, expanded, onPress, onFocusChange }: TabItemProps & {
-    expanded: SharedValue<number>; onFocusChange: (delta: 1 | -1) => void;
+    expanded: SharedValue<number>; onFocusChange: (delta: 1 | -1, isActive: boolean) => void;
 }) {
     const { colors } = useTheme();
     const active = useIndicator(selected, index, focused);
@@ -132,8 +148,8 @@ function RailItem({ label, icon, focused, index, selected, expanded, onPress, on
     return (
         <Touchable
             onPress={onPress}
-            onFocus={() => { setHasFocus(true); onFocusChange(1); }}
-            onBlur={() => { setHasFocus(false); onFocusChange(-1); }}
+            onFocus={() => { setHasFocus(true); onFocusChange(1, focused); }}
+            onBlur={() => { setHasFocus(false); onFocusChange(-1, focused); }}
             scaleTo={1}
             // The rail draws its own focus fill; no ring or focus tint stacked on it.
             focusRing={false}

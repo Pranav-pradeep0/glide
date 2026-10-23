@@ -103,11 +103,22 @@ Results, open issues and the device checklist: see **Status** below.
 - Without a TV: Android Studio's Android TV (1080p) emulator; the D-pad is on the emulator's
   extended controls.
 - Record the screen to review focus movement frame by frame: `adb shell screenrecord`, then
-  ffmpeg to tile frames (worked well for the phone tab bar on 2026-10-22).
+  ffmpeg to tile frames (worked well for the phone tab bar on 2026-10-22). Record to
+  `/data/local/tmp`, not `/sdcard`: MediaStore indexes anything there and it shows up in Videos.
+- **Set `package.json` to a version with no published OTA** (locally, never committed) before
+  building a TV test APK. Stallion serves the bundle published for the app's version; with the
+  phone's version, the second launch swaps in the live phone bundle, which has no TV code.
+- Which view has focus, exactly (no timing guesswork): `adb shell dumpsys activity top`, the
+  Glide section, the line whose second flag group starts `.F`. Keep presses under ~0.5 s apart
+  in the player or the controls auto-hide between steps.
+- The owner's TV (Mi TV AXSO0, Amlogic, Android 9, 1280×720 at 213 dpi) draws video on a
+  hardware layer: `screencap` and `screenrecord` show the picture black. It plays fine.
+- A debug build with Metro works over network adb (`adb reverse tcp:8081 tcp:8081`) but runs JS
+  too slowly on this TV to judge timing; use it for where focus goes, release builds for feel.
 
 ## Status
 
-**2026-10-23: Phase 1 written, not yet run on a device.** tsc clean, jest 33 suites pass. The
+**2026-10-23: Phase 1 written.** tsc clean, jest 33 suites pass. The
 TV APK builds (`assembleRelease -PallowDebugSigning=true`) and passes the CI "Verify Android TV
 compatibility" check locally. The worktree has its own `node_modules` (`npm ci`): the junction
 to `C:\glide
@@ -131,7 +142,38 @@ Built:
 - **CI:** "Verify Android TV compatibility" step (tested against the phone APK: correctly fails
   there on missing launcher entry, banner, and implied faketouch).
 
+**2026-10-23: first device test** (owner's Mi TV, release build). Passed: banner in Apps (1),
+onboarding (2), Allow access (3), Videos focus and rail (4), rail pages and Back (5), album first
+video focused (6), PlayerDetail Play focused, Continue watching focused, every player control
+reachable (9), Playback panel in/out with focus back on its opener (10).
+
+Fixed on the device:
+- **Fabric hoists children out of a View that is not a stacking context**, even one with a
+  background or a ref. The player screen, the error card and every overlay scope had no native
+  children, so containment thought every control was outside the player and snapped focus back
+  to Play on each press ("can't move between the controls"). All scopes are `collapsable={false}`.
+- Focus could escape an overlay without a key press (a view re-created under it): the native
+  module now watches global focus changes and pulls it back into the topmost overlay.
+- The player opened with focus on the back arrow (Android's first pick; OK left the video). It
+  now starts on Play, and an overlay the app opened itself (Continue watching, an error) returns
+  focus to Play, not to that first pick.
+- Left from the page opened the rail on whichever item was level with the card (often
+  Settings); entering the rail now goes to the current tab's item.
+- Onboarding's Next showed no focus (dark ring on a dark button): ring drawn outside the edge.
+- "Allow access" takes focus; the sheet close X is hidden on TV (Back closes).
+
 Known gaps:
+- **Green thumbnails for 10-bit HEVC on Android 9** (not TV-specific): the system thumbnailer
+  and MediaMetadataRetriever fall back to the Amlogic decoder, which returns an empty frame.
+  Root fix: thumbnails via media3's frame extractor (ExoPlayer + MediaCodec to a surface, the
+  path that plays these files fine). Needs the owner's OK for the media3 module.
+- The back arrow can keep a stale focus ring after the player opens (its blur never reaches
+  JS) until focus visits it once.
+- The speed slider takes focus with no visible state; the Audio row label wraps ("Au dio")
+  when the track name is long.
+- Back from Recents lands focus on the grid toggle, not a card.
+- Not yet tested on the device: Settings (8), remote media keys (11), Up next (12), sofa
+  readability (13), phone regression (14).
 - Sliders (playback rate, EQ bands, enhancement strength) can't be adjusted with the D-pad.
 - Recap text doesn't scroll with the D-pad.
 - While Up next shows, the controls can't be reached (Back dismisses the card).

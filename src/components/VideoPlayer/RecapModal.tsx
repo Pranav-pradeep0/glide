@@ -74,6 +74,7 @@ export const RecapModal: React.FC<RecapModalProps> = memo(({
     return (
         <Animated.View
             ref={overlayRef}
+            collapsable={false}
             style={styles.overlay}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}

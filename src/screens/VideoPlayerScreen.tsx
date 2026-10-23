@@ -1380,7 +1380,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     return (
         <PanelBackContext.Provider value={panelBack}>
-        <View ref={screenRef} style={styles.container}>
+        <View ref={screenRef} collapsable={false} style={styles.container}>
             {/* Video with gestures */}
             <GestureDetector gesture={gestures.composedGesture}>
                 <View style={styles.video}>

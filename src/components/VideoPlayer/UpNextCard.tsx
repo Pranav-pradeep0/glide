@@ -99,6 +99,7 @@ export function UpNextCard({ name, path, endsAt, inCredits, onPlay, onDismiss, b
     return (
         <Animated.View
             ref={cardRef}
+            collapsable={false}
             entering={FadeIn.duration(motion.fadeIn)}
             exiting={FadeOut.duration(motion.fadeOut)}
             style={[styles.card, { right: right + metrics.gutter }, liftStyle]}
