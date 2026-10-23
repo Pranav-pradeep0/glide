@@ -132,6 +132,9 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
                     </View>
                 </GestureDetector>
                 <View
+                    // Rebuilt on rotation: Fabric kept stale portrait sizes inside the body
+                    // (the list ran below a landscape screen). State lives in the callers.
+                    key={landscape ? 'side' : 'sheet'}
                     style={[
                         styles.body,
                         landscape
@@ -170,8 +173,6 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 0,
     },
     sheetPadding: { paddingTop: 0, paddingRight: 0 },
-    // Sized by flexBasis, a number in both: a portrait `height` reset to 'auto' on rotation
-    // stayed set, pushing the landscape body's end below the screen.
     sideBody: { flexGrow: 1, flexShrink: 1, flexBasis: 0, marginBottom: 0 },
     sheetBody: { flexGrow: 0, flexShrink: 0, paddingBottom: 0 },
     header: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.sm },
