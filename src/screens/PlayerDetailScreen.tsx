@@ -108,7 +108,7 @@ export default function PlayerDetailScreen() {
         : [];
 
     const actions = (
-        <View style={styles.actions}>
+        <View style={[styles.actions, IS_TV && styles.actionsTv]}>
             <Button label="Play" icon="play" variant="primary" size="lg" onPress={() => navigateToPlayer(false)} />
             {hapticsEnabled && !IS_TV && (
                 <Button label="Play with haptics" badge="Experimental" size="lg" onPress={() => navigateToPlayer(true)} />
@@ -169,6 +169,15 @@ export default function PlayerDetailScreen() {
                     <Gradient
                         colors={[`${colors.background}00`, colors.background]}
                         style={styles.fade}
+                        pointerEvents="none"
+                    />
+                )}
+                {/* TV: the poster melts into the page instead of ending on a hard edge. */}
+                {IS_TV && (
+                    <Gradient
+                        horizontal
+                        colors={[`${colors.background}00`, colors.background]}
+                        style={styles.fadeTv}
                         pointerEvents="none"
                     />
                 )}
@@ -278,13 +287,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     fade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FADE_HEIGHT },
+    fadeTv: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '35%' },
     content: {
         paddingHorizontal: metrics.space.xl,
         paddingBottom: 100,
     },
     contentLandscape: { marginLeft: '40%' },
-    // TV overscan: clear of the right edge.
-    contentTv: { paddingRight: 48 },
+    // TV: centred in the height, inside the overscan margins (48 dp sides, 27 dp top and bottom),
+    // with room to breathe.
+    contentTv: {
+        justifyContent: 'center',
+        paddingLeft: metrics.space.xxl,
+        paddingRight: 48 + metrics.space.xxl,
+        paddingTop: 27 + metrics.space.xl,
+        paddingBottom: 27 + metrics.space.xl,
+    },
 
     movieTitle: { marginBottom: metrics.space.sm },
     metaBlock: { gap: metrics.space.sm },
@@ -297,6 +314,8 @@ const styles = StyleSheet.create({
         marginTop: metrics.space.md,
         marginBottom: metrics.space.xl,
     },
+    // TV: Play is a button, not a bar across the column.
+    actionsTv: { alignSelf: 'flex-start', minWidth: 280, marginTop: metrics.space.xl, marginBottom: metrics.space.xxl },
 
     plot: { marginBottom: metrics.space.lg },
     plotText: { lineHeight: 21 },

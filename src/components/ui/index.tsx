@@ -600,8 +600,9 @@ export function Card({ onPlayer, padding = metrics.space.lg, style, ...rest }: C
 // Gradient
 
 interface GradientProps {
-    /** Top to bottom. Any colour React Native takes, alpha included. */
+    /** Top to bottom (left to right when `horizontal`). Any colour React Native takes, alpha included. */
     colors: string[];
+    horizontal?: boolean;
     /** 0..1, one per colour; evenly spaced when left out. Past the last stop its colour holds. */
     locations?: number[];
     style?: StyleProp<ViewStyle>;
@@ -621,7 +622,7 @@ const alphaOf = (color: string) => (((processColor(color) as number) >>> 24) & 0
  * stays "100%" of the box: sized in measured dp, it rounded a fraction of a pixel short
  * and let a 1 px line of the picture underneath show along the edge.
  */
-export function Gradient({ colors, locations, style, pointerEvents }: GradientProps) {
+export function Gradient({ colors, locations, horizontal, style, pointerEvents }: GradientProps) {
     const id = `gradient${useId().replace(/[^\w-]/g, '')}`;
     const [sizeKey, setSizeKey] = useState('');
     return (
@@ -635,7 +636,7 @@ export function Gradient({ colors, locations, style, pointerEvents }: GradientPr
         >
             <Svg key={sizeKey} style={StyleSheet.absoluteFill}>
                 <Defs>
-                    <SvgLinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+                    <SvgLinearGradient id={id} x1="0" y1="0" x2={horizontal ? '1' : '0'} y2={horizontal ? '0' : '1'}>
                         {colors.map((color, i) => (
                             <Stop
                                 key={i}
