@@ -160,7 +160,7 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
                         styles.body,
                         landscape
                             ? [styles.sideBody, { paddingBottom: insets.bottom }]
-                            : [styles.sheetBody, { height: windowHeight * 0.6, marginBottom: Math.max(insets.bottom, metrics.space.lg) }],
+                            : [styles.sheetBody, { flexBasis: windowHeight * 0.6, marginBottom: Math.max(insets.bottom, metrics.space.lg) }],
                     ]}
                 >
                     {children}
@@ -196,8 +196,10 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 0,
     },
     sheetPadding: { paddingTop: 0, paddingRight: 0 },
-    sideBody: { flex: 1, height: 'auto', marginBottom: 0 },
-    sheetBody: { flex: 0, paddingBottom: 0 },
+    // Sized by flexBasis, a number in both: a portrait `height` reset to 'auto' on rotation
+    // stayed set, pushing the landscape body's end below the screen.
+    sideBody: { flexGrow: 1, flexShrink: 1, flexBasis: 0, marginBottom: 0 },
+    sheetBody: { flexGrow: 0, flexShrink: 0, paddingBottom: 0 },
     header: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.sm },
     sheetGrip: { paddingHorizontal: metrics.gutter, paddingTop: metrics.space.sm, paddingBottom: metrics.space.xs },
     handle: {
