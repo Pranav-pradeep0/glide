@@ -1,5 +1,6 @@
 import * as RNFS from '@dr.pogodin/react-native-fs';
 import { BUILD_ENV } from '@/native/GlideNative';
+import { IS_TV } from '@/utils/tv';
 
 export const VIDEO_EXTENSIONS = [
     '.mp4', '.mkv', '.avi', '.mov', '.flv',
@@ -29,7 +30,8 @@ export const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 // they never ship in the APK. With no proxy configured, those features are simply unavailable.
 const configuredAiProxyUrl = (BUILD_ENV.AI_PROXY_URL || '').trim().replace(/\/+$/, '');
 export const AI_PROXY_URL = configuredAiProxyUrl.startsWith('https://') ? configuredAiProxyUrl : '';
-export const RECAP_AVAILABLE = AI_PROXY_URL.length > 0;
+// Not on TV (owner, 2026-10-23): Continue watching there is Resume and Start over.
+export const RECAP_AVAILABLE = AI_PROXY_URL.length > 0 && !IS_TV;
 
 // SubDL search goes through the proxy; downloads are public and need no key.
 export const SUBDL_API_URL = AI_PROXY_URL && `${AI_PROXY_URL}/v1/subdl`;

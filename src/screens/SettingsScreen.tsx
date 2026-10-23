@@ -22,6 +22,7 @@ import Feather from '@react-native-vector-icons/feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { SharedValue, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { LicencesSheet } from '@/components/LicencesSheet';
+import { TvStepper } from '@/components/ui/TvStepper';
 import {
     Chip,
     IconButton,
@@ -59,12 +60,15 @@ const SUBTITLE_STYLES = [
 
 type SliderProps = React.ComponentProps<typeof Slider>;
 
-function SliderRow({ title, valueText, caption, ...slider }: SliderProps & {
+function SliderRow({ title, valueText, caption, tvStep, ...slider }: SliderProps & {
     title: string;
     valueText?: string;
     caption?: string;
+    /** TV step where the slider has none (continuous). */
+    tvStep?: number;
 }) {
     const { colors } = useTheme();
+    const { minimumValue = 0, maximumValue = 1, step, value = minimumValue, onValueChange, onSlidingComplete } = slider;
     return (
         <View style={styles.block}>
             <View style={styles.blockHeader}>
@@ -72,16 +76,30 @@ function SliderRow({ title, valueText, caption, ...slider }: SliderProps & {
                     <Text style={[type.row, styles.regular, { color: colors.text }]}>{title}</Text>
                     {!!caption && <Text style={[type.caption, { color: colors.textSecondary }]}>{caption}</Text>}
                 </View>
-                {!!valueText && <Text style={[type.body, styles.tnum, { color: colors.textSecondary }]}>{valueText}</Text>}
+                {/* TV: the D-pad can't drag a slider, so the value gets − and + buttons instead. */}
+                {IS_TV ? (
+                    <TvStepper
+                        value={value}
+                        min={minimumValue}
+                        max={maximumValue}
+                        step={tvStep ?? step ?? 1}
+                        format={() => valueText ?? String(value)}
+                        onChange={v => {
+                            onValueChange?.(v);
+                            onSlidingComplete?.(v);
+                        }}
+                        accessibilityLabel={title}
+                    />
+                ) : !!valueText && <Text style={[type.body, styles.tnum, { color: colors.textSecondary }]}>{valueText}</Text>}
             </View>
-            <Slider
+            {!IS_TV && <Slider
                 style={styles.slider}
                 accessibilityLabel={title}
                 minimumTrackTintColor={colors.primary}
                 maximumTrackTintColor={colors.fillStrong}
                 thumbTintColor={colors.primary}
                 {...slider}
-            />
+            />}
         </View>
     );
 }
@@ -111,6 +129,7 @@ const FontSizeSliderControl = React.memo(({ fontSizeSV, onFinalChange }: {
             valueText={`${Math.round(displaySize)} px`}
             minimumValue={12}
             maximumValue={40}
+            tvStep={2}
             value={displaySize}
             onValueChange={(val) => {
                 fontSizeSV.value = val;
@@ -539,6 +558,7 @@ export default function SettingsScreen() {
                             valueText={settings.subtitleOutlineWidth.toFixed(1)}
                             minimumValue={0.5}
                             maximumValue={6}
+                            tvStep={0.5}
                             value={settings.subtitleOutlineWidth}
                             onValueChange={setSubtitleOutlineWidth}
                         />
@@ -549,6 +569,7 @@ export default function SettingsScreen() {
                             valueText={`${Math.round(settings.subtitleBackgroundOpacity * 100)}%`}
                             minimumValue={0}
                             maximumValue={1}
+                            tvStep={0.1}
                             value={settings.subtitleBackgroundOpacity}
                             onValueChange={setSubtitleBackgroundOpacity}
                         />

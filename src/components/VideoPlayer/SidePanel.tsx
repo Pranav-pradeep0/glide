@@ -36,7 +36,8 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
     const insets = useSafeAreaInsets();
     const { width: windowWidth, height: windowHeight } = useWindowDimensions();
     const landscape = windowWidth > windowHeight;
-    const panelWidth = Math.min(360, windowWidth * 0.4) + insets.right;
+    // TV text is TV_SCALE larger and the TV gutter wider: the phone's 360 dp clipped rows there.
+    const panelWidth = (IS_TV ? Math.min(480, windowWidth * 0.5) : Math.min(360, windowWidth * 0.4)) + insets.right;
     const sheetWidth = Math.min(windowWidth, 640);
 
     // 0 hidden, 1 open. Dragging the sheet moves it too, so the scrim follows the finger.

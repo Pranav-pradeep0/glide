@@ -20,6 +20,9 @@ import { LANGUAGES } from '../utils/languages';
 import { VerticalSlider } from './VerticalSlider';
 import { Button, Chip, IconButton, ListGroup, ListRow, Segmented } from './ui';
 import { SidePanel } from './VideoPlayer/SidePanel';
+import { TvStepper } from './ui/TvStepper';
+import { useAppStore } from '../store/appStore';
+import { IS_TV } from '../utils/tv';
 import { metrics, playerTheme, type as typo } from '@/theme/theme';
 
 const { colors } = playerTheme;
@@ -193,6 +196,10 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
 
     const { width, height } = useWindowDimensions();
     const isLandscape = width > height;
+    const subtitleFontSize = useAppStore((s) => s.settings.subtitleFontSize);
+    const subtitlePosition = useAppStore((s) => s.settings.subtitlePositionLandscape);
+    const setSubtitleFontSize = useAppStore((s) => s.setSubtitleFontSize);
+    const setSubtitlePosition = useAppStore((s) => s.setSubtitlePosition);
 
     // ---- Memoized Values ----
     const filteredTracks = useMemo(
@@ -558,6 +565,36 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         </ListGroup>
     ) : null;
 
+    // TV: size and position live here, over the video they change. Phones pinch and drag the
+    // subtitle itself. Position is the subtitle's centre-offset ratio (0.38 by default, ±0.45 at
+    // most) shown as height above the bottom edge, so + moves it up. TV is landscape only.
+    const styleGroup = IS_TV && type === 'subtitle' ? (
+        <ListGroup inset onPlayer style={styles.group}>
+            <TvStepper
+                title="Size"
+                value={subtitleFontSize}
+                min={12}
+                max={40}
+                step={2}
+                format={(v) => `${Math.round(v)} px`}
+                onChange={setSubtitleFontSize}
+                accessibilityLabel="Subtitle size"
+                onPlayer
+            />
+            <TvStepper
+                title="Position"
+                value={Math.round((0.5 - subtitlePosition) * 100)}
+                min={5}
+                max={95}
+                step={2}
+                format={(v) => `${v}% up`}
+                onChange={(v) => setSubtitlePosition('landscape', (50 - v) / 100)}
+                accessibilityLabel="Subtitle height"
+                onPlayer
+            />
+        </ListGroup>
+    ) : null;
+
     const browseGroup = (
         <ListGroup inset onPlayer style={styles.group}>
             <ListRow
@@ -644,7 +681,26 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                     ))}
                 </View>
 
-                <View style={[styles.bandsBox, !enabled && styles.dimmed]}>
+                {/* TV: the D-pad can't drag the band sliders; one − + row per band instead. */}
+                {IS_TV ? (
+                    <ListGroup inset onPlayer style={styles.group}>
+                        {EQUALIZER_BANDS.map((band, i) => (
+                            <TvStepper
+                                key={band.freq}
+                                title={band.label}
+                                value={bands[i] || 0}
+                                min={-12}
+                                max={12}
+                                step={1}
+                                format={(v) => `${v > 0 ? '+' : ''}${v} dB`}
+                                onChange={(v) => props.onSetEqualizerBand?.(i, v)}
+                                disabled={!enabled}
+                                accessibilityLabel={`${band.label} band`}
+                                onPlayer
+                            />
+                        ))}
+                    </ListGroup>
+                ) : <View style={[styles.bandsBox, !enabled && styles.dimmed]}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bands} nestedScrollEnabled>
                         {EQUALIZER_BANDS.map((band, i) => (
                             <BandSlider
@@ -658,7 +714,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                             />
                         ))}
                     </ScrollView>
-                </View>
+                </View>}
 
                 <Button
                     label="Reset"
@@ -795,6 +851,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                         {offGroup}
                         {group(filteredTracks.map(trackRow), 'This video has no built-in subtitles')}
                         {syncGroup}
+                        {styleGroup}
                     </>,
                 );
             case 'external':
@@ -805,6 +862,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                         {noticeText}
                         {group(externalSubtitles.map(externalRow), 'No subtitle files loaded yet')}
                         {syncGroup}
+                        {styleGroup}
                     </>,
                 );
             case 'online':

@@ -6,6 +6,7 @@
 import type { GlidePlayerRef, PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
 import { SharedValue } from 'react-native-reanimated';
 import { SubtitleCue, VideoBookmark } from '@/types';
+import { IS_TV } from '@/utils/tv';
 
 // ============================================================================
 // CONSTANTS
@@ -16,7 +17,8 @@ export const PLAYER_CONSTANTS = {
     HUD_HIDE_MS: 800,
     RIPPLE_DURATION_MS: 800,
     SPEED_HUD_HIDE_MS: 1500,
-    CONTROLS_AUTO_HIDE_MS: 3000,
+    // TV: eyes go from the screen to the remote and back between presses; 3 s hid them mid-way.
+    CONTROLS_AUTO_HIDE_MS: IS_TV ? 8000 : 3000,
     BUFFERING_TIMEOUT_MS: 300,
     // The resume position, not a recording of where you are. Every tick rewrites the
     // whole history file, and exit, pause and backgrounding all save anyway, so the only

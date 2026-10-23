@@ -3,6 +3,7 @@ import { Appearance } from 'react-native';
 import { AppSettings, HapticPreset, HapticSettings, ShakeAction } from '../types';
 import { storage } from '../storage/storage';
 import { setCrashReportsEnabled as setNativeCrashReports } from '../native/GlideNative';
+import { IS_TV } from '../utils/tv';
 
 // Registered in MainApplication from res/font/atkinson_hyperlegible_next.xml.
 export const SUBTITLE_FONT_FAMILY = 'AtkinsonHyperlegibleNext';
@@ -84,7 +85,8 @@ export function migrateSettings(settings: AppSettings): AppSettings {
 }
 
 export function loadInitialSettings(): AppSettings {
-    const systemDark = Appearance.getColorScheme() === 'dark';
+    // TV starts dark (owner, 2026-10-23): a dim room, and TVs report light. Settings can change it.
+    const systemDark = IS_TV || Appearance.getColorScheme() === 'dark';
     try {
         const saved = storage.loadSettings();
         if (saved) {

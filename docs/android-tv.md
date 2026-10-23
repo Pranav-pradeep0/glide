@@ -162,19 +162,30 @@ Fixed on the device:
 - Onboarding's Next showed no focus (dark ring on a dark button): ring drawn outside the edge.
 - "Allow access" takes focus; the sheet close X is hidden on TV (Back closes).
 
+Second pass, same day (owner's list after the first test):
+- **Thumbnails** come from media3's FrameExtractor (`media3-inspector-frame`, hardware decoder
+  first, as playback does), falling back to MediaMetadataRetriever; a flat single-colour frame
+  from any source, the system's included, is never cached. Fixes green 10-bit HEVC thumbnails on
+  Android 9 (the system thumbnailer and MediaMetadataRetriever fall back to the Amlogic decoder,
+  which returns an empty frame). Not TV-only. `Credits.kt` still uses MediaMetadataRetriever.
+- **Sliders are steppers on TV** (`ui/TvStepper.tsx`: − value +, focusable buttons; stock RN
+  has no D-pad keys outside the player): Settings, playback speed, colour strength, EQ bands.
+- **Subtitle Size and Position** steppers in the player's Subtitles panel (Built-in and Files
+  tabs); position is "N% up", live.
+- Panels are up to half the screen wide on TV; controls auto-hide after 8 s on TV (3 s on
+  phones), each key restarting it; no Recap on TV (`RECAP_AVAILABLE`); dark theme by default.
+- Play and ±10 are squircle plates on TV, so their focus rings are squircles.
+- Back to Videos from another tab lands on the rail; Play takes focus as the player mounts.
+- **Splash on Android 9:** it was white (TVs report light mode; the logo is white) and still
+  (the compat splash can't animate before Android 12). `values-television` makes it black, and
+  below Android 12 MainActivity plays the logo morph on the splash's own view.
+
 Known gaps:
-- **Green thumbnails for 10-bit HEVC on Android 9** (not TV-specific): the system thumbnailer
-  and MediaMetadataRetriever fall back to the Amlogic decoder, which returns an empty frame.
-  Root fix: thumbnails via media3's frame extractor (ExoPlayer + MediaCodec to a surface, the
-  path that plays these files fine). Needs the owner's OK for the media3 module.
-- The back arrow can keep a stale focus ring after the player opens (its blur never reaches
-  JS) until focus visits it once.
-- The speed slider takes focus with no visible state; the Audio row label wraps ("Au dio")
-  when the track name is long.
-- Back from Recents lands focus on the grid toggle, not a card.
-- Not yet tested on the device: Settings (8), remote media keys (11), Up next (12), sofa
-  readability (13), phone regression (14).
-- Sliders (playback rate, EQ bands, enhancement strength) can't be adjusted with the D-pad.
+- PlayerDetail needs a TV layout (owner: "needs to be better").
+- After choosing a subtitle track, focus once went to the back arrow instead of the Subtitles
+  button (choosing an audio track returns to Audio correctly); not reproduced cleanly.
+- Not yet tested on the device: remote media keys (11), Up next (12), sofa readability (13),
+  phone regression (14).
 - Recap text doesn't scroll with the D-pad.
 - While Up next shows, the controls can't be reached (Back dismisses the card).
 - Back from an album lands focus where Android puts it, not on the folder you came from.

@@ -393,7 +393,7 @@ const SkipButton: FC<{ seconds: number; forward?: boolean; onPress: () => void }
             }}
             onPlayer
             scaleTo={0.92}
-            style={styles.jump}
+            style={[styles.jump, IS_TV && styles.jumpTv]}
             accessibilityRole="button"
             accessibilityLabel={`${forward ? 'Forward' : 'Back'} ${seconds} seconds`}
         >
@@ -654,7 +654,8 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 )}
                 {/* The TV remote's focus target: kept as a view, so it can be found to focus Play inside it. */}
                 <View ref={playRef} collapsable={false}>
-                    <Touchable onPress={onTogglePlayPause} onPlayer scaleTo={0.9} style={styles.play} accessibilityRole="button" accessibilityLabel={paused ? 'Play' : 'Pause'}>
+                    {/* TV: focused as it mounts, before Android hands the new screen's focus to its first view, the back arrow. */}
+                    <Touchable onPress={onTogglePlayPause} onPlayer scaleTo={0.9} preferFocus style={[styles.play, IS_TV && styles.playTv]} accessibilityRole="button" accessibilityLabel={paused ? 'Play' : 'Pause'}>
                         <Animated.View style={[styles.glyphLayer, playGlyphStyle]}>
                             <Feather name="play" size={46} color={colors.text} />
                         </Animated.View>
@@ -844,6 +845,8 @@ const styles = StyleSheet.create({
     // Previous, both skips, Play and Next: 264 dp of buttons, which fits a 360 dp screen only at this gap.
     centerPortrait: { gap: metrics.space.lg },
     jump: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+    // TV: a squircle plate (about 30% radius), so the focus ring, which follows it, is one too.
+    jumpTv: { borderRadius: 18, backgroundColor: colors.fill },
     jumpText: {
         position: 'absolute',
         // The ring's centre sits slightly below the box's middle.
@@ -856,6 +859,7 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
     },
     play: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center' },
+    playTv: { borderRadius: 22, backgroundColor: colors.fill },
     glyphLayer: { position: 'absolute' },
     bottom: { position: 'absolute', left: 0, right: 0, bottom: 0 },
     timeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

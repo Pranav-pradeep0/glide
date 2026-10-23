@@ -88,6 +88,14 @@ function SideRail({ state, descriptors, navigation }: BottomTabBarProps) {
     const activeRef = useRef<HostInstance>(null);
     const inside = useRef(false);
     const leaving = useRef(0);
+    // Back (or a page's own link) changed the tab: the focused view went with the old page and
+    // Android picks the new page's first view (Videos' grid toggle). Land on the rail instead.
+    const shownIndex = useRef(state.index);
+    useEffect(() => {
+        if (shownIndex.current === state.index) { return; }
+        shownIndex.current = state.index;
+        if (!inside.current) { tvFocus(activeRef); }
+    }, [state.index]);
     const onFocusChange = useCallback((delta: 1 | -1, isActive: boolean) => {
         if (delta === 1) {
             cancelAnimationFrame(leaving.current);

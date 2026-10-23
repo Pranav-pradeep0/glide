@@ -1163,13 +1163,14 @@ const styles = StyleSheet.create({
         paddingVertical: metrics.space.md,
         gap: metrics.space.lg,
     },
-    rowText: { flex: 1, gap: 2 },
+    // TV: a long value (an audio track's name) squeezed the title to "Au / dio"; the value gives way.
+    rowText: { flex: 1, gap: 2, minWidth: IS_TV ? '40%' : undefined },
     rowTitle: { fontWeight: '400', flexShrink: 1 },
     rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm },
     badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: metrics.radius.pill },
     badgeText: { fontSize: 10, lineHeight: 14, fontWeight: '600', letterSpacing: 0.5 },
     /** Long values ("English - EAC3 6ch") truncate instead of squeezing the title. */
-    rowValue: { maxWidth: '50%', textAlign: 'right' },
+    rowValue: { maxWidth: '50%', flexShrink: IS_TV ? 1 : undefined, textAlign: 'right' },
 
     card: { borderRadius: metrics.radius.card },
 

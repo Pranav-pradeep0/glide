@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TVs report light mode, and the logo is white: a light splash was a blank white screen. -->
+    <color name="splash_background">#000000</color>
+</resources>

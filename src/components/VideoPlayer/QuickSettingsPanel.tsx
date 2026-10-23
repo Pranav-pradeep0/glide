@@ -8,6 +8,8 @@ import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { haptic } from '@/native/HapticModule';
 import { DISPLAY_MODES, formatRate } from './PlayerIcons';
 import { SidePanel } from './SidePanel';
+import { TvStepper } from '@/components/ui/TvStepper';
+import { IS_TV } from '@/utils/tv';
 import { throttle } from '../../hooks/video-player/types';
 import { HAPTIC_PRESETS, HAPTIC_STRENGTH_MIN, hapticPresetAt, useAppStore } from '../../store/appStore';
 
@@ -181,9 +183,21 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
 
     const renderMain = () => (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-            <View style={styles.speedHead}>
+            <View style={[styles.speedHead, IS_TV && styles.centerY]}>
                 <Text style={[type.label, styles.speedLabel]}>Speed</Text>
-                <Text style={[type.row, styles.speedValue]}>{formatRate(speed.shown)}</Text>
+                {/* TV: the D-pad can't drag the slider. The chips cover the usual speeds, − and + the rest. */}
+                {IS_TV ? (
+                    <TvStepper
+                        value={props.playbackRate}
+                        min={0.25}
+                        max={4}
+                        step={0.25}
+                        format={formatRate}
+                        onChange={rate => setRate(rate, false)}
+                        accessibilityLabel="Playback speed"
+                        onPlayer
+                    />
+                ) : <Text style={[type.row, styles.speedValue]}>{formatRate(speed.shown)}</Text>}
             </View>
             <View style={styles.chips}>
                 {SPEED_CHIPS.map(rate => (
@@ -197,7 +211,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                     />
                 ))}
             </View>
-            <Slider
+            {!IS_TV && <Slider
                 style={styles.slider}
                 minimumValue={0.25}
                 maximumValue={4}
@@ -210,7 +224,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                 maximumTrackTintColor={colors.fillStrong}
                 thumbTintColor={colors.primary}
                 accessibilityLabel="Playback speed"
-            />
+            />}
 
             <ListGroup inset onPlayer style={styles.group}>
                 <ListRow icon="volume-2" title="Audio" value={props.audioValue} chevron onPress={props.onOpenAudio} onPlayer />
@@ -268,7 +282,18 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                                 />
                             ))}
                         </View>
-                        <View style={styles.sliderRow}>
+                        {IS_TV ? (
+                            <TvStepper
+                                value={enhancementStrength}
+                                min={0}
+                                max={1.5}
+                                step={0.1}
+                                format={v => `${Math.round(v * 100)}%`}
+                                onChange={v => props.onSetVideoEnhancementStrength?.(v)}
+                                accessibilityLabel="Color enhancement strength"
+                                onPlayer
+                            />
+                        ) : <View style={styles.sliderRow}>
                             <Slider
                                 style={[styles.slider, styles.sliderFlex, styles.sliderInset]}
                                 minimumValue={0}
@@ -284,7 +309,7 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                                 accessibilityLabel="Color enhancement strength"
                             />
                             <Text style={[type.body, styles.valueText]}>{Math.round(enhancement.shown * 100)}%</Text>
-                        </View>
+                        </View>}
                     </View>
                 )}
                 {toggleHapticsRow && (
@@ -444,6 +469,7 @@ const styles = StyleSheet.create({
     group: { marginTop: metrics.space.lg },
     subOptions: { paddingHorizontal: metrics.space.lg, paddingVertical: metrics.space.md, gap: metrics.space.sm },
     centered: { justifyContent: 'center' },
+    centerY: { alignItems: 'center' },
     // Android's slider insets its track by the thumb's radius; this lines the track up with the chips.
     sliderInset: { marginTop: 0, marginHorizontal: -metrics.space.lg },
     sliderRow: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm },

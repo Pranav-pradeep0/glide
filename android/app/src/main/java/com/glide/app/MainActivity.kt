@@ -34,12 +34,32 @@ class MainActivity : GlideBaseActivity() {
     // polled every frame while the splash shows.
     val splashShownAt = SystemClock.uptimeMillis()
     // A fast start also cut the icon's play-to-pause morph off midway, so a cold start holds
-    // until it has played; it starts with the process. (An exit listener could time it
-    // exactly, but it moves the splash into our window and the tab bar jumps on removal.)
-    splashScreen.setKeepOnScreenCondition {
-      val now = SystemClock.uptimeMillis()
-      !BuildConfig.DEBUG && now - splashShownAt < SPLASH_TIMEOUT_MS &&
-          (!isReactReady || now - Process.getStartUptimeMillis() < SPLASH_ICON_MS)
+    // until it has played; on Android 12+ it starts with the process. (An exit listener could
+    // time it exactly there, but it moves the splash into our window and the tab bar jumps.)
+    fun hold(now: Long, iconStartedAt: Long) = !BuildConfig.DEBUG && now - splashShownAt < SPLASH_TIMEOUT_MS &&
+        (!isReactReady || now - iconStartedAt < SPLASH_ICON_MS)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      splashScreen.setKeepOnScreenCondition { hold(SystemClock.uptimeMillis(), Process.getStartUptimeMillis()) }
+    } else {
+      // Before Android 12 the splash is a still picture of the icon (a white screen on a TV).
+      // Let it hand over at once to its view in our window, play the morph there, and hold
+      // that view by the same rule. No tab bar jump here: those versions have no exit animation.
+      splashScreen.setOnExitAnimationListener { provider ->
+        // Its icon is the logo inside the library's MaskedDrawable, which can't be started: put
+        // a fresh one in its place. The mask only clips to a circle the logo sits within.
+        (provider.iconView as? android.widget.ImageView)?.let { icon ->
+          val logo = getDrawable(R.drawable.logo_animated)
+          icon.setImageDrawable(logo)
+          (logo as? android.graphics.drawable.Animatable)?.start()
+        }
+        val iconStartedAt = SystemClock.uptimeMillis()
+        val view = provider.view
+        view.postOnAnimation(object : Runnable {
+          override fun run() {
+            if (hold(SystemClock.uptimeMillis(), iconStartedAt)) view.postOnAnimation(this) else provider.remove()
+          }
+        })
+      }
     }
     dropPrivateUri(intent)
     super.onCreate(savedInstanceState)
