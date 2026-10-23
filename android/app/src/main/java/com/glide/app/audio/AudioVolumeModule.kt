@@ -2,6 +2,7 @@ package com.glide.app.audio
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
@@ -186,6 +187,10 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
     private val mainHandler = Handler(Looper.getMainLooper())
     private var audioManager: AudioManager? = null
     private var contentResolver: ContentResolver? = null
+
+    /** See [getMaxVolumeForRoute]. */
+    private val isTv = (reactContext.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+        Configuration.UI_MODE_TYPE_TELEVISION
 
     // Audio routing state
     @Volatile
@@ -375,8 +380,13 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
 
     fun detectCurrentRoute(): String = detectRoute(audioManager)
 
+    /**
+     * 100 on TV whatever the route: a TV owns HDMI/ARC/line ports, so below Android 13 the port
+     * scan calls its own speakers "wired", and the HUD drew 100% as half of 200. Boost is out
+     * of reach there anyway (no volume swipe; the remote's keys go to the system).
+     */
     fun getMaxVolumeForRoute(route: String): Int {
-        return if (ROUTE_SPEAKER == route) 100 else 200
+        return if (ROUTE_SPEAKER == route || isTv) 100 else 200
     }
 
 
