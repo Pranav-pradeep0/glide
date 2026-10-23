@@ -22,10 +22,11 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const GRID_HALF_GAP = metrics.grid.halfGap;
 
 type ViewMode = 'grid' | 'list';
-type SortByOption = 'name' | 'count';
+type SortByOption = 'name' | 'count' | 'date';
 
 const SORT_OPTIONS: { key: SortByOption; label: string }[] = [
     { key: 'name', label: 'Name' },
+    { key: 'date', label: 'Newest' },
     { key: 'count', label: 'Most videos' },
 ];
 
@@ -128,7 +129,9 @@ export default function FoldersScreen() {
 
     const sortedAlbums = useMemo(() => {
         return [...albums].sort((a, b) =>
-            sortBy === 'count' ? b.count - a.count : a.title.localeCompare(b.title)
+            sortBy === 'count' ? b.count - a.count
+                : sortBy === 'date' ? b.newestTimestamp - a.newestTimestamp
+                : a.title.localeCompare(b.title)
         );
     }, [albums, sortBy]);
 
