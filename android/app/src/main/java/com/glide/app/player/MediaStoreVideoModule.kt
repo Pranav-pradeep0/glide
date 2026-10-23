@@ -27,6 +27,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.reactnativesimplethumbnail.FlatFrame
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
@@ -142,6 +143,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         private const val TAG = "MediaStoreVideoModule"
         private const val DELETE_REQUEST_CODE = 42001
         private val thumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
+        private val oldThumbsDropped = java.util.concurrent.atomic.AtomicBoolean()
 
         private val VIDEO_PROJECTION = arrayOf(
             MediaStore.Video.Media._ID,
@@ -188,7 +190,11 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
         fun loadThumbnailSync(context: Context, videoUriOrPath: String, width: Int, height: Int): String? {
             return try {
-                val cacheDir = File(context.cacheDir, "video_thumbs")
+                // v2: v1 holds flat green frames cached before the flat check below.
+                if (oldThumbsDropped.compareAndSet(false, true)) {
+                    File(context.cacheDir, "video_thumbs").deleteRecursively()
+                }
+                val cacheDir = File(context.cacheDir, "video_thumbs2")
                 if (!cacheDir.exists()) {
                     cacheDir.mkdirs()
                 }
@@ -293,6 +299,14 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                             null
                         )
                     } catch (_: Throwable) {}
+                }
+
+                // The system thumbnailer decodes with MediaMetadataRetriever, so a 10-bit HEVC
+                // file on an Amlogic decoder comes back solid green. Passed on, ThumbnailService
+                // decodes it the way playback does.
+                if (bitmap != null && FlatFrame.isFlat(bitmap)) {
+                    bitmap.recycle()
+                    bitmap = null
                 }
 
                 // No system thumbnail (a file MediaStore has not indexed): return null and let

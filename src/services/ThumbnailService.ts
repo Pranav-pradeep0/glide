@@ -5,7 +5,9 @@ import { MediaService } from './MediaService';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { hashPath } from '@/utils/hashPath';
 
-const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails`;
+/** v2: v1 holds flat green frames cached before native rejected them. */
+const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails2`;
+const OLD_THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails`;
 /**
  * Frames taken at a set time -- only Recents' stop frames ask for one. Kept apart so the
  * launch sweep can drop every one no history entry points to any more: replaced by a later
@@ -52,6 +54,9 @@ class ThumbnailServiceClass {
 
     private async init() {
         await FileService.ensureDir(AT_TIME_DIR);
+        if (await FileService.exists(OLD_THUMBNAIL_DIR)) {
+            await RNFS.unlink(OLD_THUMBNAIL_DIR).catch(() => {});
+        }
         try {
             const wanted = new Set<string>();
             for (const entry of useVideoHistoryStore.getState().history.values()) {

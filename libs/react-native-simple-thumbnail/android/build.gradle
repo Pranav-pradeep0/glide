@@ -23,6 +23,9 @@ dependencies {
     // No version: React Native's Gradle plugin contributes a strict constraint, so this
     // always matches the RN the app is built against.
     implementation 'com.facebook.react:react-android'
+    // FrameExtractor: thumbnails decoded the way playback decodes. Must match the app's
+    // media3 version (android/app/build.gradle) exactly.
+    implementation 'androidx.media3:media3-inspector-frame:1.11.1'
     // Kotlin's stdlib comes from the Kotlin plugin the root project applies. Pinning it
     // here meant a second, older stdlib fighting the one everything else compiles against.
 }

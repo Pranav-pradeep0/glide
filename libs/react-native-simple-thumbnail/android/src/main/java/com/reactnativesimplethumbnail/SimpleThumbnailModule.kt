@@ -7,11 +7,19 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.provider.MediaStore
+import android.util.Log
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.effect.Presentation
+import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.inspector.frame.FrameExtractor
 import com.facebook.react.bridge.*
 import java.io.File
 import java.io.FileOutputStream
 import java.net.URLDecoder
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -58,6 +66,7 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
         val retriever = MediaMetadataRetriever()
         var pfd: ParcelFileDescriptor? = null
         try {
+            val uri: Uri
             if (source.startsWith("content://")) {
                 try {
                     pfd = reactApplicationContext.contentResolver.openFileDescriptor(Uri.parse(source), "r")
@@ -74,17 +83,19 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
                     return
                 }
                 retriever.setDataSource(fd.fileDescriptor)
+                uri = Uri.parse(source)
             } else if (source.startsWith("file://")) {
                 // Callers send both encoded URIs and raw paths behind file://. The literal path
                 // wins when it exists: decoding a raw one turned the `+` in
                 // "Movie+Extras.mkv" into a space and failed to open it.
-                val path = source.substring(7)
-                retriever.setDataSource(
-                    if (File(path).exists()) path
-                    else try { URLDecoder.decode(path, "UTF-8") } catch (e: Exception) { path }
-                )
+                val raw = source.substring(7)
+                val path = if (File(raw).exists()) raw
+                    else try { URLDecoder.decode(raw, "UTF-8") } catch (e: Exception) { raw }
+                retriever.setDataSource(path)
+                uri = Uri.fromFile(File(path))
             } else {
                 retriever.setDataSource(source)
+                uri = if (source.startsWith("/")) Uri.fromFile(File(source)) else Uri.parse(source)
             }
 
             // Smart timestamp: with no time given, aim for 10% in, at least 5 s, to skip the
@@ -104,21 +115,26 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
                     }
             }
 
-            // Scaled by the decoder where possible: a full 4K frame is 33 MB of ARGB, 8K four
-            // times that, only to be shrunk to a list thumbnail.
-            val scaled = width > 0 && height > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
-            var bitmap = (if (scaled) {
-                retriever.getScaledFrameAtTime(timeUs, seek, width, height)
-            } else {
-                retriever.getFrameAtTime(timeUs, seek)
-            }) ?: retriever.frameAtTime // Fallback to any frame if the specific time fails
-
+            var bitmap = extractFrame(uri, timeUs / 1000, exact = time > 0, width, height)
             if (bitmap == null) {
+                // Scaled by the decoder where possible: a full 4K frame is 33 MB of ARGB, 8K
+                // four times that, only to be shrunk to a list thumbnail.
+                val scaled = width > 0 && height > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
+                bitmap = (if (scaled) {
+                    retriever.getScaledFrameAtTime(timeUs, seek, width, height)
+                } else {
+                    retriever.getFrameAtTime(timeUs, seek)
+                }) ?: retriever.frameAtTime // Fallback to any frame if the specific time fails
+            }
+
+            // A flat frame is a decoder failure; saved, JS would serve it forever.
+            if (bitmap == null || FlatFrame.isFlat(bitmap)) {
+                bitmap?.recycle()
                 promise.reject("GEN_ERROR", "Failed to retrieve frame")
                 return
             }
 
-            if (!scaled && width > 0 && height > 0) {
+            if (width > 0 && height > 0) {
                 val scale = minOf(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
                 if (scale < 1.0f) {
                     val scaledBitmap = Bitmap.createScaledBitmap(
@@ -152,6 +168,33 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
             // Separately, so a failing release cannot skip closing the descriptor.
             try { retriever.release() } catch (e: Exception) {}
             try { pfd?.close() } catch (e: Exception) {}
+        }
+    }
+
+    /**
+     * Decodes through ExoPlayer and MediaCodec into a GL surface, the path playback takes.
+     * MediaMetadataRetriever prefers software decoders on API 28, and where those can't do
+     * 10-bit HEVC it falls back to a hardware decoder that hands back an empty (green) frame.
+     * Null on any failure, so the retriever still gets its turn.
+     */
+    @UnstableApi
+    private fun extractFrame(uri: Uri, timeMs: Long, exact: Boolean, width: Int, height: Int): Bitmap? {
+        val builder = FrameExtractor.Builder(reactApplicationContext, MediaItem.fromUri(uri))
+            // Hardware first, as playback: the default prefers software, the trap above.
+            .setMediaCodecSelector(MediaCodecSelector.DEFAULT)
+            .setSeekParameters(if (exact) SeekParameters.EXACT else SeekParameters.CLOSEST_SYNC)
+        // Short side to the box, so GL reads back a small frame; the caller fits the rest.
+        if (width > 0 && height > 0) {
+            builder.setEffects(listOf(Presentation.createForShortSide(minOf(width, height))))
+        }
+        return try {
+            // One instance per call, used and closed on this thread, as FrameExtractor requires.
+            // Its player runs on the main looper, so this must never block the main thread.
+            builder.build().use { it.getFrame(timeMs).get(EXTRACT_TIMEOUT_S, TimeUnit.SECONDS).bitmap }
+                .takeUnless { frame -> FlatFrame.isFlat(frame).also { if (it) frame.recycle() } }
+        } catch (t: Throwable) {
+            Log.w(TAG, "FrameExtractor failed for $uri, trying MediaMetadataRetriever", t)
+            null
         }
     }
 
@@ -198,6 +241,9 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
     }
 
     private companion object {
+        const val TAG = "SimpleThumbnail"
+        const val EXTRACT_TIMEOUT_S = 20L
+
         /**
          * Two decodes at a time, at background priority so they never compete with the
          * playback decoder. ThumbnailService runs four workers; the rest queue here.
