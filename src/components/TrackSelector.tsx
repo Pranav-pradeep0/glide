@@ -625,7 +625,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         const bands = props.equalizerPreset === 'custom' || !preset ? (props.equalizerBands ?? []) : preset.values;
         return (
             <ScrollView contentContainerStyle={styles.pad} showsVerticalScrollIndicator={false}>
-                <ListGroup inset onPlayer>
+                <ListGroup inset onPlayer style={styles.group}>
                     <ListRow
                         title="Volume leveler"
                         caption="Action and dialogue at the same volume"
