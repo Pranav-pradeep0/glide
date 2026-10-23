@@ -154,14 +154,11 @@ export function SidePanel({ visible, title, onClose, onBack, children }: SidePan
                     </View>
                 </GestureDetector>
                 <View
-<<<<<<< HEAD
                     ref={bodyRef}
                     collapsable={false}
-=======
                     // Rebuilt on rotation: Fabric kept stale portrait sizes inside the body
                     // (the list ran below a landscape screen). State lives in the callers.
                     key={landscape ? 'side' : 'sheet'}
->>>>>>> main
                     style={[
                         styles.body,
                         landscape
