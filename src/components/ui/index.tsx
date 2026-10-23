@@ -141,6 +141,9 @@ export function Touchable({
                 ripple && styles.clip,
                 // The outline is drawn with the view's background, so its own overflow clip doesn't cut it.
                 focused && focusRing && [focusRingInside ? styles.ringInside : styles.ringOutside, { outlineColor: colors.primary }],
+                // TV: a row's ring follows its corners, nearly square between rows of a group; the
+                // focused row becomes a rounded tile so the ring matches the rest of the shapes.
+                focused && focusRing && IS_TV && stateLayer && styles.ringRowTv,
                 animatedStyle,
                 disabled && styles.disabled,
             ]}
@@ -1092,6 +1095,12 @@ const styles = StyleSheet.create({
     clip: { overflow: 'hidden' },
     ringOutside: { outlineWidth: metrics.focus.ring, outlineOffset: 2 },
     ringInside: { outlineWidth: metrics.focus.ring, outlineOffset: -metrics.focus.ring },
+    ringRowTv: {
+        borderTopLeftRadius: metrics.radius.card,
+        borderTopRightRadius: metrics.radius.card,
+        borderBottomLeftRadius: metrics.radius.card,
+        borderBottomRightRadius: metrics.radius.card,
+    },
     block: { alignSelf: 'stretch' },
 
     iconButtonTarget: {
