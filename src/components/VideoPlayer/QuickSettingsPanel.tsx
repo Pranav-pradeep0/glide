@@ -229,7 +229,8 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
             <ListGroup inset onPlayer style={styles.group}>
                 <ListRow icon="volume-2" title="Audio" value={props.audioValue} chevron onPress={props.onOpenAudio} onPlayer />
                 <ListRow icon="type" title="Subtitles" value={props.subtitleValue} chevron onPress={props.onOpenSubtitle} onPlayer />
-                <ListRow icon="maximize" title="Display" value={displayLabel} chevron onPress={() => goTo('display')} onPlayer />
+                {/* TV's video plane ignores display modes (docs/android-tv.md). */}
+                {!IS_TV && <ListRow icon="maximize" title="Display" value={displayLabel} chevron onPress={() => goTo('display')} onPlayer />}
                 <ListRow icon="clock" title="Sleep timer" value={sleepLabel} chevron onPress={() => goTo('sleep')} onPlayer />
                 {props.onOpenPlaylist && (
                     <ListRow icon="list" title="Playlist" chevron onPress={props.onOpenPlaylist} onPlayer />

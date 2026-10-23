@@ -1392,13 +1392,16 @@ export default function VideoPlayerScreen({ route }: Props) {
                         muted={settingsHook.settings.muted || resumeModalVisible}
                         // "End of video" sleep needs the end, which native looping never reaches.
                         repeat={settingsHook.settings.repeat && settingsHook.settings.sleepTimer !== -1}
-                        resizeMode={settingsHook.settings.resizeMode}
+                        // TVs draw video on a hardware plane that ignores display modes, and the GPU
+                        // path that obeys them (as colour enhancement does) loses resolution: see
+                        // docs/android-tv.md. Both are off on TV, whatever a stored setting says.
+                        resizeMode={IS_TV ? 'contain' : settingsHook.settings.resizeMode}
                         playInBackground={settingsHook.settings.backgroundPlayEnabled}
                         pipEnabled={pipEnabled}
                         pipPresentationActive={pipPresentationActive}
                         onPipPrevious={!isNetworkStream && hasPrevious ? handlePrevious : undefined}
                         onPipNext={!isNetworkStream && hasNext ? handleNext : undefined}
-                        videoEnhancement={settingsHook.settings.videoEnhancement}
+                        videoEnhancement={!IS_TV && settingsHook.settings.videoEnhancement}
                         videoEnhancementStrength={settingsHook.settings.videoEnhancementStrength}
                         audioTrack={tracksHook.selectedAudioTrackId}
                         preferredAudioLanguage={carry?.audioTrack?.language}
@@ -1498,7 +1501,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     title={displayTitle.title}
                     subtitle={joinMeta(displayTitle.detail, albumName) || undefined}
                     videoEnhancement={settingsHook.settings.videoEnhancement}
-                    onToggleVideoEnhancement={settingsHook.toggleVideoEnhancement}
+                    onToggleVideoEnhancement={IS_TV ? undefined : settingsHook.toggleVideoEnhancement}
                     onBack={handleGoBack}
                     onOpenSubtitles={handleToggleSubtitle}
                     onOpenAudio={handleToggleAudio}
@@ -1618,7 +1621,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onSelectShakeAction={setShakeAction}
                     seekDuration={seekDuration}
                     videoEnhancement={settingsHook.settings.videoEnhancement}
-                    onToggleVideoEnhancement={settingsHook.toggleVideoEnhancement}
+                    onToggleVideoEnhancement={IS_TV ? undefined : settingsHook.toggleVideoEnhancement}
                     videoEnhancementStrength={settingsHook.settings.videoEnhancementStrength}
                     nightModeActive={nightMode}
                     onToggleNightMode={toggleNightMode}

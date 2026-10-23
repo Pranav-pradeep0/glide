@@ -96,8 +96,9 @@ const SLIDES: SlideData[] = [
         title: 'Watch Better.',
         tagline: 'Experimental features for a better viewing experience.',
         bullets: [
-            'Color enhancement',
-            // TV has no haptics. Feature indexes still line up: haptics was the last.
+            // Not on TV: it costs picture quality there (docs/android-tv.md).
+            ...(IS_TV ? [] : ['Color enhancement']),
+            // TV has no haptics either.
             ...(IS_TV ? [] : ['Haptic movie playback']),
             'Automatic subtitle sync',
         ],

@@ -189,10 +189,12 @@ from GL, the layer is `Client` (GPU) and the modes apply, but the GPU composes i
 1280×720 UI framebuffer (`Calibration: (1280x720)->(1920x1080)`): the owner saw a large quality
 loss, on top of GL's HDR → SDR. Tried and reverted: GPU playback on TV only for Crop / Stretch /
 Original (re-open on switch was annoying, quality poor). `/sys/class/video/axis` (Kodi's way) is
-not readable without root; the TV's own menu has no aspect option. Next: play a portrait or 4:3
-video, enhancement off, Fit vs Stretch. If they differ, the plane follows the display frame and
-only drops the crop: keep Auto/Fit/Stretch on TV and hide Crop/Original. If not, hide the modes
-on TV. Colour enhancement costs the same quality on this TV.
+not readable without root; the TV's own menu has no aspect option. **Decision: display modes and
+colour enhancement are hidden on TV** (pill, Display row, enhancement button and panel toggle,
+onboarding bullet), and the player gets `contain` and no enhancement there whatever the stored
+settings say. Still to test: a portrait or 4:3 video, Fit vs Stretch (temporarily un-hidden).
+If they differ, the plane follows the display frame and only drops the crop: Auto/Fit/Stretch
+could come back on TV.
 
 Known gaps:
 - PlayerDetail needs a TV layout (owner: "needs to be better").

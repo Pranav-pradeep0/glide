@@ -752,8 +752,9 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                             {c => <OrientationLockIcon size={20} color={c} locked={orientationLocked} />}
                         </GlyphButton>
                     )}
-                    {/* Icon and name, like Next: the current mode is readable without cycling through them. */}
-                    <Touchable
+                    {/* Icon and name, like Next: the current mode is readable without cycling through them.
+                        Not on TV: its video plane ignores display modes (docs/android-tv.md). */}
+                    {!IS_TV && <Touchable
                         onPress={onToggleResizeMode}
                         onPlayer
                         scaleTo={0.94}
@@ -764,7 +765,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                         <ResizeModeIcon size={18} color={colors.text} />
                         {/* Portrait's row has room for the icon only; a change still names the mode in the HUD. */}
                         {isLandscape && <Text maxFontSizeMultiplier={metrics.playerFontScale} style={styles.modeText}>{getResizeModeLabel(resizeMode)}</Text>}
-                    </Touchable>
+                    </Touchable>}
                     {onEnterPip && (
                         <GlyphButton onPress={onEnterPip} label="Picture in picture">
                             {c => <PipIcon size={20} color={c} />}
