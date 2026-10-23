@@ -180,6 +180,20 @@ Second pass, same day (owner's list after the first test):
   (the compat splash can't animate before Android 12). `values-television` makes it black, and
   below Android 12 MainActivity plays the logo morph on the splash's own view.
 
+**Display modes on the Mi TV (2026-10-23, open).** The pill and Display row change nothing with
+colour enhancement off, and work with it on. Not a Glide bug: JS, the SurfaceView and
+SurfaceFlinger all get every mode right (`dumpsys SurfaceFlinger`, "HWC layers": display frame
+and source crop change per mode). The layer is composed as `Device`, Amlogic's hardware video
+plane, which ignores them; it ignores Original size even at open. With enhancement on, frames come
+from GL, the layer is `Client` (GPU) and the modes apply, but the GPU composes into the TV's
+1280×720 UI framebuffer (`Calibration: (1280x720)->(1920x1080)`): the owner saw a large quality
+loss, on top of GL's HDR → SDR. Tried and reverted: GPU playback on TV only for Crop / Stretch /
+Original (re-open on switch was annoying, quality poor). `/sys/class/video/axis` (Kodi's way) is
+not readable without root; the TV's own menu has no aspect option. Next: play a portrait or 4:3
+video, enhancement off, Fit vs Stretch. If they differ, the plane follows the display frame and
+only drops the crop: keep Auto/Fit/Stretch on TV and hide Crop/Original. If not, hide the modes
+on TV. Colour enhancement costs the same quality on this TV.
+
 Known gaps:
 - PlayerDetail needs a TV layout (owner: "needs to be better").
 - After choosing a subtitle track, focus once went to the back arrow instead of the Subtitles
