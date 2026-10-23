@@ -121,6 +121,9 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
     @ReactProp(name = "audioDelay", defaultInt = 0)
     fun setAudioDelay(view: GlidePlayerView, ms: Int) = view.setAudioDelay(ms)
 
+    @ReactProp(name = "volumeLeveler", defaultBoolean = false)
+    fun setVolumeLeveler(view: GlidePlayerView, enabled: Boolean) = view.setVolumeLeveler(enabled)
+
     @ReactProp(name = "videoEnhancement", defaultBoolean = false)
     fun setVideoEnhancement(view: GlidePlayerView, enabled: Boolean) =
         view.setVideoEnhancement(enabled)

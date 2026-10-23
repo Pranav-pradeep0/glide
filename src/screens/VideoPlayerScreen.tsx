@@ -1312,6 +1312,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         artist={albumName || 'Glide'}
                         animatedStyle={gestures.videoAnimatedStyle}
                         audioEqualizer={settingsHook.audioEqualizer}
+                        volumeLeveler={settingsHook.settings.volumeLeveler}
                         audioDelay={settingsHook.settings.audioDelay}
                         haptics={playMode === 'with-haptics' && hapticsEnabled}
                         hapticCues={hapticCues}
@@ -1568,6 +1569,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                         equalizerBands={settingsHook.settings.customEqualizerBands}
                         onSetEqualizerBand={settingsHook.setSingleBand}
                         onResetEqualizer={handleResetEqualizer}
+                        volumeLeveler={settingsHook.settings.volumeLeveler}
+                        onToggleVolumeLeveler={settingsHook.toggleVolumeLeveler}
                         onOpenSyncPanel={handleOpenSyncPanel}
                     />
                 )}
