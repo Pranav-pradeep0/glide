@@ -1,0 +1,6 @@
+Glide: a media player focused on a clean, simple experience. Free, with no ads.
+- Smooth, solid interface
+- Subtitles that auto sync to the speech, styled the way you like
+- Color enhancement that keeps colors natural, not oversaturated
+- Music player with lyrics
+- Haptic playback (experimental): feel explosions and impacts

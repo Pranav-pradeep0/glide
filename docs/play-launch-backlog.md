@@ -32,7 +32,8 @@ Done 2026-10-22:
   555a3fc Recap line says "contain spoilers". `.gitignore` JVM crash dumps (f20974a).
 - OTA tooling: `scripts/ota.sh` + Settings Version shows `· OTA <hash>` (3e55ebc, 9a9d0d4,
   8b87dc5). Proven end to end on the phone: published, released to 2.5.0, applied on 2nd open,
-  then rolled back. **A new release starts at 0% rollout** (`update-release --rollout-percent`).
+  then rolled back (that rollback hadn't stuck; redone 2026-10-22 for `1e523d67…`). `update-release`
+  needs the full 64-char hash, not Settings' 7-char one. **A new release starts at 0% rollout** (`update-release --rollout-percent`).
   `STALLION_CI_TOKEN` is in the Desktop secrets backup; project id in `.env`. The owner allowed
   `npx stallion release-bundle *` / `update-release *` in Claude permissions (run them as a
   plain command, no pipes, or the rule doesn't match).
