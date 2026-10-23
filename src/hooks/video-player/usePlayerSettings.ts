@@ -43,6 +43,7 @@ const initialSettings: PlayerSettings = {
     equalizerEnabled: false,
     equalizerPreset: 'flat',
     customEqualizerBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    volumeLeveler: false,
 
     // Synchronization defaults
     audioDelay: 0,
@@ -288,6 +289,10 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         setSettings(prev => ({ ...prev, subtitleRatio: ratio }));
     }, []);
 
+    const toggleVolumeLeveler = useCallback(() => {
+        setSettings(prev => ({ ...prev, volumeLeveler: !prev.volumeLeveler }));
+    }, []);
+
     // Compute effective bands for player
     const audioEqualizer = useMemo(() => {
         if (!settings.equalizerEnabled) { return undefined; }
@@ -321,6 +326,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         setCustomEqualizerBands,
         setSingleBand,
         audioEqualizer,
+        toggleVolumeLeveler,
 
         // Synchronization
         setAudioDelay,
@@ -333,6 +339,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         setSleepTimer, clearSleepTimer,
         toggleBackgroundPlay, toggleVideoEnhancement, setVideoEnhancementStrength,
         toggleEqualizer, setEqualizerPreset, setCustomEqualizerBands, setSingleBand, audioEqualizer,
+        toggleVolumeLeveler,
         setAudioDelay, setSubtitleDelay, setSubtitleRatio,
     ]);
 }

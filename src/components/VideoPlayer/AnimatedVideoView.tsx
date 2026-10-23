@@ -58,6 +58,7 @@ interface AnimatedVideoViewProps {
 
     // Audio
     audioEqualizer?: number[];
+    volumeLeveler?: boolean;
     /** Milliseconds; positive plays the audio later. */
     audioDelay?: number;
     /** Play the cached haptic track for this video in step with it. */
@@ -118,6 +119,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
             title,
             artist,
             audioEqualizer,
+            volumeLeveler,
             audioDelay,
             haptics,
             hapticCues,
@@ -183,6 +185,7 @@ const AnimatedVideoView = forwardRef<GlidePlayerRef, AnimatedVideoViewProps>(
                     title={title}
                     artist={artist}
                     audioEqualizer={audioEqualizer}
+                    volumeLeveler={volumeLeveler}
                     audioDelay={audioDelay}
                     haptics={haptics}
                     hapticCues={hapticCues}
@@ -239,6 +242,7 @@ function areEqual(prevProps: AnimatedVideoViewProps, nextProps: AnimatedVideoVie
     if (prevProps.title !== nextProps.title) {return false;}
     if (prevProps.artist !== nextProps.artist) {return false;}
     if (prevProps.audioEqualizer !== nextProps.audioEqualizer) {return false;}
+    if (prevProps.volumeLeveler !== nextProps.volumeLeveler) {return false;}
     if (prevProps.playInBackground !== nextProps.playInBackground) {return false;}
     // Important: the auto-play-next closure lives in onEnd.
     if (prevProps.onEnd !== nextProps.onEnd) {return false;}

@@ -78,6 +78,8 @@ export interface GlidePlayerProps extends ViewProps {
     title?: string;
     artist?: string;
     audioEqualizer?: number[];
+    /** Quieter action, clearer voices: dialogue-first downmix and compression. */
+    volumeLeveler?: boolean;
     /** Milliseconds; positive plays the audio later. */
     audioDelay?: number;
     /** Play the cached haptic track for this video in step with it. */

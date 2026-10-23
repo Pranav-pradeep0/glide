@@ -292,6 +292,8 @@ export interface PlayerSettings {
     equalizerEnabled: boolean;
     equalizerPreset: string;
     customEqualizerBands: number[]; // 10 bands
+    /** Quieter action, clearer voices (docs/volume-leveler.md). */
+    volumeLeveler: boolean;
 
     // Synchronization
     audioDelay: number;
@@ -490,6 +492,7 @@ export interface UsePlayerSettingsReturn {
     setEqualizerPreset: (presetId: string) => void;
     setCustomEqualizerBands: (bands: number[]) => void;
     setSingleBand: (index: number, value: number) => void;
+    toggleVolumeLeveler: () => void;
 
     // Synchronization Actions
     setAudioDelay: (delay: number) => void;

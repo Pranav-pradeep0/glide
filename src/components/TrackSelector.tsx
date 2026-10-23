@@ -135,6 +135,8 @@ interface TrackSelectorProps {
     onSelectPreset?: (presetId: string) => void;
     onSetEqualizerBand?: (index: number, value: number) => void;
     onResetEqualizer?: () => void;
+    volumeLeveler?: boolean;
+    onToggleVolumeLeveler?: () => void;
     onOpenSyncPanel?: (type: 'audio' | 'subtitle') => void;
 }
 
@@ -661,6 +663,15 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         return (
             <ScrollView contentContainerStyle={styles.pad} showsVerticalScrollIndicator={false}>
                 <ListGroup inset onPlayer>
+                    <ListRow
+                        title="Volume leveler"
+                        caption="Quieter action, clearer voices"
+                        toggle={{ value: !!props.volumeLeveler, onChange: () => props.onToggleVolumeLeveler?.() }}
+                        onPlayer
+                    />
+                </ListGroup>
+
+                <ListGroup inset onPlayer style={styles.group}>
                     <ListRow
                         title="Equalizer"
                         caption={enabled ? presetName : 'Off'}

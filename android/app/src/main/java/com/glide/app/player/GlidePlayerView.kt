@@ -125,6 +125,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     private var outputWatcherRegistered = false
     private var audioDelayMs = 0
     private var audioDelayProcessor: AudioDelayProcessor? = null
+    private var levelerEnabled = false
+    private var leveler: VolumeLeveler? = null
+    private var levelerSink: LevelerAudioSink? = null
     private var haptics: HapticPerformer? = null
     private var hapticCues: List<HapticMeaning.Cue> = emptyList()
     private var hapticPreset = HapticDirector.Preset.CINEMATIC
@@ -725,6 +728,30 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         syncHaptics(hard = true)
     }
 
+    /**
+     * The volume leveler (docs/volume-leveler.md). Stereo and mono switch in place with a
+     * crossfade. 5.1/7.1 change layout (stereo out when on): the sink reconfigures on the
+     * playback thread and a seek to here applies it on a clean buffer boundary.
+     * Passthrough cannot be processed at all, so a format that is passed through when off
+     * and decoded when on is re-opened from where it is.
+     */
+    fun setVolumeLeveler(enabled: Boolean) {
+        if (enabled == levelerEnabled) return
+        levelerEnabled = enabled
+        leveler?.enabled = enabled
+        Log.d(TAG, "volume leveler=$enabled")
+        val p = player ?: return
+        if (levelerSink?.switchesPassthrough(p.audioFormat) == true) {
+            startPositionMs = p.currentPosition.takeIf { it > 0 } ?: C.TIME_UNSET
+            openPending = true
+            return
+        }
+        if (leveler?.needsReconfigure() != true) return
+        val sink = levelerSink ?: return
+        p.createMessage { _, _ -> sink.reconfigure() }.send()
+        p.seekTo(p.currentPosition)
+    }
+
     private fun applyEqualizer() {
         val sessionId = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
         if (sessionId == C.AUDIO_SESSION_ID_UNSET && equalizerBands != null) return
@@ -887,16 +914,22 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         // DTS and TrueHD, which otherwise select no track and play silently with no error.
         val delayProcessor = AudioDelayProcessor().also { it.delayMs = delayInContentMs() }
         audioDelayProcessor = delayProcessor
+        val levelerProcessor = VolumeLeveler().also { it.enabled = levelerEnabled }
+        leveler = levelerProcessor
         val renderers = object : DefaultRenderersFactory(context) {
+            // Custom processors only run on the 16-bit path: float output would skip both.
             override fun buildAudioSink(
                 context: android.content.Context,
                 enableFloatOutput: Boolean,
                 enableAudioOutputPlaybackParams: Boolean,
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(enableFloatOutput)
-                .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-                .setAudioProcessors(arrayOf(delayProcessor))
-                .build()
+            ): AudioSink = LevelerAudioSink(
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+                    .setAudioProcessors(arrayOf(levelerProcessor, delayProcessor))
+                    .build(),
+                levelerProcessor,
+            ).also { levelerSink = it }
         }.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
 
@@ -991,6 +1024,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         loudnessEnhancer?.release()
         loudnessEnhancer = null
         audioDelayProcessor = null
+        leveler = null
+        levelerSink = null
         haptics?.close()
         credits?.cancel()
         credits = null

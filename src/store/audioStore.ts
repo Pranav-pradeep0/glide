@@ -56,6 +56,11 @@ try {
 } catch {
     // ignore
 }
+// Night Mode left the presets (the video player's volume leveler does that job); a saved
+// preset that no longer exists plays as Flat.
+if (!EQUALIZER_PRESETS.some((p) => p.id === initialPlayback.equalizerPreset)) {
+    initialPlayback.equalizerPreset = 'flat';
+}
 
 /** The saved queue, as ids. Migrates the old full-JSON key on first run after the change. */
 function readPersistedIds(): string[] {

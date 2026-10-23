@@ -74,10 +74,4 @@ export const EQUALIZER_PRESETS: EqualizerPreset[] = [
         values: [6, 5, 1, -2, -2, 1, 3, 5, 5, 0], // Deep bass, crisp highs
         icon: 'zap',
     },
-    {
-        id: 'night',
-        name: 'Night Mode',
-        values: [-6, -4, -2, 0, 0, 0, -2, -4, -4, -6], // Reduced extremes for quiet listening
-        icon: 'moon',
-    },
 ];
