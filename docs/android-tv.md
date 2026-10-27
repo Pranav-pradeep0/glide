@@ -60,8 +60,8 @@ Results, open issues and the device checklist: see **Status** below.
 - Play's TV quality checklist: full D-pad navigation, no touch-only controls, banner, TV
   screenshots (1920×1080), no portrait-only screens, the app not crashing without a touchscreen.
 - Media keys from TV remotes and HDMI-CEC (play/pause/seek) through the existing MediaSession.
-- "Continue watching" row at the top of Videos (TV home pattern). **Built 2026-10-27, not yet
-  on the device:** up to 10 part-watched videos (same rule as the resume prompt), last watched
+- "Continue watching" row at the top of Videos (TV home pattern). **Built 2026-10-27, passed on
+  the owner's TV the same day:** up to 10 part-watched videos (same rule as the resume prompt), last watched
   first, missing files hidden as in Recents; its first card takes focus, else the first folder.
   The folder sort bar moves under it, inside the list, on TV only. Cards have no options (no ⋮
   on TV cards; Recents has them).
