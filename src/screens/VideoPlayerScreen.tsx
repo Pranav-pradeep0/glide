@@ -220,9 +220,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     const source = useMemo(() => {
-        if (videoPath.startsWith('http://') ||
-            videoPath.startsWith('https://') ||
-            videoPath.startsWith('rtsp://')) {
+        if (NavigationService.isNetworkStream(videoPath)) {
             return { uri: videoPath, isNetwork: true };
         }
         if (videoPath.startsWith('content://')) {

@@ -46,6 +46,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import com.glide.app.smb.SmbAwareDataSource
 import androidx.media3.extractor.metadata.Chapter
 import androidx.media3.ui.SubtitleView
 import com.facebook.react.bridge.Arguments
@@ -940,7 +941,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         val httpSource = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
 
         val p = ExoPlayer.Builder(context, renderers)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpSource)))
+            // smb:// to the network-share reader, everything else as before.
+            .setMediaSourceFactory(DefaultMediaSourceFactory(SmbAwareDataSource.Factory(DefaultDataSource.Factory(context, httpSource))))
             // The entire audio-focus subsystem of the VLC view is this one argument. With
             // handleAudioFocus = true the app must not request or respond to focus itself;
             // ducking, transient loss and resume-on-gain are the player's business.

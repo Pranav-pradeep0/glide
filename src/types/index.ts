@@ -166,6 +166,8 @@ export type RootStackParamList = {
         videoCount: number;
     };
     Search: undefined;
+    /** A folder on a network share: `smb://host/share/path`. */
+    NetworkFolder: { uri: string; title: string };
     NowPlaying: undefined;
     AlbumDetail: {
         albumId: string;
@@ -267,6 +269,7 @@ export interface VideoHistoryEntry {
 export type MainTabParamList = {
     Folders: undefined;
     Recents: undefined;
+    Network: undefined;
     Music: undefined;
     Settings: undefined;
 };

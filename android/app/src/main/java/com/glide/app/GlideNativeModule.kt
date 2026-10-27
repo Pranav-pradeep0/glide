@@ -50,6 +50,7 @@ import com.facebook.react.uimanager.ViewManager
  *     by MIME type; GlideNative.setCrashReportsEnabled(enabled) (CrashReports.kt);
  *     GlideAudioPlayerModule emits onAudioSkippedUnplayable { title, skipped, allFailed } for a
  *     song that will not play; VideoOrientation.getSystemGestureInsets() (Back-gesture strips, dp).
+ * 18: GlidePlayer plays smb:// URIs; GlideSmb module (encrypt, setServers, list, speedTest).
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -67,7 +68,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 17
+        const val API_LEVEL = 18
     }
 
     class Package : ReactPackage {

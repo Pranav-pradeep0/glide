@@ -1,0 +1,142 @@
+# Network shares (SMB)
+
+Written for: the next agent session working on SMB, and the owner. Start here.
+Started 2026-10-27 on `main`. Backlog F ("SMB/WebDAV (L)"); `docs/android-tv.md` "Later".
+
+## Decisions (owner, 2026-10-27) — do not reopen
+
+- **Phones and TV both get it.** On TV every screen must be fully D-pad usable (AGENTS.md
+  "Android TV"): reachable focus, visible focus state, shared primitives from `src/components/ui`.
+- **Library: smbj 0.15.0** (Apache-2.0, SMB2/3.1.1, maintained; jcifs-ng has had no release since
+  2023). **No SMB1.**
+- **Known smbj slowness is fixed from day one:**
+  - SMB3 signing (AES-CMAC) goes through the platform JCE/Conscrypt provider, not BouncyCastle's
+    pure-Java AES (that capped a Cortex-A55 box at ~2 MB/s). BouncyCastle only if NTLM's MD4
+    needs it.
+  - Read-ahead: several async reads in flight (`File.readAsync`), each sized to the negotiated
+    max read size. Reference: github.com/leonsuv/SMBTVPlayer (Media3 + smbj, a 2 MB window as
+    8 parallel requests, ~14 MB/s on an S905Y4 over 5 GHz Wi-Fi).
+- **Go/no-go in step (a):** an on-device throughput benchmark on the owner's Mi TV (Android 9,
+  Amlogic) against their Windows PC. Target **≥ 12 MB/s sustained** (4K remux). If smbj can't
+  reach it after the fixes, fall back to **libsmb2 over JNI** (what VLC uses; LGPL-2.1, shipped as
+  its own `.so`). Explain the licence to the owner in plain words before choosing it.
+- **Windows 11 24H2 Pro requires signing and blocks guest access:** always ask for
+  username/password; guest is optional and may fail.
+- **Credentials:** AES-GCM key in AndroidKeyStore, ciphertext in MMKV. Not Jetpack
+  security-crypto (deprecated), no Tink.
+- **Android 17 local network permission:** we target SDK 36, so `INTERNET` still grants LAN
+  access. Don't declare `ACCESS_LOCAL_NETWORK` yet, but every SMB connect goes through one place
+  where the runtime request will go when we target 37; then show "Allow nearby devices" rather
+  than a timeout. Test the restriction on an Android 16 phone:
+  `adb shell am compat enable RESTRICT_LOCAL_NETWORK com.glide.player`.
+- **Playback:** a media3 `DataSource` (`BaseDataSource`) for `smb://` URIs, picked by a wrapping
+  `DataSource.Factory` (everything else still goes to `DefaultDataSource`). Reused for sidecar
+  `.srt` (`SubtitleConfiguration`) and thumbnails (`FrameExtractor.Builder.setMediaSourceFactory`
+  with a `DefaultMediaSourceFactory` on our factory). One pooled smbj session per server;
+  reconnect on drop; media3's load-error retries do the rest.
+- **UI:** "Network" in the TV rail and on phones. Add a server by IP (NetBIOS names don't resolve
+  on Android; `.local` only on Android 12+). Browse folders live (not merged into the Videos
+  library yet), same rows/cards/focus as local. History and Continue watching keyed by the
+  `smb://` path. "Can't reach <server>" + Retry when it drops.
+
+Owner, 2026-10-27, on the step (a) plan:
+
+- (a) asks for the share name (`\\<ip>\<share>`); listing shares comes in (b).
+- The speed test is an in-app button for now. **Remove it before the release that ships SMB.**
+
+## Steps
+
+- **(a)** Add server + credentials + play one file + throughput benchmark (go/no-go).
+- **(b)** Browsing, thumbnails, subtitles.
+- **(c)** Resume/Recents, connection drops, Android 17 permission path.
+- **(d)** Discovery (mDNS `_smb._tcp` via `NsdManager` for NAS boxes; Windows doesn't advertise,
+  so a port-445 subnet scan or WS-Discovery), maybe library merge.
+
+## What the code says (read 2026-10-27)
+
+- **Player:** `GlidePlayerView.openMedia()` builds one `DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpSource))`.
+  The SMB-aware factory wraps that `DefaultDataSource.Factory`. `isLocalUri` already treats `smb` as
+  network (`WAKE_MODE_NETWORK`).
+- **Other native readers of the video URI:** `EmbeddedSubtitles.read` makes its own
+  `DefaultDataSource` (embedded track list/extract), so it has to use the same factory in (b).
+  `EmbeddedSubtitles.isNetwork` (http/https only) skips whole-file reads; add `smb`. Credits skip
+  non-local URIs already. Haptics (`HapticAnalysis`, via `SubtitleSyncModule.decodeAudio` and
+  `MediaMetadataRetriever`) can't open `smb://`; errors are caught, so haptics are off over SMB.
+- **Sidecar subtitles are not media3's:** they are found with `RNFS.readDir` next to the video
+  (`SubtitlePickerService`) and parsed in JS into a full cue list (haptics and subtitle delay need
+  it). So in (b) a sidecar `.srt` is read over SMB into the cache and handed to the same JS
+  parser; `SubtitleConfiguration` is not used.
+- **Thumbnails:** `libs/react-native-simple-thumbnail` is its own Gradle module and can't see app
+  classes. In (b) the app hands it a `DataSource.Factory` at startup (a settable field on the
+  module), and `FrameExtractor` uses it.
+- **JS:** one predicate, `NavigationService.isNetworkStream`, turns off history, resume, recap and
+  next/previous for streams. `VideoPlayerScreen`'s `source` repeats that list; it should use the
+  predicate. History skips are in `videoHistoryStore.incrementViewCount` (step (c)).
+- **Shares:** smbj can't list a server's shares (that's DCE/RPC `srvsvc`). (a) asks for the share
+  name; listing is decided in (b).
+- Native changes bump `GlideNativeModule.API_LEVEL` (17 now). Release builds are minified: check smbj
+  keep rules on a release build.
+
+## Status
+
+**2026-10-27: step (a) written, not yet measured.** tsc clean, jest 34 suites pass, the release APK
+builds with R8 (+1.5 MB) and runs on the Mi TV; the Network rail entry shows.
+
+- `android/.../smb/`: `SmbSecurity` (platform crypto; AES-CMAC on AES/CBC, RFC 4493 vectors in
+  `AesCmacTest`), `Smb` (session pool, the single connect gate, `Secrets`), `SmbDataSource`
+  (read-ahead, default 8 × 1 MB) and `SmbAwareDataSource.Factory` in the player, `SmbModule`
+  (`GlideSmb`: encrypt, setServers, list, speedTest). API level 18.
+- smbj facts: 0.15.0's `File.readAsync` is package-private, so read-ahead is blocking reads on a
+  thread pool (each is its own request on the wire). smbj's JCE provider already has MD4 and the
+  KDF; BouncyCastle stays on the classpath only because NTLM uses one of its array helpers.
+- JS: `SmbService` (MMKV `glide_smb_v1`, password sealed), `NetworkScreen` (tab + `NetworkFolder`),
+  `smb://` counts as a network stream (no history/resume yet, step (c)).
+- Speed test: the activity button on a folder tests its largest video, 20 s per setup
+  (1 × 1 MB, 8 × 256 KB, 8 × 1 MB, 8 × 1 MB on BouncyCastle). `node scripts/smb-bench.js`.
+
+TV check of the add-share sheet (2026-10-27), with `adb shell input dpad keyevent …`. Plain
+`input keyevent` is a *keyboard* source, and Android's TextView keeps keyboard arrows inside a
+text field, so it wrongly looks as if the D-pad can't leave a field. Findings, fixed:
+- No field had focus on TV (autoFocus was phone-only): the IP field now takes it.
+- Connect was disabled until IP and share were filled; a disabled button can't take TV focus, so
+  the D-pad stopped at Domain. It is always enabled now and says what's missing.
+- The keyboard's ✓ moves to the next field (last one connects).
+- Known: the TV keyboard covers the lower half of the sheet while typing; ✓ to move on.
+
+**2026-10-27, first measurement (Mi TV → owner's PC, Win 11 Home, SMB 3.1.1, signing on):**
+
+| Setup | MB/s |
+|---|---|
+| 1 × 1 MB | 3.2 |
+| 8 × 256 KB | 3.2 |
+| 8 × 1 MB | 3.3 |
+| 8 × 1 MB, BouncyCastle | 2.9 |
+| raw link, `adb push` 100 MB, no SMB | 2.8 |
+
+The network is the ceiling, not smbj: the TV is on the **2.4 GHz** network (FTTH-RAILWIRE,
+channel 1, 65 Mbps link), the PC on the separate 5 GHz one. SMB already matches the raw link, so
+the go/no-go is **not decided**: it needs the TV on 5 GHz or Ethernet. (A 100 Mb Ethernet port
+tops out near 11 MB/s.) Playback of a 1080p HEVC film (2.9 GB, ~0.3 MB/s) over SMB worked:
+playing, ~50 s buffered, seeks recover and refill at ~5× real time. The test share, account and
+firewall rule were made by a script and removed after.
+
+Owner, 2026-10-27: the Mi TV has no 5 GHz Wi-Fi. Over Wi-Fi it can't reach the target with any
+SMB library, so the go/no-go moves to a phone on 5 GHz (smbj's own ceiling on ARM), plus the TV
+on Ethernet if available.
+
+**2026-10-27, go/no-go: GO for smbj.** Phone (AIN065, Android 16) on 5 GHz (11ac, 526 Mbps link),
+same PC and share, two runs:
+
+| Setup | Run 1 | Run 2 |
+|---|---|---|
+| 1 × 1 MB | 11.5 | 9.6 |
+| 8 × 256 KB | 16.0 | 14.5 |
+| 8 × 1 MB | 14.5 | 14.7 |
+| 8 × 1 MB, BouncyCastle | 12.6 | 9.8 |
+
+Read-ahead is worth ~40% and platform crypto 15–50%; 256 KB and 1 MB chunks are within noise, so
+`CHUNK`/`DEPTH` stay 1 MB × 8. (Plain `adb push` gave 6.6 MB/s and a single `nc` stream 9.7 MB/s:
+both are weaker yardsticks than SMB's 8 parallel reads.) libsmb2 is not needed. The TV stays at its
+2.4 GHz Wi-Fi ceiling (~3 MB/s) whatever the library; 4K remux on it needs Ethernet.
+
+**Next:** step (b): browsing with the library's rows/cards, thumbnails, subtitles, share listing.

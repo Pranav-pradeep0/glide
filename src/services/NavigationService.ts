@@ -9,7 +9,8 @@ export class NavigationService {
     static isNetworkStream(videoPath: string): boolean {
         return videoPath.startsWith('http://') ||
             videoPath.startsWith('https://') ||
-            videoPath.startsWith('rtsp://');
+            videoPath.startsWith('rtsp://') ||
+            videoPath.startsWith('smb://');
     }
 
     /**

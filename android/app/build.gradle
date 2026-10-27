@@ -245,6 +245,10 @@ dependencies {
     implementation "ch.acra:acra-mail:5.14.2"
     implementation "ch.acra:acra-dialog:5.14.2"
 
+    // SMB2/3 client for network shares (docs/network-shares.md). Apache-2.0. Signing runs on
+    // the platform's AES (SmbSecurity), not BouncyCastle's pure-Java one; BC stays for MD4.
+    implementation "com.hierynomus:smbj:0.15.0"
+
     // computeGeometry is pure arithmetic over ints and floats, so the six resize modes --
     // the part of the engine migration the plan calls the risk peak -- can be checked on
     // the JVM with no device and no Robolectric.

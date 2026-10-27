@@ -35,3 +35,11 @@
 # General
 -dontwarn com.facebook.react.**
 
+
+# smbj (network shares). Its event bus, mbassador, finds @Handler methods by reflection.
+# javax.el (mbassador's optional EL filters) and org.ietf.jgss (Kerberos; we sign in with NTLM)
+# are not on Android and never reached.
+-keep class net.engio.mbassy.** { *; }
+-keepclassmembers class * { @net.engio.mbassy.listener.Handler <methods>; }
+-dontwarn javax.el.**
+-dontwarn org.ietf.jgss.**
