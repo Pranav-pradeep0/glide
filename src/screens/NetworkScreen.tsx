@@ -1,17 +1,18 @@
 // src/screens/NetworkScreen.tsx
 //
 // Network shares (docs/network-shares.md): servers found on the network, sign in, pick a share,
-// list its folders, play a file, and the speed test. Plain rows for now; (c) brings the
-// library's rows, cards and thumbnails.
+// browse its folders with the library's rows, cards and thumbnails, play a file, and the speed test.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RootStackParamList } from '@/types';
+import { FlashList } from '@shopify/flash-list';
+import { RootStackParamList, VideoFile } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { Button, Card, IconButton, ListGroup, ListRow, SectionLabel, Sheet, showDialog } from '@/components/ui';
-import { EmptyState, ListHeader } from '@/components/VideoRow';
+import { EmptyState, ListHeader, VideoCard, VideoItemCell, VideoItemComponent, VideoRow, listContentStyle } from '@/components/VideoRow';
+import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
 import { SMB_AVAILABLE, SmbEntry, SmbHost, SmbServer, SmbService } from '@/services/SmbService';
 import { NavigationService } from '@/services/NavigationService';
@@ -264,18 +265,25 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
     const { uri, title } = route.params;
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
-    const [entries, setEntries] = useState<SmbEntry[] | null>(null);
+    const [folders, setFolders] = useState<SmbEntry[]>([]);
+    const [films, setFilms] = useState<VideoFile[] | null>(null);
     const [error, setError] = useState('');
     const [testing, setTesting] = useState(false);
+    // Cards on a TV, as in the library.
+    const [grid, setGrid] = useState(IS_TV);
+    const [selected, setSelected] = useState<VideoFile | null>(null);
 
     const load = useCallback(() => {
         setError('');
-        setEntries(null);
+        setFilms(null);
         SmbService.list(uri)
-            .then(list => setEntries(
-                list.filter(e => e.isDirectory || isVideo(e.name))
-                    .sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name, undefined, { numeric: true })),
-            ))
+            .then(list => {
+                const sorted = list.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+                setFolders(sorted.filter(e => e.isDirectory));
+                setFilms(sorted.filter(e => !e.isDirectory && isVideo(e.name)).map(e => ({
+                    name: e.name, path: `${uri}/${encodeURIComponent(e.name)}`, size: e.size, modifiedDate: 0, duration: 0, isDirectory: false,
+                })));
+            })
             .catch(e => setError(errorText(e)));
     }, [uri]);
 
@@ -284,14 +292,18 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
     // `smb://host/share` with nothing after it: the share itself, which can be removed here.
     const root = SmbService.servers().find(s => SmbService.uri(s) === uri);
 
+    const play = useCallback((film: VideoFile) => {
+        NavigationService.handleVideoNavigation(navigation, film.path, { videoName: film.name });
+    }, [navigation]);
+
     const speedTest = () => {
-        const largest = entries?.filter(e => !e.isDirectory).sort((a, b) => b.size - a.size)[0];
+        const largest = films?.slice().sort((a, b) => b.size - a.size)[0];
         if (!largest) {
             showDialog('Speed test', 'Open a folder with a video in it first.');
             return;
         }
         setTesting(true);
-        SmbService.speedTest(`${uri}/${encodeURIComponent(largest.name)}`)
+        SmbService.speedTest(largest.path)
             .then(report => showDialog(`Speed test: ${largest.name}`, report))
             .catch(e => showDialog('Speed test failed', errorText(e)))
             .finally(() => setTesting(false));
@@ -302,42 +314,74 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
         { text: 'Remove', style: 'destructive', onPress: () => { SmbService.remove(root); navigation.goBack(); } },
     ]);
 
+    const renderItem = useCallback(({ item, index }: { item: VideoFile; index: number }) => {
+        const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
+        return (
+            <VideoItemCell grid={grid}>
+                <Item
+                    item={item}
+                    path={item.path}
+                    name={item.name}
+                    meta={formatFileSize(item.size)}
+                    onPress={play}
+                    onMore={setSelected}
+                    preferFocus={index === 0 && folders.length === 0}
+                />
+            </VideoItemCell>
+        );
+    }, [grid, play, folders.length]);
+
+    // Folders as rows above the films, so they don't take grid cells; no peeking inside for a picture.
+    const folderRows = folders.length > 0 && (
+        <ListGroup style={[styles.folders, grid && styles.foldersGrid]}>
+            {folders.map((e, i) => (
+                <ListRow
+                    key={e.name}
+                    preferFocus={i === 0}
+                    icon="folder"
+                    title={e.name}
+                    chevron
+                    onPress={() => navigation.push('NetworkFolder', { uri: `${uri}/${encodeURIComponent(e.name)}`, title: e.name })}
+                />
+            ))}
+        </ListGroup>
+    );
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
             <ListHeader title={title} subtitle={testing ? 'Testing speed, about 1½ minutes…' : undefined} onBack={navigation.goBack}>
-                <IconButton icon="activity" onPress={speedTest} disabled={testing || !entries} accessibilityLabel="Speed test" />
+                <IconButton icon="activity" onPress={speedTest} disabled={testing || !films} accessibilityLabel="Speed test" />
                 {root && <IconButton icon="trash-2" onPress={remove} accessibilityLabel="Remove share" />}
+                <IconButton
+                    icon={grid ? 'list' : 'grid'}
+                    onPress={() => setGrid(!grid)}
+                    accessibilityLabel={grid ? 'Switch to list view' : 'Switch to grid view'}
+                />
             </ListHeader>
             {error ? (
                 <EmptyState icon="wifi-off" text={error} action="Retry" onAction={load} />
-            ) : !entries ? (
+            ) : !films ? (
                 <Loader />
-            ) : entries.length === 0 ? (
+            ) : films.length === 0 && folders.length === 0 ? (
                 <EmptyState icon="folder" text="No folders or videos here." />
             ) : (
-                <ScrollView contentContainerStyle={[styles.content, IS_TV && styles.contentTv]}>
-                    <ListGroup>
-                        {entries.map((e, i) => (
-                            <ListRow
-                                key={e.name}
-                                preferFocus={i === 0}
-                                icon={e.isDirectory ? 'folder' : 'film'}
-                                title={e.name}
-                                caption={e.isDirectory ? undefined : formatFileSize(e.size)}
-                                chevron={e.isDirectory}
-                                onPress={() => {
-                                    const child = `${uri}/${encodeURIComponent(e.name)}`;
-                                    if (e.isDirectory) {
-                                        navigation.push('NetworkFolder', { uri: child, title: e.name });
-                                    } else {
-                                        NavigationService.handleVideoNavigation(navigation, child, { videoName: e.name });
-                                    }
-                                }}
-                            />
-                        ))}
-                    </ListGroup>
-                </ScrollView>
+                <FlashList
+                    data={films}
+                    renderItem={renderItem}
+                    keyExtractor={(item: VideoFile) => item.path}
+                    numColumns={grid ? metrics.grid.columns : 1}
+                    key={String(grid)}
+                    ListHeaderComponent={folderRows || null}
+                    contentContainerStyle={listContentStyle(grid, insets.bottom)}
+                    showsVerticalScrollIndicator={false}
+                />
             )}
+            <VideoOptionsBottomSheet
+                visible={!!selected}
+                video={selected}
+                onClose={() => setSelected(null)}
+                onPlay={() => selected && play(selected)}
+            />
         </View>
     );
 }
@@ -348,6 +392,9 @@ const styles = StyleSheet.create({
     contentTv: { paddingHorizontal: 48, paddingTop: metrics.space.md },
     form: { gap: metrics.space.md, paddingBottom: metrics.space.xl },
     intro: { marginTop: metrics.space.md },
+    // Lined up with the row or card edges below them (listContentStyle pads the two differently).
+    folders: { marginHorizontal: metrics.space.sm, marginBottom: metrics.space.md },
+    foldersGrid: { marginHorizontal: metrics.grid.halfGap },
     help: { gap: metrics.space.md },
     step: { flexDirection: 'row', gap: metrics.space.md },
     stepNumber: { width: 16 },

@@ -9,6 +9,8 @@ import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.glide.app.haptic.HapticPackage
 import com.glide.app.pip.PipPackage
+import com.glide.app.smb.SmbDataSource
+import com.reactnativesimplethumbnail.SimpleThumbnailModule
 import com.reactnativesimplethumbnail.SimpleThumbnailPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -53,5 +55,7 @@ class MainApplication : Application(), ReactApplication {
     // Subtitle font. An XML family (res/font) so fontWeight and italic pick real faces.
     com.facebook.react.common.assets.ReactFontManager.getInstance()
         .addCustomFont(this, "AtkinsonHyperlegibleNext", R.font.atkinson_hyperlegible_next)
+    // Thumbnails of smb:// films: the library can't see app classes, so it is handed the reader.
+    SimpleThumbnailModule.dataSourceFactory = androidx.media3.datasource.DataSource.Factory { SmbDataSource() }
   }
 }

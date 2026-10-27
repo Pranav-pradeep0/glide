@@ -50,8 +50,9 @@ Reordered by the owner, 2026-10-27: finding servers first, as VLC/Kodi/Nova do (
 servers on the network, sign in, pick a share; typing an IP is the fallback).
 
 - **(a) Done** (`fe7a7d4`): add a share by IP + share name + login, list folders, play, speed test.
-- **(b) Finding servers:** written 2026-10-27, not yet checked on devices. Plan below; see Status.
-- **(c) Browsing:** the library's rows/cards, thumbnails, sidecar subtitles.
+- **(b) Finding servers:** done; checked on the phone, TV pass pending. Plan below; see Status.
+- **(c) Browsing:** done; checked on the phone, TV pass pending. The library's rows/cards,
+  thumbnails, sidecar subtitles.
 - **(d) TV sign-in from the phone:** the TV shows a QR code for a page the TV serves itself on the
   LAN; the phone's keyboard fills in IP/username/password. Plain http on the home network (like a
   router's page); say so in the UI.
@@ -89,6 +90,10 @@ servers on the network, sign in, pick a share; typing an IP is the fallback).
 - Sidecar subtitles: `SubtitlePickerService.findMatchingSubtitles` lists the SMB folder
   (`SmbService.list`) instead of `RNFS.readDir`; `loadFromPath` reads through a new native
   `readText(uri)` (10 MB cap) and parses with the same `SubtitleParser`.
+  - Found while writing (c): sidecar files only ever fed the haptics SDH search, which never runs
+    for streams, so the above alone changed nothing visible. Owner, 2026-10-27: matching files
+    next to *any* video (local or SMB) are now listed under the subtitle menu's Files tab ("Next to
+    the video"), none turned on by itself.
 - Embedded subtitles already render during playback through ExoPlayer; check on a real file.
   Whole-track extraction stays off over SMB (it reads the entire film).
 
@@ -228,8 +233,42 @@ tsc clean, jest 34 suites pass, `ShareEnumTest` passes. API level 19 (`SMB_AVAIL
   (NetrShareEnum works through R8; `IPC$`, `C$`, `ADMIN$` hidden) → saved → folder → plays.
 - Not tried: "Add by IP", and a server that won't list its shares.
 
+**2026-10-27: step (c) written and passed on the phone** (AIN065, debug-signed release build,
++5 KB APK). tsc, eslint (no errors), jest 34 suites, Gradle unit tests pass. API level **20**
+(`GlideSmb.readText`, `SimpleThumbnail` reads `smb://`); `SMB_AVAILABLE` needs 20.
+
+- `NetworkFolderScreen`: films in a FlashList of `VideoRow`/`VideoCard`, grid/list toggle (grid
+  by default on TV), size as the meta line; subfolders as `ListRow`s above them (FlashList header);
+  natural sort; TV focus on the first folder, else the first film. `⋯`/long-press opens
+  `VideoOptionsBottomSheet` with Play only (`onShare`/`onDelete` are optional now; the local-only
+  metadata probe is skipped for `smb://`).
+- Thumbnails: `SimpleThumbnailModule.dataSourceFactory` (set in `MainApplication` to
+  `SmbDataSource`). `smb://` gives `FrameExtractor` a `DefaultMediaSourceFactory` on it, and
+  `MediaMetadataRetriever` a `MediaDataSource` (`Windowed`) for the film's length, so the frame is
+  10% in as for local files. Why: `FrameExtractor.getThumbnail()` only knows an MP4's thumbnail
+  time and otherwise takes frame 0 (black, rejected by `FlatFrame`). `Windowed` opens once
+  unbounded (size + header), then reopens a 1 MB window at each jump instead of the full 8 MB
+  read-ahead. First thumbnail of the 2.9 GB MKV took ~10–15 s on the phone; cached after.
+- Sidecar subtitles: `usePlayerTracks` lists matching files when the player opens (local and
+  SMB), `source: 'beside'`.
+- Phone checks, with screenshots: list and grid, thumbnails (a real frame, also in `Extras/` with
+  a space in the file name), `⋯` → Play + Details only, plays; built-in subtitles render (the
+  film's English track); `Spider-Man.srt` next to it shows under Files as "Next to the video" and
+  renders in sync.
+- (b) leftovers: removing the only share shows the "How it works" card; "Add by IP" signs in,
+  lists `GlideTest`, saves. "Type the share's name" checked with a throwaway build whose
+  `listShares` returned nothing (not committed): the field shows, a wrong name says "No share by
+  that name on 192.168.1.37", `GlideTest` connects and opens the folder.
+- Seen, not changed: the share field there doesn't raise the keyboard by itself (`autoFocus` when
+  the sheet swaps content); Google Password Manager offers to save the SMB login after "Add by
+  IP" (Android autofill sees a username + password form).
+- `C:\GlideTest` now also has `Spider-Man.srt` and `Extras\Spider-Man Clip.mkv` (a second hard
+  link); `-Undo` deletes the folder recursively.
+
 **Next:** the TV pass (owner: not yet). D-pad reaches every row, the refresh button, the sheet's
-fields and the share list; focus shows. Read the `discovery:` log line there too.
+fields and the share list; focus shows. Read the `discovery:` log line there too. Step (c) on
+TV: the grid opens focused on `Extras`, D-pad from the folder row into the cards and between them,
+long-press/`⋯` from list view, thumbnails over 2.4 GHz (slow: ~3 MB/s), sidecar under Files.
 `smb-test-share.ps1` needs PowerShell 7 (`pwsh`); 5.1 has no `RandomNumberGenerator.GetInt32`.
 
 **Test share left up for the TV pass (owner, 2026-10-27):** `\\DESKTOP-S4T6400\GlideTest`

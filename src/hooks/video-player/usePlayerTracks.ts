@@ -161,6 +161,23 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
     const [externalSubtitles, setExternalSubtitles] = useState<ExternalSubtitle[]>([]);
     const [currentExternalName, setCurrentExternalName] = useState<string | null>(null);
 
+    // Subtitle files next to the video ("Film.srt", "Film.en.srt", local or on a share) go in
+    // the Files list; none is turned on. The player mounts fresh per video, so this only adds.
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            for (const path of await SubtitlePickerService.findMatchingSubtitles(videoPath)) {
+                const picked = await SubtitlePickerService.loadFromPath(path);
+                if (!mounted) {return;}
+                if (!picked) {continue;}
+                const isSDH = SubtitleSelectionService.validateSDHContent(picked.cues).isSDH;
+                setExternalSubtitles(prev => (prev.some(s => s.name === picked.name)
+                    ? prev : [...prev, { ...picked, isSDH, source: 'beside' }]));
+            }
+        })();
+        return () => { mounted = false; };
+    }, [videoPath]);
+
     // Haptic cues: sound alone drives haptics; a subtitle's sound tags only shape them.
     // Found automatically (background search, an embedded track), the one with more tags wins.
     const [hapticCues, setHapticCues] = useState<SubtitleCue[]>(() => sdhFound.get(videoPath) ?? []);

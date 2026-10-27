@@ -110,7 +110,7 @@ interface ExternalSubtitle {
     path?: string;
     cues: SubtitleCue[];
     isSDH: boolean;
-    source: 'file' | 'api';
+    source: 'file' | 'api' | 'beside';
 }
 
 interface TrackSelectorProps {
@@ -504,7 +504,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
         <ListRow
             key={`${item.name}-${index}`}
             title={item.name}
-            caption={joinCaption(item.source === 'api' ? 'Downloaded' : 'From your device', item.isSDH && 'SDH')}
+            caption={joinCaption(item.source === 'api' ? 'Downloaded' : item.source === 'beside' ? 'Next to the video' : 'From your device', item.isSDH && 'SDH')}
             selected={currentExternalName === item.name}
             onPress={() => {
                 if (!onLoadExternalCues) {return;}

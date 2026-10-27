@@ -17,7 +17,7 @@ if ($Undo) {
     # The hard link shares the film's ACL, so the grant comes off the film itself.
     icacls $link /remove glidetest
     # Deletes the second name only; the film stays where it was.
-    Remove-Item $link, $dir, $pwFile -ErrorAction Continue
+    Remove-Item $link, $dir, $pwFile -Recurse -ErrorAction Continue
     Remove-LocalUser glidetest -ErrorAction Continue
     'UNDO DONE'
     return

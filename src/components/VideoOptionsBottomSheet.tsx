@@ -16,8 +16,9 @@ interface VideoOptionsProps {
     video: VideoFile | VideoHistoryEntry | null;
     onClose: () => void;
     onPlay: () => void;
-    onShare: () => void;
-    onDelete: () => void;
+    /** Left out where the file isn't on this device (a network share): no Share or Delete row. */
+    onShare?: () => void;
+    onDelete?: () => void;
     onClearHistory?: () => void;
 }
 
@@ -54,6 +55,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
     const date = video && 'modifiedDate' in video ? video.modifiedDate : (video && 'lastWatchedTime' in video ? video.lastWatchedTime : 0);
     const dateLabel = video && 'lastWatchedTime' in video ? 'Watched' : 'Modified';
     const resolution = video && 'width' in video && video.width && video.height ? `${video.width} × ${video.height}` : null;
+    const smb = path.startsWith('smb://');
     const folder = path.split('/').slice(0, -1).pop();
 
     // The store, not `video`: a Recents entry handed in is a snapshot.
@@ -80,7 +82,8 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
         setExtendedMeta({ loading: true });
 
         const syncModule = NativeModules.SubtitleSyncModule;
-        if (syncModule?.getVideoMetadata) {
+        // It reads local files only.
+        if (syncModule?.getVideoMetadata && !smb) {
             syncModule.getVideoMetadata(path).then((data: any) => {
                 if (cancelled) {return;}
                 if (!data) {
@@ -108,7 +111,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
         }
 
         return () => { cancelled = true; };
-    }, [visible, path]);
+    }, [visible, path, smb]);
 
     const formattedDate = useMemo(() => {
         if (!date) { return null; }
@@ -129,7 +132,8 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
         setTimeout(action, 250);
     };
 
-    const metaLine = [duration ? formatDuration(duration) : null, size ? formatFileSize(size) : null, folder]
+    const folderLabel = folder && smb ? decodeURIComponent(folder) : folder;
+    const metaLine = [duration ? formatDuration(duration) : null, size ? formatFileSize(size) : null, folderLabel]
         .filter(Boolean)
         .join(' · ');
 
@@ -142,7 +146,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
         ['Audio', extendedMeta.audio],
         ['Bitrate', extendedMeta.bitrate],
         ['Subtitles', extendedMeta.subtitles],
-        ['Folder', folder],
+        ['Folder', folderLabel],
     ];
 
     return (
@@ -173,11 +177,11 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
                         ? <ListRow icon="eye-off" title="Mark as unwatched" onPress={() => handleAction(() => setPosition(0))} />
                         : <ListRow icon="check-circle" title="Mark as watched" onPress={() => handleAction(() => setPosition(watchedDuration))} />
                     )}
-                    <ListRow icon="share-2" title="Share" onPress={() => handleAction(onShare)} />
+                    {onShare && <ListRow icon="share-2" title="Share" onPress={() => handleAction(onShare)} />}
                     {onClearHistory && (
                         <ListRow icon="x-circle" title="Remove from Recents" onPress={() => handleAction(onClearHistory)} />
                     )}
-                    <ListRow icon="trash-2" title="Delete from device" destructive onPress={() => handleAction(onDelete)} />
+                    {onDelete && <ListRow icon="trash-2" title="Delete from device" destructive onPress={() => handleAction(onDelete)} />}
                 </ListGroup>
 
                 <ListGroup inset style={styles.details}>

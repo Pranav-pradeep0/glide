@@ -77,6 +77,34 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
         }
     }
 
+    /** A small text file (a sidecar subtitle) as UTF-8, read the way playback reads; over [TEXT_CAP] is refused. */
+    @OptIn(UnstableApi::class)
+    @ReactMethod
+    fun readText(uri: String, promise: Promise) = BackgroundWork.submit(promise) {
+        val u = Uri.parse(uri)
+        val source = SmbDataSource()
+        try {
+            val length = source.open(DataSpec(u))
+            if (length > TEXT_CAP) {
+                promise.reject("smb", "Too large to read: $length bytes")
+                return@submit
+            }
+            val out = java.io.ByteArrayOutputStream(length.toInt().coerceAtLeast(0))
+            val buf = ByteArray(64 shl 10)
+            while (true) {
+                val n = source.read(buf, 0, buf.size)
+                if (n == C.RESULT_END_OF_INPUT) break
+                out.write(buf, 0, n)
+            }
+            promise.resolve(out.toString(Charsets.UTF_8.name()))
+        } catch (e: Exception) {
+            Log.w(TAG, "readText $uri", e)
+            promise.reject("smb", reason(e, u.host.orEmpty()))
+        } finally {
+            source.close()
+        }
+    }
+
     /** SMB servers on the local network ([Discovery]): `{ host, name }`, `name` null when unknown. */
     @ReactMethod
     fun discover(promise: Promise) = BackgroundWork.submit(promise) {
@@ -180,6 +208,7 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
     companion object {
         private const val TAG = "GlideSmb"
         private const val SECONDS = 20
+        private const val TEXT_CAP = 10L shl 20
         // FILE_ATTRIBUTE_HIDDEN and FILE_ATTRIBUTE_DIRECTORY (MS-FSCC 2.6).
         private const val HIDDEN = 0x2L
         private const val DIRECTORY = 0x10L

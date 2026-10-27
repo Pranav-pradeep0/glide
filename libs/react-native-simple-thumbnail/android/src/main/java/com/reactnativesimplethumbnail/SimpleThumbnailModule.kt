@@ -1,6 +1,7 @@
 package com.reactnativesimplethumbnail
 
 import android.graphics.Bitmap
+import android.media.MediaDataSource
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -8,11 +9,15 @@ import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.provider.MediaStore
 import android.util.Log
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.effect.Presentation
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.inspector.frame.FrameExtractor
 import com.facebook.react.bridge.*
 import java.io.File
@@ -93,6 +98,13 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
                     else try { URLDecoder.decode(raw, "UTF-8") } catch (e: Exception) { raw }
                 retriever.setDataSource(path)
                 uri = Uri.fromFile(File(path))
+            } else if (source.startsWith("smb://")) {
+                val factory = dataSourceFactory ?: run {
+                    promise.reject("GEN_ERROR", "No reader for $source")
+                    return
+                }
+                uri = Uri.parse(source)
+                retriever.setDataSource(Windowed(factory, uri))
             } else {
                 retriever.setDataSource(source)
                 uri = if (source.startsWith("/")) Uri.fromFile(File(source)) else Uri.parse(source)
@@ -183,6 +195,7 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
             // Hardware first, as playback: the default prefers software, the trap above.
             .setMediaCodecSelector(MediaCodecSelector.DEFAULT)
             .setSeekParameters(if (exact) SeekParameters.EXACT else SeekParameters.CLOSEST_SYNC)
+        if (uri.scheme == "smb") dataSourceFactory?.let { builder.setMediaSourceFactory(DefaultMediaSourceFactory(it)) }
         // Short side to the box, so GL reads back a small frame; the caller fits the rest.
         if (width > 0 && height > 0) {
             builder.setEffects(listOf(Presentation.createForShortSide(minOf(width, height))))
@@ -240,15 +253,64 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
         }
     }
 
-    private companion object {
-        const val TAG = "SimpleThumbnail"
-        const val EXTRACT_TIMEOUT_S = 20L
+    /**
+     * [MediaMetadataRetriever] over a media3 [DataSource], for `smb://`. The first open is
+     * unbounded, to learn the size and stream the header; a jump reopens a [WINDOW] there, so
+     * probing the end of a film costs one read, not the source's whole read-ahead.
+     */
+    @UnstableApi
+    private class Windowed(private val factory: DataSource.Factory, private val uri: Uri) : MediaDataSource() {
+        private var source: DataSource? = null
+        private var pos = 0L
+        private var left = 0L
+        private var size = -1L
+
+        override fun getSize(): Long {
+            if (size < 0) open(0, C.LENGTH_UNSET.toLong())
+            return size
+        }
+
+        override fun readAt(position: Long, buffer: ByteArray, offset: Int, length: Int): Int {
+            if (size < 0) open(0, C.LENGTH_UNSET.toLong())
+            if (position >= size) return -1
+            if (position != pos || left == 0L) open(position, minOf(WINDOW, size - position))
+            val n = source!!.read(buffer, offset, minOf(length.toLong(), left).toInt())
+            if (n == C.RESULT_END_OF_INPUT) return -1
+            pos += n
+            left -= n
+            return n
+        }
+
+        private fun open(position: Long, length: Long) {
+            source?.close()
+            val s = factory.createDataSource()
+            source = s
+            val opened = s.open(DataSpec.Builder().setUri(uri).setPosition(position).setLength(length).build())
+            if (size < 0) size = position + opened
+            pos = position
+            left = opened
+        }
+
+        override fun close() {
+            source?.close()
+            source = null
+        }
+    }
+
+    companion object {
+        /** Reads `smb://` (and anything else media3 can); the app sets it at startup. Null: no smb:// thumbnails. */
+        @JvmStatic
+        var dataSourceFactory: DataSource.Factory? = null
+
+        private const val TAG = "SimpleThumbnail"
+        private const val WINDOW = 1L shl 20
+        private const val EXTRACT_TIMEOUT_S = 20L
 
         /**
          * Two decodes at a time, at background priority so they never compete with the
          * playback decoder. ThumbnailService runs four workers; the rest queue here.
          */
-        val executor = Executors.newFixedThreadPool(2) { runnable ->
+        private val executor = Executors.newFixedThreadPool(2) { runnable ->
             Thread({
                 Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
                 runnable.run()

@@ -32,6 +32,7 @@ const native = NativeModules.GlideSmb as
           discover(): Promise<SmbHost[]>;
           listShares(host: string, user: string, password: string, domain: string): Promise<string[]>;
           list(uri: string): Promise<SmbEntry[]>;
+          readText(uri: string): Promise<string>;
           speedTest(uri: string): Promise<string>;
       }
     | undefined;
@@ -39,8 +40,8 @@ const native = NativeModules.GlideSmb as
 const mmkv = createMMKV({ id: 'glide_smb_v1' });
 const KEY = 'servers';
 
-/** Level 19+: older APKs have no SMB (18 had it without discovery, never released). */
-export const SMB_AVAILABLE = hasNativeApi(19) && !!native;
+/** Level 20+: older APKs have no SMB (18 and 19 had parts of it, never released). */
+export const SMB_AVAILABLE = hasNativeApi(20) && !!native;
 
 let pushed: Promise<unknown> | null = null;
 
@@ -82,6 +83,12 @@ export const SmbService = {
     async list(uri: string): Promise<SmbEntry[]> {
         await SmbService.ready();
         return native!.list(uri);
+    },
+
+    /** A sidecar subtitle file as text, up to 10 MB. */
+    async readText(uri: string): Promise<string> {
+        await SmbService.ready();
+        return native!.readText(uri);
     },
 
     /**

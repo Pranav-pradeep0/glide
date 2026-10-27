@@ -5,6 +5,7 @@ import { pick, isErrorWithCode } from '@react-native-documents/picker';
 import { SubtitleParser } from '../utils/SubtitleParser';
 import { SubtitleCue } from '../types';
 import { SUBTITLE_EXTENSIONS } from '../utils/constants';
+import { SmbService } from './SmbService';
 
 const LOG_PREFIX = '[SubtitlePicker]';
 
@@ -94,30 +95,31 @@ export class SubtitlePickerService {
                 return [];
             }
 
+            // smb:// paths carry each name URI-encoded; the folder listing gives them plain.
+            const smb = videoPath.startsWith('smb://');
             const videoDir = videoPath.substring(0, videoPath.lastIndexOf('/'));
-            const videoName = videoPath.substring(videoPath.lastIndexOf('/') + 1);
+            const rawName = videoPath.substring(videoPath.lastIndexOf('/') + 1);
+            const videoName = smb ? decodeURIComponent(rawName) : rawName;
             const videoBaseName = videoName.substring(0, videoName.lastIndexOf('.'));
 
             if (__DEV__) {console.log(`${LOG_PREFIX} Searching for subtitles matching:`, videoBaseName);}
 
-            const files = await RNFS.readDir(videoDir);
+            const files = smb
+                ? (await SmbService.list(videoDir)).filter(e => !e.isDirectory)
+                    .map(e => ({ name: e.name, path: `${videoDir}/${encodeURIComponent(e.name)}` }))
+                : (await RNFS.readDir(videoDir)).filter(f => f.isFile());
             const matchingSubtitles: string[] = [];
 
             for (const file of files) {
-                if (file.isFile()) {
-                    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-
-                    if (SUBTITLE_EXTENSIONS.includes(ext)) {
-                        const subBaseName = file.name.substring(0, file.name.lastIndexOf('.'));
-
-                        // Exact match or starts with video name
-                        if (subBaseName === videoBaseName ||
-                            subBaseName.startsWith(videoBaseName + '.') ||
-                            subBaseName.startsWith(videoBaseName + '_')) {
-                            matchingSubtitles.push(file.path);
-                            if (__DEV__) {console.log(`${LOG_PREFIX} Found matching:`, file.name);}
-                        }
-                    }
+                const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+                if (!SUBTITLE_EXTENSIONS.includes(ext)) {continue;}
+                const subBaseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                // Exact match or starts with video name
+                if (subBaseName === videoBaseName ||
+                    subBaseName.startsWith(videoBaseName + '.') ||
+                    subBaseName.startsWith(videoBaseName + '_')) {
+                    matchingSubtitles.push(file.path);
+                    if (__DEV__) {console.log(`${LOG_PREFIX} Found matching:`, file.name);}
                 }
             }
 
@@ -133,6 +135,11 @@ export class SubtitlePickerService {
      */
     static async loadFromPath(filePath: string): Promise<PickedSubtitle | null> {
         try {
+            if (filePath.startsWith('smb://')) {
+                const fileName = decodeURIComponent(filePath.substring(filePath.lastIndexOf('/') + 1));
+                return SubtitlePickerService.parse(fileName, await SmbService.readText(filePath));
+            }
+
             // Clean file:// prefix
             const cleanPath = filePath.replace('file://', '');
 
@@ -144,25 +151,23 @@ export class SubtitlePickerService {
             }
 
             const fileName = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
-            const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
 
-            // Read content
-            const content = await RNFS.readFile(cleanPath, 'utf8');
-
-            // Parse
-            const format = ext === '.srt' ? 'srt' : ext === '.vtt' ? 'vtt' : 'ass';
-            const cues = SubtitleParser.parse(content, format);
-
-            if (cues.length === 0) {
-                console.error(`${LOG_PREFIX} No cues parsed from:`, fileName);
-                return null;
-            }
-
-            return { name: fileName, cues };
+            return SubtitlePickerService.parse(fileName, await RNFS.readFile(cleanPath, 'utf8'));
         } catch (error) {
             console.error(`${LOG_PREFIX} Error loading subtitle:`, error);
             return null;
         }
+    }
+
+    private static parse(fileName: string, content: string): PickedSubtitle | null {
+        const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
+        const format = ext === '.srt' ? 'srt' : ext === '.vtt' ? 'vtt' : 'ass';
+        const cues = SubtitleParser.parse(content, format);
+        if (cues.length === 0) {
+            console.error(`${LOG_PREFIX} No cues parsed from:`, fileName);
+            return null;
+        }
+        return { name: fileName, cues };
     }
 }
 
