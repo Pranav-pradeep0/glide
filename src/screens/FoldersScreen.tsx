@@ -18,6 +18,7 @@ import { useMissingHistory } from '@/hooks/useMissingHistory';
 import { usePermissionStore } from '@/store/permissionStore';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { NavigationService } from '@/services/NavigationService';
+import { SMB_AVAILABLE } from '@/services/SmbService';
 import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { metrics, type } from '@/theme/theme';
 import { getResumablePosition } from '@/utils/playbackResume';
@@ -261,6 +262,10 @@ export default function FoldersScreen() {
                         onPress={() => setViewMode(grid ? 'list' : 'grid')}
                         accessibilityLabel={grid ? 'Show as list' : 'Show as grid'}
                     />
+                    {/* TV has Network in the rail. */}
+                    {!IS_TV && SMB_AVAILABLE && (
+                        <IconButton icon="server" onPress={() => navigation.navigate('NetworkShares')} accessibilityLabel="Network shares" />
+                    )}
                 </ListHeader>
             </View>
 

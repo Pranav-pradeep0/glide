@@ -166,6 +166,8 @@ export type RootStackParamList = {
         videoCount: number;
     };
     Search: undefined;
+    /** Network shares, phones only: TV has it in the rail (MainTabParamList). */
+    NetworkShares: undefined;
     /** A folder on a network share: `smb://host/share/path`. */
     NetworkFolder: { uri: string; title: string };
     NowPlaying: undefined;
@@ -269,6 +271,7 @@ export interface VideoHistoryEntry {
 export type MainTabParamList = {
     Folders: undefined;
     Recents: undefined;
+    /** TV only. */
     Network: undefined;
     Music: undefined;
     Settings: undefined;

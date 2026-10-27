@@ -1,19 +1,19 @@
 // src/screens/NetworkScreen.tsx
 //
-// Network shares, step (a) of docs/network-shares.md: add a share, list its folders, play a
-// file, and the speed test. Plain rows for now; (b) brings the library's rows, cards and
-// thumbnails.
+// Network shares (docs/network-shares.md): servers found on the network, sign in, pick a share,
+// list its folders, play a file, and the speed test. Plain rows for now; (c) brings the
+// library's rows, cards and thumbnails.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
-import { Button, IconButton, ListGroup, ListRow, Sheet, showDialog } from '@/components/ui';
+import { Button, Card, IconButton, ListGroup, ListRow, SectionLabel, Sheet, showDialog } from '@/components/ui';
 import { EmptyState, ListHeader } from '@/components/VideoRow';
 import { Loader } from '@/components/Loader';
-import { SMB_AVAILABLE, SmbEntry, SmbServer, SmbService } from '@/services/SmbService';
+import { SMB_AVAILABLE, SmbEntry, SmbHost, SmbServer, SmbService } from '@/services/SmbService';
 import { NavigationService } from '@/services/NavigationService';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { formatFileSize } from '@/utils/formatUtils';
@@ -30,18 +30,41 @@ export default function NetworkScreen() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<Nav>();
     const [servers, setServers] = useState<SmbServer[]>([]);
-    const [adding, setAdding] = useState(false);
+    const [found, setFound] = useState<SmbHost[] | null>(null);
+    // The sheet's server, `host: ''` for "Add by IP". Kept while it closes so it doesn't blank mid-slide.
+    const [target, setTarget] = useState<SmbHost>({ host: '', name: null });
+    const [signingIn, setSigningIn] = useState(false);
+    const [help, setHelp] = useState(false);
 
     useFocusEffect(useCallback(() => { setServers(SmbService.servers()); }, []));
 
+    const search = useCallback(() => {
+        if (!SMB_AVAILABLE) { return; }
+        setFound(null);
+        SmbService.discover().then(setFound, () => setFound([]));
+    }, []);
+    useEffect(search, [search]);
+
+    const open = (s: SmbServer) => navigation.navigate('NetworkFolder', { uri: SmbService.uri(s), title: s.share });
+    const signIn = (h: SmbHost) => { setTarget(h); setSigningIn(true); };
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-            <ListHeader title="Network" />
+            {/* Phones open this from Videos; on TV it is a rail page. */}
+            <ListHeader title="Network" onBack={IS_TV ? undefined : navigation.goBack}>
+                {SMB_AVAILABLE && <>
+                    <IconButton icon="info" onPress={() => setHelp(true)} accessibilityLabel="How network shares work" />
+                    <IconButton icon="refresh-cw" onPress={() => found && search()} accessibilityLabel="Search again" />
+                </>}
+            </ListHeader>
             {!SMB_AVAILABLE ? (
                 <EmptyState icon="server" text="Update Glide to play from network shares." />
             ) : (
                 <ScrollView contentContainerStyle={[styles.content, IS_TV && styles.contentTv]}>
-                    {servers.length > 0 && (
+                    {/* First visit: what this is, before any list. Later it's behind the info button. */}
+                    {servers.length === 0 && <Card style={styles.intro}><HowItWorks /></Card>}
+                    {servers.length > 0 && <>
+                        <SectionLabel title="Saved" />
                         <ListGroup>
                             {servers.map((s, i) => (
                                 <ListRow
@@ -51,61 +74,106 @@ export default function NetworkScreen() {
                                     title={`\\\\${s.host}\\${s.share}`}
                                     caption={s.user ? s.user : 'Guest'}
                                     chevron
-                                    onPress={() => navigation.navigate('NetworkFolder', { uri: SmbService.uri(s), title: s.share })}
+                                    onPress={() => open(s)}
                                 />
                             ))}
                         </ListGroup>
-                    )}
-                    <Button
-                        style={styles.add}
-                        icon="plus"
-                        label="Add network share"
-                        variant={servers.length ? 'secondary' : 'primary'}
-                        preferFocus={servers.length === 0}
-                        onPress={() => setAdding(true)}
-                    />
+                    </>}
+                    <SectionLabel title="On this network" />
+                    <ListGroup>
+                        {found === null && <ListRow title="Searching…" trailing={<ActivityIndicator size="small" color={colors.primary} />} />}
+                        {found?.length === 0 && (
+                            <ListRow icon="wifi-off" title="No servers found" caption="A Windows PC on a Public network stays hidden: add it by IP." />
+                        )}
+                        {found?.map(h => (
+                            <ListRow
+                                key={h.host}
+                                icon="monitor"
+                                title={h.name ?? h.host}
+                                caption={h.name ? h.host : undefined}
+                                value={servers.some(s => s.host === h.host) ? 'Saved' : undefined}
+                                chevron
+                                onPress={() => signIn(h)}
+                            />
+                        ))}
+                        <ListRow
+                            icon="plus"
+                            title="Add by IP"
+                            preferFocus={servers.length === 0}
+                            onPress={() => signIn({ host: '', name: null })}
+                        />
+                    </ListGroup>
                 </ScrollView>
             )}
-            <AddShareSheet
-                visible={adding}
-                onClose={() => setAdding(false)}
-                onAdded={() => { setAdding(false); setServers(SmbService.servers()); }}
+            <Sheet visible={help} onClose={() => setHelp(false)} title="Network shares">
+                <ScrollView contentContainerStyle={styles.form}><HowItWorks /></ScrollView>
+            </Sheet>
+            <SignInSheet
+                key={target.host}
+                target={target}
+                visible={signingIn}
+                onClose={() => setSigningIn(false)}
+                onAdded={s => { setSigningIn(false); setServers(SmbService.servers()); open(s); }}
             />
         </View>
     );
 }
 
-function AddShareSheet({ visible, onClose, onAdded }: { visible: boolean; onClose: () => void; onAdded: () => void }) {
+/** What network shares are for and how to set one up, in the user's words. */
+function HowItWorks() {
     const { colors } = useTheme();
-    const [host, setHost] = useState('');
-    const [share, setShare] = useState('');
-    const [user, setUser] = useState('');
+    const steps = [
+        'On your computer, share the folder with your videos (on Windows: right-click it → Properties → Sharing).',
+        'Here, pick your computer from the list, or add it by its IP address.',
+        'Sign in with your Windows username and password, then choose the folder.',
+    ];
+    return (
+        <View style={styles.help}>
+            <Text style={[type.row, { color: colors.text }]}>Watch the videos on your computer</Text>
+            <Text style={[type.body, { color: colors.textSecondary }]}>
+                Play films kept on your PC or NAS straight from here, over your Wi-Fi. Nothing is copied, so they
+                take no space on this {IS_TV ? 'TV' : 'phone'}, and your whole collection stays in one place for every device.
+            </Text>
+            {steps.map((step, i) => (
+                <View key={i} style={styles.step}>
+                    <Text style={[type.row, styles.stepNumber, { color: colors.primary }]}>{i + 1}</Text>
+                    <Text style={[type.body, styles.stepText, { color: colors.text }]}>{step}</Text>
+                </View>
+            ))}
+            <Text style={[type.caption, { color: colors.textSecondary }]}>
+                Your computer needs to be on and on the same Wi-Fi. Your password is kept encrypted on this device.
+            </Text>
+        </View>
+    );
+}
+
+/**
+ * Sign in to a server, then pick one of its shares. `target.host` empty: the IP is typed too.
+ * A server that won't list its shares gets a field for the share's name instead.
+ */
+function SignInSheet({ target, visible, onClose, onAdded }: {
+    target: SmbHost; visible: boolean; onClose: () => void; onAdded: (s: SmbServer) => void;
+}) {
+    const { colors } = useTheme();
+    const saved = SmbService.servers().find(s => s.host === target.host);
+    const [host, setHost] = useState(target.host);
+    const [user, setUser] = useState(saved?.user ?? '');
     const [password, setPassword] = useState('');
-    const [domain, setDomain] = useState('');
+    const [domain, setDomain] = useState(saved?.domain ?? '');
+    const [shares, setShares] = useState<string[] | null>(null);
+    const [share, setShare] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     // The keyboard's next key moves down the form; on a TV remote that saves leaving the keyboard.
-    const fields = [useRef<TextInputInstance>(null), useRef<TextInputInstance>(null), useRef<TextInputInstance>(null), useRef<TextInputInstance>(null)];
+    const fields = [useRef<TextInputInstance>(null), useRef<TextInputInstance>(null), useRef<TextInputInstance>(null)];
     const next = (i: number) => ({ returnKeyType: 'next' as const, submitBehavior: 'submit' as const, onSubmitEditing: () => fields[i].current?.focus() });
+    const login = { host: host.trim(), user: user.trim(), password, domain: domain.trim() };
 
-    // Never disabled: a disabled button can't take focus on a TV, so the D-pad would just stop.
-    const connect = async () => {
-        if (!host.trim() || !share.trim()) {
-            setError('Enter the IP address and the share.');
-            return;
-        }
+    const run = async (work: () => Promise<void>) => {
         setBusy(true);
         setError('');
         try {
-            await SmbService.add({
-                host: host.trim(),
-                share: share.trim().replace(/^[\\/]+|[\\/]+$/g, ''),
-                user: user.trim(),
-                password,
-                domain: domain.trim(),
-            });
-            setPassword('');
-            onAdded();
+            await work();
         } catch (e) {
             setError(errorText(e));
         } finally {
@@ -113,20 +181,58 @@ function AddShareSheet({ visible, onClose, onAdded }: { visible: boolean; onClos
         }
     };
 
+    // Never disabled: a disabled button can't take focus on a TV, so the D-pad would just stop.
+    const signIn = () => (login.host
+        ? run(async () => setShares(await SmbService.listShares(login)))
+        : setError('Enter the IP address.'));
+
+    const save = (name: string) => (name.trim()
+        ? run(async () => {
+            const server = await SmbService.add({ ...login, share: name.trim().replace(/^[\\/]+|[\\/]+$/g, '') });
+            setPassword('');
+            onAdded(server);
+        })
+        : setError("Enter the share's name."));
+
+    const errorLine = !!error && <Text style={[type.body, { color: colors.error }]}>{error}</Text>;
+    const name = target.name ?? target.host;
     return (
-        <Sheet visible={visible} onClose={onClose} title="Add network share" maxHeight={0.9}>
+        <Sheet
+            visible={visible}
+            onClose={onClose}
+            title={shares ? 'Pick a share' : name ? `Sign in to ${name}` : 'Add by IP'}
+            onBack={shares ? () => { setShares(null); setError(''); } : undefined}
+            maxHeight={0.9}
+        >
             <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-                <Field label="IP address" value={host} onChangeText={setHost} placeholder="192.168.1.5" keyboardType="numbers-and-punctuation" autoFocus {...next(0)} />
-                <Field ref={fields[0]} label="Share" value={share} onChangeText={setShare} placeholder="Movies" {...next(1)} />
-                <Field ref={fields[1]} label="Username" value={user} onChangeText={setUser} placeholder="Empty for guest" {...next(2)} />
-                <Field ref={fields[2]} label="Password" value={password} onChangeText={setPassword} secureTextEntry {...next(3)} />
-                <Field ref={fields[3]} label="Domain (optional)" value={domain} onChangeText={setDomain} returnKeyType="go" onSubmitEditing={connect} />
-                <Text style={[type.caption, { color: colors.textSecondary }]}>
-                    The PC's address and the shared folder's name, as in \\192.168.1.5\Movies. Windows 11 needs your
-                    Windows username and password.
-                </Text>
-                {!!error && <Text style={[type.body, { color: colors.error }]}>{error}</Text>}
-                <Button label="Connect" variant="primary" block loading={busy} onPress={connect} />
+                {!shares ? <>
+                    {!target.host && (
+                        <Field label="IP address" value={host} onChangeText={setHost} placeholder="192.168.1.5" keyboardType="numbers-and-punctuation" autoFocus {...next(0)} />
+                    )}
+                    <Field ref={fields[0]} label="Username" value={user} onChangeText={setUser} placeholder="Empty for guest" autoFocus={!!target.host} {...next(1)} />
+                    <Field ref={fields[1]} label="Password" value={password} onChangeText={setPassword} secureTextEntry {...next(2)} />
+                    <Field ref={fields[2]} label="Domain (optional)" value={domain} onChangeText={setDomain} returnKeyType="go" onSubmitEditing={signIn} />
+                    <Text style={[type.caption, { color: colors.textSecondary }]}>
+                        Windows 11 needs your Windows username and password.
+                    </Text>
+                    {errorLine}
+                    <Button label="Sign in" variant="primary" block loading={busy} onPress={signIn} />
+                </> : shares.length > 0 ? <>
+                    <ListGroup inset>
+                        {shares.map((s, i) => (
+                            <ListRow key={s} icon="folder" title={s} preferFocus={i === 0} chevron onPress={() => !busy && save(s)} />
+                        ))}
+                    </ListGroup>
+                    {errorLine}
+                    {busy && <Loader fullScreen={false} />}
+                </> : <>
+                    <Text style={[type.body, { color: colors.textSecondary }]}>
+                        {login.host} didn't list its shares. Type the shared folder's name, as in \\{login.host}\Movies.
+                    </Text>
+                    <Field label="Share" value={share} onChangeText={setShare} placeholder="Movies" autoFocus returnKeyType="go" onSubmitEditing={() => save(share)} />
+                    {errorLine}
+                    <Button label="Connect" variant="primary" block loading={busy} onPress={() => save(share)} />
+                </>}
             </ScrollView>
         </Sheet>
     );
@@ -240,8 +346,12 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     content: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl },
     contentTv: { paddingHorizontal: 48, paddingTop: metrics.space.md },
-    add: { marginTop: metrics.space.lg, alignSelf: 'flex-start' },
     form: { gap: metrics.space.md, paddingBottom: metrics.space.xl },
+    intro: { marginTop: metrics.space.md },
+    help: { gap: metrics.space.md },
+    step: { flexDirection: 'row', gap: metrics.space.md },
+    stepNumber: { width: 16 },
+    stepText: { flex: 1 },
     label: { marginBottom: metrics.space.xs },
     input: { borderRadius: metrics.radius.md, borderWidth: 2, paddingHorizontal: metrics.space.md, paddingVertical: metrics.space.sm },
 });

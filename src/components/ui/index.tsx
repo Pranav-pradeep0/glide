@@ -19,11 +19,13 @@ import {
     StyleProp,
     StyleSheet,
     LayoutChangeEvent,
+    NativeSyntheticEvent,
     Text,
     View,
     ViewProps,
     ViewStyle,
     processColor,
+    requireNativeComponent,
     useWindowDimensions,
 } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
@@ -45,6 +47,7 @@ import { useIsFocused } from '@react-navigation/native';
 import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { haptic } from '@/native/HapticModule';
+import { hasNativeApi } from '@/native/GlideNative';
 import { metrics, motion, playerTheme, type, Theme } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
 
@@ -701,6 +704,11 @@ interface SheetProps {
     maxHeight?: number;
 }
 
+/** The keyboard's height, from inside the Modal's own window (KeyboardInsetView.kt). Level 19+. */
+const KeyboardInset = hasNativeApi(19)
+    ? requireNativeComponent<{ style: StyleProp<ViewStyle>; onKeyboard: (e: NativeSyntheticEvent<{ height: number }>) => void }>('GlideKeyboardInset')
+    : null;
+
 /** Sheets and player panels leave quicker than they arrive. */
 export const SHEET_EXIT_MS = 200;
 
@@ -758,7 +766,20 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
             });
     }, [offset, sheetHeight]);
 
-    const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: offset.value }] }));
+    // The Modal draws edge to edge, so adjustResize never reaches it: the sheet rides the keyboard
+    // itself (KeyboardInset), shrinking (content scrolls) rather than going under the status bar.
+    const keyboard = useSharedValue(0);
+    const bottomPad = Math.max(insets.bottom, metrics.space.lg);
+    const sheetStyle = useAnimatedStyle(() => {
+        const kb = keyboard.value;
+        return {
+            transform: [{ translateY: offset.value }],
+            bottom: kb,
+            maxHeight: Math.min(windowHeight * maxHeight, windowHeight - kb - insets.top),
+            // The keyboard's height already covers the navigation bar.
+            paddingBottom: kb > 0 ? metrics.space.lg : bottomPad,
+        };
+    });
     const scrimStyle = useAnimatedStyle(() => ({
         opacity: 1 - Math.min(1, offset.value / Math.max(1, sheetHeight.value)),
     }));
@@ -787,10 +808,8 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
                         styles.sheet,
                         {
                             backgroundColor: colors.cardElevated,
-                            maxHeight: windowHeight * maxHeight,
                             width: sheetWidth,
                             left: (windowWidth - sheetWidth) / 2,
-                            paddingBottom: Math.max(insets.bottom, metrics.space.lg),
                         },
                         sheetStyle,
                     ]}
@@ -805,6 +824,7 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
                     {children}
                 </Animated.View>
                 <SnackbarHost />
+                {KeyboardInset && <KeyboardInset style={styles.keyboardInset} onKeyboard={e => { keyboard.value = e.nativeEvent.height; }} />}
             </GestureHandlerRootView>
         </Modal>
     );
@@ -1196,6 +1216,7 @@ const styles = StyleSheet.create({
         borderTopRightRadius: metrics.radius.sheet,
         paddingHorizontal: metrics.space.lg,
     },
+    keyboardInset: { position: 'absolute', width: 0, height: 0 },
     sheetGrip: { paddingTop: metrics.space.sm, paddingBottom: metrics.space.xs },
     handle: { width: 32, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: metrics.space.sm },
     sheetBody: { marginTop: metrics.space.xs },

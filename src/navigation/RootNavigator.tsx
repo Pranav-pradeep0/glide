@@ -337,14 +337,17 @@ function MainTabs() {
                     tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
                 }}
             />
-            <Tab.Screen
-                name="Network"
-                getComponent={() => require('@/screens/NetworkScreen').default}
-                options={{
-                    title: 'Network',
-                    tabBarIcon: ({ color }) => <Feather name="server" size={22} color={color} />,
-                }}
-            />
+            {/* Phones open Network from a row in Videos (NetworkShares below): five tabs crowd the bar. */}
+            {IS_TV && (
+                <Tab.Screen
+                    name="Network"
+                    getComponent={() => require('@/screens/NetworkScreen').default}
+                    options={{
+                        title: 'Network',
+                        tabBarIcon: ({ color }) => <Feather name="server" size={22} color={color} />,
+                    }}
+                />
+            )}
             {/* TV is videos only for now. */}
             {!IS_TV && (
                 <Tab.Screen
@@ -520,6 +523,15 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                         <Stack.Screen
                             name="Search"
                             getComponent={() => require('@/screens/SearchScreen').default}
+                            options={{
+                                headerShown: false,
+                                animation: 'slide_from_right',
+                                freezeOnBlur: true,
+                            }}
+                        />
+                        <Stack.Screen
+                            name="NetworkShares"
+                            getComponent={() => require('@/screens/NetworkScreen').default}
                             options={{
                                 headerShown: false,
                                 animation: 'slide_from_right',

@@ -59,12 +59,17 @@ object Smb {
     }
 
     /**
-     * Every connection to a server starts here. When targetSdk reaches 37, Android 17's
-     * ACCESS_LOCAL_NETWORK runtime request goes here, and a refusal is shown as "Allow nearby
-     * devices" rather than a timeout (docs/network-shares.md).
+     * Every connection to the local network starts here, discovery included. When targetSdk
+     * reaches 37, Android 17's ACCESS_LOCAL_NETWORK runtime request goes here, and a refusal is
+     * shown as "Allow nearby devices" rather than a timeout (docs/network-shares.md).
      */
-    private fun connect(host: String): Session {
-        val login = logins[host] ?: throw IOException("No login for $host")
+    fun gate() {}
+
+    private fun connect(host: String): Session = connect(host, logins[host] ?: throw IOException("No login for $host"))
+
+    @Synchronized
+    private fun connect(host: String, login: Login): Session {
+        gate()
         // Reads are sized by SmbDataSource; this only caps them, under the server's own maximum.
         val c = client ?: SMBClient(
             SmbConfig.builder()
@@ -77,6 +82,16 @@ object Smb {
         val auth = if (login.user.isEmpty()) AuthenticationContext.guest()
             else AuthenticationContext(login.user, login.password.toCharArray(), login.domain)
         return c.connect(host).authenticate(auth)
+    }
+
+    /** A session of its own under [login], closed after [block]: for signing in before anything is saved. */
+    fun <T> withLogin(host: String, login: Login, block: (Session) -> T): T {
+        val session = connect(host, login)
+        try {
+            return block(session)
+        } finally {
+            runCatching { session.close() }
+        }
     }
 
     /** Dialect, sizes and signing of the open session to [host], for the speed test. */

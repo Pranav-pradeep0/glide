@@ -13,6 +13,12 @@ export interface SmbServer {
     secret: string;
 }
 
+/** A server found on the network. */
+export interface SmbHost {
+    host: string;
+    name: string | null;
+}
+
 export interface SmbEntry {
     name: string;
     isDirectory: boolean;
@@ -23,6 +29,8 @@ const native = NativeModules.GlideSmb as
     | {
           encrypt(plain: string): Promise<string>;
           setServers(servers: SmbServer[]): Promise<string[]>;
+          discover(): Promise<SmbHost[]>;
+          listShares(host: string, user: string, password: string, domain: string): Promise<string[]>;
           list(uri: string): Promise<SmbEntry[]>;
           speedTest(uri: string): Promise<string>;
       }
@@ -31,8 +39,8 @@ const native = NativeModules.GlideSmb as
 const mmkv = createMMKV({ id: 'glide_smb_v1' });
 const KEY = 'servers';
 
-/** Level 18+: older APKs have no SMB. */
-export const SMB_AVAILABLE = hasNativeApi(18) && !!native;
+/** Level 19+: older APKs have no SMB (18 had it without discovery, never released). */
+export const SMB_AVAILABLE = hasNativeApi(19) && !!native;
 
 let pushed: Promise<unknown> | null = null;
 
@@ -59,6 +67,16 @@ export const SmbService = {
     /** Native holds logins in memory only, so they are handed over once per process before first use. */
     ready(): Promise<unknown> {
         return (pushed ??= native!.setServers(SmbService.servers()));
+    },
+
+    /** Servers on the local network; takes about 3 s. */
+    discover(): Promise<SmbHost[]> {
+        return native!.discover();
+    },
+
+    /** Signs in and lists the disk shares; empty when the server won't list them. */
+    listShares(login: { host: string; user: string; password: string; domain: string }): Promise<string[]> {
+        return native!.listShares(login.host, login.user, login.password, login.domain);
     },
 
     async list(uri: string): Promise<SmbEntry[]> {

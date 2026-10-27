@@ -50,7 +50,7 @@ Reordered by the owner, 2026-10-27: finding servers first, as VLC/Kodi/Nova do (
 servers on the network, sign in, pick a share; typing an IP is the fallback).
 
 - **(a) Done** (`fe7a7d4`): add a share by IP + share name + login, list folders, play, speed test.
-- **(b) Finding servers.** Next. Plan below.
+- **(b) Finding servers:** written 2026-10-27, not yet checked on devices. Plan below; see Status.
 - **(c) Browsing:** the library's rows/cards, thumbnails, sidecar subtitles.
 - **(d) TV sign-in from the phone:** the TV shows a QR code for a page the TV serves itself on the
   LAN; the phone's keyboard fills in IP/username/password. Plain http on the home network (like a
@@ -62,8 +62,7 @@ servers on the network, sign in, pick a share; typing an IP is the fallback).
 
 - **Where it lives on phones** (owner: five bottom tabs feel crowded). Proposed: take Network
   off the phone tab bar and put a "Network shares" row at the top of the Videos folder list (VLC
-  keeps network under "Browse" the same way). TV keeps its rail entry. Confirm with the owner
-  before building.
+  keeps network under "Browse" the same way). TV keeps its rail entry. Owner agreed 2026-10-27.
 - **Discovery**, shown as a live list with the saved servers above it:
   - mDNS `_smb._tcp` via `NsdManager` (NAS boxes, Macs, Samba).
   - Windows doesn't advertise over mDNS. Use WS-Discovery (UDP multicast 239.255.255.250:3702,
@@ -192,4 +191,49 @@ Read-ahead is worth ~40% and platform crypto 15–50%; 256 KB and 1 MB chunks ar
 both are weaker yardsticks than SMB's 8 parallel reads.) libsmb2 is not needed. The TV stays at its
 2.4 GHz Wi-Fi ceiling (~3 MB/s) whatever the library; 4K remux on it needs Ethernet.
 
-**Next:** step (b), finding servers (see Steps). Confirm the phone placement with the owner first.
+**2026-10-27: step (b) written, checks deferred by the owner to one pass on both devices.**
+tsc clean, jest 34 suites pass, `ShareEnumTest` passes. API level 19 (`SMB_AVAILABLE` needs it).
+
+- Phones: the Network tab is gone; a server icon in the Videos header, next to grid/list (owner,
+  2026-10-27), opens `NetworkShares` (same `NetworkScreen`, with a back arrow). TV keeps the rail.
+- "How it works" (`HowItWorks`): what the feature is for and three setup steps. Inline on Network
+  while nothing is saved; always behind the header's info button.
+- `Discovery.kt`: mDNS, WS-Discovery and the port-445 scan run together for ~3 s, always (a NAS
+  found by mDNS mustn't hide a Windows PC only the scan sees). Names come from mDNS or the router's
+  reverse DNS; WS-Discovery hits are kept only if 445 is open. Logcat `GlideSmb` logs
+  `discovery: [ip by mdns|ws-discovery|scan]`: read it to see which method found the PC.
+- Share list: **hand-written** `ShareEnum.kt` (NetrShareEnum level 1 over `srvsvc`, ~110 lines),
+  not smbj-rpc: 0.12.13 is built against smbj 0.12.2 (we ship 0.15.0) and pulls desktop Guava.
+  No new dependency, so no APK size check. An RPC failure after a good sign-in falls back to typing
+  the share name.
+- `Smb.gate()` is the single connect gate; `Smb.withLogin` signs in on a throwaway session.
+- `scripts/smb-test-share.ps1 -Client <tv>,<phone>` opens 445 to both.
+
+**2026-10-27, phone (AIN065, Android 16), debug-signed release build (R8), +4.5 KB APK:** passed.
+- 4 tabs; the Videos entry opens Network; Back from the player lands on Videos.
+- Discovery found the PC (192.168.1.37) in ~3 s with no name: the router has no reverse DNS.
+  Found **by the port scan** (logcat `discovery: [192.168.1.37 by scan]`): the PC on a Public
+  network answers neither mDNS nor WS-Discovery, as expected.
+- Header icon and the info sheet checked on screen. The inline card (no saved shares) not yet.
+- Header order: grid/list, then Network (owner). "Searching…" uses Android's spinner
+  (`ActivityIndicator`), not Feather's iOS-style `loader` icon.
+- **Sheets now rise with the keyboard** (owner: the sign-in sheet's fields were hidden). A
+  `Modal` is its own edge-to-edge window, so `adjustResize` doesn't resize it and Reanimated's
+  `useAnimatedKeyboard` (tried; watches the activity's window) never moves. `KeyboardInsetView`
+  (native, in the Modal's window) reports the IME inset each frame; `Sheet` sits on it and
+  shrinks below the status bar. Applies to every `Sheet`. Checked on the phone: rises, drops back,
+  a back swipe closes only the keyboard. (`adb shell input keyevent 4` closes the sheet too: an
+  injected key, not what a user's Back does.)
+- Wrong password → "Wrong username or password". Right one → share list shows `GlideTest` only
+  (NetrShareEnum works through R8; `IPC$`, `C$`, `ADMIN$` hidden) → saved → folder → plays.
+- Not tried: "Add by IP", and a server that won't list its shares.
+
+**Next:** the TV pass (owner: not yet). D-pad reaches every row, the refresh button, the sheet's
+fields and the share list; focus shows. Read the `discovery:` log line there too.
+`smb-test-share.ps1` needs PowerShell 7 (`pwsh`); 5.1 has no `RandomNumberGenerator.GetInt32`.
+
+**Test share left up for the TV pass (owner, 2026-10-27):** `\DESKTOP-S4T6400\GlideTest`
+(192.168.1.37), user `glidetest`, password in `%TEMP%\glidetest.pw`, firewall rule "Glide SMB test"
+opening 445 to the TV (192.168.1.33) and the phone (192.168.1.40). The TV already has the step (b)
+build installed (not opened). Remove it all after the TV pass:
+`pwsh -ExecutionPolicy Bypass -File scripts\smb-test-share.ps1 -Undo` (elevated).

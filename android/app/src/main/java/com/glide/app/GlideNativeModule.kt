@@ -68,7 +68,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 18
+        const val API_LEVEL = 19
     }
 
     class Package : ReactPackage {
@@ -76,6 +76,6 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
             listOf(GlideNativeModule(reactContext))
 
         override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
-            emptyList()
+            listOf(KeyboardInsetView.Manager())
     }
 }

@@ -20,7 +20,7 @@ import com.hierynomus.security.SecurityProvider
 import com.hierynomus.security.bc.BCSecurityProvider
 import kotlin.concurrent.thread
 
-/** Network shares for JS: logins, folder listings and the speed test. Playback goes through [SmbDataSource]. */
+/** Network shares for JS: discovery, logins, share and folder listings, and the speed test. Playback goes through [SmbDataSource]. */
 class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
     override fun getName() = "GlideSmb"
 
@@ -73,6 +73,36 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
         } catch (e: Exception) {
             Log.w(TAG, "list $uri", e)
             Smb.drop(host)
+            promise.reject("smb", reason(e, host))
+        }
+    }
+
+    /** SMB servers on the local network ([Discovery]): `{ host, name }`, `name` null when unknown. */
+    @ReactMethod
+    fun discover(promise: Promise) = BackgroundWork.submit(promise) {
+        val out = Arguments.createArray()
+        for ((ip, name) in Discovery.find(reactApplicationContext)) {
+            out.pushMap(Arguments.createMap().apply {
+                putString("host", ip)
+                putString("name", name)
+            })
+        }
+        promise.resolve(out)
+    }
+
+    /**
+     * Signs in to [host] and resolves its disk shares, before anything is saved. An empty list
+     * when sign-in worked but the server won't list them: the share's name is typed instead.
+     */
+    @ReactMethod
+    fun listShares(host: String, user: String, password: String, domain: String, promise: Promise) = BackgroundWork.submit(promise) {
+        try {
+            val shares = Smb.withLogin(host, Smb.Login(user, password, domain)) { session ->
+                runCatching { ShareEnum.list(session) }.onFailure { Log.w(TAG, "shares $host", it) }.getOrDefault(emptyList())
+            }
+            promise.resolve(Arguments.fromList(shares))
+        } catch (e: Exception) {
+            Log.w(TAG, "sign in $host", e)
             promise.reject("smb", reason(e, host))
         }
     }
