@@ -46,11 +46,64 @@ Owner, 2026-10-27, on the step (a) plan:
 
 ## Steps
 
-- **(a)** Add server + credentials + play one file + throughput benchmark (go/no-go).
-- **(b)** Browsing, thumbnails, subtitles.
-- **(c)** Resume/Recents, connection drops, Android 17 permission path.
-- **(d)** Discovery (mDNS `_smb._tcp` via `NsdManager` for NAS boxes; Windows doesn't advertise,
-  so a port-445 subnet scan or WS-Discovery), maybe library merge.
+Reordered by the owner, 2026-10-27: finding servers first, as VLC/Kodi/Nova do (a list of
+servers on the network, sign in, pick a share; typing an IP is the fallback).
+
+- **(a) Done** (`fe7a7d4`): add a share by IP + share name + login, list folders, play, speed test.
+- **(b) Finding servers.** Next. Plan below.
+- **(c) Browsing:** the library's rows/cards, thumbnails, sidecar subtitles.
+- **(d) TV sign-in from the phone:** the TV shows a QR code for a page the TV serves itself on the
+  LAN; the phone's keyboard fills in IP/username/password. Plain http on the home network (like a
+  router's page); say so in the UI.
+- **(e)** Resume/Recents, connection drops ("Can't reach <server>" + Retry), Android 17 permission.
+- Later, maybe: merging network videos into the Videos library.
+
+### Step (b) plan: finding servers
+
+- **Where it lives on phones** (owner: five bottom tabs feel crowded). Proposed: take Network
+  off the phone tab bar and put a "Network shares" row at the top of the Videos folder list (VLC
+  keeps network under "Browse" the same way). TV keeps its rail entry. Confirm with the owner
+  before building.
+- **Discovery**, shown as a live list with the saved servers above it:
+  - mDNS `_smb._tcp` via `NsdManager` (NAS boxes, Macs, Samba).
+  - Windows doesn't advertise over mDNS. Use WS-Discovery (UDP multicast 239.255.255.250:3702,
+    what Explorer's "Network" uses) to get the PC's name and IP; fall back to a quick port-445
+    scan of the /24 if WS-Discovery finds nothing. Measure which works against the owner's PC.
+  - All of it goes through the single connect gate in `Smb.kt` (Android 17 permission later).
+- **Share list** via Rapid7 `smbj-rpc` (`com.rapid7.client:dcerpc` 0.12.13, BSD-3-Clause, June
+  2025; NetrShareEnum over `IPC$`). It pulls Guava, commons-io and commons-lang3: measure the
+  release APK; if it adds over ~1 MB after R8, hand-write the one call (~150 lines) instead.
+  Hide admin shares (`C$`, `IPC$`, names ending in `$`).
+- **Flow:** tap a found server (or "Add by IP") → username/password → pick a share → saved.
+  Typing a share name stays as a fallback.
+
+### Step (c) plan: browsing (read 2026-10-27)
+
+- `NetworkFolderScreen` becomes a FlashList: films use `VideoRow`/`VideoCard` from
+  `src/components/VideoRow.tsx` (they take path/name/meta, so `smb://` paths work), grid/list
+  toggle like Videos, folders as rows with a folder icon (no peeking inside for a picture), natural
+  name sort, TV focus on the first item. The `⋯` menu offers Play only (the rest is local-file).
+- Thumbnails: `ThumbnailService` caches by path, unchanged. In `SimpleThumbnailModule`,
+  `smb://` skips `MediaMetadataRetriever` (it throws on it) and goes to `FrameExtractor`, which in
+  media3 1.11.1 has `setMediaSourceFactory` and `getThumbnail()`. The app sets a
+  `DataSource.Factory` field on the module at startup (`SmbAwareDataSource.Factory`).
+- Sidecar subtitles: `SubtitlePickerService.findMatchingSubtitles` lists the SMB folder
+  (`SmbService.list`) instead of `RNFS.readDir`; `loadFromPath` reads through a new native
+  `readText(uri)` (10 MB cap) and parses with the same `SubtitleParser`.
+- Embedded subtitles already render during playback through ExoPlayer; check on a real file.
+  Whole-track extraction stays off over SMB (it reads the entire film).
+
+## Testing against this PC
+
+The owner's PC is Windows 11 Home on 5 GHz Wi-Fi with the network on the Public profile. Don't
+change that. Make a temporary share instead: `scripts/smb-test-share.ps1 -Client <device ip>` (run
+elevated; the owner clicks UAC) creates `C:\GlideTest` with a hard link to a film, a local
+non-admin user `glidetest` with a random password (printed to `%TEMP%\glidetest.pw`), a read-only
+share, and a firewall rule opening 445 to that one device. `-Undo` removes all of it. Drive the TV
+with `adb shell input dpad keyevent …` (not plain `keyevent`: that's a keyboard source and text
+fields keep its arrows). The owner's test film: `Spider-Man…1080p.10Bit.HEVC…mkv` on the Desktop.
+Devices: Mi TV `192.168.1.33:5555` (2.4 GHz only); phone AIN065 over wireless debugging (its port
+changes; the owner reads it off the Wireless debugging screen).
 
 ## What the code says (read 2026-10-27)
 
@@ -139,4 +192,4 @@ Read-ahead is worth ~40% and platform crypto 15–50%; 256 KB and 1 MB chunks ar
 both are weaker yardsticks than SMB's 8 parallel reads.) libsmb2 is not needed. The TV stays at its
 2.4 GHz Wi-Fi ceiling (~3 MB/s) whatever the library; 4K remux on it needs Ethernet.
 
-**Next:** step (b): browsing with the library's rows/cards, thumbnails, subtitles, share listing.
+**Next:** step (b), finding servers (see Steps). Confirm the phone placement with the owner first.
