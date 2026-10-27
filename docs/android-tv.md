@@ -1,7 +1,7 @@
 # Android TV
 
 Written for: the next agent session working on the TV version, and the owner. Start here.
-Started 2026-10-23 on branch `tv` (worktree `C:\glide-tv`).
+Started 2026-10-23 on branch `tv`; merged into `main` 2026-10-27, after 2.6.0.
 
 ## Decisions (owner, 2026-10-23) — do not reopen
 
@@ -15,15 +15,10 @@ Started 2026-10-23 on branch `tv` (worktree `C:\glide-tv`).
 
 ## Where the code lives
 
-- Branch `tv`, in its own worktree `C:\glide-tv`, so `C:\glide` stays on `main` for the 2.6.0
-  phone release. The worktree has its own `node_modules` (`npm ci`); a junction to the main
-  checkout's breaks Metro's release bundle.
-- **After `v2.6.0` is tagged,** merge `tv` into `main` and continue on `main` (owner commits on
-  `main`). TV code is gated by `IS_TV`, so phones never reach it. Delete the worktree after the
-  merge (`git worktree remove ../glide-tv`).
-- **The TV launcher entry is what makes the app appear on TVs and in Play for TVs.** It is on the
-  `tv` branch. Before merging into `main`, decide: keep it (TV ships with the next release) or move
-  it out until TV is ready (see Release).
+- On `main`, like the phone app. TV code is gated by `IS_TV`, so phones never reach it.
+- **The TV launcher entry is what makes the app appear on TVs and in Play for TVs.** Owner,
+  2026-10-27: it stays on `main`, so TV ships with the next release (2.7.0). The open items in
+  Status are to be fixed before that tag.
 
 ## How TV code is written
 
@@ -43,10 +38,8 @@ Started 2026-10-23 on branch `tv` (worktree `C:\glide-tv`).
 - **Back:** closes the topmost thing first (sheet, panel, overlay, controls), then goes to Videos
   from another top-level destination, then exits from Videos.
 - **No touch-only features on TV:** gestures, haptics, brightness, PiP, rotation lock, shake.
-- **Phone work reaches TV too.** Every phone change ships on TV after the merge, so a new button
-  or screen must be D-pad reachable with a focus state, or hidden with `IS_TV`. Until the merge,
-  bring `main` into `tv` with `git merge main` in `C:\glide-tv` after each batch of phone work
-  (AGENTS.md "Android TV" says the same for every session).
+- **Phone work reaches TV too.** Every phone change ships on TV, so a new button or screen must
+  be D-pad reachable with a focus state, or hidden with `IS_TV`.
 
 ## Phase 1 — videos on TV (in progress, 2026-10-23)
 
@@ -67,7 +60,11 @@ Results, open issues and the device checklist: see **Status** below.
 - Play's TV quality checklist: full D-pad navigation, no touch-only controls, banner, TV
   screenshots (1920×1080), no portrait-only screens, the app not crashing without a touchscreen.
 - Media keys from TV remotes and HDMI-CEC (play/pause/seek) through the existing MediaSession.
-- "Continue watching" row at the top of Videos (TV home pattern).
+- "Continue watching" row at the top of Videos (TV home pattern). **Built 2026-10-27, not yet
+  on the device:** up to 10 part-watched videos (same rule as the resume prompt), last watched
+  first, missing files hidden as in Recents; its first card takes focus, else the first folder.
+  The folder sort bar moves under it, inside the list, on TV only. Cards have no options (no ⋮
+  on TV cards; Recents has them).
 
 ## Later
 
@@ -81,9 +78,9 @@ Results, open issues and the device checklist: see **Status** below.
 
 - Play reviews TV apps separately (Android TV quality review). Needs TV screenshots and a TV
   banner, and the store listing must mention TV.
-- If TV is not ready when `tv` merges into `main`, remove the `LEANBACK_LAUNCHER` category before
-  the next phone release so TVs don't get a half-finished app. All other TV code is harmless on
-  phones behind `IS_TV`.
+- To hold TV back from a release, remove the `LEANBACK_LAUNCHER` category (and the CI step
+  below) so TVs don't get a half-finished app. All other TV code is harmless on phones behind
+  `IS_TV`.
 - Hand-written release notes as usual (`release-notes/X.Y.Z.txt`, see AGENTS.md).
 - **CI builds no separate TV app:** the tag's AAB is the TV build too. The release job's "Verify
   Android TV compatibility" step (`aapt2 dump badging` on the universal APK) fails the tag if the
@@ -94,7 +91,7 @@ Results, open issues and the device checklist: see **Status** below.
 
 ## Testing
 
-- Build: from `C:\glide-tv\android`, `./gradlew assembleRelease -PallowDebugSigning=true`
+- Build: from `android`, `./gradlew assembleRelease -PallowDebugSigning=true`
   (debug-signed release build, same as phone testing).
 - Connect the TV: Settings → Device preferences → About → press Build 7 times; then Developer
   options → USB / network debugging on. `adb connect <tv-ip>:5555` (older TVs) or Wireless
