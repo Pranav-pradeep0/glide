@@ -3,15 +3,14 @@ import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { View, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { RootStackParamList, VideoHistoryEntry } from '@/types';
 import { SkeletonList } from '@/components/Skeleton';
-import { findMissingHistory, useVideoHistoryStore } from '@/store/videoHistoryStore';
-import { MediaService } from '@/services/MediaService';
-import { FileService } from '@/services/FileService';
+import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useTheme } from '@/hooks/useTheme';
+import { useMissingHistory } from '@/hooks/useMissingHistory';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { IconButton, Segmented, showDialog, SortButton } from '@/components/ui';
@@ -67,7 +66,6 @@ export default function RecentsScreen() {
     const isHydrated = useVideoHistoryStore(s => s.isHydrated);
     const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
     const clearVideoHistory = useVideoHistoryStore(s => s.clearVideoHistory);
-    const relinkMoved = useVideoHistoryStore(s => s.relinkMoved);
 
     const [kind, setKind] = useState<RecentsKind>('videos');
     // 0 on Videos, 1 on Music, in between mid-swipe.
@@ -79,18 +77,7 @@ export default function RecentsScreen() {
     const [selectedVideo, setSelectedVideo] = useState<VideoHistoryEntry | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
 
-    // Files moved since they were watched are relinked; ones gone everywhere are hidden, not deleted.
-    const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
-    const checkMissing = useCallback(async (forceRefresh = false) => {
-        const { videos } = await MediaService.getLibrary(forceRefresh);
-        const found = await findMissingHistory(getAllHistory(), videos, p => FileService.exists(p));
-        relinkMoved(found.moves);
-        setMissing(found.missing);
-    }, [getAllHistory, relinkMoved]);
-
-    useFocusEffect(useCallback(() => {
-        checkMissing().catch(error => console.error('[RecentsScreen] Missing check error:', error));
-    }, [checkMissing]));
+    const { missing, check: checkMissing } = useMissingHistory();
 
     const history = useMemo(
         () => sortHistory(getAllHistory().filter(e => !missing.has(e.videoPath)), sortBy),

@@ -1,20 +1,26 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, RefreshControl, Image } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, Image, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { SkeletonList } from '@/components/Skeleton';
 import { IconButton, SortButton, Touchable } from '@/components/ui';
-import { EmptyState, ListHeader, getRelativeTime, joinMeta, listContentStyle } from '@/components/VideoRow';
-import { RootStackParamList, VideoFolder } from '@/types';
+import {
+    EmptyState, ListHeader, SectionTitle, VideoCard, getRelativeTime, joinMeta, listContentStyle, progressOf, timeLabel,
+} from '@/components/VideoRow';
+import { RootStackParamList, VideoFolder, VideoHistoryEntry } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbums } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
+import { useMissingHistory } from '@/hooks/useMissingHistory';
 import { usePermissionStore } from '@/store/permissionStore';
+import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { NavigationService } from '@/services/NavigationService';
 import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { metrics, type } from '@/theme/theme';
+import { getResumablePosition } from '@/utils/playbackResume';
 import { IS_TV } from '@/utils/tv';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -106,12 +112,75 @@ const AlbumListItem = React.memo(({ item, onPress, preferFocus }: AlbumItemProps
     );
 });
 
+const CONTINUE_LIMIT = 10;
+const NO_HISTORY: VideoHistoryEntry[] = [];
+const noop = () => {};
+
+/** TV: videos left part-way, last watched first. Always empty on phones. */
+function useContinueWatching(): VideoHistoryEntry[] {
+    // The player saves history as it plays; the last map is kept while it is on top, so
+    // this screen doesn't re-render under it. Regaining focus picks up the latest.
+    const isFocused = useIsFocused();
+    const shownRef = useRef<Map<string, VideoHistoryEntry> | null>(null);
+    const historyMap = useVideoHistoryStore(s => {
+        if (!IS_TV) {return null;}
+        if (isFocused || !shownRef.current) { shownRef.current = s.history; }
+        return shownRef.current;
+    });
+    const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
+    const { missing } = useMissingHistory(IS_TV);
+    return useMemo(() => (historyMap
+        ? getAllHistory()
+            .filter(e => !missing.has(e.videoPath) && getResumablePosition(e.lastPausedPosition, e.duration) !== null)
+            .slice(0, CONTINUE_LIMIT)
+        : NO_HISTORY
+    ), [historyMap, getAllHistory, missing]);
+}
+
+/**
+ * TV home pattern: a row of what you were watching above the folders. Cards are one folder
+ * column wide, so they line up with the grid and the next one peeks in from the edge.
+ * `pad` is the list's side padding; the row bleeds past it so cards scroll off the screen edge.
+ */
+function ContinueRow({ items, pad }: { items: VideoHistoryEntry[]; pad: number }) {
+    const navigation = useNavigation<NavigationProp>();
+    const [width, setWidth] = useState(0);
+    const play = useCallback((v: VideoHistoryEntry) => {
+        NavigationService.handleVideoNavigation(navigation, v.videoPath, { videoName: v.videoName });
+    }, [navigation]);
+    const cellWidth = (width - 2 * pad) / metrics.grid.columns;
+    return (
+        <View onLayout={e => setWidth(e.nativeEvent.layout.width)}>
+            <SectionTitle title="Continue watching" />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.continueContent, { paddingHorizontal: pad }]}>
+                {width > 0 && items.map((item, i) => (
+                    <View key={item.videoPath} style={[styles.continueCell, { width: cellWidth }]}>
+                        <VideoCard
+                            item={item}
+                            path={item.videoPath}
+                            name={item.videoName}
+                            meta={timeLabel(item.duration, item.lastPausedPosition) ?? ''}
+                            duration={item.duration}
+                            progress={progressOf(item.duration, item.lastPausedPosition)}
+                            thumbnailTime={item.stopFrameMs}
+                            onPress={play}
+                            onMore={noop}
+                            preferFocus={i === 0}
+                        />
+                    </View>
+                ))}
+            </ScrollView>
+        </View>
+    );
+}
+
 export default function FoldersScreen() {
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<NavigationProp>();
 
     const { albums, loading, refetch } = useAlbums();
+    const continueItems = useContinueWatching();
     const videoAccess = usePermissionStore((s) => s.video.access);
 
     // Cards on a TV: bigger targets, and the D-pad moves across as well as down.
@@ -145,13 +214,15 @@ export default function FoldersScreen() {
 
     const grid = viewMode === 'grid';
 
+    // TV starts on Continue watching, or the first folder when there is none.
+    const focusFirstFolder = continueItems.length === 0;
     const renderAlbum = useCallback(({ item, index }: { item: VideoFolder; index: number }) => (
         <View style={grid ? styles.gridCell : styles.listCell}>
             {grid
-                ? <AlbumGridCard item={item} onPress={() => handleAlbumPress(item)} preferFocus={index === 0} />
-                : <AlbumListItem item={item} onPress={() => handleAlbumPress(item)} preferFocus={index === 0} />}
+                ? <AlbumGridCard item={item} onPress={() => handleAlbumPress(item)} preferFocus={focusFirstFolder && index === 0} />
+                : <AlbumListItem item={item} onPress={() => handleAlbumPress(item)} preferFocus={focusFirstFolder && index === 0} />}
         </View>
-    ), [grid, handleAlbumPress]);
+    ), [grid, handleAlbumPress, focusFirstFolder]);
 
     if (videoAccess === 'unknown' || (loading && albums.length === 0 && videoAccess !== 'denied')) {
         return (
@@ -163,6 +234,23 @@ export default function FoldersScreen() {
     }
 
     const isEmpty = sortedAlbums.length === 0;
+    const sortBar = (
+        <View style={styles.sortBar}>
+            <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
+                {sortedAlbums.length} folder{sortedAlbums.length !== 1 ? 's' : ''}
+            </Text>
+            <SortButton options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
+        </View>
+    );
+    // TV: Continue watching leads the list and scrolls away with it; the sort bar moves in
+    // under it so it stays with the folders it sorts.
+    const pad = listContentStyle(grid).paddingHorizontal;
+    const tvHeader = IS_TV ? (
+        <View style={{ marginHorizontal: -pad }}>
+            {continueItems.length > 0 && <ContinueRow items={continueItems} pad={pad} />}
+            {sortBar}
+        </View>
+    ) : undefined;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -192,16 +280,12 @@ export default function FoldersScreen() {
                     <EmptyState text="No videos found" action="Refresh" onAction={refetch} />
                 ) : (
                     <>
-                        <View style={styles.sortBar}>
-                            <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
-                                {sortedAlbums.length} folder{sortedAlbums.length !== 1 ? 's' : ''}
-                            </Text>
-                            <SortButton options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
-                        </View>
+                        {!IS_TV && sortBar}
                         <FlashList
                             ref={flashListRef}
                             data={sortedAlbums}
                             renderItem={renderAlbum}
+                            ListHeaderComponent={tvHeader}
                             keyExtractor={(item: VideoFolder) => item.id || item.title}
                             numColumns={grid ? metrics.grid.columns : 1}
                             key={`${viewMode}-${sortBy}`}
@@ -268,4 +352,7 @@ const styles = StyleSheet.create({
     gridCard: { flex: 1, borderRadius: metrics.radius.sm },
     gridCover: { width: '100%', aspectRatio: 16 / 10 },
     gridInfo: { paddingTop: metrics.space.sm, paddingLeft: 2, gap: 2 },
+    // Top room for the focus ring and grow, which the row would otherwise clip.
+    continueContent: { paddingTop: metrics.space.md },
+    continueCell: { paddingHorizontal: GRID_HALF_GAP, paddingBottom: metrics.space.sm },
 });
