@@ -232,7 +232,7 @@ tsc clean, jest 34 suites pass, `ShareEnumTest` passes. API level 19 (`SMB_AVAIL
 fields and the share list; focus shows. Read the `discovery:` log line there too.
 `smb-test-share.ps1` needs PowerShell 7 (`pwsh`); 5.1 has no `RandomNumberGenerator.GetInt32`.
 
-**Test share left up for the TV pass (owner, 2026-10-27):** `\DESKTOP-S4T6400\GlideTest`
+**Test share left up for the TV pass (owner, 2026-10-27):** `\\DESKTOP-S4T6400\GlideTest`
 (192.168.1.37), user `glidetest`, password in `%TEMP%\glidetest.pw`, firewall rule "Glide SMB test"
 opening 445 to the TV (192.168.1.33) and the phone (192.168.1.40). The TV already has the step (b)
 build installed (not opened). Remove it all after the TV pass:
