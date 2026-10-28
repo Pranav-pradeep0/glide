@@ -58,6 +58,14 @@ servers on the network, sign in, pick a share; typing an IP is the fallback).
   fills in IP/username/password. Plain http on the home network (like a router's page); the UI says
   so.
 - **(e)** Resume/Recents, connection drops ("Can't reach <server>" + Retry), Android 17 permission.
+  Same step: app streams (Stremio etc. "Open with" `http(s)`) go to Recents too, both loosen the
+  same two skips (the view count in `VideoPlayerScreen`, `incrementViewCount`).
+  - Save the sender's `external.headers` on the entry and send them on replay; `secureUri` entries
+    never show the link.
+  - Addon links last: Torrentio hands out `/resolve/<debrid>/…`, which 302s to a fresh debrid link
+    on every request (`RESOLVED_URL_TTL` 3 h), so the saved URL works while the account does.
+  - Skip `127.0.0.1` / `localhost` (Stremio's own torrent server, gone once Stremio closes) and
+    unresolved `content://` (the grant ends with the task stack).
 - Later, maybe: merging network videos into the Videos library.
 
 ### Step (b) plan: finding servers
@@ -129,7 +137,7 @@ changes; the owner reads it off the Wireless debugging screen).
   module), and `FrameExtractor` uses it.
 - **JS:** one predicate, `NavigationService.isNetworkStream`, turns off history, resume, recap and
   next/previous for streams. `VideoPlayerScreen`'s `source` repeats that list; it should use the
-  predicate. History skips are in `videoHistoryStore.incrementViewCount` (step (c)).
+  predicate. History skips are in `videoHistoryStore.incrementViewCount` (step (e)).
 - **Shares:** smbj can't list a server's shares (that's DCE/RPC `srvsvc`). (a) asks for the share
   name; listing is decided in (b).
 - Native changes bump `GlideNativeModule.API_LEVEL` (17 now). Release builds are minified: check smbj
@@ -148,7 +156,7 @@ builds with R8 (+1.5 MB) and runs on the Mi TV; the Network rail entry shows.
   thread pool (each is its own request on the wire). smbj's JCE provider already has MD4 and the
   KDF; BouncyCastle stays on the classpath only because NTLM uses one of its array helpers.
 - JS: `SmbService` (MMKV `glide_smb_v1`, password sealed), `NetworkScreen` (tab + `NetworkFolder`),
-  `smb://` counts as a network stream (no history/resume yet, step (c)).
+  `smb://` counts as a network stream (no history/resume yet, step (e)).
 - Speed test: the activity button on a folder tests its largest video, 20 s per setup
   (1 × 1 MB, 8 × 256 KB, 8 × 1 MB, 8 × 1 MB on BouncyCastle). `node scripts/smb-bench.js`.
 
