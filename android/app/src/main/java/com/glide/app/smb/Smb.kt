@@ -81,7 +81,15 @@ object Smb {
         ).also { client = it }
         val auth = if (login.user.isEmpty()) AuthenticationContext.guest()
             else AuthenticationContext(login.user, login.password.toCharArray(), login.domain)
-        return c.connect(host).authenticate(auth)
+        val connection = c.connect(host)
+        return try {
+            connection.authenticate(auth)
+        } catch (e: Exception) {
+            // Windows closes the connection after a failed sign-in, but smbj hands the same one
+            // out again while its socket still looks open: the next try would fail with a reset.
+            runCatching { connection.close(true) }
+            throw e
+        }
     }
 
     /** A session of its own under [login], closed after [block]: for signing in before anything is saved. */

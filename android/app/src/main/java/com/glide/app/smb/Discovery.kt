@@ -101,13 +101,16 @@ object Discovery {
         }
     }
 
+    /** This device's LAN address: the /24 to scan, and where the phone sign-in page listens. */
+    fun ownAddress(): Inet4Address? = NetworkInterface.getNetworkInterfaces().asSequence()
+        .filter { it.isUp && !it.isLoopback }
+        .flatMap { it.interfaceAddresses.asSequence() }
+        .map { it.address }
+        .firstOrNull { it is Inet4Address && it.isSiteLocalAddress } as Inet4Address?
+
     /** Port 445 on every other address of our /24. */
     private fun scan(found: MutableMap<String, String>) {
-        val own = NetworkInterface.getNetworkInterfaces().asSequence()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.interfaceAddresses.asSequence() }
-            .map { it.address }
-            .firstOrNull { it is Inet4Address && it.isSiteLocalAddress } ?: return
+        val own = ownAddress() ?: return
         val prefix = own.address.let { "${it[0].toInt() and 255}.${it[1].toInt() and 255}.${it[2].toInt() and 255}." }
         val pool = Executors.newFixedThreadPool(64)
         (1..254).map { "$prefix$it" }.filter { it != own.hostAddress }.forEach { ip ->

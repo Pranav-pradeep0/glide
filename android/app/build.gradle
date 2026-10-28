@@ -248,6 +248,9 @@ dependencies {
     // SMB2/3 client for network shares (docs/network-shares.md). Apache-2.0. Signing runs on
     // the platform's AES (SmbSecurity), not BouncyCastle's pure-Java one; BC stays for MD4.
     implementation "com.hierynomus:smbj:0.15.0"
+    // QR codes for signing in to the TV from a phone (docs/network-shares.md, step (d)).
+    // Apache-2.0, no dependencies; R8 drops the decoders, which the unit test uses.
+    implementation "com.google.zxing:core:3.5.4"
 
     // computeGeometry is pure arithmetic over ints and floats, so the six resize modes --
     // the part of the engine migration the plan calls the risk peak -- can be checked on

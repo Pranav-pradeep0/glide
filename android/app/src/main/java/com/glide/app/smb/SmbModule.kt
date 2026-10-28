@@ -13,6 +13,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.glide.app.player.BackgroundWork
 import com.hierynomus.mserref.NtStatus
 import com.hierynomus.mssmb2.SMBApiException
@@ -136,6 +137,26 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
     }
 
     /**
+     * TV sign-in from a phone ([PhoneSignIn]): serves the form for [host] (empty: the phone types
+     * the IP) and resolves `{ url, qr }`, `qr` a PNG data URI. Each form the phone sends arrives
+     * as a [PHONE_LOGIN] event `{ host, user, password, domain }`.
+     */
+    @ReactMethod
+    fun servePhoneSignIn(host: String, promise: Promise) = BackgroundWork.submit(promise) {
+        val url = PhoneSignIn.start(host) { login ->
+            reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                ?.emit(PHONE_LOGIN, Arguments.makeNativeMap(login))
+        }
+        promise.resolve(Arguments.createMap().apply {
+            putString("url", url)
+            putString("qr", PhoneSignIn.qrPng(url))
+        })
+    }
+
+    @ReactMethod
+    fun stopPhoneSignIn() = PhoneSignIn.stop()
+
+    /**
      * The go/no-go speed test (docs/network-shares.md): reads [uri] for [SECONDS] per setup the
      * way playback does and resolves a report, also logged as `smb-bench` lines for
      * scripts/smb-bench.js. Its own thread at normal priority, not BackgroundWork's background
@@ -207,6 +228,7 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
 
     companion object {
         private const val TAG = "GlideSmb"
+        private const val PHONE_LOGIN = "GlideSmbPhoneLogin"
         private const val SECONDS = 20
         private const val TEXT_CAP = 10L shl 20
         // FILE_ATTRIBUTE_HIDDEN and FILE_ATTRIBUTE_DIRECTORY (MS-FSCC 2.6).

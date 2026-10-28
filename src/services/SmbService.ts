@@ -1,6 +1,7 @@
-import { NativeModules } from 'react-native';
+import { DeviceEventEmitter, NativeModules } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 import { hasNativeApi } from '@/native/GlideNative';
+import { IS_TV } from '@/utils/tv';
 
 /** A share the user added. One login per host: native keys sessions by host. */
 export interface SmbServer {
@@ -34,6 +35,8 @@ const native = NativeModules.GlideSmb as
           list(uri: string): Promise<SmbEntry[]>;
           readText(uri: string): Promise<string>;
           speedTest(uri: string): Promise<string>;
+          servePhoneSignIn(host: string): Promise<{ url: string; qr: string }>;
+          stopPhoneSignIn(): void;
       }
     | undefined;
 
@@ -42,6 +45,11 @@ const KEY = 'servers';
 
 /** Level 20+: older APKs have no SMB (18 and 19 had parts of it, never released). */
 export const SMB_AVAILABLE = hasNativeApi(20) && !!native;
+
+/** TV only: a phone types the login (docs/network-shares.md, step (d)). */
+export const PHONE_SIGN_IN = IS_TV && hasNativeApi(21);
+
+export type SmbLogin = { host: string; user: string; password: string; domain: string };
 
 let pushed: Promise<unknown> | null = null;
 
@@ -76,7 +84,7 @@ export const SmbService = {
     },
 
     /** Signs in and lists the disk shares; empty when the server won't list them. */
-    listShares(login: { host: string; user: string; password: string; domain: string }): Promise<string[]> {
+    listShares(login: SmbLogin): Promise<string[]> {
         return native!.listShares(login.host, login.user, login.password, login.domain);
     },
 
@@ -117,6 +125,20 @@ export const SmbService = {
 
     remove(server: SmbServer) {
         return save(SmbService.servers().filter(s => !(s.host === server.host && s.share === server.share)));
+    },
+
+    /**
+     * Serves a sign-in page on the LAN for `host` (empty: the phone types the IP) until `stop`.
+     * `page`: its URL and a QR code of it (PNG data URI). `onLogin` gets each form the phone sends.
+     */
+    servePhoneSignIn(host: string, onLogin: (login: SmbLogin) => void) {
+        const sub = DeviceEventEmitter.addListener('GlideSmbPhoneLogin', onLogin);
+        const page = native!.servePhoneSignIn(host);
+        const stop = () => {
+            sub.remove();
+            page.finally(() => native!.stopPhoneSignIn()).catch(() => {});
+        };
+        return { page, stop };
     },
 
     /** Go/no-go speed test (docs/network-shares.md). Remove before the release that ships SMB. */

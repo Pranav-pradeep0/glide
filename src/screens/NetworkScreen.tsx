@@ -3,7 +3,7 @@
 // Network shares (docs/network-shares.md): servers found on the network, sign in, pick a share,
 // browse its folders with the library's rows, cards and thumbnails, play a file, and the speed test.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { Button, Card, IconButton, ListGroup, ListRow, SectionLabel, Sheet, show
 import { EmptyState, ListHeader, VideoCard, VideoItemCell, VideoItemComponent, VideoRow, listContentStyle } from '@/components/VideoRow';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
-import { SMB_AVAILABLE, SmbEntry, SmbHost, SmbServer, SmbService } from '@/services/SmbService';
+import { PHONE_SIGN_IN, SMB_AVAILABLE, SmbEntry, SmbHost, SmbLogin, SmbServer, SmbService } from '@/services/SmbService';
 import { NavigationService } from '@/services/NavigationService';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { formatFileSize } from '@/utils/formatUtils';
@@ -35,6 +35,8 @@ export default function NetworkScreen() {
     // The sheet's server, `host: ''` for "Add by IP". Kept while it closes so it doesn't blank mid-slide.
     const [target, setTarget] = useState<SmbHost>({ host: '', name: null });
     const [signingIn, setSigningIn] = useState(false);
+    // A fresh sheet each time it opens, so it never reopens on the last visit's share list.
+    const [opened, setOpened] = useState(0);
     const [help, setHelp] = useState(false);
 
     useFocusEffect(useCallback(() => { setServers(SmbService.servers()); }, []));
@@ -47,7 +49,7 @@ export default function NetworkScreen() {
     useEffect(search, [search]);
 
     const open = (s: SmbServer) => navigation.navigate('NetworkFolder', { uri: SmbService.uri(s), title: s.share });
-    const signIn = (h: SmbHost) => { setTarget(h); setSigningIn(true); };
+    const signIn = (h: SmbHost) => { setTarget(h); setOpened(n => n + 1); setSigningIn(true); };
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -110,7 +112,7 @@ export default function NetworkScreen() {
                 <ScrollView contentContainerStyle={styles.form}><HowItWorks /></ScrollView>
             </Sheet>
             <SignInSheet
-                key={target.host}
+                key={opened}
                 target={target}
                 visible={signingIn}
                 onClose={() => setSigningIn(false)}
@@ -165,7 +167,9 @@ function SignInSheet({ target, visible, onClose, onAdded }: {
     const [share, setShare] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [phone, setPhone] = useState<{ url: string; qr: string } | null>(null);
     // The keyboard's next key moves down the form; on a TV remote that saves leaving the keyboard.
+    // Its go key keeps focus too, so the keyboard stays up for the share field.
     const fields = [useRef<TextInputInstance>(null), useRef<TextInputInstance>(null), useRef<TextInputInstance>(null)];
     const next = (i: number) => ({ returnKeyType: 'next' as const, submitBehavior: 'submit' as const, onSubmitEditing: () => fields[i].current?.focus() });
     const login = { host: host.trim(), user: user.trim(), password, domain: domain.trim() };
@@ -183,9 +187,27 @@ function SignInSheet({ target, visible, onClose, onAdded }: {
     };
 
     // Never disabled: a disabled button can't take focus on a TV, so the D-pad would just stop.
-    const signIn = () => (login.host
-        ? run(async () => setShares(await SmbService.listShares(login)))
+    const signIn = (l: SmbLogin = login) => (l.host
+        ? run(async () => setShares(await SmbService.listShares(l)))
         : setError('Enter the IP address.'));
+
+    // TV: while the sheet is open, a phone can type the login instead of the remote. What it
+    // sends fills the fields and signs in, so a wrong password shows here like a typed one.
+    useEffect(() => {
+        if (!visible || !PHONE_SIGN_IN) { return; }
+        const { page, stop } = SmbService.servePhoneSignIn(target.host, sent => {
+            const l = { ...sent, host: (target.host || sent.host).trim(), user: sent.user.trim(), domain: sent.domain.trim() };
+            setHost(l.host);
+            setUser(l.user);
+            setPassword(l.password);
+            setDomain(l.domain);
+            setShares(null);
+            signIn(l);
+        });
+        page.then(setPhone, () => setPhone(null));
+        return stop;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one server per opening; `target` is fixed per sheet (keyed by opening)
+    }, [visible]);
 
     const save = (name: string) => (name.trim()
         ? run(async () => {
@@ -207,17 +229,31 @@ function SignInSheet({ target, visible, onClose, onAdded }: {
         >
             <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
                 {!shares ? <>
+                    {phone && (
+                        <View style={styles.phone}>
+                            <Image source={{ uri: phone.qr }} style={styles.qr} accessibilityLabel="QR code" />
+                            <View style={styles.phoneText}>
+                                <Text style={[type.row, { color: colors.text }]}>Sign in from your phone</Text>
+                                <Text style={[type.body, { color: colors.textSecondary }]}>
+                                    Scan the code with your phone's camera, or open {phone.url}
+                                </Text>
+                                <Text style={[type.caption, { color: colors.textSecondary }]}>
+                                    The login travels over your home Wi-Fi unencrypted, like your router's settings page.
+                                </Text>
+                            </View>
+                        </View>
+                    )}
                     {!target.host && (
                         <Field label="IP address" value={host} onChangeText={setHost} placeholder="192.168.1.5" keyboardType="numbers-and-punctuation" autoFocus {...next(0)} />
                     )}
                     <Field ref={fields[0]} label="Username" value={user} onChangeText={setUser} placeholder="Empty for guest" autoFocus={!!target.host} {...next(1)} />
                     <Field ref={fields[1]} label="Password" value={password} onChangeText={setPassword} secureTextEntry {...next(2)} />
-                    <Field ref={fields[2]} label="Domain (optional)" value={domain} onChangeText={setDomain} returnKeyType="go" onSubmitEditing={signIn} />
+                    <Field ref={fields[2]} label="Domain (optional)" value={domain} onChangeText={setDomain} returnKeyType="go" submitBehavior="submit" onSubmitEditing={() => signIn()} />
                     <Text style={[type.caption, { color: colors.textSecondary }]}>
                         Windows 11 needs your Windows username and password.
                     </Text>
                     {errorLine}
-                    <Button label="Sign in" variant="primary" block loading={busy} onPress={signIn} />
+                    <Button label="Sign in" variant="primary" block loading={busy} onPress={() => signIn()} />
                 </> : shares.length > 0 ? <>
                     <ListGroup inset>
                         {shares.map((s, i) => (
@@ -230,7 +266,7 @@ function SignInSheet({ target, visible, onClose, onAdded }: {
                     <Text style={[type.body, { color: colors.textSecondary }]}>
                         {login.host} didn't list its shares. Type the shared folder's name, as in \\{login.host}\Movies.
                     </Text>
-                    <Field label="Share" value={share} onChangeText={setShare} placeholder="Movies" autoFocus returnKeyType="go" onSubmitEditing={() => save(share)} />
+                    <Field label="Share" value={share} onChangeText={setShare} placeholder="Movies" autoFocus returnKeyType="go" submitBehavior="submit" onSubmitEditing={() => save(share)} />
                     {errorLine}
                     <Button label="Connect" variant="primary" block loading={busy} onPress={() => save(share)} />
                 </>}
@@ -251,6 +287,8 @@ function Field({ label, ref, ...input }: TextInputProps & { label: string; ref?:
                 {...input}
                 autoCapitalize="none"
                 autoCorrect={false}
+                // Logins are kept sealed by Glide; no "save password?" from Google's autofill.
+                importantForAutofill="no"
                 accessibilityLabel={label}
                 placeholderTextColor={colors.textTertiary}
                 onFocus={() => setFocused(true)}
@@ -399,6 +437,10 @@ const styles = StyleSheet.create({
     step: { flexDirection: 'row', gap: metrics.space.md },
     stepNumber: { width: 16 },
     stepText: { flex: 1 },
+    phone: { flexDirection: 'row', gap: metrics.space.lg, alignItems: 'center' },
+    // White around the code is the quiet zone a camera needs to find it.
+    qr: { width: 176, height: 176, borderRadius: metrics.radius.md },
+    phoneText: { flex: 1, gap: metrics.space.sm },
     label: { marginBottom: metrics.space.xs },
     input: { borderRadius: metrics.radius.md, borderWidth: 2, paddingHorizontal: metrics.space.md, paddingVertical: metrics.space.sm },
 });

@@ -53,9 +53,10 @@ servers on the network, sign in, pick a share; typing an IP is the fallback).
 - **(b) Finding servers:** done; checked on the phone, TV pass pending. Plan below; see Status.
 - **(c) Browsing:** done; checked on the phone, TV pass pending. The library's rows/cards,
   thumbnails, sidecar subtitles.
-- **(d) TV sign-in from the phone:** the TV shows a QR code for a page the TV serves itself on the
-  LAN; the phone's keyboard fills in IP/username/password. Plain http on the home network (like a
-  router's page); say so in the UI.
+- **(d) TV sign-in from the phone:** done; checked on the phone standing in for the TV, TV pass
+  pending. The TV shows a QR code for a page the TV serves itself on the LAN; the phone's keyboard
+  fills in IP/username/password. Plain http on the home network (like a router's page); the UI says
+  so.
 - **(e)** Resume/Recents, connection drops ("Can't reach <server>" + Retry), Android 17 permission.
 - Later, maybe: merging network videos into the Videos library.
 
@@ -265,10 +266,59 @@ tsc clean, jest 34 suites pass, `ShareEnumTest` passes. API level 19 (`SMB_AVAIL
 - `C:\GlideTest` now also has `Spider-Man.srt` and `Extras\Spider-Man Clip.mkv` (a second hard
   link); `-Undo` deletes the folder recursively.
 
+**2026-10-28: step (d) written and passed on the phone** (AIN065, debug-signed release build, phone
+standing in for the TV). tsc, eslint (no errors), jest 34 suites, Gradle unit tests pass. API level
+**21**; the phone sign-in needs 21, the rest of SMB still 20. zxing `core` 3.5.4 (Apache-2.0, no
+dependencies): R8 keeps 17 encoder classes.
+
+- `PhoneSignIn.kt`: while the TV's sign-in sheet is open (found server or "Add by IP"), a
+  `ServerSocket` on the TV's LAN address (`Discovery.ownAddress()`, shared with the port scan), a
+  random port and an 8-character token in the path (no `x`: the app's font draws `9x2` as `9×2`);
+  other paths 404. It serves a small form (IP only when the TV doesn't know it), and each POST
+  arrives in JS as the `GlideSmbPhoneLogin` event. A thread per connection: browsers open spare
+  connections and send nothing. Stopped when the sheet closes.
+- The sheet (TV only, `PHONE_SIGN_IN`): QR (PNG data URI) beside "Sign in from your phone", the
+  URL as text, and the unencrypted note. A login from the phone fills the fields and signs in, so
+  a wrong password shows on the TV and the QR stays for another try; the share is picked on the TV.
+  The remote's own fields stay.
+- Fixed on the way:
+  - smbj reuses its connection to a server while the socket looks open, and Windows closes it
+    after a failed sign-in: the next sign-in failed with "Can't reach" (reset, broken pipe).
+    `Smb.connect` now closes the connection when sign-in fails.
+  - The sign-in sheet reopened on the last visit's share list (it was keyed by host); it now
+    starts fresh each time it opens.
+  - Keyboard (the (c) note): RN's autoFocus asks for the keyboard once, straight after focusing,
+    and Android drops it while the window has no keyboard attached: a sheet opening, or the
+    swap to the share field (RN blurs the unmounted field, which hides the keyboard). Seen in
+    `dumpsys input_method`. `KeyboardInsetView` (in every sheet's window) now raises it through
+    the window's insets controller when a field takes focus or the window gains focus with one,
+    phones only (API 30+): the sheet's first field and the share field both raise it now. Domain's
+    and Share's go key keep focus (`submitBehavior="submit"`) like the other fields.
+  - Google Password Manager no longer offers to save the login (`importantForAutofill="no"`).
+- Phone checks, with screenshots, on a throwaway build (not committed) that showed the TV's QR
+  section on the phone and returned no shares for `GLIDETEST`: the QR in a screenshot decodes to
+  the URL shown (zxing); Playwright on this PC opened it, sent the login, the phone signed in,
+  listed `GlideTest`, opened it; a wrong token gets 404; after the sheet closes the port refuses;
+  wrong password from the page shows "Wrong username or password", then the right one signs in.
+  The real build: no QR section on the phone; Add by IP signs in and saves with no save-password
+  prompt; the keyboard rises with the sheet; a back swipe still closes only the keyboard.
+  `PhoneSignInTest`: the QR reads back, and a real HTTP round trip (form, POST with `&`, `=`, `é`,
+  404, closed after stop).
+- Not done: the phone's page doesn't wait to hear whether sign-in worked (the TV shows it). Add a
+  long-poll if that turns out to matter.
+- The phone is now **192.168.1.43** (DHCP). SMB from it works although the "Glide SMB test"
+  firewall rule still lists .40 (raising the rule was refused at UAC); some other rule lets 445
+  through on this PC. Not looked into.
+
 **Next:** the TV pass (owner: not yet). D-pad reaches every row, the refresh button, the sheet's
 fields and the share list; focus shows. Read the `discovery:` log line there too. Step (c) on
 TV: the grid opens focused on `Extras`, D-pad from the folder row into the cards and between them,
 long-press/`⋯` from list view, thumbnails over 2.4 GHz (slow: ~3 MB/s), sidecar under Files.
+Step (d) on TV: the sheet shows the QR and the URL; a real phone camera scans it from the sofa
+and opens the page; the TV's URL uses its Wi-Fi address; the phone's login signs the TV in and the
+share is picked with the D-pad; a wrong password shows on the TV, resend from the phone works; the
+remote's fields still work beside it and D-pad focus never lands on the QR; the keyboard doesn't
+pop up by itself when the D-pad moves onto a field; the share field takes D-pad focus. Android 9.
 `smb-test-share.ps1` needs PowerShell 7 (`pwsh`); 5.1 has no `RandomNumberGenerator.GetInt32`.
 
 **Test share left up for the TV pass (owner, 2026-10-27):** `\\DESKTOP-S4T6400\GlideTest`
