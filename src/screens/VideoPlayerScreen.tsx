@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { joinMeta, prettyTitle } from '@/components/VideoRow';
 import {
     StyleSheet,
@@ -20,7 +20,8 @@ import { nextDisplayMode } from '@/components/VideoPlayer/PlayerIcons';
 // Native Modules
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
 
-import { currentActivityName, finishCurrentActivity, usePipModeListener } from '@/native/PipModule';
+import { currentActivityName, finishCurrentActivity, setStopPoint, usePipModeListener } from '@/native/PipModule';
+import { ExternalPlayerContext } from '@/navigation/ExternalPlayerContext';
 
 // Components
 import AnimatedVideoView from '@/components/VideoPlayer/AnimatedVideoView';
@@ -84,7 +85,7 @@ import { hapticPresetAt, useAppStore } from '@/store/appStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 
 // Types
-import { VideoFile, VideoSort } from '@/types';
+import { ExternalOpen, VideoFile, VideoSort } from '@/types';
 import type { PlayerCarry, PlayerProgressData } from '@/hooks/video-player';
 import { carriedAudio, carriedSubtitle } from '@/hooks/video-player/types';
 import HapticModule, { type HapticMark } from '@/native/HapticModule';
@@ -101,6 +102,10 @@ type RouteParams = {
     albumName?: string;
     bucketId?: string;
     isExternalOpen?: boolean;
+    /** Seconds. The opening app's resume point (Stremio's), where Glide has no history of its own. */
+    startPosition?: number;
+    /** What the opening app sent beyond the link: headers, subtitles, a playlist, secure_uri. */
+    external?: ExternalOpen;
     imdbId?: string;
     cleanTitle?: string;
     carry?: PlayerCarry;
@@ -133,6 +138,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         videoName = 'Video',
         contentUri, // Original content:// URI for history storage
         isExternalOpen,
+        startPosition,
+        external,
         playMode,
         albumName: routeAlbumName,
         bucketId: routeBucketId,
@@ -147,11 +154,23 @@ export default function VideoPlayerScreen({ route }: Props) {
     // "The.Boys.S05E04.1080p" → "The Boys" + "S5 E4", as in the library.
     const displayTitle = useMemo(() => prettyTitle(videoName), [videoName]);
 
-    // The parent folder when the caller didn't name one ("Open with")
+    // The parent folder when the caller didn't name one ("Open with"). Not for another app's
+    // stream (a server path like Stremio's torrent hash), nor when secure_uri hides the link.
     const albumName = useMemo(
-        () => routeAlbumName || DeepLinkService.getFolderNameFromUri(videoPath),
-        [videoPath, routeAlbumName],
+        () => routeAlbumName || (external && (external.secureUri || NavigationService.isNetworkStream(videoPath))
+            ? null : DeepLinkService.getFolderNameFromUri(videoPath)),
+        [videoPath, routeAlbumName, external],
     );
+
+    // The opening app's video_list, or else the folder's videos.
+    const externalVideos = useMemo(() => external?.playlist?.map((v): VideoFile => ({
+        name: v.name, path: v.uri, size: 0, modifiedDate: 0, duration: 0, isDirectory: false,
+    })), [external]);
+    // Next / Previous / a playlist pick stay an external open with the same headers; the
+    // subtitles the app sent belong to the video it opened.
+    const externalListParams = useMemo(() => (externalVideos
+        ? { isExternalOpen, external: { ...external, subtitles: undefined } }
+        : {}), [externalVideos, isExternalOpen, external]);
 
     // ========================================================================
 
@@ -162,6 +181,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const isScreenFocused = useIsFocused();
+    const inExternalPlayer = useContext(ExternalPlayerContext);
     const { width, height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
 
@@ -221,7 +241,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const source = useMemo(() => {
         if (NavigationService.isNetworkStream(videoPath)) {
-            return { uri: videoPath, isNetwork: true };
+            return { uri: videoPath, isNetwork: true, headers: external?.headers };
         }
         if (videoPath.startsWith('content://')) {
             return { uri: videoPath, isNetwork: false };
@@ -234,7 +254,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             finalUri = `/${finalUri}`;
         }
         return { uri: finalUri, isNetwork: false };
-    }, [videoPath]);
+    }, [videoPath, external?.headers]);
 
     const isLandscape = useMemo(() => width > height, [width, height]);
     const isNetworkStream = useMemo(() => NavigationService.isNetworkStream(videoPath), [videoPath]);
@@ -445,6 +465,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         carriedSubtitleTrack: carry?.subtitleTrack,
         subtitleDelay: settingsHook.settings.subtitleDelay,
         defaultAudioLanguage: defaultAudioLanguage,
+        openerSubtitles: external?.subtitles,
     });
 
     // Every cue crosses the bridge: native reads the tags (HapticMeaning) and fits the lines to the
@@ -602,6 +623,12 @@ export default function VideoPlayerScreen({ route }: Props) {
     const savePlaybackProgress = useCallback((atExit = false) => {
         if (!videoPath || !videoName) {return;}
 
+        // Before the stream check: Stremio's videos are streams, and it keeps their progress.
+        if (inExternalPlayer && player.state.duration > 0) {
+            const inCredits = creditsAt !== null && player.currentTimeRef.current >= creditsAt;
+            setStopPoint(videoPath, inCredits ? player.state.duration : player.currentTimeRef.current, player.state.duration);
+        }
+
         const isNetwork = NavigationService.isNetworkStream(videoPath);
         if (isNetwork) {return;}
 
@@ -652,6 +679,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         brightnessMode,
         resumePosition,
         creditsAt,
+        inExternalPlayer,
     ]);
 
     // Keep ref updated for usePlayerCore
@@ -809,8 +837,9 @@ export default function VideoPlayerScreen({ route }: Props) {
             playAll,
             videoSort,
             carry: carryRef.current,
+            ...externalListParams,
         });
-    }, [navigation, albumName, routeBucketId, playMode, playAll, videoSort, closeAllPanels]);
+    }, [navigation, albumName, routeBucketId, playMode, playAll, videoSort, closeAllPanels, externalListParams]);
 
     // ========================================================================
     // CONTROL HANDLERS
@@ -999,17 +1028,20 @@ export default function VideoPlayerScreen({ route }: Props) {
     // PLAYLIST NAVIGATION
     // ========================================================================
 
-    // Get album videos for playlist navigation
-    const { videos: albumVideos } = useAlbumVideos(albumName || null, routeBucketId, videoSort);
+    // The folder's videos, unless the opening app sent its own video_list.
+    const { videos: folderVideos } = useAlbumVideos(externalVideos ? null : albumName || null, routeBucketId, videoSort);
+    const albumVideos = externalVideos ?? folderVideos;
 
     // Find current video index in playlist
     const currentVideoIndex = useMemo(() => {
         return albumVideos.findIndex(v => v.path === videoPath);
     }, [albumVideos, videoPath]);
 
-    // Calculate if we have prev/next videos
-    const hasPrevious = currentVideoIndex > 0;
-    const hasNext = currentVideoIndex >= 0 && currentVideoIndex < albumVideos.length - 1;
+    // Calculate if we have prev/next videos. A stream has no folder to step through, only
+    // the list an opening app sent with it.
+    const canStep = !isNetworkStream || !!externalVideos;
+    const hasPrevious = canStep && currentVideoIndex > 0;
+    const hasNext = canStep && currentVideoIndex >= 0 && currentVideoIndex < albumVideos.length - 1;
 
     const handlePrevious = useCallback(() => {
         if (!hasPrevious) {return;}
@@ -1027,9 +1059,10 @@ export default function VideoPlayerScreen({ route }: Props) {
                 carry: carryRef.current,
                 fromPip: isInPipMode,
                 previous: true,
+                ...externalListParams,
             });
         }
-    }, [hasPrevious, albumVideos, currentVideoIndex, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode, closeAllPanels]);
+    }, [hasPrevious, albumVideos, currentVideoIndex, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode, closeAllPanels, externalListParams]);
 
     const handleNext = useCallback(() => {
         if (!hasNext) {return;}
@@ -1046,9 +1079,10 @@ export default function VideoPlayerScreen({ route }: Props) {
                 videoSort,
                 carry: carryRef.current,
                 fromPip: isInPipMode,
+                ...externalListParams,
             });
         }
-    }, [hasNext, albumVideos, currentVideoIndex, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode, closeAllPanels]);
+    }, [hasNext, albumVideos, currentVideoIndex, navigation, albumName, routeBucketId, playMode, playAll, videoSort, isInPipMode, closeAllPanels, externalListParams]);
 
     const handleShakeAction = useCallback(() => {
         if (shakeAction === 'play_pause') {
@@ -1056,11 +1090,11 @@ export default function VideoPlayerScreen({ route }: Props) {
             return;
         }
         if (shakeAction === 'next') {
-            if (!isNetworkStream && hasNext) { handleNext(); }
+            if (hasNext) { handleNext(); }
             return;
         }
         if (shakeAction === 'previous') {
-            if (!isNetworkStream && hasPrevious) { handlePrevious(); }
+            if (hasPrevious) { handlePrevious(); }
             return;
         }
         if (shakeAction === 'seek_forward') {
@@ -1079,7 +1113,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         handleJumpBackward,
         hasNext,
         hasPrevious,
-        isNetworkStream,
     ]);
 
     // "Up next" once the credits start, or the video ends: with autoplay, a countdown that plays
@@ -1397,8 +1430,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                         playInBackground={settingsHook.settings.backgroundPlayEnabled}
                         pipEnabled={pipEnabled}
                         pipPresentationActive={pipPresentationActive}
-                        onPipPrevious={!isNetworkStream && hasPrevious ? handlePrevious : undefined}
-                        onPipNext={!isNetworkStream && hasNext ? handleNext : undefined}
+                        onPipPrevious={hasPrevious ? handlePrevious : undefined}
+                        onPipNext={hasNext ? handleNext : undefined}
                         videoEnhancement={!IS_TV && settingsHook.settings.videoEnhancement}
                         videoEnhancementStrength={settingsHook.settings.videoEnhancementStrength}
                         audioTrack={tracksHook.selectedAudioTrackId}
@@ -1414,7 +1447,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         hapticCues={hapticCues}
                         hapticPreset={hapticPreset}
                         hapticStrength={hapticStrength}
-                        initialResumeSeconds={resumePosition ?? undefined}
+                        initialResumeSeconds={resumePosition ?? startPosition}
                         onLoad={handleLoad}
                         onProgress={handleProgress}
                         onEnd={handleVideoEnd}
@@ -1528,9 +1561,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                     insets={effectiveInsets}
                     cutouts={cutoutRects}
                     onOpenBookmarks={isNetworkStream ? undefined : handleToggleBookmarkPanel}
-                    onOpenPlaylist={isNetworkStream ? undefined : handleTogglePlaylist}
-                    onPrevious={!isNetworkStream && hasPrevious ? handlePrevious : undefined}
-                    onNext={!isNetworkStream && hasNext ? handleNext : undefined}
+                    onOpenPlaylist={isNetworkStream && !externalVideos ? undefined : handleTogglePlaylist}
+                    onPrevious={hasPrevious ? handlePrevious : undefined}
+                    onNext={hasNext ? handleNext : undefined}
                     onJumpBackward={handleJumpBackward}
                     onJumpForward={handleJumpForward}
                     onLockScreen={IS_TV ? undefined : ui.lock}
@@ -1604,7 +1637,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     sleepTimer={settingsHook.settings.sleepTimer}
                     sleepTimerEndsAt={settingsHook.settings.sleepTimerEndsAt}
                     onSetSleepTimer={settingsHook.setSleepTimer}
-                    onOpenPlaylist={isNetworkStream ? undefined : handleQSOpenPlaylist}
+                    onOpenPlaylist={isNetworkStream && !externalVideos ? undefined : handleQSOpenPlaylist}
                     onOpenAudio={handleQSOpenAudio}
                     onOpenSubtitle={handleQSOpenSubtitle}
                     onOpenBookmarkPanel={isNetworkStream ? undefined : handleQSOpenBookmarkPanel}
@@ -1635,7 +1668,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             )}
 
             {/* Playlist panel */}
-            {!pipPresentationActive && !isNetworkStream && (
+            {!pipPresentationActive && (!isNetworkStream || !!externalVideos) && (
                 <PlaylistPanel
                     visible={ui.state.playlistOpen}
                     onClose={handlePlaylistClose}
@@ -1646,6 +1679,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     albumName={albumName ?? undefined}
                     bucketId={routeBucketId}
                     videoSort={videoSort}
+                    videos={externalVideos}
                 />
             )}
 
@@ -1749,7 +1783,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 <PlayerErrorCard
                     code={player.state.errorText}
                     onRetry={handleRetry}
-                    onNext={!isNetworkStream && hasNext ? handleNext : undefined}
+                    onNext={hasNext ? handleNext : undefined}
                     onClose={handleGoBack}
                 />
             )}

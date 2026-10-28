@@ -24,6 +24,8 @@ interface PlaylistPanelProps {
     bucketId?: string;
     videoSort?: VideoSort;
     onBack?: () => void;
+    /** A list given whole (another app's video_list) instead of the folder's. */
+    videos?: VideoFile[];
 }
 
 const PlaylistItem = memo<{
@@ -31,7 +33,8 @@ const PlaylistItem = memo<{
     isCurrent: boolean;
     onPlay: (video: VideoFile) => void;
 }>(({ item, isCurrent, onPlay }) => {
-    const { thumbnail } = useThumbnail(item.path);
+    // A link has no frame to show without opening the stream.
+    const { thumbnail } = useThumbnail(/^https?:\/\//i.test(item.path) ? undefined : item.path);
     // A number, so a position save elsewhere re-renders only the row whose bar moved.
     const progress = useVideoHistoryStore((s) => {
         const entry = s.getVideoHistory(item.path);
@@ -96,8 +99,11 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = memo(({
     bucketId,
     videoSort,
     onBack,
+    videos: givenVideos,
 }) => {
-    const { videos, loading } = useAlbumVideos(albumName || null, bucketId, videoSort);
+    const album = useAlbumVideos(givenVideos ? null : albumName || null, bucketId, videoSort);
+    const videos = givenVideos ?? album.videos;
+    const loading = !givenVideos && album.loading;
 
     const handlePlayAndClose = useCallback((video: VideoFile) => {
         onPlayVideo(video);

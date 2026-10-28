@@ -6,6 +6,7 @@ import { SubtitleParser } from '../utils/SubtitleParser';
 import { SubtitleCue } from '../types';
 import { SUBTITLE_EXTENSIONS } from '../utils/constants';
 import { SmbService } from './SmbService';
+import { fetchWithTimeout } from '../utils/network';
 
 const LOG_PREFIX = '[SubtitlePicker]';
 
@@ -159,9 +160,36 @@ export class SubtitlePickerService {
         }
     }
 
+    /**
+     * A subtitle another app handed over with the video (Stremio's addons): a link, a
+     * content:// URI or a file. Named by the sender, or by the file if it gave none.
+     */
+    static async loadFromUri(uri: string, name?: string): Promise<PickedSubtitle | null> {
+        const fileName = name || decodeURIComponent(uri.split('?')[0].split('/').pop() || 'Subtitle');
+        try {
+            if (/^https?:\/\//i.test(uri)) {
+                const response = await fetchWithTimeout(uri, {}, 15000);
+                if (!response.ok) {
+                    console.error(`${LOG_PREFIX} HTTP ${response.status} for subtitle`);
+                    return null;
+                }
+                return SubtitlePickerService.parse(fileName, await response.text());
+            }
+            if (uri.startsWith('content://')) {
+                return SubtitlePickerService.parse(fileName, await RNFS.readFile(uri, 'utf8'));
+            }
+            const loaded = await SubtitlePickerService.loadFromPath(uri);
+            return loaded && { ...loaded, name: fileName };
+        } catch (error) {
+            console.error(`${LOG_PREFIX} Error loading subtitle:`, error);
+            return null;
+        }
+    }
+
     private static parse(fileName: string, content: string): PickedSubtitle | null {
         const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
-        const format = ext === '.srt' ? 'srt' : ext === '.vtt' ? 'vtt' : 'ass';
+        // No known extension (a sender's name like "English", or a link): let the content say.
+        const format = ext === '.srt' ? 'srt' : ext === '.vtt' ? 'vtt' : ext === '.ass' || ext === '.ssa' ? 'ass' : undefined;
         const cues = SubtitleParser.parse(content, format);
         if (cues.length === 0) {
             console.error(`${LOG_PREFIX} No cues parsed from:`, fileName);

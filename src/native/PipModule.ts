@@ -70,6 +70,15 @@ export async function finishCurrentActivity(): Promise<boolean> {
 }
 
 /**
+ * Where playback is (seconds), handed back to the app that opened the video when the
+ * player closes -- Stremio resumes from it. A no-op when nothing opened it for a result.
+ */
+export function setStopPoint(uri: string, position: number, duration: number): void {
+    if (Platform.OS !== 'android') { return; }
+    NativePipModule?.setStopPoint?.(uri, Math.round(position * 1000), Math.round(duration * 1000));
+}
+
+/**
  * The simple class name of the Activity in front, e.g. 'VideoPlayerActivity', or null.
  * Undefined on APKs from before the native freeze, which lack the method.
  */

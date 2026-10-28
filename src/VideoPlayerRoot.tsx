@@ -14,12 +14,10 @@ import { NavigationService } from '@/services/NavigationService';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { finishCurrentActivity } from '@/native/PipModule';
 import { useActivityBackButton } from '@/navigation/useActivityBackButton';
+import { ExternalPlayerContext } from '@/navigation/ExternalPlayerContext';
+import type { LaunchExtras } from '@/services/DeepLinkService';
 
 const Stack = createNativeStackNavigator();
-
-type Props = {
-    videoUri?: string;
-};
 
 type OpenRequest = { routeName: string; params: any };
 
@@ -27,7 +25,10 @@ type OpenRequest = { routeName: string; params: any };
  * Which screen an opened video lands on. A film or an episode gets its detail screen
  * first; anything else, and every stream, goes straight to the player.
  */
-async function resolveRoute(uri: string): Promise<OpenRequest> {
+async function resolveRoute(extras: LaunchExtras & { videoUri: string }): Promise<OpenRequest> {
+    const uri = extras.videoUri;
+    const startPositionMs = extras.startPositionMs ?? 0;
+    const external = DeepLinkService.externalOpenFrom(extras);
     let resolvedPath = uri;
     try {
         resolvedPath = await DeepLinkService.resolveToFilePath(uri);
@@ -36,7 +37,9 @@ async function resolveRoute(uri: string): Promise<OpenRequest> {
         console.error('[VideoPlayerRoot] Could not resolve', uri, error);
     }
     // Name it from the resolved path: a MediaStore URI (.../video/media/1234) only names "External Video".
-    const videoName = DeepLinkService.getVideoNameFromUri(resolvedPath);
+    // The sender's title beats both, and secure_uri forbids reading one off the link.
+    const videoName = extras.title
+        || (external.secureUri ? 'Video' : DeepLinkService.getVideoNameFromUri(resolvedPath));
 
     let routeName = 'VideoPlayer';
     if (!NavigationService.isNetworkStream(resolvedPath)) {
@@ -48,11 +51,18 @@ async function resolveRoute(uri: string): Promise<OpenRequest> {
 
     return {
         routeName,
-        params: { videoPath: resolvedPath, videoName, isExternalOpen: true },
+        params: {
+            videoPath: resolvedPath,
+            videoName,
+            isExternalOpen: true,
+            startPosition: startPositionMs > 0 ? startPositionMs / 1000 : undefined,
+            external,
+        },
     };
 }
 
-export default function VideoPlayerRoot({ videoUri }: Props) {
+export default function VideoPlayerRoot(extras: LaunchExtras) {
+    const { videoUri } = extras;
     const theme = useTheme();
     const navigationRef = useRef<NavigationContainerRef<any>>(null);
     useActivityBackButton(navigationRef, 'VideoPlayerActivity');
@@ -69,27 +79,30 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
                 return;
             }
             openedUriRef.current = videoUri;
-            setInitialState(await resolveRoute(videoUri));
+            setInitialState(await resolveRoute({ ...extras, videoUri }));
             setReady(true);
         };
         prepare();
+        // Launch options are fixed for the Activity's life; a new intent arrives as an event.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [videoUri]);
 
     // A second "Open with" while this Activity is alive, relayed from its onNewIntent.
     useEffect(() => {
-        const sub = DeviceEventEmitter.addListener('onNewVideoUri', async (newUri: string) => {
+        const sub = DeviceEventEmitter.addListener('onNewVideoUri', async (next: LaunchExtras) => {
+            const newUri = next?.videoUri;
             // Re-opening what is already playing would restart it from the top.
             if (!newUri || newUri === openedUriRef.current) { return; }
             openedUriRef.current = newUri;
 
-            const next = await resolveRoute(newUri);
+            const request = await resolveRoute({ ...next, videoUri: newUri });
             if (navigationRef.current?.isReady()) {
                 navigationRef.current.reset({
                     index: 0,
-                    routes: [{ name: next.routeName, params: next.params }],
+                    routes: [{ name: request.routeName, params: request.params }],
                 });
             } else {
-                setInitialState(next);
+                setInitialState(request);
             }
         });
         return () => sub.remove();
@@ -116,6 +129,7 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
         <SafeAreaProvider style={{ flex: 1, backgroundColor: '#000' }}>
             <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
                 <ErrorBoundary onError={console.error}>
+                    <ExternalPlayerContext.Provider value={true}>
                     <BaseNavigationContainer ref={navigationRef} theme={DarkTheme}>
                         <Stack.Navigator
                             initialRouteName={initialState.routeName}
@@ -134,6 +148,7 @@ export default function VideoPlayerRoot({ videoUri }: Props) {
                             />
                         </Stack.Navigator>
                     </BaseNavigationContainer>
+                    </ExternalPlayerContext.Provider>
                 </ErrorBoundary>
             </GestureHandlerRootView>
         </SafeAreaProvider>

@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubtitleExtractor, SubtitleTrack } from '@/utils/SubtitleExtractor';
-import { SubtitleCue } from '@/types';
+import { ExternalOpen, SubtitleCue } from '@/types';
 import {
     CarriedTrack,
     NativeAudioTrack,
@@ -79,6 +79,8 @@ interface UsePlayerTracksOptions {
     carriedAudioTrack?: CarriedTrack;
     /** null: subtitles were off. The caller drops history's subtitle when this is set. */
     carriedSubtitleTrack?: CarriedTrack | null;
+    /** Subtitle files the app that opened the video sent with it (Stremio's addons). */
+    openerSubtitles?: ExternalOpen['subtitles'];
 }
 
 // ============================================================================
@@ -97,7 +99,7 @@ interface UsePlayerTracksOptions {
  * - SDH cues for haptic feedback
  */
 export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTracksReturn {
-    const { videoPath, currentTimeRef, findHapticCues, videoName, imdbId, initialAudioTrackId, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage, carriedAudioTrack, carriedSubtitleTrack } = options;
+    const { videoPath, currentTimeRef, findHapticCues, videoName, imdbId, initialAudioTrackId, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage, carriedAudioTrack, carriedSubtitleTrack, openerSubtitles } = options;
 
     // ========================================================================
     // STATE
@@ -425,6 +427,23 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         });
         return () => { mounted = false; };
     }, [videoPath, initialSubtitleTrackIndex, loadExternalCues]);
+
+    // Subtitles the opening app sent: all in the Files list, the first it marked enabled turned on.
+    useEffect(() => {
+        if (!openerSubtitles?.length) {return;}
+        let mounted = true;
+        const firstEnabled = openerSubtitles.findIndex(s => s.enable);
+        openerSubtitles.forEach(async (sub, i) => {
+            const picked = await SubtitlePickerService.loadFromUri(sub.uri, sub.name);
+            if (!mounted || !picked) {return;}
+            const isSDH = SubtitleSelectionService.validateSDHContent(picked.cues).isSDH;
+            // Listed first, so loadExternalCues finds it there and keeps its source.
+            setExternalSubtitles(prev => (prev.some(s => s.name === picked.name)
+                ? prev : [...prev, { ...picked, isSDH, source: 'opener' }]));
+            if (i === firstEnabled) {loadExternalCues(picked.cues, picked.name, isSDH);}
+        });
+        return () => { mounted = false; };
+    }, [openerSubtitles, loadExternalCues]);
 
     // ========================================================================
     // SELECTORS FOR COMPONENT PROPS

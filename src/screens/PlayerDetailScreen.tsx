@@ -44,7 +44,7 @@ export default function PlayerDetailScreen() {
 
     const portraitHeroHeight = Math.min(width * 1.2, 500);
 
-    const { videoPath, videoName, albumName, bucketId, videoSort } = route.params;
+    const { videoPath, videoName, albumName, bucketId, videoSort, startPosition, external } = route.params;
 
     const [movieDetails, setMovieDetails] = useState<OMDBResult | null>(null);
     const [detailsLoading, setDetailsLoading] = useState(true);
@@ -89,6 +89,8 @@ export default function PlayerDetailScreen() {
             videoSort,
             imdbId: movieDetails?.imdbID,
             playMode: withHaptics ? 'with-haptics' : 'normal',
+            startPosition,
+            external,
         });
     }
 

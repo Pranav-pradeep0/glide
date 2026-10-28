@@ -149,8 +149,8 @@ export interface ExternalSubtitle {
     name: string;
     cues: SubtitleCue[];
     isSDH: boolean;
-    /** `beside`: a file next to the video ("Film.srt"), found when the player opens. */
-    source: 'file' | 'api' | 'beside';
+    /** `beside`: a file next to the video ("Film.srt"), found when the player opens. `opener`: sent with it by another app. */
+    source: 'file' | 'api' | 'beside' | 'opener';
 }
 
 // ============================================================================

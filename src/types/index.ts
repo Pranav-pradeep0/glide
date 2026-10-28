@@ -2,6 +2,18 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
 
+/**
+ * What another app sent with a video beyond its link (the MX Player / VLC extras): request
+ * headers, subtitle files, the videos that follow it, and whether the link may be shown.
+ */
+export interface ExternalOpen {
+    headers?: Record<string, string>;
+    subtitles?: { uri: string; name: string; enable: boolean }[];
+    playlist?: { uri: string; name: string }[];
+    /** secure_uri: never show the link, or names taken from it. */
+    secureUri?: boolean;
+}
+
 export interface VideoFile {
     id?: string;
     name: string;
@@ -140,6 +152,9 @@ export type RootStackParamList = {
         imdbId?: string;
         // The order picked on the folder screen, passed on to the player
         videoSort?: VideoSort;
+        // Seconds: the opening app's resume point, passed on to the player
+        startPosition?: number;
+        external?: ExternalOpen;
     };
     VideoPlayer: {
         videoPath: string;
@@ -153,6 +168,9 @@ export type RootStackParamList = {
         subtitlePath?: string;
         // If true, exit app on back press instead of navigating back
         isExternalOpen?: boolean;
+        // Seconds: the opening app's resume point (Stremio's)
+        startPosition?: number;
+        external?: ExternalOpen;
         // Started from a folder's "Play all": plays through even with auto-play next off
         playAll?: boolean;
         // The folder screen's order, so Next / Previous / the playlist follow it

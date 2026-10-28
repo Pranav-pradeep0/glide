@@ -1,7 +1,24 @@
 import { Linking, NativeModules, Platform } from 'react-native';
 import { FileService } from './FileService';
+import type { ExternalOpen } from '../types';
 
 const LOG_PREFIX = '[DeepLinkService]';
+
+/** VideoPlayerActivity's launch options (and onNewVideoUri's payload), validated natively. */
+export type LaunchExtras = {
+    videoUri?: string;
+    /** The opener's resume point ("position" extra), e.g. Stremio's. 0 when none. */
+    startPositionMs?: number;
+    title?: string;
+    secureUri?: boolean;
+    /** Name, value, name, value... */
+    headers?: string[];
+    subs?: string[];
+    subsName?: string[];
+    subsEnable?: string[];
+    videoList?: string[];
+    videoListName?: string[];
+};
 
 export class DeepLinkService {
     static readonly VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.m4v', '.3gp', '.ts', '.mpg', '.mpeg', '.m3u8', '.wmv', '.asf'];
@@ -231,6 +248,38 @@ export class DeepLinkService {
         // Fallback: return original URI
         if (__DEV__) {console.log(LOG_PREFIX, 'Could not resolve, returning original URI');}
         return uri;
+    }
+
+    /** The intent's extras as the player uses them. Names repeat ("eng" twice), and the list dedupes by name. */
+    static externalOpenFrom(extras: LaunchExtras): ExternalOpen {
+        const { headers = [], subs = [], subsName = [], subsEnable = [], videoList = [], videoListName = [] } = extras;
+        const secureUri = !!extras.secureUri;
+        const fallbackName = (uri: string, i: number, kind: string) =>
+            (secureUri ? `${kind} ${i + 1}` : DeepLinkService.getVideoNameFromUri(uri));
+
+        const seen = new Map<string, number>();
+        const unique = (name: string) => {
+            const n = (seen.get(name) ?? 0) + 1;
+            seen.set(name, n);
+            return n === 1 ? name : `${name} (${n})`;
+        };
+
+        const headerMap: Record<string, string> = {};
+        for (let i = 0; i + 1 < headers.length; i += 2) { headerMap[headers[i]] = headers[i + 1]; }
+
+        return {
+            secureUri,
+            headers: headers.length ? headerMap : undefined,
+            subtitles: subs.length ? subs.map((uri, i) => ({
+                uri,
+                name: unique(subsName[i] || fallbackName(uri, i, 'Subtitle')),
+                enable: subsEnable.includes(uri),
+            })) : undefined,
+            playlist: videoList.length > 1 ? videoList.map((uri, i) => ({
+                uri,
+                name: videoListName[i] || fallbackName(uri, i, 'Video'),
+            })) : undefined,
+        };
     }
 
     /**

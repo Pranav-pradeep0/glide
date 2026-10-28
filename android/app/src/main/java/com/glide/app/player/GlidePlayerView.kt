@@ -97,6 +97,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
     // genuinely cannot answer them -- playInBackground is our policy, not its state.
     private var sourceUri: String? = null
     private var startPositionMs: Long = C.TIME_UNSET
+    private var requestHeaders: Map<String, String> = emptyMap()
     private var pausedProp = false
     private var rateProp = 1.0f
     private var mutedProp = false
@@ -240,6 +241,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             if (activity !== getHostActivity()) return
             hostStopped = true
             val p = player ?: return
+            // Exact, and before VideoPlayerActivity.onStop may finish with it; JS's report could land after.
+            (activity as? com.glide.app.VideoPlayerActivity)?.setStopPoint(sourceUri, p.currentPosition, p.duration)
             // A drag cut short by leaving never sends its final exact seek, and scrubbing
             // mode left on suppresses playback silently until Media3's stuck timeout.
             p.setScrubbingModeEnabled(false)
@@ -388,9 +391,14 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
         val startMs = if (startSec > 0) (startSec * 1000).roundToLong() else C.TIME_UNSET
 
-        if (uri == sourceUri && startMs == startPositionMs && player != null) {
+        // Sent with every HTTP request for this source: the "headers" of an external open.
+        val headers = src.takeIf { it.hasKey("headers") && !it.isNull("headers") }?.getMap("headers")
+            ?.toHashMap()?.mapValues { it.value.toString() }.orEmpty()
+
+        if (uri == sourceUri && startMs == startPositionMs && headers == requestHeaders && player != null) {
             return
         }
+        requestHeaders = headers
         if (uri != sourceUri) {
             // Track ids index this media's tracks; they mean nothing for another file.
             chosenAudioTrack = null
@@ -461,6 +469,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
 
     fun setPlayInBackground(enabled: Boolean) {
         playInBackground = enabled
+        (getHostActivity() as? com.glide.app.VideoPlayerActivity)?.playInBackground = enabled
     }
 
     /**
@@ -939,6 +948,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         // Cross-protocol redirects are off by default, so an http link answered with a
         // redirect to https failed to open.
         val httpSource = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(requestHeaders)
 
         val p = ExoPlayer.Builder(context, renderers)
             // smb:// to the network-share reader, everything else as before.

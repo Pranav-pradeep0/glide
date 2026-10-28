@@ -84,6 +84,13 @@ class PipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
         promise.resolve(true)
     }
 
+    /** Where playback is, for the app that opened the video and wants it back (Stremio). */
+    @ReactMethod
+    fun setStopPoint(uri: String, positionMs: Double, durationMs: Double) {
+        val activity = VideoPlayerActivity.instance?.get() ?: return
+        activity.runOnUiThread { activity.setStopPoint(uri, positionMs.toLong(), durationMs.toLong()) }
+    }
+
     /**
      * The simple class name of the Activity in front, or null. Synchronous because a
      * hardwareBackPress handler has to answer at once whether the press is its own: React
