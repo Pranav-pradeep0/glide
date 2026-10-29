@@ -56,7 +56,7 @@ export interface GlidePlayerRef {
     setVolume: (percent: number) => void;
 }
 
-export interface GlidePlayerProps extends ViewProps {
+interface GlidePlayerProps extends ViewProps {
     source: PlayerSource;
     paused?: boolean;
     rate?: number;

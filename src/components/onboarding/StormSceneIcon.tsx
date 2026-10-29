@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 import Svg, {
     Rect, Path, Circle, G, Defs,
     LinearGradient, Stop, ClipPath,
@@ -35,26 +35,6 @@ const MR = 13;       // moon radius
 function hr(n: number): number {
     const x = Math.sin(n) * 10000;
     return x - Math.floor(x);
-}
-
-// ─── Catmull-Rom → cubic bezier path builder ──────────────────────────────────
-// tension 0.3–0.4 gives organic natural curves without overshooting
-function smoothPath(pts: [number, number][], tension = 0.33): string {
-    const n = pts.length;
-    if (n < 2) {return '';}
-    let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
-    for (let i = 0; i < n - 1; i++) {
-        const p0 = pts[Math.max(0, i - 1)];
-        const p1 = pts[i];
-        const p2 = pts[i + 1];
-        const p3 = pts[Math.min(n - 1, i + 2)];
-        const c1x = p1[0] + (p2[0] - p0[0]) * tension;
-        const c1y = p1[1] + (p2[1] - p0[1]) * tension;
-        const c2x = p2[0] - (p3[0] - p1[0]) * tension;
-        const c2y = p2[1] - (p3[1] - p1[1]) * tension;
-        d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
-    }
-    return d;
 }
 
 // ─── Stars ────────────────────────────────────────────────────────────────────
@@ -196,11 +176,10 @@ const MAST = `M ${SHX + 13} ${SHY + 1} L ${SHX + 13} ${SHY - 16}`;
 const BOW = `M ${SHX - 18} ${SHY + 9} L ${SHX - 26} ${SHY + 14}`;
 
 // ─── Public props ─────────────────────────────────────────────────────────────
-export interface StormSceneIconProps {
+interface StormSceneIconProps {
     animate: boolean;
     vivid: boolean;
     color?: string;
-    secondaryColor?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -208,7 +187,6 @@ function StormSceneAnimatedIcon({
     animate,
     vivid,
     color,
-    secondaryColor,
 }: StormSceneIconProps) {
 
     const alive = useRef(false);
@@ -229,7 +207,6 @@ function StormSceneAnimatedIcon({
     const brOp3 = useSharedValue(0);
     const lgFlash = useSharedValue(0);
     const subtitleOp = useSharedValue(0);
-    const moonPulse = useSharedValue(0); // kept for strike side-effect (harmless if unused)
     const shakeX = useSharedValue(0);
     const shakeY = useSharedValue(0);
 
@@ -276,11 +253,6 @@ function StormSceneAnimatedIcon({
             withTiming(0.10, { duration: 52 }),
             withTiming(0.24, { duration: 28 }),
             withTiming(0, { duration: 190 }),
-        );
-        // Moon glow briefly spikes on lightning strike
-        moonPulse.value = withSequence(
-            withTiming(1, { duration: 50 }),
-            withTiming(0, { duration: 400 }),
         );
 
         // Thunder rumble — rapid dual-axis micro-oscillations that decay
@@ -332,7 +304,6 @@ function StormSceneAnimatedIcon({
             cancelAnimation(brOp3);
             cancelAnimation(lgFlash);
             cancelAnimation(subtitleOp);
-            cancelAnimation(moonPulse);
             cancelAnimation(shakeX);
             cancelAnimation(shakeY);
         };
@@ -513,8 +484,6 @@ function StormSceneAnimatedIcon({
     const skyTop = vivid ? '#060810' : '#09131E';
     const skyMid = vivid ? '#0B0E22' : '#111D2C';
     const skyBot = vivid ? '#101530' : '#182838';
-    const cloudCol = vivid ? '#080C18' : '#0D1622';
-    const bCloudCol = vivid ? '#101828' : '#162030';
     const lgOuter = vivid ? '#7220E0' : '#5510B8';  // lightning corona
     const lgMid = vivid ? '#44E0FF' : '#28B8E8';  // lightning channel
     const lgCore = vivid ? '#ECFCFF' : '#D9F6FF'; // hottest lightning core

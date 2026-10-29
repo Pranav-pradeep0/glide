@@ -3,28 +3,9 @@ import { hasNativeApi } from '@/native/GlideNative';
 import { PermissionService } from './PermissionService';
 import { VideoFile, VideoFolder } from '@/types';
 
-export interface MediaLibraryResult {
+interface MediaLibraryResult {
     videos: VideoFile[];
     folders: VideoFolder[];
-}
-
-export interface VideoEdge {
-    name: string;
-    path: string;
-    uri: string;
-    duration: number;
-    size: number;
-    width?: number;
-    height?: number;
-    timestamp: number;
-}
-
-export interface VideoPageResult {
-    edges: VideoEdge[];
-    page_info: {
-        has_next_page: boolean;
-        end_cursor?: string | null;
-    };
 }
 
 class MediaServiceClass {
@@ -43,10 +24,6 @@ class MediaServiceClass {
         this.libraryCacheTimestamp = 0;
         // A scan already running may have read the library before the change.
         this.inflightLibrary = null;
-    }
-
-    invalidateVideosCache(_albumName?: string | null) {
-        this.invalidateCache();
     }
 
     private changeListeners = new Set<() => void>();
@@ -167,13 +144,6 @@ class MediaServiceClass {
     }
 
     /**
-     * Get all albums (folders). Kept for backward compatibility.
-     */
-    async getAlbums(forceRefresh = false): Promise<VideoFolder[]> {
-        return this.getFolders(forceRefresh);
-    }
-
-    /**
      * Get all videos in the library.
      */
     async getAllVideos(forceRefresh = false): Promise<VideoFile[]> {
@@ -218,48 +188,6 @@ class MediaServiceClass {
 
         const library = await this.getLibrary(forceRefresh);
         return library.videos.filter(filterFn);
-    }
-
-    /**
-     * Paginated videos query compatible with CameraRoll pagination format.
-     */
-    async getVideos(
-        albumName: string | null,
-        limit = 50,
-        after?: string,
-        forceRefresh = false
-    ): Promise<VideoPageResult> {
-        // Check only: a data call never prompts. The grant-access screen asks.
-        const hasPermission = (await PermissionService.check('video')) !== 'denied';
-        if (!hasPermission) {
-            return { edges: [], page_info: { has_next_page: false } };
-        }
-
-        const allVideos = albumName
-            ? await this.getVideosByAlbum(albumName, forceRefresh)
-            : (await this.getLibrary(forceRefresh)).videos;
-
-        const offset = after ? parseInt(after, 10) : 0;
-        const paged = allVideos.slice(offset, offset + limit);
-        const hasNext = offset + limit < allVideos.length;
-        const endCursor = hasNext ? (offset + limit).toString() : null;
-
-        return {
-            edges: paged.map(v => ({
-                name: v.name,
-                path: v.path,
-                uri: v.uri || v.path,
-                duration: v.duration,
-                size: v.size,
-                width: v.width,
-                height: v.height,
-                timestamp: Math.floor(v.modifiedDate / 1000),
-            })),
-            page_info: {
-                has_next_page: hasNext,
-                end_cursor: endCursor,
-            },
-        };
     }
 
     /**

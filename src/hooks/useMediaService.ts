@@ -13,7 +13,7 @@ export function useAlbums() {
     const fetchAlbums = useCallback(async (forceRefresh = false) => {
         setLoading(true);
         try {
-            const data = await MediaService.getAlbums(forceRefresh);
+            const data = await MediaService.getFolders(forceRefresh);
             setAlbums(data);
             setError(null);
         } catch (err) {
@@ -31,35 +31,6 @@ export function useAlbums() {
     }, [fetchAlbums]);
 
     return { albums, folders: albums, loading, error, refetch: () => fetchAlbums(true) };
-}
-
-export function useFolders() {
-    return useAlbums();
-}
-
-export function useVideos() {
-    const [videos, setVideos] = useState<VideoFile[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
-
-    const fetchVideos = useCallback(async (forceRefresh = false) => {
-        setLoading(true);
-        try {
-            const data = await MediaService.getAllVideos(forceRefresh);
-            setVideos(data);
-            setError(null);
-        } catch (err) {
-            setError(err instanceof Error ? err : new Error('Failed to fetch videos'));
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchVideos();
-    }, [fetchVideos]);
-
-    return { videos, loading, error, refetch: () => fetchVideos(true) };
 }
 
 /**
@@ -166,36 +137,9 @@ export function useAlbumVideos(albumTitle: string | null, bucketId?: string, sor
         refetch: () => {
             if (cacheKey) {
                 albumVideosCache.delete(cacheKey);
-                MediaService.invalidateVideosCache(cacheKey);
+                MediaService.invalidateCache();
             }
             return fetchVideos(true);
         },
     };
-}
-
-export function useAlbumCover(albumTitle: string, refreshKey: number = 0) {
-    const [coverVideo, setCoverVideo] = useState<VideoFile | null>(null);
-
-    useEffect(() => {
-        let isMounted = true;
-
-        const fetchCover = async () => {
-            try {
-                const videos = await MediaService.getVideosByAlbum(albumTitle);
-                if (isMounted && videos.length > 0) {
-                    setCoverVideo(videos[0]);
-                } else if (isMounted) {
-                    setCoverVideo(null);
-                }
-            } catch (error) {
-                // ignore
-            }
-        };
-
-        fetchCover();
-
-        return () => { isMounted = false; };
-    }, [albumTitle, refreshKey]);
-
-    return coverVideo;
 }

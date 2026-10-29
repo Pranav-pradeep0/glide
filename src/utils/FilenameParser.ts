@@ -1,16 +1,12 @@
 import { filenameParse } from './video-filename-parser/filenameParse';
 
-export interface ParsedFilename {
+interface ParsedFilename {
     title: string;
     year?: number;
     isTVShow: boolean;
     season?: number;
     episode?: number;
     fullSeason?: boolean;
-    quality?: string;
-    group?: string;
-    // Original metadata for debugging/logging
-    rawYear?: string;
 }
 
 export class FilenameParser {
@@ -58,54 +54,7 @@ export class FilenameParser {
             // Passing isTv is CRITICAL for the library to parse Season/Episode info
             const parsed = filenameParse(cleaned, isTv);
 
-            // STEP 4: METADATA MAPPING & SANITIZATION
-
-            // Quality Construction
-            const partsQuality: string[] = [];
-            if (parsed.resolution) {partsQuality.push(parsed.resolution);}
-
-            // Source: Filter out junk
-            if (parsed.sources && parsed.sources.length > 0) {
-                const uniqueSources = [...new Set(parsed.sources)]; // resizing
-                partsQuality.push(uniqueSources.join(' '));
-            }
-
-            if (parsed.videoCodec) {partsQuality.push(parsed.videoCodec);}
-
-            if (parsed.edition) {
-                Object.keys(parsed.edition).forEach(k => {
-                    // @ts-ignore
-                    if (parsed.edition[k]) {partsQuality.push(k.toUpperCase());}
-                });
-            }
-            if (parsed.revision) {
-                Object.keys(parsed.revision).forEach(k => {
-                    // @ts-ignore
-                    if (parsed.revision[k]) {
-                        // Filter out generic terms like "VERSION" which the library often returns
-                        if (k.toUpperCase() !== 'VERSION') {
-                            partsQuality.push(k.toUpperCase());
-                        }
-                    }
-                });
-            }
-
-            let quality = partsQuality.join(' ').trim();
-
-            // Group Construction
-            const partsGroup: string[] = [];
-            if (parsed.group) {
-                // Filter out "AUDIO" if it appears as a group (library sometimes mistakes audio tags for groups)
-                if (parsed.group.toUpperCase() !== 'AUDIO') {
-                    partsGroup.push(parsed.group);
-                }
-            }
-            if (parsed.audioCodec) {partsGroup.push(parsed.audioCodec);}
-            if (parsed.audioChannels) {partsGroup.push(parsed.audioChannels);}
-
-            let group = partsGroup.join(' ').trim();
-
-            // Final Title Cleanup
+            // STEP 4: TITLE CLEANUP
             let title = parsed.title;
             if (title) {
                 // Letters and digits in any script: an [a-zA-Z0-9] trim ate the whole
@@ -128,8 +77,6 @@ export class FilenameParser {
                 season: (parsed as any).seasons?.[0],
                 episode: (parsed as any).episodeNumbers?.[0],
                 fullSeason: (parsed as any).fullSeason || false,
-                quality: quality,
-                group: group,
             };
         } catch (error) {
             console.warn('[FilenameParser] Parsing error, falling back:', error);

@@ -7,7 +7,6 @@ import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { RootStackParamList, VideoHistoryEntry } from '@/types';
-import { SkeletonList } from '@/components/Skeleton';
 import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useMissingHistory } from '@/hooks/useMissingHistory';
@@ -63,7 +62,6 @@ export default function RecentsScreen() {
         if (isFocused || !shownHistoryRef.current) { shownHistoryRef.current = s.history; }
         return shownHistoryRef.current;
     });
-    const isHydrated = useVideoHistoryStore(s => s.isHydrated);
     const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
     const clearVideoHistory = useVideoHistoryStore(s => s.clearVideoHistory);
 
@@ -161,15 +159,6 @@ export default function RecentsScreen() {
             </VideoItemCell>
         );
     }, [grid, metaFor, handleVideoPress, handleOpenOptions, hero]);
-
-    if (!isHydrated) {
-        return (
-            <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-                <ListHeader title="Recents" />
-                <SkeletonList kind={grid ? 'videoCard' : 'video'} />
-            </View>
-        );
-    }
 
     const header = (
         <View>

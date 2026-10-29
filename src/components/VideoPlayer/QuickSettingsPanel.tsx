@@ -65,8 +65,6 @@ interface QuickSettingsPanelProps {
     onAddBookmark?: () => void;
     resizeMode: PlayerResizeMode;
     onSetResizeMode: (mode: PlayerResizeMode) => void;
-    isLandscape: boolean;
-    insets?: any;
     enableHaptics?: boolean;
     shakeEnabled?: boolean;
     onToggleShake?: () => void;

@@ -1,17 +1,7 @@
 // ErrorBoundary.tsx
-import React, { Component, ReactNode, createContext, useContext } from 'react';
+import React, { Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Share, NativeModules } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
-
-// Define the shape of the error boundary context
-interface ErrorBoundaryContextType {
-    error: Error | null;
-    resetError: () => void;
-    logError: (error: Error, errorInfo: React.ErrorInfo) => void;
-}
-
-// Create the context with a default value
-const ErrorBoundaryContext = createContext<ErrorBoundaryContextType | undefined>(undefined);
 
 // Props for the ErrorBoundary component
 interface ErrorBoundaryProps {
@@ -24,7 +14,6 @@ interface ErrorBoundaryProps {
 interface FallbackProps {
     error: Error;
     resetError: () => void;
-    logError: (error: Error, errorInfo: React.ErrorInfo) => void;
     /** False when the last Try Again went straight back into a crash. */
     canRetry: boolean;
 }
@@ -35,7 +24,6 @@ const RETRY_CRASH_WINDOW_MS = 5000;
 // State for the ErrorBoundary component
 interface ErrorBoundaryState {
     error: Error | null;
-    errorInfo: React.ErrorInfo | null;
     canRetry: boolean;
 }
 
@@ -43,7 +31,7 @@ interface ErrorBoundaryState {
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     constructor(props: ErrorBoundaryProps) {
         super(props);
-        this.state = { error: null, errorInfo: null, canRetry: true };
+        this.state = { error: null, canRetry: true };
     }
 
     /**
@@ -63,10 +51,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         // A crash before navigation is ready would otherwise sit under the splash, which
         // only lifts on navReady. Hiding twice is harmless.
         NativeModules.SplashModule?.hide();
-        this.setState({ error, errorInfo, canRetry: Date.now() - this.lastResetAt > RETRY_CRASH_WINDOW_MS });
-
-        // Log the error using the utility function
-        logError(error, errorInfo);
+        this.setState({ error, canRetry: Date.now() - this.lastResetAt > RETRY_CRASH_WINDOW_MS });
 
         // Call the optional onError prop if provided
         if (this.props.onError) {
@@ -80,16 +65,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     resetError = (): void => {
         console.log('[ErrorBoundary] Resetting error state');
         this.lastResetAt = Date.now();
-        this.setState({ error: null, errorInfo: null });
+        this.setState({ error: null });
         if (this.props.onReset) {
             this.props.onReset();
         }
-    };
-
-    // Function to log the error (can be called by children via context)
-    logError = (error: Error, errorInfo: React.ErrorInfo): void => {
-        console.error('[ErrorBoundary] Error logged via context:', error, errorInfo);
-        logError(error, errorInfo); // Use the utility function
     };
 
     render(): ReactNode {
@@ -98,20 +77,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
         // If an error occurred, render the fallback UI
         if (error) {
-            const contextValue: ErrorBoundaryContextType = {
-                error,
-                resetError: this.resetError,
-                logError: this.logError,
-            };
-
             // Use the provided fallback component or the default one
             const Fallback = FallbackComponent || ErrorBoundaryFallback;
 
-            return (
-                <ErrorBoundaryContext.Provider value={contextValue}>
-                    <Fallback error={error} resetError={this.resetError} logError={this.logError} canRetry={canRetry} />
-                </ErrorBoundaryContext.Provider>
-            );
+            return <Fallback error={error} resetError={this.resetError} canRetry={canRetry} />;
         }
 
         // If no error occurred, render the children
@@ -154,28 +123,6 @@ ${error.stack ?? ''}` }).catch(() => {});
     );
 };
 
-// Hook to use the ErrorBoundary context
-const useErrorBoundary = (): ErrorBoundaryContextType => {
-    const context = useContext(ErrorBoundaryContext);
-    if (context === undefined) {
-        throw new Error('useErrorBoundary must be used within an ErrorBoundaryProvider');
-    }
-    return context;
-};
-
-// Utility function for logging errors (replace with your preferred logging service)
-const logError = (error: Error, errorInfo: React.ErrorInfo): void => {
-    // Example: Log to console (production builds might disable this or send to a service)
-    console.group('[ErrorBoundary] Logging Error');
-    console.error('Error Object:', error);
-    console.error('Error Info (Component Stack):', errorInfo);
-    console.groupEnd();
-
-    // Example: Send to a logging service like Sentry, Bugsnag, etc.
-    // import * as Sentry from '@sentry/react-native';
-    // Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
-};
-
 // Styles for the fallback component
 const styles = StyleSheet.create({
     fallbackContainer: {
@@ -215,4 +162,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export { ErrorBoundary, useErrorBoundary };
+export { ErrorBoundary };

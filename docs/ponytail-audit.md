@@ -51,61 +51,61 @@ docs). Estimated net: about -8,300 lines and -2 deps. Delete this file when ever
 
 ## Batch 3 — dead JS/TS code (~-900)
 
-- [ ] `PlayerIcons.tsx`: delete BackgroundPlayIcon, HapticsIcon, RecapIcon and the whole animated block (99-310).
-- [ ] Subtitles:
+- [x] `PlayerIcons.tsx`: delete BackgroundPlayIcon, HapticsIcon, RecapIcon and the whole animated block (99-310).
+- [x] Subtitles:
   - delete `SubtitleCueStore.cleanup`/`evict`, which also makes `SubtitleExtractor.cleanupSubtitleFiles` dead
   - delete `isBitmapSubtitle`
   - delete `scoreAPISubtitles`, `selectBestEmbeddedSDH`, `selectBestAPISDH` and `ScoredSubtitleResult`
   - delete `findMatchingSubtitleTrack` and `SubtitleTrackForMatching` (languages.ts)
   - delete `useFormattedSubtitle` and `hasHtmlTags` (SubtitleHtmlParser)
-- [ ] `videoHistoryStore`:
+- [x] `videoHistoryStore`:
   - delete `getVideoHistoryByName`, `updateVideoHistory` and `updateBookmarkLabel`
   - `isHydrated` is always true, so delete it and the dead skeleton branch in RecentsScreen:165-172
-- [ ] Media:
+- [x] Media:
   - delete `useFolders`, `useVideos` and `useAlbumCover`
   - delete `MediaService.getVideos`, `VideoEdge` and `VideoPageResult` (update the tests)
   - delete the `getAlbums` alias and the `invalidateVideosCache` alias
-- [ ] FileService:
-  - delete `normalizePath`, `getCleanPath`, `unlink`, `stat` and `writeFile`
-  - delete the subtitle cache dir, which nothing writes: `getSubtitleCacheDir`, `cleanSubtitleCache`, `ensureDir`, App.tsx:50-51 and the Settings row
-- [ ] `network.ts`: replace `abortSignalWithTimeout` and `NetworkTimeoutError` with `AbortSignal.timeout`; delete `fetchJsonWithTimeout`. Check Hermes has `AbortSignal.any` before using it.
-- [ ] ErrorBoundary: delete the context, `useErrorBoundary`, both `logError`s and `errorInfo`.
-- [ ] `hooks/video-player/types.ts`: delete `createDebounce`, `PlayerPlayingData`, `HUDType` and the orphan comment stubs.
-- [ ] Hook returns nobody reads:
+- [x] FileService:
+  - [x] delete `normalizePath`, `getCleanPath`, `unlink`, `stat` and `writeFile`
+  - [-] delete the subtitle cache dir, which nothing writes: `getSubtitleCacheDir`, `cleanSubtitleCache`, `ensureDir`, App.tsx:50-51 and the Settings row. Skipped: removing the "Clear subtitle cache" row is a visible Settings change, so it needs a product call. `ensureDir` stays either way: ThumbnailService uses it.
+- [x] `network.ts`: replace `abortSignalWithTimeout` and `NetworkTimeoutError` with `AbortSignal.timeout`; delete `fetchJsonWithTimeout`. Check Hermes has `AbortSignal.any` before using it. (RN 0.88's AbortSignal has both. Callers test `isTimeoutError`.)
+- [x] ErrorBoundary: delete the context, `useErrorBoundary`, both `logError`s and `errorInfo`.
+- [x] `hooks/video-player/types.ts`: delete `createDebounce`, `PlayerPlayingData`, `HUDType` and the orphan comment stubs.
+- [x] Hook returns nobody reads:
   - `ui.toggleLock`, `ui.cancelAutoHide`
   - `settings.clearSleepTimer`
   - `tracks.currentSubtitleCue`, `tracks.setSubtitleCues`
   - `audioRoute` and `setVolume` in useAudioController
-- [ ] Remove props and params:
+- [x] Remove props and params:
   - `playerRef` in VideoPlayerScreen (only written)
   - `isLandscape`/`insets` on QuickSettingsPanel and PlaylistPanel
-  - route params `videoCount`, `subtitlePath` and `imdbId`
-- [ ] Constants and types:
+  - route params `videoCount`, `subtitlePath` and `imdbId`. `imdbId` stays on VideoPlayer: PlayerDetail passes OMDb's id to it. It is gone from PlayerDetail, where nothing read it.
+- [x] Constants and types:
   - `SUBTITLE_FONT_SIZES`, `PLAYBACK_RATES`, `DEFAULT_STORAGE_PATH`
   - `GestureState`, `SortOption`
   - `SubtitleTrack` is declared twice; keep one
   - equalizer `icon`/`note`
   - OMDb `Writer`/`Country`/`Awards`/`BoxOffice`
   - `SyncService.MAX_WINDOW_MINUTES`
-- [ ] Misc:
+- [x] Misc:
   - `searchByIMDBId`, `LyricsService.clearCache`, `DeepLinkService.isVideoUri` (test-only)
   - `lockPortrait`/`lockLandscape`, `isPipSupported` and the PipModule default export
   - `setGlobalBrightness`
-- [ ] UI:
+- [x] UI:
   - `SortTabs`, `SUBTITLE_CODEC_NAMES`
   - theme `secondary`/`success`, `motion.slow`
   - unused NowPlaying styles (891-906)
   - iOS-only `shadow*` props
-- [ ] Onboarding:
+- [x] Onboarding:
   - `smoothPath`, `moonPulse`
   - `syncOn`/`hapticsOn`/`animateRef`
   - the ignored `secondaryColor`/`animate` props
   - the unused imports `tsc --noUnusedLocals` reports
-- [ ] Delete `src/utils/video-filename-parser/index.js` and `index.d.ts` (unimported).
-- [ ] FilenameParser: drop `quality`, `group` and `rawYear` (update the test).
-- [ ] ThumbnailService: drop the `OLD_THUMBNAIL_DIR` sweep and `PendingRequest.reject`.
-- [ ] Unexport file-local exports; drop the 13 unused `export default`s and the barrel re-exports in `hooks/video-player/index.ts`.
-- [ ] `subtitleParser.test.ts:66-72`: fix `parseVTT` for `MM:SS.mmm` and unskip the test, or delete it.
+- [x] Delete `src/utils/video-filename-parser/index.js` and `index.d.ts` (unimported).
+- [x] FilenameParser: drop `quality`, `group` and `rawYear` (update the test).
+- [x] ThumbnailService: drop the `OLD_THUMBNAIL_DIR` sweep and `PendingRequest.reject`.
+- [x] Unexport file-local exports; drop the 13 unused `export default`s and the barrel re-exports in `hooks/video-player/index.ts`. (18 by now; the barrel keeps only what VideoPlayerScreen and Settings import.)
+- [-] `subtitleParser.test.ts:66-72`: fix `parseVTT` for `MM:SS.mmm` and unskip the test, or delete it. Skipped: the fix changes what parses, and deleting the test would hide a known bug. Do it as a `fix(subtitles)` commit.
 
 ## Batch 4 — dead native code (~-400)
 

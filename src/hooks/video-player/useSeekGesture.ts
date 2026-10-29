@@ -185,5 +185,3 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
 
     return gesture;
 }
-
-export default useSeekGesture;

@@ -80,5 +80,3 @@ export function usePlayerBookmarks(options: UsePlayerBookmarksOptions): UsePlaye
         showToastWithMessage,
     }), [bookmarks, addBookmark, deleteBookmark, jumpToBookmark]);
 }
-
-export default usePlayerBookmarks;

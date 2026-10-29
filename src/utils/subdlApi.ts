@@ -7,7 +7,7 @@ import * as RNFS from '@dr.pogodin/react-native-fs';
 import { hasNativeApi } from '@/native/GlideNative';
 import { FilenameParser } from './FilenameParser';
 import { SubtitleParser } from './SubtitleParser';
-import { createCoalescedRequest, fetchWithTimeout, InFlightRequest, isAbortError, NetworkTimeoutError } from './network';
+import { createCoalescedRequest, fetchWithTimeout, InFlightRequest, isAbortError, isTimeoutError } from './network';
 
 const LOG_PREFIX = '[SubDL]';
 const SUBDL_SEARCH_TIMEOUT_MS = 12000;
@@ -139,8 +139,8 @@ export async function searchAllSubtitles(
     try {
         return await requestFactory;
     } catch (error) {
-        if (error instanceof NetworkTimeoutError) {
-            console.warn(`${LOG_PREFIX} Search timed out after ${error.timeoutMs}ms`);
+        if (isTimeoutError(error)) {
+            console.warn(`${LOG_PREFIX} Search timed out`);
         } else if (!isAbortError(error)) {
             console.error(`${LOG_PREFIX} Search error:`, error);
         }
@@ -397,7 +397,7 @@ async function executeSubtitleDownload(
             throw error;
         }
         if (didTimeout) {
-            throw new NetworkTimeoutError(SUBDL_DOWNLOAD_TIMEOUT_MS);
+            throw new Error(`Download timed out after ${SUBDL_DOWNLOAD_TIMEOUT_MS}ms`);
         }
         if (tooLarge) {
             console.error(`${LOG_PREFIX} Download is over ${MAX_SUBTITLE_ZIP_BYTES / 1024 / 1024} MB, stopped`);
@@ -421,17 +421,6 @@ async function executeSubtitleDownload(
             console.warn(`${LOG_PREFIX} Cleanup error:`, cleanupError);
         }
     }
-}
-
-/**
- * Search by IMDB ID directly
- */
-export async function searchByIMDBId(
-    imdbId: string,
-    language: string = 'en'
-): Promise<SubtitleResult[]> {
-    const result = await searchAllSubtitles('', language, imdbId);
-    return result.subtitles;
 }
 
 function buildSearchParams({

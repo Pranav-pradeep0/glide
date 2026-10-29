@@ -168,7 +168,7 @@ const safeInitialIndex = initialPlayback.currentIndex || 0;
  * -1 when the playing track is not in our queue at all -- a queue started from Android Auto
  * or another controller. Showing whatever song sits at native's index would be a wrong song.
  */
-export function resolveQueueIndex(queue: AudioTrack[], nativeIndex: number, trackId?: string): number {
+function resolveQueueIndex(queue: AudioTrack[], nativeIndex: number, trackId?: string): number {
     if (!trackId) { return nativeIndex; }
     // If nativeIndex already points to this trackId, honor native's current index (breaks duplicates tie)
     if (queue[nativeIndex] && String(queue[nativeIndex].id) === String(trackId)) {
@@ -250,7 +250,7 @@ function getPresetBands(presetId: string): number[] | null {
     return preset?.values ?? null;
 }
 
-export interface AudioStoreState {
+interface AudioStoreState {
     currentTrack: AudioTrack | null;
     queue: AudioTrack[];
     currentIndex: number;

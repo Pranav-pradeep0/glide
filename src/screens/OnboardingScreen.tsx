@@ -168,15 +168,14 @@ const SlideItem = React.memo<SlideItemProps>(
         const iconElement = useMemo(() => {
             const p = {
                 color: themeColors.text,
-                secondaryColor: themeColors.textSecondary,
             };
             switch (item.id) {
                 case '1': return <PlaybackIcon {...p} animate={animate} />;
                 case '2': return <FeatureShowcaseIcon {...p} animate={stormAnimate} onFeatureActivate={onFeatureActivate} />;
-                case '3': return <PrivacyIcon {...p} animate={animate} />;
+                case '3': return <PrivacyIcon {...p} />;
                 default: return null;
             }
-        }, [item.id, animate, stormAnimate, themeColors.text, themeColors.textSecondary, onFeatureActivate]);
+        }, [item.id, animate, stormAnimate, themeColors.text, onFeatureActivate]);
 
         return (
             <View style={[slideStyles.slide, { width: slideWidth }]}>

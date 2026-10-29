@@ -303,9 +303,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: metrics.space.sm,
         elevation: 6,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
     },
     albumTitle: {
         textAlign: 'center',

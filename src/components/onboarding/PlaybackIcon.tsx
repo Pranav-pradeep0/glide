@@ -11,7 +11,6 @@ import Animated, {
     useSharedValue,
     useAnimatedProps,
     withTiming,
-    withDelay,
     withSequence,
     Easing,
 } from 'react-native-reanimated';
@@ -19,7 +18,6 @@ import Animated, {
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedLine = Animated.createAnimatedComponent(Line);
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
 const AnimatedG = Animated.createAnimatedComponent(G);
 
 // ─── Dimensions ────────────────────────────────
@@ -46,13 +44,11 @@ const rightTapX = PHONE_X + PHONE_W * 0.75;
 interface PlaybackIconProps {
     animate: boolean;
     color: string;
-    secondaryColor: string;
 }
 
 export default function PlaybackIcon({
     animate,
     color,
-    secondaryColor,
 }: PlaybackIconProps) {
     const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 

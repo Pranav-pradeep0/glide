@@ -19,7 +19,6 @@ interface PlaylistPanelProps {
     onClose: () => void;
     currentVideoPath: string;
     onPlayVideo: (video: VideoFile) => void;
-    isLandscape: boolean;
     albumName?: string;
     bucketId?: string;
     videoSort?: VideoSort;

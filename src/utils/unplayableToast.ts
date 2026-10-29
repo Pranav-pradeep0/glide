@@ -1,5 +1,5 @@
 /** Native's onAudioSkippedUnplayable: a song that would not play, and what the player did next. */
-export interface UnplayableEvent {
+interface UnplayableEvent {
     title: string;
     /** Moved on to the next song; false when playback stopped there. */
     skipped: boolean;
@@ -16,7 +16,7 @@ const clip = (title: string) => {
     return t.length > MAX_TITLE ? `${t.slice(0, MAX_TITLE - 1).trimEnd()}…` : t;
 };
 
-export function unplayableText(events: UnplayableEvent[]): string {
+function unplayableText(events: UnplayableEvent[]): string {
     const last = events[events.length - 1];
     if (last.allFailed) { return "Nothing in this queue can play"; }
     if (events.length > 1) { return `Skipped ${events.length} songs that can't play`; }

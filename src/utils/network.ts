@@ -1,17 +1,4 @@
-const DEFAULT_ABORT_MESSAGE = 'The operation was aborted.';
-const abortReasons = new WeakMap<AbortSignal, Error>();
-
-export class NetworkTimeoutError extends Error {
-    readonly timeoutMs: number;
-
-    constructor(timeoutMs: number) {
-        super(`Request timed out after ${timeoutMs}ms`);
-        this.name = 'NetworkTimeoutError';
-        this.timeoutMs = timeoutMs;
-    }
-}
-
-function createAbortError(message: string = DEFAULT_ABORT_MESSAGE): Error {
+function createAbortError(message: string = 'The operation was aborted.'): Error {
     const error = new Error(message);
     error.name = 'AbortError';
     return error;
@@ -21,65 +8,9 @@ export function isAbortError(error: unknown): boolean {
     return error instanceof Error && error.name === 'AbortError';
 }
 
-function setAbortReason(signal: AbortSignal, error: Error): void {
-    abortReasons.set(signal, error);
-}
-
-function getAbortReason(signal: AbortSignal): Error {
-    return abortReasons.get(signal) ?? createAbortError();
-}
-
-function abortSignalWithTimeout(
-    timeoutMs: number,
-    signal?: AbortSignal
-): {
-    signal: AbortSignal;
-    cleanup: () => void;
-} {
-    const controller = new AbortController();
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let onAbort: (() => void) | null = null;
-
-    const clear = () => {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
-        if (signal && onAbort) {
-            signal.removeEventListener('abort', onAbort);
-            onAbort = null;
-        }
-    };
-
-    if (signal?.aborted) {
-        setAbortReason(controller.signal, createAbortError());
-        controller.abort();
-        return { signal: controller.signal, cleanup: clear };
-    }
-
-    onAbort = () => {
-        setAbortReason(controller.signal, createAbortError());
-        controller.abort();
-    };
-    if (signal) {
-        signal.addEventListener('abort', onAbort, { once: true });
-    }
-
-    timeoutId = setTimeout(() => {
-        setAbortReason(controller.signal, new NetworkTimeoutError(timeoutMs));
-        controller.abort();
-    }, timeoutMs);
-
-    return { signal: controller.signal, cleanup: clear };
-}
-
-export async function fetchJsonWithTimeout<T>(
-    url: string,
-    init: RequestInit = {},
-    timeoutMs: number = 10000
-): Promise<T> {
-    const response = await fetchWithTimeout(url, init, timeoutMs);
-    return await response.json() as T;
+/** What fetchWithTimeout throws when its time runs out (AbortSignal.timeout's reason). */
+export function isTimeoutError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'TimeoutError';
 }
 
 export async function fetchWithTimeout(
@@ -87,17 +18,17 @@ export async function fetchWithTimeout(
     init: RequestInit = {},
     timeoutMs: number = 10000
 ): Promise<Response> {
-    const { signal, cleanup } = abortSignalWithTimeout(timeoutMs, init.signal);
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
 
     try {
         return await fetch(url, { ...init, signal });
     } catch (error) {
+        // fetch rejects with a plain AbortError; the reason says whether time ran out.
         if (signal.aborted) {
-            throw getAbortReason(signal);
+            throw signal.reason;
         }
         throw error;
-    } finally {
-        cleanup();
     }
 }
 
@@ -143,7 +74,6 @@ export function createCoalescedRequest<T>(
                 signal.removeEventListener('abort', onAbort);
             }
             if (sharedRequest.consumers === 0 && !sharedRequest.controller.signal.aborted) {
-                setAbortReason(sharedRequest.controller.signal, createAbortError());
                 sharedRequest.controller.abort();
             }
         };

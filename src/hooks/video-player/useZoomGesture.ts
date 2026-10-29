@@ -193,5 +193,3 @@ export function useZoomGesture(options: UseZoomGestureOptions) {
 
     return { pinchGesture, panGesture };
 }
-
-export default useZoomGesture;

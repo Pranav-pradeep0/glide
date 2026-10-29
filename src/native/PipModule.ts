@@ -37,22 +37,6 @@ export async function isInPipMode(): Promise<boolean> {
 }
 
 /**
- * Check if PIP is supported on this device
- */
-export async function isPipSupported(): Promise<boolean> {
-    if (Platform.OS !== 'android' || !NativePipModule) {
-        return false;
-    }
-
-    try {
-        return await NativePipModule.isPipSupported();
-    } catch (error) {
-        console.error('[PipModule] Failed to check PIP support:', error);
-        return false;
-    }
-}
-
-/**
  * Close the Activity hosting the player. Used for externally opened videos, where
  * dismissing the player should close this Activity rather than exit the app.
  */
@@ -138,10 +122,3 @@ export function usePipModeListener(): boolean {
 
     return isInPip;
 }
-
-export default {
-    isInPipMode,
-    isPipSupported,
-    finishCurrentActivity,
-    usePipModeListener,
-};

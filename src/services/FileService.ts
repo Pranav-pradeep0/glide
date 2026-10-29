@@ -1,29 +1,7 @@
 import * as RNFS from '@dr.pogodin/react-native-fs';
-import { Platform } from 'react-native';
 import SimpleThumbnail from '../../libs/react-native-simple-thumbnail';
 
 class FileServiceClass {
-    /**
-     * Normalize a path to be safe for use with React Native components and libraries.
-     * Handles the messy file:// prefix logic consistently.
-     */
-    normalizePath(path: string): string {
-        if (!path) {return '';}
-
-        // Remove double prefixes if any (common issue)
-        let cleanPath = path.replace(/file:\/\/file:\/\//g, 'file://');
-
-        // Ensure single file:// prefix for Android if missing (unless it's a content:// URI)
-        if (Platform.OS === 'android' && !cleanPath.startsWith('file://') && !cleanPath.startsWith('content://') && !cleanPath.startsWith('http')) {
-            // Check if it's an absolute path before adding prefix
-            if (cleanPath.startsWith('/')) {
-                cleanPath = `file://${cleanPath}`;
-            }
-        }
-
-        return cleanPath;
-    }
-
     /**
      * Resolve content:// or ph:// URIs to real file paths
      */
@@ -64,19 +42,11 @@ class FileServiceClass {
     }
 
     /**
-     * Get a clean filesystem path (without file:// prefix) for use with RNFS
-     */
-    getCleanPath(path: string): string {
-        if (!path) {return '';}
-        return path.replace('file://', '');
-    }
-
-    /**
      * Check if a file or directory exists
      */
     async exists(path: string): Promise<boolean> {
         try {
-            const cleanPath = this.getCleanPath(path);
+            const cleanPath = path.replace('file://', '');
             return await RNFS.exists(cleanPath);
         } catch (error) {
             console.warn('[FileService] exists check failed:', error);
@@ -89,7 +59,7 @@ class FileServiceClass {
      */
     async ensureDir(path: string): Promise<void> {
         try {
-            const cleanPath = this.getCleanPath(path);
+            const cleanPath = path.replace('file://', '');
             const exists = await RNFS.exists(cleanPath);
             if (!exists) {
                 await RNFS.mkdir(cleanPath);
@@ -97,32 +67,6 @@ class FileServiceClass {
         } catch (error) {
             console.error('[FileService] Failed to ensure directory:', path, error);
             throw error;
-        }
-    }
-
-    /**
-     * Delete a file or directory
-     */
-    async unlink(path: string): Promise<void> {
-        try {
-            const cleanPath = this.getCleanPath(path);
-            if (await RNFS.exists(cleanPath)) {
-                await RNFS.unlink(cleanPath);
-            }
-        } catch (error) {
-            console.warn('[FileService] Failed to unlink:', path, error);
-        }
-    }
-
-    /**
-     * Get file stats (size, modification time, etc.)
-     */
-    async stat(path: string): Promise<RNFS.StatResultT | null> {
-        try {
-            const cleanPath = this.getCleanPath(path);
-            return await RNFS.stat(cleanPath);
-        } catch (error) {
-            return null;
         }
     }
 
@@ -147,19 +91,6 @@ class FileServiceClass {
      */
     getSubtitleCacheDir(): string {
         return `${RNFS.CachesDirectoryPath}/subtitles`;
-    }
-
-    /**
-     * Write content to a file
-     */
-    async writeFile(path: string, content: string, encoding: RNFS.EncodingT = 'utf8'): Promise<void> {
-        try {
-            const cleanPath = this.getCleanPath(path);
-            await RNFS.writeFile(cleanPath, content, encoding);
-        } catch (error) {
-            console.error('[FileService] Failed to write file:', path, error);
-            throw error;
-        }
     }
 }
 

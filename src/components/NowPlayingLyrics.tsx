@@ -242,5 +242,3 @@ const styles = StyleSheet.create({
         paddingHorizontal: metrics.space.lg,
     },
 });
-
-export default NowPlayingLyrics;

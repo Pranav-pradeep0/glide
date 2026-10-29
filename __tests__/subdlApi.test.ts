@@ -27,13 +27,7 @@ jest.mock('../src/utils/network', () => {
         createCoalescedRequest: jest.fn((map: any, key: any, factory: any, signal: any) => factory(signal)),
         fetchWithTimeout: jest.fn(),
         isAbortError: jest.fn(),
-        NetworkTimeoutError: class extends Error {
-            timeoutMs = 0;
-            constructor(ms: number) {
-                super('timeout');
-                this.timeoutMs = ms;
-            }
-        },
+        isTimeoutError: jest.fn(),
     };
 });
 

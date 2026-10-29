@@ -7,7 +7,6 @@ import { hashPath } from '@/utils/hashPath';
 
 /** v2: v1 holds flat green frames cached before native rejected them. */
 const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails2`;
-const OLD_THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails`;
 /**
  * Frames taken at a set time -- only Recents' stop frames ask for one. Kept apart so the
  * launch sweep can drop every one no history entry points to any more: replaced by a later
@@ -19,7 +18,6 @@ const MAX_MEMO_ENTRIES = 2000;
 
 interface PendingRequest {
     resolve: (path: string | null) => void;
-    reject: (error: any) => void;
     /** Identifies the caller, so a cancel drops that caller's wait and nobody else's. */
     token?: object;
 }
@@ -54,9 +52,6 @@ class ThumbnailServiceClass {
 
     private async init() {
         await FileService.ensureDir(AT_TIME_DIR);
-        if (await FileService.exists(OLD_THUMBNAIL_DIR)) {
-            await RNFS.unlink(OLD_THUMBNAIL_DIR).catch(() => {});
-        }
         try {
             const wanted = new Set<string>();
             for (const entry of useVideoHistoryStore.getState().history.values()) {
@@ -121,16 +116,16 @@ class ThumbnailServiceClass {
         }
 
         // 2. Queue for Generation
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             // Deduplication
             if (this.pendingResolvers.has(key)) {
-                this.pendingResolvers.get(key)?.push({ resolve, reject, token });
+                this.pendingResolvers.get(key)?.push({ resolve, token });
                 this.promoteToTop(key);
                 return;
             }
 
             // New Request
-            this.pendingResolvers.set(key, [{ resolve, reject, token }]);
+            this.pendingResolvers.set(key, [{ resolve, token }]);
             this.queue.push({ path: videoPath, time: timeMs, key });
             this.processNext();
         });

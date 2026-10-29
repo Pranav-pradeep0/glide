@@ -188,10 +188,6 @@ export function usePlayerUI(orientationLocked: boolean, startLocked = false): Us
         armAutoHide();
     }, [armAutoHide]);
 
-    const toggleLock = useCallback(() => {
-        if (state.locked) {unlock();} else {lock();}
-    }, [state.locked, lock, unlock]);
-
     /** A tap while locked (re)shows the unlock chip for 2 s; only the chip itself unlocks. */
     const showLockIconTemporarily = useCallback(() => {
         if (!state.locked) {return;}
@@ -235,22 +231,18 @@ export function usePlayerUI(orientationLocked: boolean, startLocked = false): Us
         showControls,
         hideControls,
         scheduleAutoHide,
-        cancelAutoHide,
         setAutoHideBlocked,
         screenReaderEnabled,
         lock,
         unlock,
-        toggleLock,
         showLockIconTemporarily,
         openPanel,
         closePanel,
         closeAllPanels,
     }), [
         state, isLockedShared,
-        toggleControls, showControls, hideControls, scheduleAutoHide, cancelAutoHide, setAutoHideBlocked, screenReaderEnabled,
-        lock, unlock, toggleLock, showLockIconTemporarily,
+        toggleControls, showControls, hideControls, scheduleAutoHide, setAutoHideBlocked, screenReaderEnabled,
+        lock, unlock, showLockIconTemporarily,
         openPanel, closePanel, closeAllPanels,
     ]);
 }
-
-export default usePlayerUI;

@@ -67,7 +67,7 @@ const SHAPES = {
     album: { thumb: { aspectRatio: 1, borderRadius: radius.card }, gutter: metrics.gutter - GRID_HALF_GAP },
 } satisfies Record<string, Shape>;
 
-export type SkeletonKind = keyof typeof SHAPES;
+type SkeletonKind = keyof typeof SHAPES;
 
 // Varied title widths so the rows read as text, not a barcode.
 const TITLE_WIDTHS: DimensionValue[] = ['72%', '54%', '84%', '63%', '78%', '46%'];

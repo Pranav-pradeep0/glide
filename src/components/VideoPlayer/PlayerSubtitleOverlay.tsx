@@ -79,5 +79,3 @@ export const PlayerSubtitleOverlay: React.FC<PlayerSubtitleOverlayProps> = React
         />
     );
 });
-
-export default PlayerSubtitleOverlay;

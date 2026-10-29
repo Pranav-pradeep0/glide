@@ -53,5 +53,3 @@ export function useTapGestures(options: UseTapGesturesOptions) {
         return Gesture.Exclusive(doubleTap, singleTap);
     }, [isLockedShared, onSingleTap, onDoubleTap, onLockTap, tapStartedAt]);
 }
-
-export default useTapGestures;

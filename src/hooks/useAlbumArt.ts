@@ -56,7 +56,7 @@ export function useAlbumArt(albumId?: string | null, songUri?: string | null): s
     return artworkUri;
 }
 
-export interface AlbumPaletteResult {
+interface AlbumPaletteResult {
     artworkUri: string | null;
     primaryColor: string | null;
     secondaryColor: string | null;

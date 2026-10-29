@@ -17,7 +17,6 @@ import {
 } from './types';
 import { findMatchingAudioTrack } from '@/utils/languages';
 import { SubtitleCueStore } from '@/services/SubtitleCueStore';
-import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 import { EXTERNAL_SUBTITLE_INDEX, loadExternalSubtitle, saveExternalSubtitle } from '@/services/ExternalSubtitleStore';
 import { SubtitleSelectionService } from '@/services/SubtitleSelectionService';
 import { SubtitlePickerService } from '@/services/SubtitlePickerService';
@@ -25,7 +24,7 @@ import { searchSDHSubtitles, downloadSubtitle } from '@/utils/subdlApi';
 import { isAbortError } from '@/utils/network';
 
 /** A cue that can carry a sound tag ([explosion], (footsteps), ♪); native reads the tags (HapticMeaning). */
-export const hasSoundTag = (text: string) => /[[(♪♫]/.test(text);
+const hasSoundTag = (text: string) => /[[(♪♫]/.test(text);
 const tagCount = (cues: SubtitleCue[]) => cues.reduce((n, c) => n + (hasSoundTag(c.text) ? 1 : 0), 0);
 
 // The SDH subtitle found for each video (null: none), so playing it again has the tags at once.
@@ -489,7 +488,6 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         subtitleCuesLoading,
         selectedSubtitleTrackIndex,
         subtitleCues,
-        currentSubtitleCue: useSubtitleCueStore.getState().currentCue,
         nativeTextTrackOrdinal,
         selectSubtitleTrack,
 
@@ -508,8 +506,6 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         // For parent to set audio tracks from native player
         setAudioTracksFromNative,
         setSubtitleTracksFromPlayer,
-        // For drift correction updates
-        setSubtitleCues,
     }), [
         audioTracks, selectedAudioTrackId, selectAudioTrack,
         subtitleTracks, subtitleTracksReady, subtitleCuesLoading, selectedSubtitleTrackIndex, subtitleCues, selectSubtitleTrack,
@@ -520,7 +516,3 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         setSubtitleTracksFromPlayer,
     ]);
 }
-
-export default usePlayerTracks;
-
-

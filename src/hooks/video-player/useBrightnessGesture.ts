@@ -156,5 +156,3 @@ export function useBrightnessGesture(options: UseBrightnessGestureOptions) {
 
     return gesture;
 }
-
-export default useBrightnessGesture;

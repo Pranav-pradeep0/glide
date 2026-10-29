@@ -2,7 +2,7 @@
 
 import { NativeModules } from 'react-native';
 
-export type UiHaptic =
+type UiHaptic =
     | 'tick' | 'segmentTick' | 'confirm' | 'reject' | 'longPress' | 'gestureEnd' | 'toggleOn' | 'toggleOff';
 
 interface HapticModuleInterface {

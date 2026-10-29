@@ -3,9 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import Svg, { Path, G } from 'react-native-svg';
 
 interface PrivacyIconProps {
-    animate: boolean;
     color: string;
-    secondaryColor: string;
 }
 
 const W = 200;

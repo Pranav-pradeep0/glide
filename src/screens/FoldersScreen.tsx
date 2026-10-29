@@ -209,7 +209,6 @@ export default function FoldersScreen() {
         navigation.navigate('AlbumVideos', {
             albumTitle: album.title,
             bucketId: album.id,
-            videoCount: album.count,
         });
     }, [navigation]);
 

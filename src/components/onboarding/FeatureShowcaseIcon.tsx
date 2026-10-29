@@ -5,22 +5,17 @@ import StormSceneIcon from './StormSceneIcon';
 interface FeatureShowcaseIconProps {
     animate: boolean;
     color: string;
-    secondaryColor: string;
     onFeatureActivate?: (index: number) => void;
 }
 
 export default function FeatureShowcaseIcon({
     animate,
     color,
-    secondaryColor,
     onFeatureActivate,
 }: FeatureShowcaseIconProps) {
     const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-    const animateRef = useRef(animate);
     const onFeatureActivateRef = useRef(onFeatureActivate);
     const [vividOn, setVividOn] = useState(false);
-    const [syncOn, setSyncOn] = useState(false);
-    const [hapticsOn, setHapticsOn] = useState(false);
 
     useEffect(() => { onFeatureActivateRef.current = onFeatureActivate; }, [onFeatureActivate]);
 
@@ -32,8 +27,6 @@ export default function FeatureShowcaseIcon({
     const runShowcaseCycle = useCallback(() => {
         clearTimers();
         setVividOn(false);
-        setSyncOn(false);
-        setHapticsOn(false);
 
         const schedule = (fn: () => void, ms: number) => {
             const id = setTimeout(fn, ms);
@@ -48,27 +41,19 @@ export default function FeatureShowcaseIcon({
 
         // Feature 1: AI subtitle sync
         schedule(() => {
-            setSyncOn(true);
             onFeatureActivateRef.current?.(1);
         }, 2440);
 
         // Feature 2: Haptic playback
         schedule(() => {
-            setHapticsOn(true);
             onFeatureActivateRef.current?.(2);
         }, 4020);
     }, [clearTimers]);
 
     useEffect(() => {
-        animateRef.current = animate;
-    }, [animate]);
-
-    useEffect(() => {
         if (!animate) {
             clearTimers();
             setVividOn(false);
-            setSyncOn(false);
-            setHapticsOn(false);
             onFeatureActivateRef.current?.(-1);
             return;
         }
@@ -84,7 +69,6 @@ export default function FeatureShowcaseIcon({
                 animate={animate}
                 vivid={vividOn}
                 color={color}
-                secondaryColor={secondaryColor}
             />
         </View>
     );

@@ -36,7 +36,7 @@ const BUBBLE_WIDTH = 96;
 /** Room for a chapter name under the time. */
 const CHAPTER_BUBBLE_WIDTH = 168;
 
-export interface SeekChapter { title: string; start: number }
+interface SeekChapter { title: string; start: number }
 
 /** "1:02:03" / "02:03"; -1 is the "no duration yet" sentinel. */
 const formatClock = (val: number) => {

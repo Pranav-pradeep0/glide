@@ -10,7 +10,7 @@ import { fetchWithTimeout } from '../utils/network';
 
 const LOG_PREFIX = '[SubtitlePicker]';
 
-export interface PickedSubtitle {
+interface PickedSubtitle {
     name: string;
     cues: SubtitleCue[];
 }

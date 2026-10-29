@@ -1,7 +1,7 @@
 // src/services/SubtitleSelectionService.ts
 
 import { SubtitleTrack } from '../utils/SubtitleExtractor';
-import { SubtitleResult, SubtitleCue } from '../types';
+import { SubtitleCue } from '../types';
 
 const LOG_PREFIX = '[SubtitleSelection]';
 
@@ -24,12 +24,6 @@ const SDH_CONTENT_PATTERNS = [
 
 interface ScoredTrack {
     track: SubtitleTrack;
-    score: number;
-    reason: string;
-}
-
-interface ScoredSubtitleResult {
-    subtitle: SubtitleResult;
     score: number;
     reason: string;
 }
@@ -87,91 +81,6 @@ export class SubtitleSelectionService {
 
         if (__DEV__) {console.log(`${LOG_PREFIX} Scored ${tracks.length} embedded tracks`);}
         return scored;
-    }
-
-    /**
-     * Score API subtitle results for SDH likelihood
-     */
-    static scoreAPISubtitles(subtitles: SubtitleResult[], preferredLang: string = 'en'): ScoredSubtitleResult[] {
-        const scored: ScoredSubtitleResult[] = [];
-
-        for (const sub of subtitles) {
-            // Use existing sdhScore if available
-            let score = sub.sdhScore || 0;
-            const reasons: string[] = [];
-
-            if (sub.sdhScore && sub.sdhScore > 0) {
-                reasons.push(`API SDH score: ${sub.sdhScore}`);
-            }
-
-            // Hearing impaired flag from API
-            if (sub.hearingImpaired) {
-                score += 18;
-                reasons.push('API HI flag');
-            }
-
-            // Language preference
-            if (sub.language === preferredLang || sub.language.startsWith(preferredLang)) {
-                score += 8;
-                reasons.push('Matches language');
-            }
-
-            scored.push({
-                subtitle: sub,
-                score,
-                reason: reasons.join(', ') || 'No indicators',
-            });
-        }
-
-        // Sort by score descending
-        scored.sort((a, b) => b.score - a.score);
-
-        if (__DEV__) {console.log(`${LOG_PREFIX} Scored ${subtitles.length} API subtitles`);}
-        return scored;
-    }
-
-    /**
-     * Select best embedded SDH track
-     */
-    static selectBestEmbeddedSDH(
-        tracks: SubtitleTrack[],
-        preferredLang: string = 'en',
-        minConfidence: number = 15
-    ): ScoredTrack | null {
-        const scored = this.scoreEmbeddedTracks(tracks, preferredLang);
-
-        if (scored.length === 0) {return null;}
-
-        const best = scored[0];
-        if (best.score >= minConfidence) {
-            if (__DEV__) {console.log(`${LOG_PREFIX} Selected embedded track: index ${best.track.index}, score ${best.score}`);}
-            return best;
-        }
-
-        if (__DEV__) {console.log(`${LOG_PREFIX} No embedded track met confidence threshold (${minConfidence})`);}
-        return null;
-    }
-
-    /**
-     * Select best API SDH subtitle
-     */
-    static selectBestAPISDH(
-        subtitles: SubtitleResult[],
-        preferredLang: string = 'en',
-        minConfidence: number = 10
-    ): ScoredSubtitleResult | null {
-        const scored = this.scoreAPISubtitles(subtitles, preferredLang);
-
-        if (scored.length === 0) {return null;}
-
-        const best = scored[0];
-        if (best.score >= minConfidence) {
-            if (__DEV__) {console.log(`${LOG_PREFIX} Selected API subtitle: ${best.subtitle.id}, score ${best.score}`);}
-            return best;
-        }
-
-        if (__DEV__) {console.log(`${LOG_PREFIX} No API subtitle met confidence threshold (${minConfidence})`);}
-        return null;
     }
 
     /**

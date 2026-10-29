@@ -1,6 +1,6 @@
 // src/services/OMDBService.ts
 import { OMDB_API_URL } from '../utils/constants';
-import { fetchWithTimeout, NetworkTimeoutError } from '../utils/network';
+import { fetchWithTimeout, isTimeoutError } from '../utils/network';
 
 const LOG_PREFIX = '[OMDBService]';
 const OMDB_TIMEOUT_MS = 8000;
@@ -21,11 +21,7 @@ export interface OMDBResult {
     imdbRating?: string;
     Ratings?: { Source: string; Value: string }[];
     Actors?: string;
-    Writer?: string;
     Language?: string;
-    Country?: string;
-    Awards?: string;
-    BoxOffice?: string;
 }
 
 export class OMDBService {
@@ -77,8 +73,8 @@ export class OMDBService {
 
             return data;
         } catch (error) {
-            if (error instanceof NetworkTimeoutError) {
-                console.warn(`${LOG_PREFIX} Search timed out after ${error.timeoutMs}ms`);
+            if (isTimeoutError(error)) {
+                console.warn(`${LOG_PREFIX} Search timed out`);
                 return null;
             }
             console.error(`${LOG_PREFIX} Search error:`, error);
@@ -115,8 +111,8 @@ export class OMDBService {
 
             return data.Search;
         } catch (error) {
-            if (error instanceof NetworkTimeoutError) {
-                console.warn(`${LOG_PREFIX} Fuzzy search timed out after ${error.timeoutMs}ms`);
+            if (isTimeoutError(error)) {
+                console.warn(`${LOG_PREFIX} Fuzzy search timed out`);
                 return [];
             }
             console.error(`${LOG_PREFIX} Fuzzy search error:`, error);
@@ -141,8 +137,8 @@ export class OMDBService {
             const data: OMDBResult = await response.json();
             return data.Response === 'True' ? data : null;
         } catch (error) {
-            if (error instanceof NetworkTimeoutError) {
-                console.warn(`${LOG_PREFIX} GetByID timed out after ${error.timeoutMs}ms`);
+            if (isTimeoutError(error)) {
+                console.warn(`${LOG_PREFIX} GetByID timed out`);
                 return null;
             }
             console.error(`${LOG_PREFIX} GetByID error:`, error);

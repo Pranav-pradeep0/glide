@@ -1,4 +1,4 @@
-export interface EmphasisSpan {
+interface EmphasisSpan {
     text: string;
     bold?: boolean;
     italic?: boolean;

@@ -215,44 +215,4 @@ export class SubtitleCueStore {
 
         return null;
     }
-
-    /**
-     * Evict cache for a specific video.
-     */
-    static evict(videoPath: string) {
-        // Clear cues (heavy data)
-        const keysToEvict = Array.from(this.cache.keys()).filter(k => k.startsWith(`${videoPath}::`));
-        keysToEvict.forEach(key => {
-            this.cache.delete(key);
-            this.lru = this.lru.filter(k => k !== key);
-        });
-
-        // NOTE: We keep the track list cache (tracksCache) so that returning to the Details
-        // screen or choosing a different track doesn't trigger a redundant FFprobe.
-        // It will be cleared eventually via tracksLru or app cleanup.
-
-        if (__DEV__ && (keysToEvict.length > 0)) {
-            if (__DEV__) {console.log(`${LOG_PREFIX} Evicted ${keysToEvict.length} cue entries for:`, videoPath);}
-        }
-    }
-
-    /**
-     * Complete cleanup: clear cache and delete all temporary files.
-     */
-    static async cleanup() {
-        if (__DEV__) {console.log(`${LOG_PREFIX} Final cleanup initiated...`);}
-        this.cache.clear();
-        this.tracksCache.clear();
-        this.pendingPromises.clear();
-        this.pendingTracksPromises.clear();
-        this.lru = [];
-        this.tracksLru = [];
-        try {
-            await SubtitleExtractor.cleanupSubtitleFiles();
-        } catch (error) {
-            console.error(`${LOG_PREFIX} Cleanup error:`, error);
-        }
-    }
 }
-
-

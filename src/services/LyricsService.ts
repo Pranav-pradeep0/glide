@@ -42,7 +42,7 @@ function storePicked(trackId: string, lyrics: string) {
     lyricsMMKV.set(`lyrics_${trackId}`, lyrics);
 }
 
-export interface LyricsTrackInfo {
+interface LyricsTrackInfo {
     id: string;
     path?: string;
     uri?: string;
@@ -416,10 +416,6 @@ export class LyricsServiceClass {
                 RNFS.unlink(tempCachePath).catch(() => {});
             }
         }
-    }
-
-    clearCache() {
-        this.cache.clear();
     }
 }
 

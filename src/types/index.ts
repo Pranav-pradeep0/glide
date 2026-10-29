@@ -127,15 +127,7 @@ export interface PlayerState {
     isControlsLocked: boolean;
 }
 
-export interface GestureState {
-    brightness: number;
-    volume: number;
-    seekPosition: number;
-}
-
-export type SortOption = 'name' | 'date' | 'size';
-
-export type PlayMode = 'with-haptics' | 'normal';
+type PlayMode = 'with-haptics' | 'normal';
 
 /** A folder's order: name (episode order for a series), newest first, or largest first. */
 export type VideoSort = 'name' | 'date' | 'size';
@@ -149,7 +141,6 @@ export type RootStackParamList = {
         contentUri?: string; // Original content:// URI for CameraRoll operations
         albumName?: string;
         bucketId?: string;
-        imdbId?: string;
         // The order picked on the folder screen, passed on to the player
         videoSort?: VideoSort;
         // Seconds: the opening app's resume point, passed on to the player
@@ -165,7 +156,6 @@ export type RootStackParamList = {
         bucketId?: string;
         imdbId?: string;
         playMode?: PlayMode;
-        subtitlePath?: string;
         // If true, exit app on back press instead of navigating back
         isExternalOpen?: boolean;
         // Seconds: the opening app's resume point (Stremio's)
@@ -181,7 +171,6 @@ export type RootStackParamList = {
     AlbumVideos: {
         albumTitle: string;
         bucketId?: string;
-        videoCount: number;
     };
     Search: undefined;
     /** Network shares, phones only: TV has it in the rail (MainTabParamList). */

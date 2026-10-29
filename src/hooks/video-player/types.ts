@@ -7,6 +7,7 @@ import type { GlidePlayerRef, PlayerResizeMode } from '@/components/VideoPlayer/
 import { SharedValue } from 'react-native-reanimated';
 import { SubtitleCue, VideoBookmark } from '@/types';
 import { IS_TV } from '@/utils/tv';
+import type { SubtitleTrack } from '@/utils/SubtitleExtractor';
 
 // ============================================================================
 // CONSTANTS
@@ -57,12 +58,6 @@ export interface PlayerProgressData {
     duration: number;
     position: number;
     remainingTime?: number;
-}
-
-export interface PlayerPlayingData {
-    target: number;
-    duration: number;
-    seekable: boolean;
 }
 
 export interface PlayerBufferingEvent {
@@ -138,14 +133,6 @@ export function carriedSubtitle(
     return ordinal < 0 ? undefined : { language: tracks[ordinal].language, title: tracks[ordinal].title, ordinal };
 }
 
-export interface SubtitleTrack {
-    index: number;
-    codec: string;
-    language?: string;
-    title?: string;
-    isDefault?: boolean;
-}
-
 export interface ExternalSubtitle {
     name: string;
     cues: SubtitleCue[];
@@ -158,7 +145,7 @@ export interface ExternalSubtitle {
 // HUD STATE TYPES
 // ============================================================================
 
-export interface SeekHUDState {
+interface SeekHUDState {
     show: boolean;
     time: number;
     startTime: number;  // Time when seek started (for difference calculation)
@@ -166,31 +153,31 @@ export interface SeekHUDState {
     side: 'left' | 'right' | null;  // For double-tap opposite-side positioning
 }
 
-export interface BrightnessHUDState {
+interface BrightnessHUDState {
     show: boolean;
     value: number;
 }
 
-export interface VolumeHUDState {
+interface VolumeHUDState {
     show: boolean;
     value: number;
 }
 
-export interface SpeedHUDState {
+interface SpeedHUDState {
     show: boolean;
     rate: number;
 }
 
-export interface ZoomHUDState {
+interface ZoomHUDState {
     scale: number;
 }
 
-export interface ResizeModeHUDState {
+interface ResizeModeHUDState {
     show: boolean;
     mode: string;
 }
 
-export interface RippleHUDState {
+interface RippleHUDState {
     show: boolean;
     side: 'left' | 'right';
     /** Accumulated double-tap seek, shown as "20s". */
@@ -211,8 +198,6 @@ export interface HUDState {
     zoom: ZoomHUDState;
     ripple: RippleHUDState;
 }
-
-export type HUDType = keyof HUDState;
 
 // HUD Action types for useReducer
 export type HUDAction =
@@ -388,10 +373,8 @@ export interface UsePlayerUIReturn {
     showControls: () => void;
     hideControls: () => void;
     scheduleAutoHide: () => void;
-    cancelAutoHide: () => void;
     lock: () => void;
     unlock: () => void;
-    toggleLock: () => void;
     showLockIconTemporarily: () => void;
     /** Paused or scrubbing: controls stay up until this clears. */
     setAutoHideBlocked: (blocked: boolean) => void;
@@ -439,7 +422,6 @@ export interface UsePlayerTracksReturn {
     selectedSubtitleTrackIndex: number | null;
     subtitleCues: SubtitleCue[];
     subtitleCuesLoading: boolean;
-    currentSubtitleCue: SubtitleCue | null;
     /** Ordinal among subtitle streams for the native player; -1 disables text output. */
     nativeTextTrackOrdinal: number;
     selectSubtitleTrack: (trackIndex: number | null) => void;
@@ -459,7 +441,6 @@ export interface UsePlayerTracksReturn {
     // Native Text Track ID
 
     // Actions
-    setSubtitleCues: React.Dispatch<React.SetStateAction<SubtitleCue[]>>;
     /** Tracks the native player found at load, handed back by the screen. */
     setAudioTracksFromNative: (tracks: NativeAudioTrack[]) => void;
     setSubtitleTracksFromPlayer: (tracks: SubtitleTrack[]) => void;
@@ -484,7 +465,6 @@ export interface UsePlayerSettingsReturn {
     toggleRepeat: () => void;
     setResizeMode: (mode: PlayerResizeMode) => void;
     setSleepTimer: (minutes: number | null) => void;
-    clearSleepTimer: () => void;
     toggleBackgroundPlay: () => void;
     toggleVideoEnhancement: () => void;
     setVideoEnhancementStrength: (strength: number) => void;
@@ -509,9 +489,6 @@ export interface UsePlayerSettingsReturn {
 // HELPER FUNCTIONS (moved outside component for optimization)
 // ============================================================================
 
-/**
- * Format seconds to MM:SS or H:MM:SS string
- */
 /** Seconds either side of a bookmark that count as "at" it. */
 export const BOOKMARK_ACTIVE_WINDOW_SECONDS = 2;
 
@@ -536,6 +513,7 @@ export function findActiveBookmarkId(
     return bestId;
 }
 
+/** Seconds to MM:SS, or H:MM:SS from an hour up. */
 export const formatTime = (seconds: number): string => {
     if (!isFinite(seconds) || seconds < 0) { return '00:00'; }
     const hrs = Math.floor(seconds / 3600);
@@ -570,29 +548,3 @@ export const throttle = <A extends unknown[]>(fn: (...args: A) => void, ms: numb
     throttled.flush = flush;
     return throttled;
 };
-
-/**
- * Create a debounced function with cancel capability
- */
-export const createDebounce = <T extends (...args: any[]) => void>(
-    fn: T,
-    delay: number
-) => {
-    let timeoutId: NodeJS.Timeout | null = null;
-    const debounced = (...args: Parameters<T>) => {
-        if (timeoutId) { clearTimeout(timeoutId); }
-        timeoutId = setTimeout(() => {
-            fn(...args);
-            timeoutId = null;
-        }, delay);
-    };
-    debounced.cancel = () => {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
-    };
-    return debounced;
-};
-
-

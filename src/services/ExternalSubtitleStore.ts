@@ -12,7 +12,7 @@ export const EXTERNAL_SUBTITLE_INDEX = -999;
  */
 const DIR = `${RNFS.DocumentDirectoryPath}/external_subtitles`;
 
-export interface SavedExternalSubtitle {
+interface SavedExternalSubtitle {
     /** Checked on load: the file name is a 32-bit hash and could collide. */
     videoPath: string;
     name: string;

@@ -166,5 +166,3 @@ const styles = StyleSheet.create({
         opacity: 0,
     },
 });
-
-export default DoubleTapRipple;

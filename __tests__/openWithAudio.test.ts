@@ -80,19 +80,6 @@ describe('DeepLinkService.isAudioContent', () => {
     });
 });
 
-describe('DeepLinkService.isVideoUri', () => {
-    it('separates video from audio by file name', () => {
-        expect(DeepLinkService.isVideoUri('content://com.foo.bar/doc/film.mkv')).toBe(true);
-        expect(DeepLinkService.isVideoUri('content://com.foo.bar/doc/song.mp3')).toBe(false);
-        expect(DeepLinkService.isVideoUri('https://example.com/live/stream.m3u8')).toBe(true);
-    });
-
-    it('falls back to the MediaStore path when there is no extension', () => {
-        expect(DeepLinkService.isVideoUri('content://media/external/video/media/42')).toBe(true);
-        expect(DeepLinkService.isVideoUri('content://media/external/audio/media/42')).toBe(false);
-    });
-});
-
 // The player's subtitle line under "Open with": a file manager's own link arrives encoded.
 describe('DeepLinkService.getFolderNameFromUri', () => {
     it('decodes the folder of a link', () => {

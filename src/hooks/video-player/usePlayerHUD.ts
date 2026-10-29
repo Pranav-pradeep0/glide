@@ -432,5 +432,3 @@ export function usePlayerHUD(): UsePlayerHUDReturn {
         showRipple, hideRipple,
     ]);
 }
-
-export default usePlayerHUD;

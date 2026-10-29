@@ -5,7 +5,7 @@ const mmkv = createMMKV({ id: 'glide_music_history_v1' });
 const HISTORY_KEY = '@glide_music_history';
 const MAX_ENTRIES = 50;
 
-export interface MusicHistoryEntry {
+interface MusicHistoryEntry {
     /** The song's id: its MediaStore id for library songs. */
     id: string;
     playedAt: number;

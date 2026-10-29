@@ -5,7 +5,7 @@ import type { GlidePlayerRef } from '@/components/VideoPlayer/GlidePlayer';
 
 const { AudioVolumeModule: AudioModule } = NativeModules;
 
-export type AudioRouteType = 'speaker' | 'bluetooth' | 'wired' | 'usb' | 'unknown';
+type AudioRouteType = 'speaker' | 'bluetooth' | 'wired' | 'usb' | 'unknown';
 
 interface AudioRoute {
     type: AudioRouteType;
@@ -19,17 +19,11 @@ interface UseAudioControllerReturn {
     // Limits
     maxVolume: number; // 1.0 or 2.0 (normalized)
 
-    // Current audio route
-    audioRoute: AudioRoute;
-
     // Shared value for gesture integration (0-2 range for UI/Gestures)
     currentVolumeShared: SharedValue<number>;
 
     // Apply volume (normalized 0-2)
     applyVolume: (normalizedValue: number, fromGesture?: boolean) => void;
-
-    // Set volume manually (0-200)
-    setVolume: (value: number) => void;
 
     // Notify gesture ended (syncs React state)
     onGestureEnd: () => void;
@@ -255,11 +249,6 @@ export function useAudioController(
         }
     }, [setBoost]);
 
-    // Set volume (0-200 range)
-    const setVolume = useCallback((val: number) => {
-        applyVolume(val / 100);
-    }, [applyVolume]);
-
     // Volume keys: native consumes them and reports direction + one system step. Stepping
     // here, through applyVolume, lets them walk the whole 0-200% the gesture can, with the
     // same route clamp -- so the speaker still stops at 100%.
@@ -301,17 +290,14 @@ export function useAudioController(
     return useMemo(() => ({
         volume,
         maxVolume: audioRoute.maxVolume / 100, // Normalized 1.0 or 2.0
-        audioRoute,
         currentVolumeShared,
         applyVolume,
-        setVolume,
         onGestureEnd,
     }), [
         volume,
         audioRoute,
         currentVolumeShared,
         applyVolume,
-        setVolume,
         onGestureEnd,
     ]);
 }

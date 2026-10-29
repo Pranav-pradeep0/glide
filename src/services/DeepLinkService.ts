@@ -36,32 +36,6 @@ export class DeepLinkService {
     }
 
     /**
-     * Check if a URI looks like a video file
-     */
-    static isVideoUri(uri: string): boolean {
-        const extension = this.extensionOf(uri);
-        if (DeepLinkService.VIDEO_EXTENSIONS.includes(extension)) {
-            return true;
-        }
-        if (DeepLinkService.AUDIO_EXTENSIONS.includes(extension)) {
-            return false;
-        }
-
-        // MediaStore spells the kind into the path, which beats having no extension at all.
-        const lowerUri = uri.toLowerCase();
-        if (lowerUri.includes('/video/')) {
-            return true;
-        }
-        if (lowerUri.includes('/audio/')) {
-            return false;
-        }
-
-        // Streams and extensionless provider URIs: the intent filter that let this in
-        // already declared it a video.
-        return uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('content://');
-    }
-
-    /**
      * An audio file handed to the main app by "Open with". MainActivity is exported, so any
      * app can send it any URI: only local content:// and file:// are played, and the length
      * is capped like VideoPlayerActivity's.

@@ -1,4 +1,3 @@
-import * as RNFS from '@dr.pogodin/react-native-fs';
 import { BUILD_ENV } from '@/native/GlideNative';
 import { IS_TV } from '@/utils/tv';
 
@@ -8,8 +7,6 @@ export const VIDEO_EXTENSIONS = [
 ];
 
 export const SUBTITLE_EXTENSIONS = ['.srt', '.vtt', '.ass', '.ssa'];
-
-export const SUBTITLE_FONT_SIZES = [14, 18, 22, 26, 30];
 
 export const SUBTITLE_COLORS = [
     { name: 'White', value: '#FFFFFF' },
@@ -24,8 +21,6 @@ export const SUBTITLE_COLORS = [
     { name: 'Gray', value: '#8E8E93' },
 ];
 
-export const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-
 // Glide's Worker (proxy/): AI recap, plus SubDL and OMDb lookups, whose API keys it holds so
 // they never ship in the APK. With no proxy configured, those features are simply unavailable.
 const configuredAiProxyUrl = (BUILD_ENV.AI_PROXY_URL || '').trim().replace(/\/+$/, '');
@@ -39,10 +34,6 @@ export const SUBDL_DOWNLOAD_URL = 'https://dl.subdl.com';
 
 // OMDB (1,000 free requests/day, shared by every install).
 export const OMDB_API_URL = AI_PROXY_URL && `${AI_PROXY_URL}/v1/omdb`;
-
-// export const DEFAULT_STORAGE_PATH = '/storage/emulated/0/Movies';
-export const DEFAULT_STORAGE_PATH = RNFS.ExternalStorageDirectoryPath;
-
 
 // Served by GitHub Pages from the public repo; the Play listing links the same page.
 export const PRIVACY_POLICY_URL = 'https://pranav-pradeep0.github.io/glide/privacy';

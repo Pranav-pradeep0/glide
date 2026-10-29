@@ -148,5 +148,3 @@ export function useVolumeGesture(options: UseVolumeGestureOptions) {
 
     return gesture;
 }
-
-export default useVolumeGesture;

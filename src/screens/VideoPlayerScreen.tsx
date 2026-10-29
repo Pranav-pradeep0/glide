@@ -67,7 +67,6 @@ import {
     ShakeDetector,
     formatTime,
     PLAYER_CONSTANTS,
-    UsePlayerCoreReturn,
     UsePlayerTracksReturn,
 } from '@/hooks/video-player';
 import type { PlayerLoadData } from '@/hooks/video-player/types';
@@ -379,7 +378,6 @@ export default function VideoPlayerScreen({ route }: Props) {
      * one of those callbacks happens to run after mount. Any hook that called one while
      * initialising would have thrown a ReferenceError.
      */
-    const playerRef = useRef<UsePlayerCoreReturn | null>(null);
     const tracksRef = useRef<UsePlayerTracksReturn | null>(null);
     const showToastRef = useRef<(message: string) => void>(() => { });
     // Leaves like Back does, so an "Open with" video closes its Activity instead of going black.
@@ -479,7 +477,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         .map(c => ({ startMs: Math.round(c.startTime * 1000), endMs: Math.round(c.endTime * 1000), text: c.text })),
     [tracksHook.hapticCues]);
 
-    playerRef.current = player;
     tracksRef.current = tracksHook;
 
     // Bookmarks hook (needs player for seek)
@@ -1650,8 +1647,6 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onAddBookmark={isNetworkStream ? undefined : bookmarksHook.addBookmark}
                     resizeMode={settingsHook.settings.resizeMode}
                     onSetResizeMode={settingsHook.setResizeMode}
-                    isLandscape={isLandscape}
-                    insets={effectiveInsets}
                     enableHaptics={!IS_TV && playMode === 'with-haptics'}
                     shakeEnabled={shakeEnabled}
                     onToggleShake={IS_TV ? undefined : handleToggleShake}
@@ -1681,7 +1676,6 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onBack={openedFromPlayback ? handleBackToPlayback : undefined}
                     currentVideoPath={videoPath}
                     onPlayVideo={handlePlayVideo}
-                    isLandscape={isLandscape}
                     albumName={albumName ?? undefined}
                     bucketId={routeBucketId}
                     videoSort={videoSort}

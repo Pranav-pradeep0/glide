@@ -64,7 +64,7 @@ export function useUiTheme(onPlayer?: boolean): Theme {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export interface TouchableProps extends Omit<PressableProps, 'style' | 'children'> {
+interface TouchableProps extends Omit<PressableProps, 'style' | 'children'> {
     style?: StyleProp<AnimatedStyle<ViewStyle>>;
     children?: React.ReactNode;
     /** Scale while pressed; 1 turns it off (full-width rows use the ripple only). */
@@ -895,9 +895,6 @@ export function SortButton<K extends string>({ options, value, onChange, title =
         </>
     );
 }
-
-/** @deprecated Use SortButton. Kept so unported screens still render. */
-export const SortTabs = SortButton;
 
 // ---------------------------------------------------------------------------
 // Snackbar

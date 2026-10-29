@@ -11,7 +11,6 @@ export const lightColors = {
     onPrimary: '#FFFFFF',
     /** Accent tint behind a selected nav item or an update card. */
     primaryContainer: 'rgba(0, 0, 0, 0.08)',
-    secondary: '#3A3A40',
     background: '#F6F6F8',
     /** Surface 1: rows, nav bar, setting groups. */
     surface: '#FFFFFF',
@@ -27,7 +26,6 @@ export const lightColors = {
     textTertiary: '#8E8E96',
     border: 'rgba(0, 0, 0, 0.08)',
     error: '#D93B3B',
-    success: '#1F9D6A',
     warning: '#C98A12',
     card: '#FFFFFF',
     /** Surface 2: sheets, dialogs, search field. */
@@ -40,7 +38,6 @@ export const darkColors: typeof lightColors = {
     primary: '#FFFFFF',
     onPrimary: '#000000',
     primaryContainer: 'rgba(255, 255, 255, 0.14)',
-    secondary: '#CFCFD4',
     // True black: OLED-friendly and the same black as the player, so going in and out of a
     // video never flashes grey.
     background: '#000000',
@@ -54,7 +51,6 @@ export const darkColors: typeof lightColors = {
     textTertiary: '#6E6E76',
     border: 'rgba(255, 255, 255, 0.08)',
     error: '#FF6B6B',
-    success: '#5EDBA5',
     warning: '#F5B544',
     card: '#121214',
     cardElevated: '#1C1C1F',

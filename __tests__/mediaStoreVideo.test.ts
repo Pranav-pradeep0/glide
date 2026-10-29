@@ -108,19 +108,6 @@ describe('MediaService with MediaStoreVideoModule', () => {
         expect(videos[0].name).toBe('video1.mp4');
     });
 
-    it('provides paginated results compatible with legacy format', async () => {
-        const page = await MediaService.getVideos(null, 1);
-        expect(page.edges).toHaveLength(1);
-        expect(page.edges[0].name).toBe('video1.mp4');
-        expect(page.page_info.has_next_page).toBe(true);
-        expect(page.page_info.end_cursor).toBe('1');
-
-        const page2 = await MediaService.getVideos(null, 1, '1');
-        expect(page2.edges).toHaveLength(1);
-        expect(page2.edges[0].name).toBe('video2.mp4');
-        expect(page2.page_info.has_next_page).toBe(false);
-    });
-
     it('fetches system thumbnail via MediaStoreVideoModule', async () => {
         const thumb = await MediaService.getThumbnail('content://media/external/video/media/1');
         expect(thumb).toBe('file:///cache/video_thumbs/1_512x512.jpg');

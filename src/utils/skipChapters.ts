@@ -4,7 +4,7 @@
 
 export type SkipKind = 'intro' | 'recap';
 
-export interface SkipRange {
+interface SkipRange {
     kind: SkipKind;
     /** Seconds; the skip lands on end, the next chapter's start. */
     start: number;

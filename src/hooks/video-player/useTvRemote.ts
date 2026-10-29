@@ -24,10 +24,10 @@ const { TvRemoteModule } = NativeModules;
  * Fast forward, rewind, next and previous are the player's in both; play / pause stays the
  * media session's, and arrives here unconsumed.
  */
-export type TvKeyMode = 'off' | 'hidden' | 'focus';
+type TvKeyMode = 'off' | 'hidden' | 'focus';
 const MODES: Record<TvKeyMode, number> = { off: 0, hidden: 1, focus: 2 };
 
-export type TvKey =
+type TvKey =
     | 'up' | 'down' | 'left' | 'right' | 'center'
     | 'fastForward' | 'rewind' | 'next' | 'previous' | 'playPause';
 
@@ -41,7 +41,7 @@ export interface TvKeyEvent {
 }
 
 /** One press of Left / Right, as on Google TV and YouTube. */
-export const TV_SEEK_SECONDS = 10;
+const TV_SEEK_SECONDS = 10;
 
 /**
  * Where a remote seek lands after one more key event. Held, it speeds up: 1.5 s a repeat,

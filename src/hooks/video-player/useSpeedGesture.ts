@@ -190,5 +190,3 @@ export function useSpeedGesture(options: UseSpeedGestureOptions) {
 
     return { rightGesture, leftGesture };
 }
-
-export default useSpeedGesture;

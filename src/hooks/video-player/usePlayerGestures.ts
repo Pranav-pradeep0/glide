@@ -573,5 +573,3 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         audioController.maxVolume, audioController.volume, resetZoom,
     ]);
 }
-
-export default usePlayerGestures;

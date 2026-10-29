@@ -10,21 +10,6 @@ const { VideoOrientation } = NativeModules;
  */
 export const VideoOrientationService = {
     /**
-     * Lock the screen to Portrait mode.
-     */
-    lockPortrait: () => {
-        VideoOrientation.lockToPortrait();
-    },
-
-    /**
-     * Lock the screen to Landscape mode.
-     * Starts strictly as sensor landscape, but locks it.
-     */
-    lockLandscape: () => {
-        VideoOrientation.lockToLandscape();
-    },
-
-    /**
      * Enable auto-orientation based on device sensor.
      * This OVERRIDES system auto-rotate settings.
      * The app will rotate even if system auto-rotate is OFF.

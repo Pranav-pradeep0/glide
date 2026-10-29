@@ -4,7 +4,7 @@ import { FilenameParser } from '../utils/FilenameParser';
 
 const LOG_PREFIX = '[ContentDetector]';
 
-export interface ContentClassification {
+interface ContentClassification {
     isPlayableContent: boolean;  // Movie OR Series (not home video)
     contentType: 'movie' | 'series' | 'home_video' | 'unknown';
     confidence: number;  // 0-1

@@ -315,7 +315,6 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         toggleRepeat,
         setResizeMode,
         setSleepTimer,
-        clearSleepTimer,
         toggleBackgroundPlay,
         toggleVideoEnhancement,
         setVideoEnhancementStrength,
@@ -336,14 +335,10 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         settings,
         toggleMute, toggleRepeat,
         setResizeMode,
-        setSleepTimer, clearSleepTimer,
+        setSleepTimer,
         toggleBackgroundPlay, toggleVideoEnhancement, setVideoEnhancementStrength,
         toggleEqualizer, setEqualizerPreset, setCustomEqualizerBands, setSingleBand, audioEqualizer,
         toggleVolumeLeveler,
         setAudioDelay, setSubtitleDelay, setSubtitleRatio,
     ]);
 }
-
-export default usePlayerSettings;
-
-

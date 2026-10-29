@@ -10,7 +10,7 @@ const HISTORY_KEY = '@video_history_v1';
  * This allows matching the same video opened from different sources
  * (e.g., content:// URI vs file:// path).
  */
-export function generateVideoId(videoName: string, fileSize?: number): string {
+function generateVideoId(videoName: string, fileSize?: number): string {
     const normalizedName = videoName.toLowerCase().trim();
     if (fileSize && fileSize > 0) {
         return `${normalizedName}::${fileSize}`;
@@ -20,13 +20,10 @@ export function generateVideoId(videoName: string, fileSize?: number): string {
 
 interface VideoHistoryState {
     history: Map<string, VideoHistoryEntry>;
-    isHydrated: boolean;
 
     // Actions
     getVideoHistory: (videoPath: string) => VideoHistoryEntry | null;
-    getVideoHistoryByName: (videoName: string) => VideoHistoryEntry | null;
     getAllHistory: () => VideoHistoryEntry[];
-    updateVideoHistory: (entry: Partial<VideoHistoryEntry> & { videoPath: string; videoName: string }) => void;
     /** `link`: an app link's headers and secure flag, sent again when Recents reopens it. */
     incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number, link?: Pick<VideoHistoryEntry, 'headers' | 'secureUri'>) => void;
     updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrackId?: number, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, subtitleRatio?: number, brightness?: number, fileSize?: number) => void;
@@ -35,7 +32,6 @@ interface VideoHistoryState {
     setStopFrame: (videoPath: string, videoName: string, stopFrameMs: number | undefined) => void;
     addBookmark: (videoPath: string, videoName: string, timestamp: number, label?: string) => void;
     removeBookmark: (videoPath: string, bookmarkId: string) => void;
-    updateBookmarkLabel: (videoPath: string, bookmarkId: string, label: string) => void;
     clearVideoHistory: (videoPath: string) => void;
     clearAllHistory: () => void;
     /** Point entries at where their file moved; see findMovedVideo. */
@@ -91,7 +87,7 @@ export function replayParams(entry: VideoHistoryEntry) {
  * through MediaStore keeps it), then the only video in the library with the same file
  * name. Two files sharing a name are not guessed between.
  */
-export function findMovedVideo(entry: VideoHistoryEntry, library: VideoFile[]): VideoFile | null {
+function findMovedVideo(entry: VideoHistoryEntry, library: VideoFile[]): VideoFile | null {
     const byUri = entry.contentUri ? library.find(v => v.uri === entry.contentUri) : undefined;
     if (byUri) {return byUri;}
     const name = entry.videoPath.split('/').pop()?.toLowerCase();
@@ -189,21 +185,10 @@ function findHistoryEntry(
 
 export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
     history: initialHistory,
-    isHydrated: true, // Always hydrated now
 
     getVideoHistory: (videoPath: string) => {
         const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
         return findHistoryEntry(get().history, videoPath, videoId)?.entry ?? null;
-    },
-
-    getVideoHistoryByName: (videoName: string) => {
-        const videoId = generateVideoId(videoName);
-        for (const entry of get().history.values()) {
-            if (entry.videoId === videoId) {
-                return entry;
-            }
-        }
-        return null;
     },
 
     getAllHistory: () => {
@@ -211,46 +196,6 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         return Array.from(historyMap.values())
             .filter(entry => !entry.hideFromRecents) // Hide content:// and http(s):// entries
             .sort((a, b) => b.lastWatchedTime - a.lastWatchedTime);
-    },
-
-    updateVideoHistory: (entry) => {
-        const { videoPath, videoName, ...updates } = entry;
-        const videoId = generateVideoId(videoName);
-
-        set((state) => {
-            const newHistory = new Map(state.history);
-
-            const match = findHistoryEntry(newHistory, videoPath, videoId);
-            const existingKey = match?.key;
-            const existing = match?.entry;
-
-            if (existing && existingKey) {
-                // Update existing entry, but keep the original key
-                newHistory.set(existingKey, {
-                    ...existing,
-                    ...updates,
-                    videoPath: existing.videoPath, // Keep original path for file operations
-                    videoName,
-                    videoId,
-                    lastWatchedTime: Date.now(),
-                });
-            } else {
-                newHistory.set(videoPath, {
-                    videoPath,
-                    videoName,
-                    videoId,
-                    lastWatchedTime: Date.now(),
-                    lastPausedPosition: 0,
-                    duration: 0,
-                    viewCount: 0,
-                    bookmarks: [],
-                    ...updates,
-                });
-            }
-
-            return { history: newHistory };
-        });
-        debouncedPersist();
     },
 
     incrementViewCount: (videoPath, videoName, contentUri, fileSize, link) => {
@@ -354,8 +299,8 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         debouncedPersist();
     },
 
-    // Not updateVideoHistory: that stamps "watched now", and marking an old episode watched
-    // shouldn't move it to the top of Recents.
+    // Leaves lastWatchedTime alone: marking an old episode watched shouldn't move it to the
+    // top of Recents.
     setWatchedPosition: (videoPath, videoName, position, duration) => {
         set((state) => {
             const newHistory = new Map(state.history);
@@ -461,29 +406,6 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
 
         // Immediate persist for bookmark deletion
         get().persistNow();
-    },
-
-    updateBookmarkLabel: (videoPath: string, bookmarkId: string, label: string) => {
-        set((state) => {
-            const newHistory = new Map(state.history);
-
-            const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
-            const match = findHistoryEntry(newHistory, videoPath, videoId);
-            const existingKey = match?.key;
-            const existing = match?.entry;
-
-            if (existing && existingKey) {
-                newHistory.set(existingKey, {
-                    ...existing,
-                    bookmarks: existing.bookmarks.map((b) =>
-                        b.id === bookmarkId ? { ...b, label } : b
-                    ),
-                });
-            }
-
-            return { history: newHistory };
-        });
-        debouncedPersist();
     },
 
     clearVideoHistory: (videoPath: string) => {

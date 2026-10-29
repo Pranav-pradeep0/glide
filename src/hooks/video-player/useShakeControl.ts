@@ -87,5 +87,3 @@ export function ShakeDetector(props: Omit<UseShakeControlOptions, 'enabled'>) {
     useShakeControl({ ...props, enabled: true });
     return null;
 }
-
-export default useShakeControl;

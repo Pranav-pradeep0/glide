@@ -860,9 +860,6 @@ const styles = StyleSheet.create({
         top: 0,
         overflow: 'hidden',
         elevation: 8,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 14,
     },
     artPlaceholder: {
         flex: 1,
@@ -888,22 +885,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 4,
     },
-    scrubberArea: {
-        paddingVertical: metrics.space.xs,
-    },
-    slider: {
-        width: '100%',
-        height: 40,
-    },
-    timeRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: metrics.space.xs,
-        marginTop: -6,
-    },
-    timeText: {
-        fontVariant: ['tabular-nums'],
-    },
     controlsArea: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -918,9 +899,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         elevation: 4,
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
     },
     repeatBadge: {
         position: 'absolute',

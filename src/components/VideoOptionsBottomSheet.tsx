@@ -30,13 +30,6 @@ interface ExtendedMeta {
     loading: boolean;
 }
 
-const SUBTITLE_CODEC_NAMES: Record<string, string> = {
-    subrip: 'SRT',
-    hdmv_pgs_subtitle: 'PGS',
-    ass: 'SSA',
-    mov_text: 'MOV',
-};
-
 export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
     visible,
     video,

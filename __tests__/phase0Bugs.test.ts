@@ -17,7 +17,7 @@ import type { VideoFile } from '../src/types';
 describe('Phase 0 Bug Fixes', () => {
     beforeEach(() => {
         jest.useFakeTimers();
-        useVideoHistoryStore.setState({ history: new Map(), isHydrated: true });
+        useVideoHistoryStore.setState({ history: new Map() });
     });
 
     afterEach(() => {

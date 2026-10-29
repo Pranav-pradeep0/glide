@@ -193,13 +193,6 @@ export class SubtitleHtmlParser {
             .trim();
     }
 
-    static hasHtmlTags(text: string): boolean {
-        if (!text || typeof text !== 'string') {
-            return false;
-        }
-        return /<[^>\n]*>/.test(text) || /&(?:[a-z][a-z0-9]+|#\d+|#x[0-9a-f]+);/i.test(text);
-    }
-
     static decodeEntities(text: string): string {
         if (!text || text.indexOf('&') === -1) {
             return text;
@@ -457,12 +450,4 @@ export const FormattedSubtitleText: React.FC<FormattedSubtitleTextProps> = ({
             })}
         </Animated.Text>
     );
-};
-
-export const useFormattedSubtitle = (text: string) => {
-    return useMemo(() => ({
-        segments: SubtitleHtmlParser.parse(text),
-        plainText: SubtitleHtmlParser.stripTags(text),
-        hasFormatting: SubtitleHtmlParser.hasHtmlTags(text),
-    }), [text]);
 };

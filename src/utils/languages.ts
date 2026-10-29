@@ -5,7 +5,7 @@
 
 import { NativeAudioTrack } from '../hooks/video-player/types';
 
-export interface LanguageOption {
+interface LanguageOption {
     code: string;       // ISO code (e.g., 'en', 'jpa')
     name: string;       // English name (e.g., 'English')
     nativeName: string; // Native name (e.g., '日本語')
@@ -108,81 +108,3 @@ export function findMatchingAudioTrack(tracks: NativeAudioTrack[], preferredLang
 
     return undefined;
 }
-
-/**
- * Subtitle track interface for matching
- */
-interface SubtitleTrackForMatching {
-    index: number;
-    language?: string;
-    title?: string;
-}
-
-/**
- * Finds the best matching subtitle track for a preferred language.
- * Uses smart matching against aliases (e.g., matching "eng" track to "English" preference).
- *
- * @param tracks List of available subtitle tracks
- * @param preferredLanguageName The English name of the preferred language (e.g., "English")
- * @returns The matching track index or undefined
- */
-export function findMatchingSubtitleTrack(tracks: SubtitleTrackForMatching[], preferredLanguageName: string | null): number | undefined {
-    if (!preferredLanguageName || !tracks || tracks.length === 0) {return undefined;}
-
-    const normalizedPref = preferredLanguageName.trim().toLowerCase();
-
-    // Find the language definition for the user's preference
-    const langDef = LANGUAGES.find(l => l.name.toLowerCase() === normalizedPref);
-
-    // If we have a definition, we can match against all its aliases
-    // If not (custom input?), we just fallback to simple includes check
-    const searchTerms = langDef ? langDef.aliases : [normalizedPref];
-
-    if (__DEV__) {
-        if (__DEV__) {console.log('[LanguageUtils] Searching for subtitle track matching:', {
-            preference: preferredLanguageName,
-            searchTerms,
-        });}
-    }
-
-    // Iterate through tracks and try to match against language or title
-    for (const term of searchTerms) {
-        const match = tracks.find(t => {
-            const trackLang = (t.language || '').toLowerCase();
-            const trackTitle = (t.title || '').toLowerCase();
-
-            // Check language field first (most reliable)
-            if (trackLang === term) {return true;}
-            if (trackLang.includes(term) && term.length >= 2) {return true;}
-
-            // Check title field
-            if (trackTitle === term) {return true;}
-            if (
-                trackTitle.includes(`[${term}]`) ||
-                trackTitle.includes(`(${term})`) ||
-                trackTitle.includes(` ${term} `) ||
-                trackTitle.includes(`_${term}_`) ||
-                trackTitle.startsWith(`${term} `) ||
-                trackTitle.endsWith(` ${term}`)
-            ) {
-                return true;
-            }
-
-            // Substring match for longer terms
-            if (term.length >= 3 && trackTitle.includes(term)) {
-                return true;
-            }
-
-            return false;
-        });
-
-        if (match) {
-            if (__DEV__) {console.log('[LanguageUtils] Subtitle match found:', match.title || match.language, 'for term:', term);}
-            return match.index;
-        }
-    }
-
-    return undefined;
-}
-
-

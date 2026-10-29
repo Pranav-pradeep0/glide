@@ -8,14 +8,14 @@ const DEFAULT_COLOR = playerTheme.colors.text;
 // DISPLAY MODE ICONS
 // ============================================================================
 
-export const ContainIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
+const ContainIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
         <Rect x="2" y="3" width="20" height="18" rx="2" strokeOpacity={0.6} />
         <Rect x="6" y="7" width="12" height="10" rx="1" fill={color} stroke="none" />
     </Svg>
 );
 
-export const CoverIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
+const CoverIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
         <Rect x="2" y="3" width="20" height="18" rx="2" strokeOpacity={0.6} />
         <Rect x="4" y="5" width="16" height="14" rx="1" fill={color} fillOpacity={0.9} stroke="none" />
@@ -23,7 +23,7 @@ export const CoverIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number,
     </Svg>
 );
 
-export const StretchIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
+const StretchIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
         <Rect x="2" y="3" width="20" height="18" rx="2" strokeOpacity={0.6} />
         <Path d="M7 12H17M7 12L9 10M7 12L9 14M17 12L15 10M17 12L15 14" stroke={color} strokeWidth={2} />
@@ -31,14 +31,14 @@ export const StretchIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: numbe
     </Svg>
 );
 
-export const NoneIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
+const NoneIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
         <Rect x="2" y="3" width="20" height="18" rx="2" strokeOpacity={0.6} />
         <Rect x="8" y="8" width="8" height="8" rx="1" fill={color} fillOpacity={0.85} stroke="none" />
     </Svg>
 );
 
-export const ScaleDownIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
+const ScaleDownIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
         <Rect x="2" y="3" width="20" height="18" rx="2" strokeOpacity={0.6} />
         <Rect x="7" y="8" width="10" height="8" rx="1" fill={color} fillOpacity={0.7} stroke="none" />
@@ -46,7 +46,7 @@ export const ScaleDownIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: num
     </Svg>
 );
 
-export const BestFitIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
+const BestFitIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
         <Rect x="2" y="3" width="20" height="18" rx="2" strokeOpacity={0.6} />
         <Rect x="5" y="6" width="14" height="12" rx="1" fill={color} fillOpacity={0.85} stroke="none" />
@@ -93,14 +93,6 @@ export const OrientationLockIcon = ({ size = 20, color = DEFAULT_COLOR, locked =
         ) : (
             <Path d="M12 18h.01" stroke={color} strokeWidth={3} strokeLinecap="round" />
         )}
-    </Svg>
-);
-
-export const BackgroundPlayIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <Path d="M4 12V9a8 8 0 0 1 16 0v3" strokeOpacity={1} />
-        <Rect x="2" y="12" width="6" height="10" rx="3" fill={color} stroke="none" />
-        <Rect x="16" y="12" width="6" height="10" rx="3" fill={color} stroke="none" />
     </Svg>
 );
 
@@ -167,19 +159,6 @@ export const getResizeModeIcon = (resizeMode: string) => {
     }
 };
 
-export const HapticsIcon = ({ size = 20, color = DEFAULT_COLOR, active = true }: { size?: number, color?: string, active?: boolean }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        {/* Central element */}
-        <Rect x="6" y="6" width="12" height="12" rx="2" fill={active ? color : 'none'} stroke={color} />
-        {/* Left waves */}
-        <Path d="M3.5 8v8" stroke={color} strokeOpacity={active ? 1 : 0.6} />
-        <Path d="M1 10v4" stroke={color} strokeOpacity={active ? 0.6 : 0.3} />
-        {/* Right waves */}
-        <Path d="M20.5 8v8" stroke={color} strokeOpacity={active ? 1 : 0.6} />
-        <Path d="M23 10v4" stroke={color} strokeOpacity={active ? 0.6 : 0.3} />
-    </Svg>
-);
-
 // ============================================================================
 // RATING LOGOS
 // ============================================================================
@@ -201,133 +180,6 @@ export const RottenTomatoesIcon = ({ size = 20 }: { size?: number }) => (
         <Path d="M39.436 8.5696L48.4042 3.287L55.1611 18.766C58.9536 12.4434 68.9511 2.45 80.1 14.0976C75.3719 15.3612 72.5839 17.9529 72.3603 22.5744C87.5053 18.4047 103.703 25.7871 105.899 31.6655C94.948 27.3515 78.204 42.0425 64.128 33.9985C64.137 49.0435 51.511 50.6345 44.226 51.0745C46.303 46.0785 49.817 41.0805 45.7 36.0875C38.082 44.2585 31.826 46.7555 12.53 40.7555C17.406 39.0765 27.373 29.3655 36.978 29.3305C30.203 26.8635 24.688 27.2435 19.164 27.8555C22.081 23.8945 31.313 12.6586 47.789 19.379L39.436 8.5696Z" fill="#02902E" />
     </Svg>
 );
-// ============================================================================
-// ANIMATED ICONS (Reanimated)
-// ============================================================================
-
-import Animated, {
-    useAnimatedProps,
-    type SharedValue,
-} from 'react-native-reanimated';
-
-// Create Animated SVG components
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-
-interface AnimatedIconProps {
-    size?: number;
-    color?: string;
-    progress: SharedValue<number>; // 0 to 1 (or higher for boost)
-    maxVolume?: number; // For normalising boost
-}
-
-// Improved Volume Icon with standard paths but animated opacities
-export const AnimatedVolumeIconStandard = ({ size = 20, color = DEFAULT_COLOR, progress, maxVolume = 1.0 }: AnimatedIconProps) => {
-    // Speaker Base
-    const baseProps = useAnimatedProps(() => ({
-        fillOpacity: progress.value > 0 ? 1 : 0.5,
-    }));
-
-    // Inner Wave
-    const wave1Props = useAnimatedProps(() => {
-        const normalized = progress.value / maxVolume;
-        return {
-            strokeOpacity: normalized > 0.01 ? 1 : 0.3,
-        };
-    });
-
-    // Outer Wave
-    const wave2Props = useAnimatedProps(() => {
-        const normalized = progress.value / maxVolume;
-        return {
-            strokeOpacity: normalized > 0.5 ? 1 : 0.3,
-        };
-    });
-
-    return (
-        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <AnimatedPath d="M11 5L6 9H2V15H6L11 19V5Z" stroke={color} animatedProps={baseProps} fill={color} />
-            <AnimatedPath d="M15.54 8.46a5 5 0 0 1 0 7.07" stroke={color} animatedProps={wave1Props} />
-            <AnimatedPath d="M19.07 4.93a10 10 0 0 1 0 14.14" stroke={color} animatedProps={wave2Props} />
-        </Svg>
-    );
-};
-
-// Helper to create threshold opacity
-const useRayOpacity = (progress: SharedValue<number>, threshold: number) => {
-    return useAnimatedProps(() => {
-        const p = Math.max(0, Math.min(1, progress.value));
-        return {
-            strokeOpacity: p >= threshold ? 1 : 0.3,
-        };
-    });
-};
-
-export const AnimatedBrightnessIcon = ({ size = 20, color = DEFAULT_COLOR, progress }: AnimatedIconProps) => {
-    // Rays light up clockwise from top (12 o'clock)
-    // 8 rays -> steps of 1/8 = 0.125
-
-    // 1. Top (12:00) - 0% to 12.5%
-    const ray1 = useRayOpacity(progress, 0.05);
-    // 2. Top-Right (1:30)
-    const ray2 = useRayOpacity(progress, 0.125 * 1);
-    // 3. Right (3:00)
-    const ray3 = useRayOpacity(progress, 0.125 * 2);
-    // 4. Bottom-Right (4:30)
-    const ray4 = useRayOpacity(progress, 0.125 * 3);
-    // 5. Bottom (6:00)
-    const ray5 = useRayOpacity(progress, 0.125 * 4);
-    // 6. Bottom-Left (7:30)
-    const ray6 = useRayOpacity(progress, 0.125 * 5);
-    // 7. Left (9:00)
-    const ray7 = useRayOpacity(progress, 0.125 * 6);
-    // 8. Top-Left (10:30)
-    const ray8 = useRayOpacity(progress, 0.125 * 7);
-
-    return (
-        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <Circle cx="12" cy="12" r="5" fill={color} stroke="none" />
-
-            {/* 1. Top */}
-            <AnimatedPath d="M12 1v2" animatedProps={ray1} />
-            {/* 2. Top-Right */}
-            <AnimatedPath d="M18.36 5.64l1.42-1.42" animatedProps={ray2} />
-            {/* 3. Right */}
-            <AnimatedPath d="M21 12h2" animatedProps={ray3} />
-            {/* 4. Bottom-Right */}
-            <AnimatedPath d="M18.36 18.36l1.42 1.42" animatedProps={ray4} />
-            {/* 5. Bottom */}
-            <AnimatedPath d="M12 21v2" animatedProps={ray5} />
-            {/* 6. Bottom-Left */}
-            <AnimatedPath d="M4.22 19.78l1.42-1.42" animatedProps={ray6} />
-            {/* 7. Left */}
-            <AnimatedPath d="M1 12h2" animatedProps={ray7} />
-            {/* 8. Top-Left */}
-            <AnimatedPath d="M4.22 4.22l1.42 1.42" animatedProps={ray8} />
-        </Svg>
-    );
-};
-
-export const RecapIcon = ({ size = 20, color = DEFAULT_COLOR, active = false }: { size?: number, color?: string, active?: boolean }) => {
-    return (
-        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-            {/* Film frame/play hybrid */}
-            <Path
-                d="M10 9l5 3-5 3V9z"
-                fill={active ? color : 'none'}
-                stroke={color}
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-            />
-            <Path
-                d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"
-                stroke={color}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeOpacity={active ? 1 : 0.6}
-            />
-        </Svg>
-    );
-};
 
 export const BookmarkListIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: number, color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

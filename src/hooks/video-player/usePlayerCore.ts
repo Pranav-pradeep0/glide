@@ -695,8 +695,3 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         handleBuffering, handlePlaying, handlePaused, handleStopped, handleSeek,
     ]);
 }
-
-export default usePlayerCore;
-export { initialPlayerState };
-
-

@@ -10,7 +10,6 @@ interface InternalMatchResult extends MatchResult {
 }
 
 export class SubtitleSyncService {
-    private static MAX_WINDOW_MINUTES = 5;
     private static WINDOW_STEPS = [1, 2, 3, 5];
 
     /**

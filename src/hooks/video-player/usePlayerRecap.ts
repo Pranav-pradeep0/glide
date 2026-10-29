@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { SubtitleCue } from '@/types';
-import { SubtitleTrack } from './types';
+import { SubtitleTrack } from '@/utils/SubtitleExtractor';
 import { RecapService } from '@/services/RecapService';
 import { RECAP_AVAILABLE } from '@/utils/constants';
 

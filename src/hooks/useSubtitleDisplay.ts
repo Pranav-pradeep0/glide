@@ -7,7 +7,7 @@ import { SubtitleSyncService } from '../services/SubtitleSyncService';
 /** Position events arrive every 250 ms; allow a little jitter on top. */
 const MAX_EXTRAPOLATION_S = 0.3;
 
-export interface UseSubtitleDisplayProps {
+interface UseSubtitleDisplayProps {
     currentTimeRef: MutableRefObject<number>;
     subtitleCues?: SubtitleCue[];
     isPlaying: boolean;

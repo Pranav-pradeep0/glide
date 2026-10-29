@@ -25,7 +25,7 @@ export const HAPTIC_STRENGTH_MIN = 0.1;
 export const hapticPresetAt = (strength: number) =>
     HAPTIC_PRESETS.reduce((a, b) => (Math.abs(b.strength - strength) < Math.abs(a.strength - strength) ? b : a));
 
-export const DEFAULT_HAPTIC_SETTINGS: HapticSettings = {
+const DEFAULT_HAPTIC_SETTINGS: HapticSettings = {
     enabled: true,
     strength: 0.6,
 };
@@ -58,7 +58,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     crashReportsEnabled: true,
 };
 
-export function migrateSettings(settings: AppSettings): AppSettings {
+function migrateSettings(settings: AppSettings): AppSettings {
     const merged = {
         ...DEFAULT_APP_SETTINGS,
         ...settings,
@@ -84,7 +84,7 @@ export function migrateSettings(settings: AppSettings): AppSettings {
     };
 }
 
-export function loadInitialSettings(): AppSettings {
+function loadInitialSettings(): AppSettings {
     // TV starts dark (owner, 2026-10-23): a dim room, and TVs report light. Settings can change it.
     const systemDark = IS_TV || Appearance.getColorScheme() === 'dark';
     try {
@@ -123,7 +123,6 @@ interface AppStore {
     // Brightness settings
     setBrightnessMode: (mode: 'global' | 'video') => void;
     setPipBrightnessMode: (mode: 'system' | 'player') => void;
-    setGlobalBrightness: (brightness: number) => void;
 
     // Playback settings
     setShowSeekButtons: (show: boolean) => void;
@@ -238,10 +237,6 @@ export const useAppStore = create<AppStore>((set) => ({
     setPipBrightnessMode: (mode) =>
         set((state) => ({
             settings: { ...state.settings, pipBrightnessMode: mode },
-        })),
-    setGlobalBrightness: (brightness) =>
-        set((state) => ({
-            settings: { ...state.settings, globalBrightness: brightness },
         })),
 
     // Playback settings
