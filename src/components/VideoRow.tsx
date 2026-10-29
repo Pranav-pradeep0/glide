@@ -282,6 +282,8 @@ export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnai
             onLongPress={() => onMore(item)}
             scaleTo={0.985}
             preferFocus={preferFocus}
+            // A ring round the whole picture is heavy; focused, it grows and takes the focus tint.
+            focusRing={false}
             accessibilityRole="button"
             accessibilityLabel={`Resume ${text.title}`}
             accessibilityHint={text.meta}
