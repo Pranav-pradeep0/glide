@@ -30,24 +30,24 @@ docs). Estimated net: about -8,300 lines and -2 deps. Delete this file when ever
 
 ## Batch 2 — build and config (~-120, -2 deps)
 
-- [ ] `metro.config.js` → `module.exports = require('@react-native/metro-config').getDefaultConfig(__dirname);` (the override only sets the defaults).
-- [ ] `tsconfig.json`: keep only `extends`, `paths` and `exclude` (10 keys repeat the base; `lib` narrows it).
-- [ ] Delete `jest.config.js` and add `"jest": {"preset": "@react-native/jest-preset"}` to package.json. Then confirm all suites still pass.
-- [ ] Delete `react-native.config.js` (it only sets the CLI defaults).
-- [ ] package.json: remove `@babel/preset-env` and `babel-jest`; drop `&& cd ..` from `clean`.
-- [ ] `babel.config.js`: set module-resolver `extensions` to `['.ts','.tsx','.js']` and drop the comments that restate the code.
-- [ ] `app.json`: drop `displayName`.
-- [ ] `android/settings.gradle:8`: remove the duplicate `includeBuild`.
-- [ ] Remove the `flatDir` repos that point at the missing `android/libs` (`app/build.gradle:125-129`, `build.gradle:30-32`).
-- [ ] `app/build.gradle:40-88`: delete the commented-out template block. Inline `enableProguardInReleaseBuilds`.
-- [ ] CI (`android-ci.yml`):
-  - the release job no longer re-runs the verify checks (272-294)
+- [x] `metro.config.js` → `module.exports = require('@react-native/metro-config').getDefaultConfig(__dirname);` (the override only sets the defaults).
+- [x] `tsconfig.json`: keep only `extends`, `paths` and `exclude` (10 keys repeat the base; `lib` narrows it).
+- [x] Delete `jest.config.js` and add `"jest": {"preset": "@react-native/jest-preset"}` to package.json. Then confirm all suites still pass.
+- [x] Delete `react-native.config.js` (it only sets the CLI defaults).
+- [x] package.json: remove `@babel/preset-env` and `babel-jest`; drop `&& cd ..` from `clean`.
+- [x] `babel.config.js`: set module-resolver `extensions` to `['.ts','.tsx','.js']` and drop the comments that restate the code.
+- [x] `app.json`: drop `displayName`.
+- [-] `android/settings.gradle:8`: remove the duplicate `includeBuild`. Skipped: not a duplicate. The `pluginManagement` copy only serves `plugins {}`; this one supplies the versionless `buildscript` classpath (AGP, RN Gradle plugin), and Gradle fails to resolve them without it.
+- [x] Remove the `flatDir` repos that point at the missing `android/libs` (`app/build.gradle:125-129`, `build.gradle:30-32`).
+- [x] `app/build.gradle:40-88`: delete the commented-out template block. Inline `enableProguardInReleaseBuilds`.
+- [x] CI (`android-ci.yml`):
+  - [-] the release job no longer re-runs the verify checks (272-294). Skipped: the tag job never waits on `verify`, so these steps are its only gate; dropping them lets a red commit publish. Redo with a check that `verify` passed for `$GITHUB_SHA`.
   - the proxy job becomes one `npx tsc -p proxy --noEmit` step in verify (21-46)
   - set `BT=` once in `$GITHUB_ENV`
   - drop the `develop` trigger
   - use `$GITHUB_REF_NAME` instead of `TAG`
-- [ ] Proxy: run `npx wrangler types` instead of hand-declaring `RateLimit`/`KVNamespace`; make `err()` reuse `json()`; fold `logUpstreamFailure` into `logRoute`.
-- [ ] `proxy/eval-recap.mjs:14`: use `fileURLToPath(new URL(…, import.meta.url))`.
+- [x] Proxy: run `npx wrangler types` instead of hand-declaring `RateLimit`/`KVNamespace`; make `err()` reuse `json()`; fold `logUpstreamFailure` into `logRoute`.
+- [x] `proxy/eval-recap.mjs:14`: use `fileURLToPath(new URL(…, import.meta.url))`.
 
 ## Batch 3 — dead JS/TS code (~-900)
 

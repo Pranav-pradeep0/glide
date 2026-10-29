@@ -4,6 +4,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const base = process.env.BASE_URL?.replace(/\/$/, '');
 if (!base) {
@@ -11,7 +12,7 @@ if (!base) {
     process.exit(1);
 }
 
-const fixtures = new URL('../.haptics-fixtures/films/', import.meta.url).pathname.replace(/^\/(\w:)/, '$1');
+const fixtures = fileURLToPath(new URL('../.haptics-fixtures/films/', import.meta.url));
 const files = process.argv.length > 2
     ? process.argv.slice(2)
     : readdirSync(fixtures).filter(f => f.endsWith('.srt')).map(f => join(fixtures, f));

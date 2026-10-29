@@ -3,9 +3,9 @@ name: Android CI
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   push:
-    branches: [main, develop]
+    branches: [main]
     tags:
       - 'v*.*.*'
 
@@ -18,33 +18,6 @@ env:
   AI_PROXY_URL: ${{ vars.AI_PROXY_URL }}
 
 jobs:
-  # `proxy/` is its own TypeScript project, excluded from the app's tsconfig, so the app's
-  # typecheck never looked at it. It is the Worker that stands between every install and
-  # Groq, GitHub and the subtitle APIs.
-  proxy:
-    name: Proxy (typecheck)
-    runs-on: ubuntu-latest
-
-    concurrency:
-      group: proxy-${{ github.ref }}
-      cancel-in-progress: true
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install JS dependencies
-        run: npm ci
-
-      - name: Typecheck proxy
-        run: npx tsc -p proxy --noEmit
-
   verify:
     name: Verify (typecheck, lint, tests, release build)
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -90,6 +63,10 @@ jobs:
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+      - name: Typecheck proxy
+        # `proxy/` is its own TypeScript project, excluded from the app's tsconfig.
+        run: npx tsc -p proxy --noEmit
 
       - name: Lint
         run: npx eslint .
@@ -184,21 +161,19 @@ jobs:
       - name: Validate release tag and version identity
         run: |
           set -e
-          TAG="${GITHUB_REF_NAME}"
-
-          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Tag '$TAG' is not a strict final version (expected vX.Y.Z). Prerelease/build suffixes are rejected."
+          if ! echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not a strict final version (expected vX.Y.Z). Prerelease/build suffixes are rejected."
             exit 1
           fi
 
-          # A tag on a develop commit must never publish as a production release.
+          # A tag on a commit outside main must never publish as a production release.
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::Tag '$TAG' points at $GITHUB_SHA, which is not an ancestor of origin/main. Production releases are cut from main only."
+            echo "::error::Tag '$GITHUB_REF_NAME' points at $GITHUB_SHA, which is not an ancestor of origin/main. Production releases are cut from main only."
             exit 1
           fi
 
-          VERSION="${TAG#v}"
+          VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION=$(node -p "require('./package.json').version")
           if [ "$VERSION" != "$PKG_VERSION" ]; then
             echo "::error::Tag version '$VERSION' does not equal package.json version '$PKG_VERSION'."
@@ -209,7 +184,7 @@ jobs:
           # strict tag cannot silently reuse an installed version such as 1.8.1.
           PREVIOUS_VERSION=$(git tag --list \
             | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-build\.[0-9]+)?$' \
-            | grep -Fvx "$TAG" \
+            | grep -Fvx "$GITHUB_REF_NAME" \
             | sed -E 's/^v//; s/-build\.[0-9]+$//' \
             | sort -V \
             | tail -n 1)
@@ -234,8 +209,8 @@ jobs:
             exit 1
           fi
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::GitHub Release '$TAG' already exists. Never rebuild a public version in place; bump the patch version."
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::error::GitHub Release '$GITHUB_REF_NAME' already exists. Never rebuild a public version in place; bump the patch version."
             exit 1
           fi
 
@@ -245,7 +220,6 @@ jobs:
           fi
 
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -341,6 +315,7 @@ jobs:
             --bundle="$AAB_PATH" --output="$RUNNER_TEMP/check.apks"
           unzip -p "$RUNNER_TEMP/check.apks" universal.apk > "$RUNNER_TEMP/check.apk"
           echo "CHECK_APK=$RUNNER_TEMP/check.apk" >> "$GITHUB_ENV"
+          echo "BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)" >> "$GITHUB_ENV"
 
       - name: Verify the FFmpeg decoder shipped
         run: |
@@ -373,8 +348,7 @@ jobs:
               fi
             done
           done
-          ZIPALIGN="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)zipalign"
-          "$ZIPALIGN" -c -P 16 4 "$CHECK_APK" \
+          "${BT}zipalign" -c -P 16 4 "$CHECK_APK" \
             || { echo "::error::native libraries are not 16 KB aligned inside the APK"; FAILED=1; }
           exit $FAILED
 
@@ -383,8 +357,7 @@ jobs:
           set -e
           # The same bundle is the TV app. Play hides it from TVs if it has no TV launcher entry
           # or banner, or requires hardware a TV lacks (declared, or implied by a permission).
-          AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
-          BADGING=$("$AAPT2" dump badging "$CHECK_APK")
+          BADGING=$("${BT}aapt2" dump badging "$CHECK_APK")
           FAILED=0
           grep -q 'leanback-launchable-activity:' <<< "$BADGING" \
             || { echo "::error::no LEANBACK_LAUNCHER activity; the app won't show on Android TV"; FAILED=1; }
@@ -481,7 +454,7 @@ jobs:
             "$API/generatedApks/$VERSION_CODE/downloads/$DOWNLOAD_ID:download"
           sha256sum "$APK" > "$APK.sha256"
           # Printed so anyone can check a downloaded APK carries Play's app signing key.
-          "$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner" verify --print-certs "$APK" | grep SHA-256
+          "${BT}apksigner" verify --print-certs "$APK" | grep SHA-256
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
@@ -495,7 +468,7 @@ jobs:
           # The Play-signed APK, when the step above fetched one. The AAB is not attached:
           # it is signed with the upload key and is of no use to anyone but Play.
           ASSETS=(dist/Glide-*.apk dist/Glide-*.apk.sha256)
-          gh release create "$TAG" \
+          gh release create "$GITHUB_REF_NAME" \
             --title "Glide ${VERSION}" \
             --notes-file release_notes.md \
             --verify-tag \

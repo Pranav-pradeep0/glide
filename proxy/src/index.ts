@@ -1,25 +1,3 @@
-interface RateLimitResult {
-    success: boolean;
-}
-
-interface RateLimit {
-    limit(key: { key: string }): Promise<RateLimitResult>;
-}
-
-interface KVNamespace {
-    put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
-}
-
-export interface Env {
-    GROQ_API_KEY: string;
-    SUBDL_API_KEY: string;
-    OMDB_API_KEY: string;
-    AI_RATE_LIMITER: RateLimit;
-    AI_GLOBAL_LIMITER: RateLimit;
-    LOOKUP_RATE_LIMITER: RateLimit;
-    REPORTS: KVNamespace;
-}
-
 const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 const CHAT_MODEL = 'openai/gpt-oss-120b';
@@ -65,27 +43,20 @@ Rules:
 - Ignore subtitle credits, lyrics and sound labels. Keep violence and sex non-graphic.
 - Output only the recap, in the dialogue's language. No heading, preamble, or mention of subtitles, AI, "the scene" or "the last line".`;
 
-function json(data: unknown, status = 200): Response {
+function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
     return new Response(JSON.stringify(data), {
-        status,
-        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-    });
-}
-
-function err(status: number, message: string, headers: Record<string, string> = {}): Response {
-    return new Response(JSON.stringify({ error: message }), {
         status,
         headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers },
     });
 }
 
-// Never log request content, response bodies, or credentials.
-function logRoute(route: string, status: number): void {
-    console.log(JSON.stringify({ route, status }));
+function err(status: number, message: string, headers: Record<string, string> = {}): Response {
+    return json({ error: message }, status, headers);
 }
 
-function logUpstreamFailure(route: string, upstreamStatus: number): void {
-    console.log(JSON.stringify({ route, status: 502, upstream_status: upstreamStatus }));
+// Never log request content, response bodies, or credentials.
+function logRoute(route: string, status: number, upstreamStatus?: number): void {
+    console.log(JSON.stringify({ route, status, upstream_status: upstreamStatus }));
 }
 
 // ponytail: per-colo burst gates, not a spend budget. The binding only supports 10s/60s
@@ -172,14 +143,14 @@ async function handleRecap(request: Request, env: Env): Promise<Response> {
     });
 
     if (!upstream.ok) {
-        logUpstreamFailure('recap', upstream.status);
+        logRoute('recap', 502, upstream.status);
         return err(502, 'Recap service unavailable.');
     }
 
     const data = await upstream.json() as { choices?: Array<{ message?: { content?: string } }> };
     const recap = data.choices?.[0]?.message?.content?.trim();
     if (!recap) {
-        logUpstreamFailure('recap', upstream.status);
+        logRoute('recap', 502, upstream.status);
         return err(502, 'Recap service returned no summary.');
     }
 
@@ -202,7 +173,7 @@ async function handleLookup(url: URL, env: Env, lookup: (typeof LOOKUPS)[string]
         headers: { accept: 'application/json' },
     });
     if (upstream.status >= 500) {
-        logUpstreamFailure(route, upstream.status);
+        logRoute(route, 502, upstream.status);
         return err(502, 'Lookup service unavailable.');
     }
     logRoute(route, upstream.status);
