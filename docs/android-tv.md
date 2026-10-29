@@ -127,6 +127,11 @@ Built:
   rows are one stop on TV; sheets/dialogs hide the close X on TV and start focus on content;
   `TV_SCALE` 1.2, gutter 48, overscan 27, 3-column grid; grid default on TV; card ⋮ hidden on TV
   (options via list view's row → Right → ⋮).
+  `TvRemoteModule.watch` (every window, TV): Android's own focus restores and clear-focus
+  fallbacks used to land on the window's first focusable view (the player's back arrow); Play or
+  the open overlay's start is now marked focused-by-default and taken instead. JS gets focus and
+  blur events of one burst grouped by type, so a bounce left a stale ring; native reports the
+  focused view each frame (`onTvFocus`) and `Touchable`'s ring follows it.
 - **Shell:** `SideRail` (80 dp, opens to 240 dp on focus) on `tabBarPosition: 'left'`; Videos,
   Recents, Settings; music routes and "Open with" for audio disabled on TV; Back → Videos → home.
 - **Screens:** Settings hides lyrics, brightness, PiP, gestures & haptics; Recents video-only;

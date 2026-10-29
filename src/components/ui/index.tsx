@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    DeviceEventEmitter,
     Modal,
     Pressable,
     PressableProps,
@@ -99,6 +100,24 @@ export function Touchable({
     // Spent on the first blur. FlashList reuses a cell's view for other rows, and the first row
     // scrolling back into a reused cell must not pull focus to itself again.
     const [wantsFocus, setWantsFocus] = useState(true);
+    // TV: the native view's id, from its first focus. Focus and blur events of one burst reach JS
+    // grouped by type, so a bounce (A, B, A) left B ringed; native says who really has focus
+    // once the frame settles (TvRemoteModule.watch), and the ring follows that.
+    const tagRef = useRef<number | null>(null);
+    const focusedRef = useRef(false);
+    const showFocus = useCallback((on: boolean) => {
+        focusedRef.current = on;
+        setFocused(on);
+        focus.value = withTiming(on ? 1 : 0, { duration: motion.fadeIn });
+    }, [focus]);
+    useEffect(() => {
+        if (!IS_TV) { return; }
+        const sub = DeviceEventEmitter.addListener('onTvFocus', (id: number) => {
+            const on = id === tagRef.current;
+            if (tagRef.current !== null && on !== focusedRef.current) { showFocus(on); }
+        });
+        return () => sub.remove();
+    }, [showFocus]);
     const grow = IS_TV && scaleTo !== 1 && !stateLayer ? metrics.focus.tvScale : 1;
     // On a TV every touchable gets the ripple: its focused state is the M3 focus state layer.
     const ripple = stateLayer || IS_TV;
@@ -117,14 +136,13 @@ export function Touchable({
             accessibilityRole={accessibilityRole}
             disabled={disabled}
             onFocus={e => {
-                setFocused(true);
-                focus.value = withTiming(1, { duration: motion.fadeIn });
+                tagRef.current = e.nativeEvent.target;
+                showFocus(true);
                 onFocus?.(e);
             }}
             onBlur={e => {
-                setFocused(false);
+                showFocus(false);
                 setWantsFocus(false);
-                focus.value = withTiming(0, { duration: motion.fadeIn });
                 onBlur?.(e);
             }}
             onPressIn={e => {

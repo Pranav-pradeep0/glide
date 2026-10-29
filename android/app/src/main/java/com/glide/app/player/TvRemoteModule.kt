@@ -38,6 +38,8 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     companion object {
         const val NAME = "TvRemoteModule"
         const val EVENT = "onTvRemoteKey"
+        /** The id of the view that has focus, once a frame's focus changes settle (Touchable's ring). */
+        const val FOCUS_EVENT = "onTvFocus"
         const val OFF = 0
         const val HIDDEN = 1
         const val FOCUS = 2
@@ -89,8 +91,11 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         private val overlays = ArrayList<Int>()
         /** Where focus starts in each open overlay (its own id when none was given). */
         private val starts = HashMap<Int, Int>()
-        /** The window [guardFocus] watches; one listener per window. */
-        private var guarded: WeakReference<View>? = null
+        /** Marked focused-by-default, so Android's own focus restores land on it: see [markDefault]. */
+        private var defaultView: WeakReference<View>? = null
+        /** The latest [markDefault]: an earlier one still waiting for its view gives way. */
+        private var wantedDefault = View.NO_ID
+        private var syncPosted = false
         /**
          * A key has reached the player since it opened. Before that, what has focus is only
          * Android's first pick (the back arrow), not something the viewer chose to come back to.
@@ -163,6 +168,41 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             return false
         }
 
+        /**
+         * TV, every window (GlideBaseActivity). Keys alone can't keep focus where it belongs:
+         *  - In an overlay, focus that lands outside it (its focused view removed or re-created
+         *    under it) goes back to where the overlay starts.
+         *  - In the player, focus cleared outright (old is null: the focused view went away) went
+         *    to the window's first focusable view, the back arrow, where OK leaves the video. It
+         *    goes to the default instead: Play, or the overlay's start.
+         *  - JS hears which view ended up focused. Focus and blur events of one burst reach it
+         *    grouped by type, so a quick bounce (A, B, A) left B's ring on (Touchable).
+         */
+        fun watch(decor: View) {
+            decor.viewTreeObserver.addOnGlobalFocusChangeListener { old, now ->
+                val top = overlays.lastOrNull()
+                val scope = top?.let { decor.findViewById<View>(it) }
+                if (top != null && scope != null) {
+                    if (now == null || !isInside(scope, now)) module?.get()?.focusWhenShown(starts[top] ?: top, FOCUS_TRIES)
+                } else if (old == null && now != null && mode != OFF) {
+                    decor.restoreDefaultFocus()
+                }
+                if (!syncPosted) {
+                    syncPosted = true
+                    decor.post {
+                        syncPosted = false
+                        emitFocus(decor.findFocus()?.id ?: View.NO_ID)
+                    }
+                }
+            }
+        }
+
+        private fun emitFocus(id: Int) {
+            val context = module?.get()?.reactApplicationContext ?: return
+            if (!context.hasActiveReactInstance()) return
+            context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(FOCUS_EVENT, id)
+        }
+
         private fun emit(key: String, event: KeyEvent, consumed: Boolean) {
             val context = module?.get()?.reactApplicationContext ?: return
             if (!context.hasActiveReactInstance()) return
@@ -208,6 +248,7 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             screenId = screenTag
             seekBarId = seekBarTag
             homeId = homeTag
+            if (overlays.isEmpty()) markDefault(if (value == OFF) View.NO_ID else homeTag, FOCUS_TRIES)
             // The player opens with its controls up: start on Play, not on whatever Android picks
             // first (the back arrow, where OK leaves the video). An overlay opening sets its own.
             if (opening && overlays.isEmpty() && homeTag != View.NO_ID) focusWhenShown(homeTag, FOCUS_TRIES)
@@ -224,7 +265,7 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             overlays.remove(tag)
             overlays.add(tag)
             starts[tag] = if (focusTag != View.NO_ID) focusTag else tag
-            guardFocus()
+            markDefault(starts.getValue(tag), FOCUS_TRIES)
             focusWhenShown(starts.getValue(tag), FOCUS_TRIES)
         }
     }
@@ -234,7 +275,10 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     fun popScope(tag: Int) {
         UiThreadUtil.runOnUiThread {
             starts.remove(tag)
-            if (!overlays.remove(tag) || overlays.isNotEmpty()) return@runOnUiThread
+            if (!overlays.remove(tag)) return@runOnUiThread
+            val under = overlays.lastOrNull()
+            markDefault(if (under != null) starts[under] ?: under else if (mode != OFF) homeId else View.NO_ID, FOCUS_TRIES)
+            if (under != null) return@runOnUiThread
             // Opened by the app (Continue watching, an error) rather than from a button: start on Play.
             val back = opener?.get()?.takeIf { it.isAttachedToWindow && it.isShown }
             if (back != null) back.requestFocus() else if (mode != OFF && homeId != View.NO_ID) focusWhenShown(homeId, FOCUS_TRIES)
@@ -243,20 +287,23 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     /**
-     * Keys alone can't keep focus in an overlay: when the focused view is removed or re-created
-     * under it, Android hands focus to the window's first focusable view (the player's back
-     * arrow), and OK there leaves the video. Any focus that lands outside the topmost overlay
-     * goes back to where that overlay starts.
+     * Android restores focus by itself: a view group asked for focus before its layout gets it
+     * back on its next layout pass (Fabric lays views out directly), to its default focus, and
+     * with none marked that is its first focusable view -- the player's back arrow. Seen as
+     * focus bouncing off Resume while the Continue watching prompt was up. Marking where focus
+     * belongs (Play, or the open overlay's start) makes those restores land there. [View.NO_ID]
+     * unmarks.
      */
-    private fun guardFocus() {
-        val decor = reactApplicationContext.currentActivity?.window?.decorView ?: return
-        if (guarded?.get() === decor) return
-        guarded = WeakReference(decor)
-        decor.viewTreeObserver.addOnGlobalFocusChangeListener { _, now ->
-            val top = overlays.lastOrNull() ?: return@addOnGlobalFocusChangeListener
-            val scope = decor.findViewById<View>(top) ?: return@addOnGlobalFocusChangeListener
-            if (now == null || !isInside(scope, now)) focusWhenShown(starts[top] ?: top, FOCUS_TRIES)
+    private fun markDefault(tag: Int, tries: Int) {
+        if (tries == FOCUS_TRIES) wantedDefault = tag else if (tag != wantedDefault) return
+        val view = if (tag == View.NO_ID) null else reactApplicationContext.currentActivity?.findViewById<View>(tag)
+        if (view == null && tag != View.NO_ID) {
+            if (tries > 0) UiThreadUtil.runOnUiThread({ markDefault(tag, tries - 1) }, FOCUS_RETRY_MS)
+            return
         }
+        defaultView?.get()?.takeIf { it !== view }?.isFocusedByDefault = false
+        view?.isFocusedByDefault = true
+        defaultView = view?.let { WeakReference(it) }
     }
 
     /** Focus this view, or the first focusable view inside it. */
@@ -283,6 +330,7 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             starts.clear()
             held.clear()
             opener = null
+            defaultView = null
         }
         super.invalidate()
     }

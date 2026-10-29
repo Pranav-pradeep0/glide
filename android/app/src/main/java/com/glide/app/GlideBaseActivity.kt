@@ -31,6 +31,8 @@ open class GlideBaseActivity : ReactActivity() {
         supportFragmentManager.fragmentFactory = RNScreensFragmentFactory()
         super.onCreate(savedInstanceState)
         keepSystemGesturesWithBarsHidden()
+        val isTv = (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+        if (isTv) TvRemoteModule.watch(window.decorView)
     }
 
     /**
