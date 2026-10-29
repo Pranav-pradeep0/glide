@@ -1,0 +1,5 @@
+Glide 3.0: now on Android TV, and plays from your PC or NAS.
+- Glide for Android TV: built for the remote, and optimised for TV
+- Play videos from shared folders on your PC or NAS over Wi-Fi
+- Sign in to a share on the TV from your phone by scanning a code
+- Full support for using as an external player for apps like Stremio
