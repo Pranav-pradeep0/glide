@@ -34,7 +34,6 @@ const native = NativeModules.GlideSmb as
           listShares(host: string, user: string, password: string, domain: string): Promise<string[]>;
           list(uri: string): Promise<SmbEntry[]>;
           readText(uri: string): Promise<string>;
-          speedTest(uri: string): Promise<string>;
           servePhoneSignIn(host: string): Promise<{ url: string; qr: string }>;
           stopPhoneSignIn(): void;
       }
@@ -142,11 +141,5 @@ export const SmbService = {
             page.finally(() => native!.stopPhoneSignIn()).catch(() => {});
         };
         return { page, stop };
-    },
-
-    /** Go/no-go speed test (docs/network-shares.md). Remove before the release that ships SMB. */
-    async speedTest(uri: string): Promise<string> {
-        await SmbService.ready();
-        return native!.speedTest(uri);
     },
 };

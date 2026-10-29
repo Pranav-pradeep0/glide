@@ -1,7 +1,6 @@
 package com.glide.app.smb
 
 import android.net.Uri
-import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
@@ -17,11 +16,8 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.glide.app.player.BackgroundWork
 import com.hierynomus.mserref.NtStatus
 import com.hierynomus.mssmb2.SMBApiException
-import com.hierynomus.security.SecurityProvider
-import com.hierynomus.security.bc.BCSecurityProvider
-import kotlin.concurrent.thread
 
-/** Network shares for JS: discovery, logins, share and folder listings, and the speed test. Playback goes through [SmbDataSource]. */
+/** Network shares for JS: discovery, logins, share and folder listings. Playback goes through [SmbDataSource]. */
 class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
     override fun getName() = "GlideSmb"
 
@@ -161,64 +157,6 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
     @ReactMethod
     fun stopPhoneSignIn() = PhoneSignIn.stop()
 
-    /**
-     * The go/no-go speed test (docs/network-shares.md): reads [uri] for [SECONDS] per setup the
-     * way playback does and resolves a report, also logged as `smb-bench` lines for
-     * scripts/smb-bench.js. Its own thread at normal priority, not BackgroundWork's background
-     * lane, so it measures the network rather than the scheduler.
-     * Remove before the release that ships SMB.
-     */
-    @OptIn(UnstableApi::class)
-    @ReactMethod
-    fun speedTest(uri: String, promise: Promise) {
-        thread(name = "smb-bench") {
-            val u = Uri.parse(uri)
-            try {
-                val setups = listOf<Triple<String, Pair<Int, Int>, SecurityProvider>>(
-                    Triple("1 x 1 MB", (1 shl 20) to 1, SmbSecurity),
-                    Triple("8 x 256 KB", (256 shl 10) to 8, SmbSecurity),
-                    Triple("8 x 1 MB", (1 shl 20) to 8, SmbSecurity),
-                    Triple("8 x 1 MB, BouncyCastle", (1 shl 20) to 8, BCSecurityProvider()),
-                )
-                val lines = setups.map { (name, size, security) ->
-                    Smb.security = security
-                    val mbps = measure(u, size.first, size.second)
-                    "$name: ${"%.1f".format(mbps)} MB/s".also { Log.w(TAG, "smb-bench $it") }
-                }
-                val session = Smb.describe(u.host.orEmpty()).also { Log.w(TAG, "smb-bench $it") }
-                promise.resolve((lines + session).joinToString("\n"))
-            } catch (e: Throwable) {
-                Log.w(TAG, "smb-bench failed", e)
-                promise.reject("smb", reason(e, u.host.orEmpty()))
-            } finally {
-                Smb.security = SmbSecurity
-            }
-        }
-    }
-
-    @OptIn(UnstableApi::class)
-    private fun measure(uri: Uri, chunk: Int, depth: Int): Double {
-        val source = SmbDataSource(chunk, depth)
-        val buf = ByteArray(64 shl 10)
-        val start = SystemClock.elapsedRealtime()
-        var bytes = 0L
-        try {
-            source.open(DataSpec(uri))
-            while (SystemClock.elapsedRealtime() - start < SECONDS * 1000) {
-                val n = source.read(buf, 0, buf.size)
-                if (n != C.RESULT_END_OF_INPUT) {
-                    bytes += n
-                } else {
-                    source.close()
-                    source.open(DataSpec(uri))
-                }
-            }
-        } finally {
-            source.close()
-        }
-        return bytes / 1e6 / ((SystemClock.elapsedRealtime() - start) / 1000.0)
-    }
-
     /** `local-network` for [Smb.LocalNetworkDenied], so JS offers its settings; `smb` for the rest. */
     private fun fail(promise: Promise, e: Throwable, host: String) {
         val denied = generateSequence(e) { it.cause }.any { it is Smb.LocalNetworkDenied }
@@ -240,7 +178,6 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
     companion object {
         private const val TAG = "GlideSmb"
         private const val PHONE_LOGIN = "GlideSmbPhoneLogin"
-        private const val SECONDS = 20
         private const val TEXT_CAP = 10L shl 20
         // FILE_ATTRIBUTE_HIDDEN and FILE_ATTRIBUTE_DIRECTORY (MS-FSCC 2.6).
         private const val HIDDEN = 0x2L

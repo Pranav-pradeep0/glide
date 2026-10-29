@@ -6,7 +6,6 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import com.hierynomus.security.SecurityProvider
 import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.auth.AuthenticationContext
@@ -41,13 +40,6 @@ object Smb {
     private val sessions = HashMap<String, Session>()
     private val shares = HashMap<String, DiskShare>()
     private var client: SMBClient? = null
-
-    /** The speed test swaps this to measure BouncyCastle against the platform. */
-    var security: SecurityProvider = SmbSecurity
-        @Synchronized set(value) {
-            field = value
-            closeAll()
-        }
 
     /** SmbDataSource's read-ahead threads. */
     val readers: ExecutorService = Executors.newCachedThreadPool { r -> Thread(r, "smb-read").apply { isDaemon = true } }
@@ -90,7 +82,7 @@ object Smb {
         // Reads are sized by SmbDataSource; this only caps them, under the server's own maximum.
         val c = client ?: SMBClient(
             SmbConfig.builder()
-                .withSecurityProvider(security)
+                .withSecurityProvider(SmbSecurity)
                 .withReadBufferSize(4 shl 20)
                 .withTimeout(15, TimeUnit.SECONDS)
                 .withSoTimeout(30, TimeUnit.SECONDS)
@@ -118,11 +110,6 @@ object Smb {
             runCatching { session.close() }
         }
     }
-
-    /** Dialect, sizes and signing of the open session to [host], for the speed test. */
-    @Synchronized
-    fun describe(host: String): String =
-        sessions[host]?.let { "${it.connection.negotiatedProtocol}, signing ${if (it.isSigningRequired) "on" else "off"}" }.orEmpty()
 
     /** After a failure: the next [share] for [host] connects again. */
     @Synchronized

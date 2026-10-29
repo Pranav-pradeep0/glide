@@ -55,6 +55,7 @@ import com.facebook.react.uimanager.ViewManager
  * 20: GlideSmb.readText(uri); SimpleThumbnail.generate() takes smb:// sources.
  * 21: GlideSmb.servePhoneSignIn(host), stopPhoneSignIn() and event GlideSmbPhoneLogin;
  *     KeyboardInsetView raises the keyboard when a field in its sheet takes focus (phones).
+ * 25: GlideSmb.speedTest() removed.
  */
 class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -72,7 +73,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 24
+        const val API_LEVEL = 25
     }
 
     class Package : ReactPackage {

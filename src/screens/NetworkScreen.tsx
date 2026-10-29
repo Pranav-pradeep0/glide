@@ -1,7 +1,7 @@
 // src/screens/NetworkScreen.tsx
 //
 // Network shares (docs/network-shares.md): servers found on the network, sign in, pick a share,
-// browse its folders with the library's rows, cards and thumbnails, play a file, and the speed test.
+// browse its folders with the library's rows, cards and thumbnails, and play a file.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -310,7 +310,6 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
     const [films, setFilms] = useState<VideoFile[] | null>(null);
     const [error, setError] = useState('');
     const [denied, setDenied] = useState(false);
-    const [testing, setTesting] = useState(false);
     // Cards on a TV, as in the library.
     const [grid, setGrid] = useState(IS_TV);
     const [selected, setSelected] = useState<VideoFile | null>(null);
@@ -337,19 +336,6 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
     const play = useCallback((film: VideoFile) => {
         NavigationService.handleVideoNavigation(navigation, film.path, { videoName: film.name });
     }, [navigation]);
-
-    const speedTest = () => {
-        const largest = films?.slice().sort((a, b) => b.size - a.size)[0];
-        if (!largest) {
-            showDialog('Speed test', 'Open a folder with a video in it first.');
-            return;
-        }
-        setTesting(true);
-        SmbService.speedTest(largest.path)
-            .then(report => showDialog(`Speed test: ${largest.name}`, report))
-            .catch(e => showDialog('Speed test failed', errorText(e)))
-            .finally(() => setTesting(false));
-    };
 
     const remove = () => root && showDialog(`Remove \\\\${root.host}\\${root.share}?`, undefined, [
         { text: 'Cancel', style: 'cancel' },
@@ -391,8 +377,7 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-            <ListHeader title={title} subtitle={testing ? 'Testing speed, about 1½ minutes…' : undefined} onBack={navigation.goBack}>
-                <IconButton icon="activity" onPress={speedTest} disabled={testing || !films} accessibilityLabel="Speed test" />
+            <ListHeader title={title} onBack={navigation.goBack}>
                 {root && <IconButton icon="trash-2" onPress={remove} accessibilityLabel="Remove share" />}
                 <IconButton
                     icon={grid ? 'list' : 'grid'}
