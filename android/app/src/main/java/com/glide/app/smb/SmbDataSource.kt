@@ -121,6 +121,7 @@ class SmbDataSource(private val chunk: Int = CHUNK, private val depth: Int = DEP
 
     /** Missing and refused files are final; anything else drops the session so media3's retry reconnects. */
     private fun failed(e: Throwable): DataSourceException {
+        if (e is Smb.LocalNetworkDenied) return DataSourceException(e, PlaybackException.ERROR_CODE_IO_NO_PERMISSION)
         val status = (e as? SMBApiException)?.status
         val reason = when (status) {
             NtStatus.STATUS_OBJECT_NAME_NOT_FOUND, NtStatus.STATUS_OBJECT_PATH_NOT_FOUND, NtStatus.STATUS_BAD_NETWORK_NAME ->

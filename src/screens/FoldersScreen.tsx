@@ -16,7 +16,7 @@ import { useAlbums } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { useMissingHistory } from '@/hooks/useMissingHistory';
 import { usePermissionStore } from '@/store/permissionStore';
-import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { NavigationService } from '@/services/NavigationService';
 import { SMB_AVAILABLE } from '@/services/SmbService';
 import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
@@ -147,7 +147,7 @@ function ContinueRow({ items, pad }: { items: VideoHistoryEntry[]; pad: number }
     const navigation = useNavigation<NavigationProp>();
     const [width, setWidth] = useState(0);
     const play = useCallback((v: VideoHistoryEntry) => {
-        NavigationService.handleVideoNavigation(navigation, v.videoPath, { videoName: v.videoName });
+        NavigationService.handleVideoNavigation(navigation, v.videoPath, replayParams(v));
     }, [navigation]);
     const cellWidth = (width - 2 * pad) / metrics.grid.columns;
     return (

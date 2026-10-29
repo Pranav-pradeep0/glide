@@ -57,8 +57,8 @@ servers on the network, sign in, pick a share; typing an IP is the fallback).
   pending. The TV shows a QR code for a page the TV serves itself on the LAN; the phone's keyboard
   fills in IP/username/password. Plain http on the home network (like a router's page); the UI says
   so.
-- **(e)** Resume/Recents, connection drops ("Can't reach <server>" + Retry), Android 17 permission.
-  Same step: app streams (Stremio etc. "Open with" `http(s)`) go to Recents too, both loosen the
+- **(e) Done:** Resume/Recents, connection drops ("Can't reach <server>" + Retry), Android 17
+  permission; checked on the phone, and Recents/resume on the TV. See Status. Same step: app streams (Stremio etc. "Open with" `http(s)`) go to Recents too, both loosen the
   same two skips (the view count in `VideoPlayerScreen`, `incrementViewCount`).
   - Save the sender's `external.headers` on the entry and send them on replay; `secureUri` entries
     never show the link.
@@ -135,9 +135,8 @@ changes; the owner reads it off the Wireless debugging screen).
 - **Thumbnails:** `libs/react-native-simple-thumbnail` is its own Gradle module and can't see app
   classes. In (b) the app hands it a `DataSource.Factory` at startup (a settable field on the
   module), and `FrameExtractor` uses it.
-- **JS:** one predicate, `NavigationService.isNetworkStream`, turns off history, resume, recap and
-  next/previous for streams. `VideoPlayerScreen`'s `source` repeats that list; it should use the
-  predicate. History skips are in `videoHistoryStore.incrementViewCount` (step (e)).
+- **JS:** `NavigationService.isNetworkStream` turns off recap, bookmarks and next/previous for
+  streams. History and resume follow `isReplayable` in `videoHistoryStore` instead (step (e)).
 - **Shares:** smbj can't list a server's shares (that's DCE/RPC `srvsvc`). (a) asks for the share
   name; listing is decided in (b).
 - Native changes bump `GlideNativeModule.API_LEVEL` (17 now). Release builds are minified: check smbj
@@ -318,6 +317,51 @@ dependencies): R8 keeps 17 encoder classes.
   firewall rule still lists .40 (raising the rule was refused at UAC); some other rule lets 445
   through on this PC. Not looked into.
 
+**2026-10-29: step (e) written and checked on the phone** (AIN065, debug-signed release build),
+Recents/resume also on the Mi TV. tsc, eslint, jest 36 suites (new `historyStreams`), Gradle unit
+tests pass. API level **22** (native changes; JS needs no new gate).
+
+- History: `isReplayable(path)` (local, `smb://`, `http(s)` except `localhost`/`127.*`) entries are
+  keyed by path, never matched by name, counted, shown in Recents. `content://` keeps the old hidden
+  by-name entry; rtsp and Stremio's own server keep no history. App links save the sender's
+  `headers` and `secureUri` on the entry; Recents and Continue watching reopen them with both
+  (`replayParams`). In the external player a stream's start comes from the sender, not Glide's
+  history, and gets no prompt; its progress still lands in Recents.
+- Recents rows for shares/links: no Share or Delete; links have no folder in Details and no
+  thumbnail (`ThumbnailService` skips http: without headers it would fetch a debrid link per
+  frame).
+- Saved logins go to native at app start, so a share's video opens from Recents in a fresh process
+  (before, only the Network screen pushed them: "No login for host").
+- Drops: the player card says "Can't reach <host>" for `smb://` with the existing Retry. Measured on
+  the phone (Wi-Fi off mid-play, phone on USB): ~80 s of buffer plays out, then three native
+  retries; the card is up ~94 s after the drop. Retry after Wi-Fi returns reconnects and plays on.
+  No timeout change.
+- Android 17: `Smb.gate()` throws `LocalNetworkDenied` when the OS is 17+, our targetSdk 37+ and
+  `ACCESS_LOCAL_NETWORK` isn't granted: inert while we target 36. Network shows "Allow nearby
+  devices" (discovery row, folder screen with "Open settings"); the player card says the same
+  (`LOCAL_NETWORK_DENIED`, never retried) with Open settings. When targeting 37: declare the
+  permission and request it before the first connect.
+  - **The doc's compat-flag test doesn't work on this phone:** `RESTRICT_LOCAL_NETWORK` is listed
+    but not enforced (no platform flag on this Android 16 build); with it on, Glide's UID still
+    reaches 445 (probed with `run-as` on a throwaway debuggable build, which otherwise won't start:
+    it looks for debug-only modules). The denial UI was checked with a throwaway build whose gate
+    always throws (not committed).
+- Found on the way: the resume prompt was still hidden for streams while its state paused the
+  player, so a share's video opened from Recents sat paused with no prompt. One `noResume` now
+  drives both.
+- Phone checks, with screenshots: share film → Recents and Continue watching with its stop frame →
+  cold start → plays from 0:33 with the prompt; `⋯` shows no Share/Delete; drop → card → Retry. App
+  stream (`am start` with `headers`, `secure_uri`, `title`, served by a local Python server that
+  logs headers): plays, every request carries the header; Recents shows "Test Stream" with no link;
+  replay from Recents sends the header on every request; a sender `position` of 5:00 wins over the
+  saved 0:32 with no prompt.
+- TV checks: Continue watching shows the share's film with its stop frame, D-pad reaches it, the
+  resume prompt opens focused on Resume, plays. Not tried on TV: the drop card (cutting its Wi-Fi
+  drops adb; same card as on the phone, D-pad focus scope unchanged).
+- The TV's saved GlideTest login was stale ("Wrong username or password"): most likely from the
+  step (a) share, deleted and recreated with a new password. Signed in again through its phone
+  sign-in page (POST from this PC).
+
 **Next:** the TV pass (owner: not yet). D-pad reaches every row, the refresh button, the sheet's
 fields and the share list; focus shows. Read the `discovery:` log line there too. Step (c) on
 TV: the grid opens focused on `Extras`, D-pad from the folder row into the cards and between them,
@@ -331,6 +375,7 @@ pop up by itself when the D-pad moves onto a field; the share field takes D-pad 
 
 **Test share left up for the TV pass (owner, 2026-10-27):** `\\DESKTOP-S4T6400\GlideTest`
 (192.168.1.37), user `glidetest`, password in `%TEMP%\glidetest.pw`, firewall rule "Glide SMB test"
-opening 445 to the TV (192.168.1.33) and the phone (192.168.1.40). The TV already has the step (b)
+opening 445 to the TV (192.168.1.33, now .35 by DHCP) and the phone (192.168.1.40, now .43); SMB
+works from the new addresses anyway. The TV already has the step (b)
 build installed (not opened). Remove it all after the TV pass:
 `pwsh -ExecutionPolicy Bypass -File scripts\smb-test-share.ps1 -Undo` (elevated).

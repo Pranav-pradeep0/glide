@@ -284,6 +284,10 @@ export interface VideoHistoryEntry {
     /** Frame-rate retiming from auto sync; unset means 1. */
     subtitleRatio?: number;
     brightness?: number;
+    /** An app link's request headers, sent again on replay. */
+    headers?: Record<string, string>;
+    /** secure_uri: never show the link. */
+    secureUri?: boolean;
 }
 
 export type MainTabParamList = {

@@ -49,6 +49,9 @@ export const SMB_AVAILABLE = hasNativeApi(20) && !!native;
 /** TV only: a phone types the login (docs/network-shares.md, step (d)). */
 export const PHONE_SIGN_IN = IS_TV && hasNativeApi(21);
 
+/** Android 17's local network permission is off (native `Smb.gate`): offer the app's settings. */
+export const isLocalNetworkDenied = (e: unknown) => (e as { code?: string } | null)?.code === 'local-network';
+
 export type SmbLogin = { host: string; user: string; password: string; domain: string };
 
 let pushed: Promise<unknown> | null = null;

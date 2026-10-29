@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { RootStackParamList, VideoHistoryEntry } from '@/types';
 import { SkeletonList } from '@/components/Skeleton';
-import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useMissingHistory } from '@/hooks/useMissingHistory';
 import { NavigationService } from '@/services/NavigationService';
@@ -98,7 +98,7 @@ export default function RecentsScreen() {
 
     const handleVideoPress = useCallback((video: VideoHistoryEntry) => {
         if (!video.videoPath) {return;}
-        NavigationService.handleVideoNavigation(navigation, video.videoPath, { videoName: video.videoName });
+        NavigationService.handleVideoNavigation(navigation, video.videoPath, replayParams(video));
     }, [navigation]);
 
     const handleOpenOptions = useCallback((video: VideoHistoryEntry) => {
@@ -124,6 +124,8 @@ export default function RecentsScreen() {
             { text: 'Remove', style: 'destructive', onPress: () => clearVideoHistory(video.videoPath) },
         ]);
     };
+
+    const selectedLocal = !!selectedVideo && !NavigationService.isNetworkStream(selectedVideo.videoPath);
 
     const grid = viewMode === 'grid';
     // The hero is "what you were just watching", so it only leads the recency order, and
@@ -264,8 +266,9 @@ export default function RecentsScreen() {
                 video={selectedVideo}
                 onClose={() => setOptionsVisible(false)}
                 onPlay={() => selectedVideo && handleVideoPress(selectedVideo)}
-                onShare={() => selectedVideo && shareVideo(selectedVideo.contentUri ?? selectedVideo.videoPath)}
-                onDelete={handleDelete}
+                // A share or an app link: nothing on this device to share or delete.
+                onShare={selectedLocal ? () => shareVideo(selectedVideo.contentUri ?? selectedVideo.videoPath) : undefined}
+                onDelete={selectedLocal ? handleDelete : undefined}
                 onClearHistory={handleClearHistoryItem}
             />
         </View>

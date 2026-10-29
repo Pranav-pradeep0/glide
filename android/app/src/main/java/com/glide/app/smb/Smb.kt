@@ -1,5 +1,8 @@
 package com.glide.app.smb
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -27,6 +30,12 @@ import javax.crypto.spec.GCMParameterSpec
  */
 object Smb {
     class Login(val user: String, val password: String, val domain: String)
+
+    /** Android 17's local network permission is not granted: shown as "Allow nearby devices", never retried. */
+    class LocalNetworkDenied : IOException("Allow nearby devices for Glide in its settings")
+
+    /** Set at startup, for [gate]'s permission check. */
+    var app: Context? = null
 
     private val logins = ConcurrentHashMap<String, Login>()
     private val sessions = HashMap<String, Session>()
@@ -59,11 +68,19 @@ object Smb {
     }
 
     /**
-     * Every connection to the local network starts here, discovery included. When targetSdk
-     * reaches 37, Android 17's ACCESS_LOCAL_NETWORK runtime request goes here, and a refusal is
-     * shown as "Allow nearby devices" rather than a timeout (docs/network-shares.md).
+     * Every connection to the local network starts here, discovery included. Android 17 blocks
+     * the LAN only for apps targeting 37+ without ACCESS_LOCAL_NETWORK; then this throws
+     * [LocalNetworkDenied] instead of letting the connect time out. Inert while we target 36.
+     * When we target 37: declare the permission and request it (JS) before the first connect.
      */
-    fun gate() {}
+    fun gate() {
+        val app = app ?: return
+        if (Build.VERSION.SDK_INT >= 37 && app.applicationInfo.targetSdkVersion >= 37 &&
+            app.checkSelfPermission(LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
+        ) throw LocalNetworkDenied()
+    }
+
+    private const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
 
     private fun connect(host: String): Session = connect(host, logins[host] ?: throw IOException("No login for $host"))
 

@@ -87,7 +87,8 @@ class ThumbnailServiceClass {
      * @param timeMs Time in milliseconds (0 = Smart Scan)
      */
     async getThumbnail(videoPath: string, timeMs: number = 0, token?: object): Promise<string | null> {
-        if (!videoPath) { return null; }
+        // An app's link (Recents): without the sender's headers it fails, or costs a debrid fetch per frame.
+        if (!videoPath || /^https?:/i.test(videoPath)) { return null; }
 
         const memo = `${videoPath}::${timeMs}`;
         const known = this.resolved.get(memo);

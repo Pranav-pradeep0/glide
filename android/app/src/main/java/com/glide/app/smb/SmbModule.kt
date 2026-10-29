@@ -74,7 +74,7 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
         } catch (e: Exception) {
             Log.w(TAG, "list $uri", e)
             Smb.drop(host)
-            promise.reject("smb", reason(e, host))
+            fail(promise, e, host)
         }
     }
 
@@ -100,7 +100,7 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
             promise.resolve(out.toString(Charsets.UTF_8.name()))
         } catch (e: Exception) {
             Log.w(TAG, "readText $uri", e)
-            promise.reject("smb", reason(e, u.host.orEmpty()))
+            fail(promise, e, u.host.orEmpty())
         } finally {
             source.close()
         }
@@ -110,7 +110,12 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
     @ReactMethod
     fun discover(promise: Promise) = BackgroundWork.submit(promise) {
         val out = Arguments.createArray()
-        for ((ip, name) in Discovery.find(reactApplicationContext)) {
+        val found = try {
+            Discovery.find(reactApplicationContext)
+        } catch (e: Smb.LocalNetworkDenied) {
+            return@submit fail(promise, e, "")
+        }
+        for ((ip, name) in found) {
             out.pushMap(Arguments.createMap().apply {
                 putString("host", ip)
                 putString("name", name)
@@ -132,7 +137,7 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
             promise.resolve(Arguments.fromList(shares))
         } catch (e: Exception) {
             Log.w(TAG, "sign in $host", e)
-            promise.reject("smb", reason(e, host))
+            fail(promise, e, host)
         }
     }
 
@@ -212,6 +217,12 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
             source.close()
         }
         return bytes / 1e6 / ((SystemClock.elapsedRealtime() - start) / 1000.0)
+    }
+
+    /** `local-network` for [Smb.LocalNetworkDenied], so JS offers its settings; `smb` for the rest. */
+    private fun fail(promise: Promise, e: Throwable, host: String) {
+        val denied = generateSequence(e) { it.cause }.any { it is Smb.LocalNetworkDenied }
+        promise.reject(if (denied) "local-network" else "smb", if (denied) e.message else reason(e, host))
     }
 
     private fun reason(e: Throwable, host: String): String {

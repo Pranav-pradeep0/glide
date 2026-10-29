@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { StyleSheet, Text, View, type HostInstance } from 'react-native';
+import { Linking, StyleSheet, Text, View, type HostInstance } from 'react-native';
 import Feather from '@react-native-vector-icons/feather';
 import { Button } from '@/components/ui';
 import { metrics, playerTheme, type } from '@/theme/theme';
@@ -11,14 +11,16 @@ const { colors } = playerTheme;
 
 interface Props {
     code: string;
+    /** The share's host, when the video is on one. */
+    server?: string;
     onRetry: () => void;
     onNext?: () => void;
     onClose: () => void;
 }
 
 /** Sits over the video, outside the auto-hiding controls, so it stays until acted on. */
-export function PlayerErrorCard({ code, onRetry, onNext, onClose }: Props) {
-    const { title, body } = describePlayerError(code);
+export function PlayerErrorCard({ code, server, onRetry, onNext, onClose }: Props) {
+    const { title, body } = describePlayerError(code, server);
     // TV: the remote stays on the card's buttons until it goes.
     const cardRef = useRef<HostInstance>(null);
     useTvFocusScope(cardRef, true);
@@ -32,6 +34,7 @@ export function PlayerErrorCard({ code, onRetry, onNext, onClose }: Props) {
                 <View style={styles.actions}>
                     <Button label="Close" onPress={onClose} onPlayer />
                     {onNext && <Button label="Next video" onPress={onNext} onPlayer />}
+                    {/LOCAL_NETWORK_DENIED/.test(code) && <Button label="Open settings" onPress={() => Linking.openSettings()} onPlayer />}
                     <Button label="Retry" variant="primary" icon="rotate-cw" onPress={onRetry} onPlayer />
                 </View>
             </View>

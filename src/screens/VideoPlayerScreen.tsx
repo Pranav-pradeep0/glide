@@ -80,7 +80,7 @@ import { VideoOrientationService } from '@/services/VideoOrientationService';
 import { NavigationService } from '@/services/NavigationService';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { EXTERNAL_SUBTITLE_INDEX } from '@/services/ExternalSubtitleStore';
-import { useVideoHistoryStore } from '@/store/videoHistoryStore';
+import { isReplayable, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { hapticPresetAt, useAppStore } from '@/store/appStore';
 import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 
@@ -258,6 +258,10 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const isLandscape = useMemo(() => width > height, [width, height]);
     const isNetworkStream = useMemo(() => NavigationService.isNetworkStream(videoPath), [videoPath]);
+    // Shares and app links have history too; rtsp and the sending app's own local server don't.
+    const keepsHistory = !isNetworkStream || isReplayable(videoPath);
+    // No resume prompt: nothing saved, or another app's stream, which sends its own start.
+    const noResume = !keepsHistory || (inExternalPlayer && isNetworkStream);
 
     const [orientationLocked, setOrientationLocked] = React.useState(carry?.orientationLocked ?? false);
 
@@ -320,7 +324,8 @@ export default function VideoPlayerScreen({ route }: Props) {
     // ========================================================================
 
     const getResumeState = useCallback(() => {
-        const history = getVideoHistory(videoPath);
+        // Another app's stream: that app keeps the resume point and sends it as startPosition.
+        const history = inExternalPlayer && NavigationService.isNetworkStream(videoPath) ? null : getVideoHistory(videoPath);
         if (history) {
             return {
                 resumePosition: getResumablePosition(
@@ -337,7 +342,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             };
         }
         return { resumePosition: null };
-    }, [videoPath, getVideoHistory]);
+    }, [videoPath, getVideoHistory, inExternalPlayer]);
 
     // Get initial state once
     const {
@@ -530,7 +535,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // Resume Playback Hook
     const resume = useResumePlayback({
-        isNetworkStream,
+        noResume,
         resumePosition: promptPosition,
         savedDuration: player.state.duration > 0 ? player.state.duration : savedDuration,
         imdbId,
@@ -629,8 +634,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             setStopPoint(videoPath, inCredits ? player.state.duration : player.currentTimeRef.current, player.state.duration);
         }
 
-        const isNetwork = NavigationService.isNetworkStream(videoPath);
-        if (isNetwork) {return;}
+        if (!keepsHistory) {return;}
 
         if (player.state.duration > 0) {
             // Guard: If we have a resume position but the player is still at 0 (or near 0),
@@ -680,6 +684,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         resumePosition,
         creditsAt,
         inExternalPlayer,
+        keepsHistory,
     ]);
 
     // Keep ref updated for usePlayerCore
@@ -1221,12 +1226,13 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     // Increment view count on first play
     useEffect(() => {
-        const isNetwork = NavigationService.isNetworkStream(videoPath);
-        if (!isNetwork && player.state.isPlaying && !hasIncrementedView.current && videoPath && videoName) {
-            incrementViewCount(videoPath, videoName, contentUri); // Pass contentUri for history storage
+        if (keepsHistory && player.state.isPlaying && !hasIncrementedView.current && videoPath && videoName) {
+            // An app link's headers and secure flag go with it, for Recents to open it again.
+            const link = external?.headers || external?.secureUri ? { headers: external.headers, secureUri: external.secureUri } : undefined;
+            incrementViewCount(videoPath, videoName, contentUri, undefined, link);
             hasIncrementedView.current = true;
         }
-    }, [player.state.isPlaying, videoPath, videoName, contentUri, incrementViewCount]);
+    }, [keepsHistory, player.state.isPlaying, videoPath, videoName, contentUri, incrementViewCount, external]);
 
     // Periodic progress save, plus one on pause -- which is where the interval's cleanup
     // runs, and the moment the position is worth keeping. The interval itself only has to
@@ -1761,7 +1767,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             )}
 
             {/* Continue watching: mounted throughout, so it fades out */}
-            {!pipPresentationActive && !isNetworkStream && (
+            {!pipPresentationActive && !noResume && (
                 <View style={styles.overlayWrapper} pointerEvents="box-none">
                     <ResumeModal
                         visible={resumeModalVisible}
@@ -1782,6 +1788,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             {!pipPresentationActive && !!player.state.errorText && (
                 <PlayerErrorCard
                     code={player.state.errorText}
+                    server={/^smb:\/\/([^/]+)/.exec(videoPath)?.[1]}
                     onRetry={handleRetry}
                     onNext={hasNext ? handleNext : undefined}
                     onClose={handleGoBack}

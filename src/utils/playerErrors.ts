@@ -1,5 +1,14 @@
-/** Media3 error code names, grouped into what a person can act on. */
-export function describePlayerError(code: string): { title: string; body: string } {
+/**
+ * Media3 error code names, grouped into what a person can act on. `server`: the share's host,
+ * for a video on a network share.
+ */
+export function describePlayerError(code: string, server?: string): { title: string; body: string } {
+    if (/LOCAL_NETWORK_DENIED/.test(code)) {
+        return { title: 'Allow nearby devices', body: 'Glide needs it to reach computers on your network. Turn it on in app settings.' };
+    }
+    if (server && /NETWORK|TIMEOUT/.test(code)) {
+        return { title: `Can't reach ${server}`, body: 'Check that the computer is on and on the same network.' };
+    }
     if (/FILE_NOT_FOUND/.test(code)) {
         return { title: 'File not found', body: 'It may have been moved, renamed or deleted.' };
     }

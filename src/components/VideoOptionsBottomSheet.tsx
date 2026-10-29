@@ -56,7 +56,9 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
     const dateLabel = video && 'lastWatchedTime' in video ? 'Watched' : 'Modified';
     const resolution = video && 'width' in video && video.width && video.height ? `${video.width} × ${video.height}` : null;
     const smb = path.startsWith('smb://');
-    const folder = path.split('/').slice(0, -1).pop();
+    // An app's link: its "folder" is a server path (a debrid token, say), and secure_uri hides it anyway.
+    const link = /^https?:/.test(path);
+    const folder = link ? undefined : path.split('/').slice(0, -1).pop();
 
     // The store, not `video`: a Recents entry handed in is a snapshot.
     const entry = useVideoHistoryStore((s) => (path ? s.getVideoHistory(path) : null));
@@ -83,7 +85,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
 
         const syncModule = NativeModules.SubtitleSyncModule;
         // It reads local files only.
-        if (syncModule?.getVideoMetadata && !smb) {
+        if (syncModule?.getVideoMetadata && !smb && !link) {
             syncModule.getVideoMetadata(path).then((data: any) => {
                 if (cancelled) {return;}
                 if (!data) {
@@ -111,7 +113,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
         }
 
         return () => { cancelled = true; };
-    }, [visible, path, smb]);
+    }, [visible, path, smb, link]);
 
     const formattedDate = useMemo(() => {
         if (!date) { return null; }

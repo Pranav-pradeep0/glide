@@ -1,5 +1,6 @@
 import RootNavigator from '@/navigation/RootNavigator';
 import { FileService } from '@/services/FileService';
+import { SMB_AVAILABLE, SmbService } from '@/services/SmbService';
 import { useAppStore } from '@/store/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useVideoIndexStore } from '@/store/videoIndexStore';
@@ -48,6 +49,10 @@ function App() {
     try {
       const subtitleCacheDir = FileService.getSubtitleCacheDir();
       await FileService.ensureDir(subtitleCacheDir);
+      // Recents can open a share's video before anything else touches the network.
+      if (SMB_AVAILABLE && SmbService.servers().length > 0) {
+        SmbService.ready().catch(error => console.error('SMB logins:', error));
+      }
 
       setAppReady(true);
       console.log('App initialized successfully');

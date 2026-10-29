@@ -33,8 +33,7 @@ const PlaylistItem = memo<{
     isCurrent: boolean;
     onPlay: (video: VideoFile) => void;
 }>(({ item, isCurrent, onPlay }) => {
-    // A link has no frame to show without opening the stream.
-    const { thumbnail } = useThumbnail(/^https?:\/\//i.test(item.path) ? undefined : item.path);
+    const { thumbnail } = useThumbnail(item.path);
     // A number, so a position save elsewhere re-renders only the row whose bar moved.
     const progress = useVideoHistoryStore((s) => {
         const entry = s.getVideoHistory(item.path);

@@ -57,5 +57,6 @@ class MainApplication : Application(), ReactApplication {
         .addCustomFont(this, "AtkinsonHyperlegibleNext", R.font.atkinson_hyperlegible_next)
     // Thumbnails of smb:// films: the library can't see app classes, so it is handed the reader.
     SimpleThumbnailModule.dataSourceFactory = androidx.media3.datasource.DataSource.Factory { SmbDataSource() }
+    com.glide.app.smb.Smb.app = this
   }
 }

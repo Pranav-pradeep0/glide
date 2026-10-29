@@ -3,7 +3,7 @@
 // Network shares (docs/network-shares.md): servers found on the network, sign in, pick a share,
 // browse its folders with the library's rows, cards and thumbnails, play a file, and the speed test.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TextInputProps, type TextInputInstance, View } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { Button, Card, IconButton, ListGroup, ListRow, SectionLabel, Sheet, show
 import { EmptyState, ListHeader, VideoCard, VideoItemCell, VideoItemComponent, VideoRow, listContentStyle } from '@/components/VideoRow';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
-import { PHONE_SIGN_IN, SMB_AVAILABLE, SmbEntry, SmbHost, SmbLogin, SmbServer, SmbService } from '@/services/SmbService';
+import { isLocalNetworkDenied, PHONE_SIGN_IN, SMB_AVAILABLE, SmbEntry, SmbHost, SmbLogin, SmbServer, SmbService } from '@/services/SmbService';
 import { NavigationService } from '@/services/NavigationService';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { formatFileSize } from '@/utils/formatUtils';
@@ -32,6 +32,7 @@ export default function NetworkScreen() {
     const navigation = useNavigation<Nav>();
     const [servers, setServers] = useState<SmbServer[]>([]);
     const [found, setFound] = useState<SmbHost[] | null>(null);
+    const [denied, setDenied] = useState(false);
     // The sheet's server, `host: ''` for "Add by IP". Kept while it closes so it doesn't blank mid-slide.
     const [target, setTarget] = useState<SmbHost>({ host: '', name: null });
     const [signingIn, setSigningIn] = useState(false);
@@ -44,7 +45,7 @@ export default function NetworkScreen() {
     const search = useCallback(() => {
         if (!SMB_AVAILABLE) { return; }
         setFound(null);
-        SmbService.discover().then(setFound, () => setFound([]));
+        SmbService.discover().then(setFound, e => { setDenied(isLocalNetworkDenied(e)); setFound([]); });
     }, []);
     useEffect(search, [search]);
 
@@ -85,9 +86,11 @@ export default function NetworkScreen() {
                     <SectionLabel title="On this network" />
                     <ListGroup>
                         {found === null && <ListRow title="Searching…" trailing={<ActivityIndicator size="small" color={colors.primary} />} />}
-                        {found?.length === 0 && (
+                        {found?.length === 0 && (denied ? (
+                            <ListRow icon="lock" title="Allow nearby devices" caption="Glide needs it to find computers on your network." chevron onPress={() => Linking.openSettings()} />
+                        ) : (
                             <ListRow icon="wifi-off" title="No servers found" caption="A Windows PC on a Public network stays hidden: add it by IP." />
-                        )}
+                        ))}
                         {found?.map(h => (
                             <ListRow
                                 key={h.host}
@@ -306,6 +309,7 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
     const [folders, setFolders] = useState<SmbEntry[]>([]);
     const [films, setFilms] = useState<VideoFile[] | null>(null);
     const [error, setError] = useState('');
+    const [denied, setDenied] = useState(false);
     const [testing, setTesting] = useState(false);
     // Cards on a TV, as in the library.
     const [grid, setGrid] = useState(IS_TV);
@@ -322,7 +326,7 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
                     name: e.name, path: `${uri}/${encodeURIComponent(e.name)}`, size: e.size, modifiedDate: 0, duration: 0, isDirectory: false,
                 })));
             })
-            .catch(e => setError(errorText(e)));
+            .catch(e => { setDenied(isLocalNetworkDenied(e)); setError(errorText(e)); });
     }, [uri]);
 
     useEffect(load, [load]);
@@ -397,7 +401,9 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
                 />
             </ListHeader>
             {error ? (
-                <EmptyState icon="wifi-off" text={error} action="Retry" onAction={load} />
+                denied
+                    ? <EmptyState icon="lock" text={error} action="Open settings" onAction={() => Linking.openSettings()} />
+                    : <EmptyState icon="wifi-off" text={error} action="Retry" onAction={load} />
             ) : !films ? (
                 <Loader />
             ) : films.length === 0 && folders.length === 0 ? (

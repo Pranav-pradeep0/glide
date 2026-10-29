@@ -27,7 +27,8 @@ interface VideoHistoryState {
     getVideoHistoryByName: (videoName: string) => VideoHistoryEntry | null;
     getAllHistory: () => VideoHistoryEntry[];
     updateVideoHistory: (entry: Partial<VideoHistoryEntry> & { videoPath: string; videoName: string }) => void;
-    incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number) => void;
+    /** `link`: an app link's headers and secure flag, sent again when Recents reopens it. */
+    incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number, link?: Pick<VideoHistoryEntry, 'headers' | 'secureUri'>) => void;
     updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrackId?: number, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, subtitleRatio?: number, brightness?: number, fileSize?: number) => void;
     /** Play from start / mark (un)watched: the position only, leaving when it was watched alone. */
     setWatchedPosition: (videoPath: string, videoName: string, position: number, duration: number) => void;
@@ -66,6 +67,23 @@ export function prune(history: Map<string, VideoHistoryEntry>): VideoHistoryEntr
 }
 
 const isLocalPath = (p: string) => p.startsWith('/') || p.startsWith('file://');
+
+/**
+ * What Recents can open again, keyed by its path: files, shares, and app links (an addon's
+ * link redirects to a fresh one each time). Not the sending app's own server on this device
+ * (Stremio's 127.0.0.1, gone once it closes), and not content://, whose grant ends with the task.
+ */
+export function isReplayable(path: string): boolean {
+    if (isLocalPath(path) || path.startsWith('smb://')) {return true;}
+    const host = /^https?:\/\/([^/:?#]+)/i.exec(path)?.[1]?.toLowerCase();
+    return !!host && host !== 'localhost' && !host.startsWith('127.');
+}
+
+/** Opening a Recents entry: an app link goes with the headers and secure flag it came with. */
+export function replayParams(entry: VideoHistoryEntry) {
+    const { headers, secureUri } = entry;
+    return { videoName: entry.videoName, external: headers || secureUri ? { headers, secureUri } : undefined };
+}
 
 /**
  * History is keyed by path, so a file moved to another folder leaves an entry pointing at
@@ -156,9 +174,9 @@ function findHistoryEntry(
         }
     }
 
-    // 3. Fallback: match by videoId only for non-local paths (content://, http(s)://)
-    const isLocalFile = videoPath.startsWith('file://') || videoPath.startsWith('/');
-    if (!isLocalFile && videoId) {
+    // 3. Fallback: match by videoId only for paths that change between opens (content://).
+    // Not shares or links: two shares' S01E01.mkv, or every secure_uri stream titled "Video".
+    if (!isReplayable(videoPath) && videoId) {
         for (const [key, entry] of history.entries()) {
             if (entry.videoId === videoId) {
                 return { key, entry };
@@ -235,14 +253,9 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         debouncedPersist();
     },
 
-    incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number) => {
-        // Skip content:// and http/https URIs from appearing in history list
-        // These can't be reliably replayed (permissions expire, URLs expire)
-        // Note: updatePlaybackPosition still saves their state for resume when reopened
-        const isNonReplayable = videoPath.startsWith('content://') ||
-            videoPath.startsWith('http://') ||
-            videoPath.startsWith('https://');
-        if (isNonReplayable) {
+    incrementViewCount: (videoPath, videoName, contentUri, fileSize, link) => {
+        // Not in Recents: updatePlaybackPosition still saves a content:// file's state for resume.
+        if (!isReplayable(videoPath)) {
             return;
         }
 
@@ -261,20 +274,19 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                     viewCount: existing.viewCount + 1,
                     lastWatchedTime: Date.now(),
                     contentUri: contentUri || existing.contentUri,
+                    ...link,
                     // Keep the best path: prefer file:// over content:// or http(s)://
                     videoPath: videoPath.startsWith('file://') || videoPath.startsWith('/')
                         ? videoPath
                         : existing.videoPath,
                 });
             } else {
-                // Use videoId as key for non-file:// URIs (content://, http://, etc.)
-                const isLocalFile = videoPath.startsWith('file://') || videoPath.startsWith('/');
-                const key = isLocalFile ? videoPath : videoId;
-                newHistory.set(key, {
+                newHistory.set(videoPath, {
                     videoPath,
                     videoName,
                     videoId,
                     contentUri,
+                    ...link,
                     lastWatchedTime: Date.now(),
                     lastPausedPosition: 0,
                     duration: 0,
@@ -316,17 +328,13 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                         : existing.videoPath,
                 });
             } else {
-                // Create new entry
-                // Mark non-local files (content://, http(s)://) as hidden from Recents
-                // but still save their playback state for resume functionality
-                const isLocalFile = videoPath.startsWith('file://') || videoPath.startsWith('/');
-                const key = isLocalFile ? videoPath : videoId;
-
-                newHistory.set(key, {
+                // content:// is kept by name for resume, but hidden from Recents: it can't be reopened.
+                const replayable = isReplayable(videoPath);
+                newHistory.set(replayable ? videoPath : videoId, {
                     videoPath,
                     videoName,
                     videoId,
-                    hideFromRecents: !isLocalFile, // Hide content:// and http(s):// from Recents
+                    hideFromRecents: !replayable,
                     lastWatchedTime: Date.now(),
                     lastPausedPosition: position,
                     duration: duration,
@@ -411,15 +419,12 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                     bookmarks: [...existing.bookmarks, newBookmark].sort((a, b) => a.timestamp - b.timestamp),
                 });
             } else {
-                // Create new entry for bookmark
-                const isLocalFile = videoPath.startsWith('file://') || videoPath.startsWith('/');
-                const key = isLocalFile ? videoPath : videoId;
-
-                newHistory.set(key, {
+                const replayable = isReplayable(videoPath);
+                newHistory.set(replayable ? videoPath : videoId, {
                     videoPath,
                     videoName,
                     videoId,
-                    hideFromRecents: !isLocalFile,
+                    hideFromRecents: !replayable,
                     lastWatchedTime: Date.now(),
                     lastPausedPosition: 0,
                     duration: 0,

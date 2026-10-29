@@ -5,7 +5,8 @@ import { RECAP_AVAILABLE } from '@/utils/constants';
 const RECAP_INACTIVITY_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 
 interface UseResumePlaybackOptions {
-    isNetworkStream: boolean;
+    /** No saved position to offer: a stream with no history, or another app's, which sends its own. */
+    noResume: boolean;
     resumePosition: number;
     savedDuration?: number;
     imdbId?: string;
@@ -27,7 +28,7 @@ interface UseResumePlaybackOptions {
 }
 
 export function useResumePlayback({
-    isNetworkStream,
+    noResume,
     resumePosition,
     savedDuration,
     imdbId,
@@ -46,8 +47,8 @@ export function useResumePlayback({
     onRestartPersist,
 }: UseResumePlaybackOptions) {
     const shouldResume = useMemo(() => {
-        return !isNetworkStream && !!(resumePosition && resumePosition > 15);
-    }, [resumePosition, isNetworkStream]);
+        return !noResume && !!(resumePosition && resumePosition > 15);
+    }, [resumePosition, noResume]);
 
     // Blocked means resume: the media already opens at the saved position.
     const [resumeModalVisible, setResumeModalVisible] = useState(shouldResume && !promptBlocked);
@@ -65,11 +66,11 @@ export function useResumePlayback({
             formattedTime: formatTime(resumePosition),
             remainingTime: savedDuration ? remaining : undefined,
             finishByTime: finishBy,
-            showRecap: RECAP_AVAILABLE && !isNetworkStream && resumePosition > 120 && (!!imdbId || !!albumName)
+            showRecap: RECAP_AVAILABLE && !noResume && resumePosition > 120 && (!!imdbId || !!albumName)
                 && (isRecapEligible || !recapChecked),
             recapChecking: !recapChecked,
         };
-    }, [resumePosition, savedDuration, imdbId, albumName, isNetworkStream, isRecapEligible, recapChecked]);
+    }, [resumePosition, savedDuration, imdbId, albumName, noResume, isRecapEligible, recapChecked]);
 
     // Inactivity prompt: if paused for > threshold, offer resume/recap
     useEffect(() => {
@@ -80,7 +81,7 @@ export function useResumePlayback({
         } else {
             if (lastPauseTimeRef.current) {
                 const pauseDuration = Date.now() - lastPauseTimeRef.current;
-                if (!isNetworkStream && !promptBlocked && pauseDuration > RECAP_INACTIVITY_THRESHOLD && !resumeModalVisible && !recapVisible) {
+                if (!noResume && !promptBlocked && pauseDuration > RECAP_INACTIVITY_THRESHOLD && !resumeModalVisible && !recapVisible) {
                     onPromptPosition(currentTimeRef.current);
                     setResumeModalVisible(true);
                     onPause();
@@ -88,7 +89,7 @@ export function useResumePlayback({
             }
             lastPauseTimeRef.current = null;
         }
-    }, [isPaused, resumeModalVisible, recapVisible, isNetworkStream, promptBlocked, onPause, onPromptPosition, currentTimeRef]);
+    }, [isPaused, resumeModalVisible, recapVisible, noResume, promptBlocked, onPause, onPromptPosition, currentTimeRef]);
 
     // The modal holds playback paused while it's up; closing it must leave the player paused.
     const closeResumeModal = useCallback(() => {

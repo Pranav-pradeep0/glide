@@ -1326,7 +1326,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             keepScreenOn = false
             emit(EVENT_ERROR, eventMap().apply {
                 putString("type", "Error")
-                putString("error", error.errorCodeName)
+                // Its own name: the card offers settings, where a refused file would not.
+                val denied = generateSequence<Throwable>(error) { it.cause }.any { it is com.glide.app.smb.Smb.LocalNetworkDenied }
+                putString("error", if (denied) "LOCAL_NETWORK_DENIED" else error.errorCodeName)
             })
         }
     }
