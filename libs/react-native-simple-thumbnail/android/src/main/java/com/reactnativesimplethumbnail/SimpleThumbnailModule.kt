@@ -71,7 +71,10 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
         val retriever = MediaMetadataRetriever()
         var pfd: ParcelFileDescriptor? = null
         try {
+            // Opened only for the smart scan's duration or as the fallback: a stop frame never
+            // needs it, and over smb:// opening it parses the film through the network.
             val uri: Uri
+            val openRetriever: () -> Unit
             if (source.startsWith("content://")) {
                 try {
                     pfd = reactApplicationContext.contentResolver.openFileDescriptor(Uri.parse(source), "r")
@@ -87,7 +90,7 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
                     promise.reject("FILE_ERROR", "Could not open file descriptor for $source")
                     return
                 }
-                retriever.setDataSource(fd.fileDescriptor)
+                openRetriever = { retriever.setDataSource(fd.fileDescriptor) }
                 uri = Uri.parse(source)
             } else if (source.startsWith("file://")) {
                 // Callers send both encoded URIs and raw paths behind file://. The literal path
@@ -96,7 +99,7 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
                 val raw = source.substring(7)
                 val path = if (File(raw).exists()) raw
                     else try { URLDecoder.decode(raw, "UTF-8") } catch (e: Exception) { raw }
-                retriever.setDataSource(path)
+                openRetriever = { retriever.setDataSource(path) }
                 uri = Uri.fromFile(File(path))
             } else if (source.startsWith("smb://")) {
                 val factory = dataSourceFactory ?: run {
@@ -104,9 +107,9 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
                     return
                 }
                 uri = Uri.parse(source)
-                retriever.setDataSource(Windowed(factory, uri))
+                openRetriever = { retriever.setDataSource(Windowed(factory, uri)) }
             } else {
-                retriever.setDataSource(source)
+                openRetriever = { retriever.setDataSource(source) }
                 uri = if (source.startsWith("/")) Uri.fromFile(File(source)) else Uri.parse(source)
             }
 
@@ -118,6 +121,7 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
             // The smart scan only needs a representative frame, and the keyframe is cheaper.
             val seek = if (timeUs == 0L) MediaMetadataRetriever.OPTION_CLOSEST_SYNC else MediaMetadataRetriever.OPTION_CLOSEST
             if (timeUs == 0L) {
+                openRetriever()
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                     ?.toLongOrNull()
                     ?.let { durationMs ->
@@ -129,6 +133,7 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
 
             var bitmap = extractFrame(uri, timeUs / 1000, exact = time > 0, width, height)
             if (bitmap == null) {
+                if (time > 0) openRetriever()
                 // Scaled by the decoder where possible: a full 4K frame is 33 MB of ARGB, 8K
                 // four times that, only to be shrunk to a list thumbnail.
                 val scaled = width > 0 && height > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
@@ -254,47 +259,53 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
     }
 
     /**
-     * [MediaMetadataRetriever] over a media3 [DataSource], for `smb://`. The first open is
-     * unbounded, to learn the size and stream the header; a jump reopens a [WINDOW] there, so
-     * probing the end of a film costs one read, not the source's whole read-ahead.
+     * [MediaMetadataRetriever] over a media3 [DataSource], for `smb://`. Reads a [WINDOW] into
+     * memory and answers from it: the retriever steps back and forth by a few bytes while it
+     * parses, and reopening the file at each step took 57 s for one MKV at ~3 MB/s.
      */
     @UnstableApi
     private class Windowed(private val factory: DataSource.Factory, private val uri: Uri) : MediaDataSource() {
-        private var source: DataSource? = null
-        private var pos = 0L
-        private var left = 0L
         private var size = -1L
+        private var start = 0L
+        private var window = ByteArray(0)
 
         override fun getSize(): Long {
-            if (size < 0) open(0, C.LENGTH_UNSET.toLong())
+            if (size < 0) load(0)
             return size
         }
 
         override fun readAt(position: Long, buffer: ByteArray, offset: Int, length: Int): Int {
-            if (size < 0) open(0, C.LENGTH_UNSET.toLong())
-            if (position >= size) return -1
-            if (position != pos || left == 0L) open(position, minOf(WINDOW, size - position))
-            val n = source!!.read(buffer, offset, minOf(length.toLong(), left).toInt())
-            if (n == C.RESULT_END_OF_INPUT) return -1
-            pos += n
-            left -= n
+            if (position >= getSize()) return -1
+            // A little before the position too, for the next step back.
+            if (position < start || position >= start + window.size) load(maxOf(0, position - WINDOW / 8))
+            val at = (position - start).toInt()
+            if (at >= window.size) return -1
+            val n = minOf(length, window.size - at)
+            System.arraycopy(window, at, buffer, offset, n)
             return n
         }
 
-        private fun open(position: Long, length: Long) {
-            source?.close()
+        private fun load(position: Long) {
             val s = factory.createDataSource()
-            source = s
-            val opened = s.open(DataSpec.Builder().setUri(uri).setPosition(position).setLength(length).build())
-            if (size < 0) size = position + opened
-            pos = position
-            left = opened
+            try {
+                val opened = s.open(DataSpec.Builder().setUri(uri).setPosition(position)
+                    .setLength(if (size < 0) C.LENGTH_UNSET.toLong() else minOf(WINDOW, size - position)).build())
+                if (size < 0) size = position + opened
+                val buf = ByteArray(minOf(WINDOW, size - position).toInt())
+                var got = 0
+                while (got < buf.size) {
+                    val n = s.read(buf, got, buf.size - got)
+                    if (n == C.RESULT_END_OF_INPUT) break
+                    got += n
+                }
+                start = position
+                window = if (got == buf.size) buf else buf.copyOf(got)
+            } finally {
+                s.close()
+            }
         }
 
-        override fun close() {
-            source?.close()
-            source = null
-        }
+        override fun close() {}
     }
 
     companion object {

@@ -362,6 +362,23 @@ tests pass. API level **22** (native changes; JS needs no new gate).
   step (a) share, deleted and recreated with a new password. Signed in again through its phone
   sign-in page (POST from this PC).
 
+**2026-10-29: share thumbnails fixed (measured).** API level **24**. Both devices on 2.4 GHz
+(~3 MB/s); the 2.9 GB MKV's stop frame, one each:
+
+| | Before (phone) | After (TV) |
+|---|---|---|
+| Stop frame (time given) | 470 s: retriever open 57 s, ExoPlayer timed out at 20 s, retriever fallback ~6.5 min | 4.0 s |
+| Folder thumbnail (time 0) | — | 4.6 s (retriever 2.3 s, ExoPlayer 2.2 s) |
+
+- `Windowed` reopened the file at every small step back of the retriever's parser (8343 → 8171):
+  39 reopens of ~1.4 s just to open, hundreds as the fallback. It now keeps its 1 MB window in
+  memory (starting 128 KB before the asked position) and answers from it: 5 opens.
+- The retriever is opened only when needed: the smart scan's duration, or the fallback. A stop
+  frame never needs it.
+- Thumbnails read through `SmbDataSource(256 KB, 4)`: ExoPlayer opens a film 4 times per frame
+  (header, cues at the end, first cluster, target), and playback's 8 × 1 MB read-ahead made that
+  ~32 MB. `EXACT` seek kept: the target open is ~1 s.
+
 **Next:** the TV pass (owner: not yet). D-pad reaches every row, the refresh button, the sheet's
 fields and the share list; focus shows. Read the `discovery:` log line there too. Step (c) on
 TV: the grid opens focused on `Extras`, D-pad from the folder row into the cards and between them,

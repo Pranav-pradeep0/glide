@@ -72,7 +72,7 @@ class GlideNativeModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     companion object {
         const val NAME = "GlideNative"
-        const val API_LEVEL = 23
+        const val API_LEVEL = 24
     }
 
     class Package : ReactPackage {
