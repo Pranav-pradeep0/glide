@@ -57,7 +57,7 @@ export default function NetworkScreen() {
             {/* Phones open this from Videos; on TV it is a rail page. */}
             <ListHeader title="Network" onBack={IS_TV ? undefined : navigation.goBack}>
                 {SMB_AVAILABLE && <>
-                    <IconButton icon="info" onPress={() => setHelp(true)} accessibilityLabel="How network shares work" />
+                    {servers.length > 0 && <IconButton icon="info" onPress={() => setHelp(true)} accessibilityLabel="How network shares work" />}
                     <IconButton icon="refresh-cw" onPress={() => found && search()} accessibilityLabel="Search again" />
                 </>}
             </ListHeader>
@@ -65,7 +65,7 @@ export default function NetworkScreen() {
                 <EmptyState icon="server" text="Update Glide to play from network shares." />
             ) : (
                 <ScrollView contentContainerStyle={[styles.content, IS_TV && styles.contentTv]}>
-                    {/* First visit: what this is, before any list. Later it's behind the info button. */}
+                    {/* First visit: what this is, before any list. Later it's behind the info button, shown only then. */}
                     {servers.length === 0 && <Card style={styles.intro}><HowItWorks /></Card>}
                     {servers.length > 0 && <>
                         <SectionLabel title="Saved" />
