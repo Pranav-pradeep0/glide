@@ -471,6 +471,8 @@ const styles = StyleSheet.create({
     hero: {
         marginHorizontal: metrics.gutter,
         aspectRatio: 16 / 10,
+        // TV: full width at 16:10 is taller than a 720p screen; half leaves room for Earlier.
+        width: IS_TV ? '50%' : undefined,
         borderRadius: metrics.radius.card,
         overflow: 'hidden',
         justifyContent: 'flex-end',
