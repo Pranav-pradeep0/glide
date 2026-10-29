@@ -1376,9 +1376,9 @@ export default function VideoPlayerScreen({ route }: Props) {
         } else if (e.key === 'down') {
             showControls();
             tvFocus(seekBarRef);
-        } else if (e.key === 'next' && !isNetworkStream) {
+        } else if (e.key === 'next' && canStep) {
             handleNext();
-        } else if (e.key === 'previous' && !isNetworkStream) {
+        } else if (e.key === 'previous' && canStep) {
             handlePrevious();
         }
     };
