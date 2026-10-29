@@ -5,8 +5,6 @@
  * gone: init options, decoder mode, media options, `initType`, network/asset classification,
  * forced aspect ratios and the subtitle-slave path. What is left is the props the native
  * view actually implements.
- *
- * See docs/player-engine-migration-plan.md.
  */
 
 import React, { forwardRef, useCallback, useImperativeHandle, useRef } from 'react';

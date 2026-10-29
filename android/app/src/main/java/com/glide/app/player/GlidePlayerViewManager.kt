@@ -11,10 +11,7 @@ import com.glide.app.haptic.HapticDirector
 import com.glide.app.haptic.HapticMeaning
 
 /**
- * Only the props that are actually implemented are declared. A prop that is absent here is
- * absent on purpose: subtitles, enhancement, the equalizer, audio delay, resize modes, title
- * and artist, and PiP all belong to later steps, and declaring a no-op setter for each would
- * hide which of them are really wired.
+ * Only the props that are actually implemented are declared; no no-op setters.
  */
 @UnstableApi
 class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {

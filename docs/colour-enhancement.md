@@ -6,7 +6,7 @@ The code lives in `android/app/src/main/java/com/glide/app/player/`:
 - `ColorEnhancementEffect.kt` is the GL plumbing.
 - `ColorEnhancementTest.kt` has 23 JVM tests.
 
-History and root-cause write-ups are in `player-engine-migration-plan.md` (Phase 2).
+History and root-cause write-ups are in git history (the deleted `player-engine-migration-plan.md`, Phase 2).
 
 ## Using it
 

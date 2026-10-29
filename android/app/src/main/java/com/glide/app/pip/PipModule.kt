@@ -14,8 +14,7 @@ import com.glide.app.VideoPlayerActivity
 /**
  * Reports Picture-in-Picture state to JavaScript.
  *
- * PiP itself is owned natively by the video view (see VlcPipController in the VLC
- * player module), because that is the only place that knows the video's dimensions,
+ * PiP itself is owned natively by the video view (see GlidePipController), because that is the only place that knows the video's dimensions,
  * the surface bounds and whether playback is live. This module is only the event
  * channel that lets the React tree react to a mode change, plus the one activity
  * action the external-open flow needs.

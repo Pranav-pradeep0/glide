@@ -1,6 +1,6 @@
 # Glide - Haptic Video Player
 
-Glide is a React Native video player that blends traditional playback controls with a tactile, subtitle-aware experience. It is built around a custom VLC bridge and adds a smart subtitle pipeline, assisted sync tools, and deep media controls that go beyond a typical player UI.
+Glide is a React Native video player that blends traditional playback controls with a tactile, subtitle-aware experience. It is built on Media3/ExoPlayer and adds a smart subtitle pipeline, assisted sync tools, and deep media controls that go beyond a typical player UI.
 
 ## Why Glide Feels Different
 
@@ -51,8 +51,8 @@ Key files:
 
 Subtitles are treated like a full subsystem, not a toggle.
 
-- Embedded tracks are discovered via FFprobe and extracted with FFmpeg when text-based.
-- Bitmap subtitles (PGS, VobSub) are detected and rendered natively by VLC.
+- Embedded tracks are discovered and extracted natively when text-based.
+- Bitmap subtitles (PGS, VobSub) are decoded by ExoPlayer and drawn by the same overlay.
 - External files can be picked locally or downloaded via SubDL.
 - SDH content is detected by actual text patterns, not only by filename hints.
 - Subtitle rendering supports inline HTML formatting with a custom parser.
@@ -68,7 +68,7 @@ Key files:
 
 ## 4) Visual Enhancement Toggle
 
-A color enhancement toggle is wired directly into the VLC player instance. It allows quick visual boost without leaving playback.
+A color enhancement toggle is wired directly into the native player. It allows quick visual boost without leaving playback.
 
 Key files:
 - `C:\glide\src\hooks\video-player\usePlayerSettings.ts`
@@ -80,7 +80,7 @@ Glide has a real audio stack:
 
 - 10-band equalizer with presets and custom tuning.
 - Audio delay control with a dedicated sync panel.
-- Route-aware volume handling (speaker, wired, bluetooth) with support for >100% boost through VLC when appropriate.
+- Route-aware volume handling (speaker, wired, bluetooth) with support for >100% boost when appropriate.
 - Hardware volume buttons and gestures update the HUD without fighting each other.
 
 Key files:
@@ -139,20 +139,14 @@ Glide is not trying to replace any media player. Instead, it is pushing the play
 
 ## Tech Stack
 
-- React Native 0.78
-- Custom VLC bridge (`@glide/vlc-player`)
-- FFmpeg/FFprobe via `react-native-ffmpeg-kit`
+- React Native
+- Media3/ExoPlayer
 - Cloudflare Worker AI proxy for Groq recap
 - Zustand + MMKV for state and persistence
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the client configuration.
-
-- SubDL API key for subtitle search and download
-- OMDB API key for metadata (optional)
-- `AI_PROXY_URL` for speech-to-text and recap; the Groq key belongs only in the
-  Cloudflare Worker secret store and must never be added to the mobile `.env`
+Copy `.env.example` to `.env` and set `AI_PROXY_URL`. API keys are Worker secrets and never go in the app's `.env`.
 
 ## Getting Started
 
@@ -178,8 +172,6 @@ npm start
 
 ```bash
 npm run android
-# or
-npm run ios
 ```
 
 ## Project Structure

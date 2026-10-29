@@ -157,7 +157,7 @@ no difference on this phone (p95 staleness 10 ms either way), not changed. Hapti
       from `onIsPlayingChanged`; slow when host stopped.
 - [x] **B3** Background play keeps decoding video: `setTrackTypeDisabled(TRACK_TYPE_VIDEO, true)` in
       `onActivityStopped` (~221) when playing on and not PiP; re-enable on start.
-- [x] **B4** ALAC not in FFmpeg `ENABLED_DECODERS` (`docs/exoplayer-migration.md:75`, private
+- [x] **B4** ALAC not in FFmpeg `ENABLED_DECODERS` (private
       decoder repo); tracks with no supported audio play silently with no error →
       treat as error in `onTracksChanged` (music: `MusicPlayback.kt`).
 - [x] **B5** HTTP redirects http→https fail (default `DefaultHttpDataSource`,
