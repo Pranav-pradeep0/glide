@@ -52,6 +52,7 @@ export interface PlayerLoadData {
 }
 
 export interface PlayerProgressData {
+    isPlaying?: boolean;
     currentTime: number;
     duration: number;
     position: number;

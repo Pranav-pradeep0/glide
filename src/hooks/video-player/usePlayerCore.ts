@@ -265,16 +265,12 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
                 : {}),
         }));
 
-        if (state.playerStopped) {
-            isPlayingShared.value = true;
-            if (__DEV__) {console.log('[SEEK] commitSeek: reviving from stopped state');}
-        }
+        if (state.playerStopped && __DEV__) {console.log('[SEEK] commitSeek: reviving from stopped state');}
 
         isScrubbingShared.value = false;
         return true;
     }, [state.duration, state.isVideoLoaded, state.playerStopped, applySeekToNative,
-        currentTimeShared, lastSyncPosition, lastSyncTimestamp, isScrubbingShared,
-        isPlayingShared]);
+        currentTimeShared, lastSyncPosition, lastSyncTimestamp, isScrubbingShared]);
 
     /** setIsSeeking — marks scrub start/end for UI feedback. */
     const setIsSeeking = useCallback((seeking: boolean) => {
@@ -300,7 +296,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         lastPauseIntentValueRef.current = false;
         lastPauseIntentAtRef.current = Date.now();
         playerStoppedRef.current = false;
-        isPlayingShared.value = true;
+        // No isPlayingShared here: only native starts the clock (handlePlaying). Started
+        // early, it ran from the anchor taken before the pause and threw the playhead
+        // forward by the whole pause until Playing pulled it back.
 
         // Native restarts an ended video on play (GlidePlayerView.setPaused); match it here.
         // The near-end check is the secondary guard, for an end event that never arrived.
@@ -317,7 +315,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             isPlaying: true,
             playerStopped: false,
         }));
-    }, [currentTimeShared, isPlayingShared, lastSyncPosition, lastSyncTimestamp]);
+    }, [currentTimeShared, lastSyncPosition, lastSyncTimestamp]);
 
     const pause = useCallback(() => {
         if (__DEV__) {console.log('[CONTROL] pause() | currentTime=' + currentTimeRef.current.toFixed(2));}
@@ -425,6 +423,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
      * handleProgress — Player position update during playback.
      */
     const handleProgress = useCallback((data: PlayerProgressData) => {
+        // Native's stop tick (pause, buffering, error). First, so no early return below can
+        // leave the clock running while the player is not.
+        if (data.isPlaying === false) {isPlayingShared.value = false;}
         if (isScrubbingShared.value) {return;}
         if (playerStoppedRef.current) {return;}
 
@@ -458,10 +459,11 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         if (drift > 1.0 || !isPlayingShared.value) {
             lastSyncPosition.value = timeSec;
             lastSyncTimestamp.value = now;
-            if (drift > 2.0) {currentTimeShared.value = timeSec;}
+            // A stopped clock shows the reported position as is.
+            if (drift > 2.0 || !isPlayingShared.value) {currentTimeShared.value = timeSec;}
         }
 
-        if (!state.paused && !isPlayingShared.value) {
+        if (data.isPlaying !== false && !state.paused && !isPlayingShared.value) {
             if (__DEV__) {console.log('[PROGRESS] waking up isPlayingShared');}
             isPlayingShared.value = true;
             lastSyncTimestamp.value = now;

@@ -1112,6 +1112,10 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             hapticAnchor.count = 0
             if (isPlaying && haptics != null) progressHandler.postDelayed(hapticAnchor, 100)
             restartProgress()
+            // Ticks run only while playing, so mark every stop with one last tick at the exact
+            // position. Pause, buffering and the IDLE left by an error all stop the clock, and
+            // only pause has its own event: JS kept predicting the playhead through the rest.
+            if (!isPlaying) emit(EVENT_PROGRESS, eventMap())
             // Scrubbing mode suppresses playback while the thumb is dragged, which reads as
             // isPlaying=false. It is not a pause: reporting one dropped keepScreenOn, told
             // PiP the video had stopped, and a Paused event landing after the drag ended
