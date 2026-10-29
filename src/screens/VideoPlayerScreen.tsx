@@ -1589,8 +1589,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                 />
             )}
 
-            {/* Haptics marks for testers, over the video at all times while haptics play */}
-            {!pipPresentationActive && !ui.state.locked && !IS_TV && playMode === 'with-haptics' && hapticsEnabled && (
+            {/* Haptics marks for testers, over the video at all times while haptics play; dev builds only */}
+            {__DEV__ && !pipPresentationActive && !ui.state.locked && !IS_TV && playMode === 'with-haptics' && hapticsEnabled && (
                 <HapticMarkButtons onMark={handleHapticMark} right={12 + effectiveInsets.right} />
             )}
 
