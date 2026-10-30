@@ -161,10 +161,6 @@ final class GlidePipController {
                 }
             };
 
-    private static void logTrace(String tag, String message) {
-        Log.d(TAG, tag + " " + message);
-    }
-
     GlidePipController(GlidePlayerView videoView) {
         this.videoView = videoView;
     }
@@ -286,13 +282,6 @@ final class GlidePipController {
         applyParams();
     }
 
-    boolean isInPipMode() {
-        // The Activity is the ground truth; the cached flag only covers the window
-        // between teardown and the last callback.
-        Activity activity = currentActivity();
-        return activity != null ? activity.isInPictureInPictureMode() : inPipMode;
-    }
-
     // =========================================================================
     // Entry
     // =========================================================================
@@ -310,15 +299,6 @@ final class GlidePipController {
             Log.w(TAG, "enterPictureInPictureMode failed: " + e.getMessage());
             return false;
         }
-    }
-
-    boolean isSupported() {
-        Activity activity = currentActivity();
-        if (activity == null) {
-            return false;
-        }
-        return activity.getPackageManager()
-                .hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE);
     }
 
     // =========================================================================
@@ -479,9 +459,8 @@ final class GlidePipController {
             restorePresentation();
         }
 
-        logViewChain(isInPipMode ? "enter" : "exit");
         if (isInPipMode) {
-            syncVideoBoundsToWindow("pipEnter");
+            syncVideoBoundsToWindow();
         } else {
             restoreVideoBounds();
         }
@@ -583,8 +562,7 @@ final class GlidePipController {
             boolean sizeChanged = (right - left) != (oldRight - oldLeft)
                     || (bottom - top) != (oldBottom - oldTop);
             if (sizeChanged) {
-                logViewChain("decorResize");
-                syncVideoBoundsToWindow("decorResize");
+                syncVideoBoundsToWindow();
             }
         };
         activity.getWindow().getDecorView().addOnLayoutChangeListener(decorLayoutListener);
@@ -614,7 +592,7 @@ final class GlidePipController {
      * relayout gap. Upgrade path is finding why that surface never re-mounts in PiP
      * (or hosting the player outside the screens stack), after which this can go.
      */
-    private void syncVideoBoundsToWindow(String reason) {
+    private void syncVideoBoundsToWindow() {
         Activity activity = currentActivity();
         if (activity == null || activity.getWindow() == null) {
             return;
@@ -630,11 +608,7 @@ final class GlidePipController {
         pipTargetWidth = width;
         pipTargetHeight = height;
 
-        int adjusted = layoutChainToWindow(width, height);
-        if (adjusted > 0) {
-            logTrace("PIP_BOUNDS", adjusted + " view(s) -> " + width + "x" + height
-                    + " reason=" + reason);
-        }
+        layoutChainToWindow(width, height);
     }
 
     /**
@@ -648,28 +622,22 @@ final class GlidePipController {
      *
      * Ancestors that are already the right size are skipped, which naturally stops the
      * walk doing anything to the natively-sized views above the React subtree.
-     *
-     * @return how many views actually needed adjusting.
      */
-    private int layoutChainToWindow(int width, int height) {
+    private void layoutChainToWindow(int width, int height) {
         ViewGroup contentRoot = contentRoot();
         View view = videoView;
-        int adjusted = 0;
 
         while (view != null) {
             if (view.getWidth() != width || view.getHeight() != height) {
                 // ReactViewGroup.onLayout does not reposition children (Fabric places
                 // them directly), so laying out a parent cannot undo the child above it.
                 view.layout(0, 0, width, height);
-                adjusted++;
             }
             if (view == contentRoot) {
                 break;
             }
             view = (view.getParent() instanceof View) ? (View) view.getParent() : null;
         }
-
-        return adjusted;
     }
 
     /**
@@ -689,11 +657,9 @@ final class GlidePipController {
             return;
         }
 
-        logTrace("PIP_BOUNDS", "surface was re-laid out to " + currentWidth + "x" + currentHeight
-                + ", re-asserting " + pipTargetWidth + "x" + pipTargetHeight);
         videoView.post(() -> {
             if (inPipMode) {
-                syncVideoBoundsToWindow("enforce");
+                syncVideoBoundsToWindow();
             }
         });
     }
@@ -726,36 +692,8 @@ final class GlidePipController {
                 return;
             }
 
-            int adjusted = layoutChainToWindow(width, height);
-            if (adjusted > 0) {
-                logTrace("PIP_BOUNDS", "restored " + adjusted + " view(s) -> "
-                        + width + "x" + height);
-            }
+            layoutChainToWindow(width, height);
         });
-    }
-
-    /** Diagnostic: where in the view chain the stale size actually lives. */
-    private void logViewChain(String reason) {
-        Activity activity = currentActivity();
-        if (activity == null) {
-            return;
-        }
-
-        StringBuilder sb = new StringBuilder("[PIP_CHAIN] ").append(reason);
-        View decor = activity.getWindow() != null ? activity.getWindow().getDecorView() : null;
-        if (decor != null) {
-            sb.append(" decor=").append(decor.getWidth()).append('x').append(decor.getHeight());
-        }
-
-        View view = videoView;
-        int depth = 0;
-        while (view != null && depth < 16) {
-            sb.append(" | ").append(view.getClass().getSimpleName())
-                    .append('=').append(view.getWidth()).append('x').append(view.getHeight());
-            view = (view.getParent() instanceof View) ? (View) view.getParent() : null;
-            depth++;
-        }
-        Log.d(TAG, sb.toString());
     }
 
     private ViewGroup contentRoot() {
@@ -772,7 +710,7 @@ final class GlidePipController {
     }
 
     private Activity currentActivity() {
-        Activity activity = videoView.getReactActivity();
+        Activity activity = videoView.getHostActivity();
         return (activity == null || activity.isFinishing()) ? null : activity;
     }
 

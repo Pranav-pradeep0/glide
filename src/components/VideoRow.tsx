@@ -69,8 +69,7 @@ export async function shareVideo(pathOrUri: string) {
         await MediaService.shareVideo(pathOrUri);
     } catch (error: any) {
         showSnackbar({
-            text: error?.code === 'E_OLD_APK' ? error.message
-                : error?.code === 'E_NOT_FOUND' ? "This video isn't in your library yet, so it can't be shared"
+            text: error?.code === 'E_NOT_FOUND' ? "This video isn't in your library yet, so it can't be shared"
                 : error?.code === 'E_NO_ACCESS' ? 'Glide can no longer read this video. Open it again to share it'
                 : "Couldn't open sharing",
             tone: 'reject',

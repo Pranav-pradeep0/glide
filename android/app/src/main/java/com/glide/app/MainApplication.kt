@@ -59,6 +59,5 @@ class MainApplication : Application(), ReactApplication {
     // and playback's 8 MB per open took an MKV stop frame past its 20 s timeout at ~3 MB/s.
     SimpleThumbnailModule.dataSourceFactory =
       androidx.media3.datasource.DataSource.Factory { SmbDataSource(chunk = 256 shl 10, depth = 4) }
-    com.glide.app.smb.Smb.app = this
   }
 }

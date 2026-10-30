@@ -4,7 +4,6 @@ import { SubtitleCue, SubtitleResult } from '../types';
 import { SUBDL_API_URL, SUBDL_DOWNLOAD_URL } from './constants';
 import { NativeModules } from 'react-native';
 import * as RNFS from '@dr.pogodin/react-native-fs';
-import { hasNativeApi } from '@/native/GlideNative';
 import { FilenameParser } from './FilenameParser';
 import { SubtitleParser } from './SubtitleParser';
 import { createCoalescedRequest, fetchWithTimeout, InFlightRequest, isAbortError, isTimeoutError } from './network';
@@ -322,9 +321,6 @@ async function executeSubtitleDownload(
     let tooLarge = false;
 
     try {
-        if (!hasNativeApi(7)) {
-            throw new Error('Subtitle download needs the latest Glide update');
-        }
         if (__DEV__) {console.log(`${LOG_PREFIX} Downloading from:`, fullUrl);}
 
         const download = RNFS.downloadFile({

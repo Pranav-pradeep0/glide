@@ -1,8 +1,5 @@
 package com.glide.app.smb
 
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -30,11 +27,12 @@ import javax.crypto.spec.GCMParameterSpec
 object Smb {
     class Login(val user: String, val password: String, val domain: String)
 
-    /** Android 17's local network permission is not granted: shown as "Allow nearby devices", never retried. */
+    /**
+     * Android 17's local network permission is not granted: shown as "Allow nearby devices", never
+     * retried. Nothing throws it while we target 36; the targetSdk 37 bump adds the check before
+     * every connect (docs/network-shares.md).
+     */
     class LocalNetworkDenied : IOException("Allow nearby devices for Glide in its settings")
-
-    /** Set at startup, for [gate]'s permission check. */
-    var app: Context? = null
 
     private val logins = ConcurrentHashMap<String, Login>()
     private val sessions = HashMap<String, Session>()
@@ -59,26 +57,10 @@ object Smb {
         return (session.connectShare(name) as DiskShare).also { shares["$host/$name"] = it }
     }
 
-    /**
-     * Every connection to the local network starts here, discovery included. Android 17 blocks
-     * the LAN only for apps targeting 37+ without ACCESS_LOCAL_NETWORK; then this throws
-     * [LocalNetworkDenied] instead of letting the connect time out. Inert while we target 36.
-     * When we target 37: declare the permission and request it (JS) before the first connect.
-     */
-    fun gate() {
-        val app = app ?: return
-        if (Build.VERSION.SDK_INT >= 37 && app.applicationInfo.targetSdkVersion >= 37 &&
-            app.checkSelfPermission(LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
-        ) throw LocalNetworkDenied()
-    }
-
-    private const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
-
     private fun connect(host: String): Session = connect(host, logins[host] ?: throw IOException("No login for $host"))
 
     @Synchronized
     private fun connect(host: String, login: Login): Session {
-        gate()
         // Reads are sized by SmbDataSource; this only caps them, under the server's own maximum.
         val c = client ?: SMBClient(
             SmbConfig.builder()

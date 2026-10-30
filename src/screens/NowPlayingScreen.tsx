@@ -44,7 +44,6 @@ import { readableOn } from '@/theme/colors';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { LyricLine } from '@/types';
 import { haptic } from '@/native/HapticModule';
-import { hasNativeApi } from '@/native/GlideNative';
 import { QueueList, type QueueItem } from '@/components/QueueList';
 
 const SLEEP_MINUTES = [15, 30, 45, 60];
@@ -426,7 +425,7 @@ export default function NowPlayingScreen() {
 
     // With shuffle on, the list is the shuffle order, so it can only be dragged once that
     // order has arrived from native and native can reorder it.
-    const canReorderQueue = !shuffle || (shuffledIndices.length === queue.length && hasNativeApi(5));
+    const canReorderQueue = !shuffle || shuffledIndices.length === queue.length;
 
     const playFromQueue = useCallback((index: number) => {
         skipToIndex(index);

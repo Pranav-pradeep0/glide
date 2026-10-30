@@ -48,7 +48,6 @@ import { useIsFocused } from '@react-navigation/native';
 import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { haptic } from '@/native/HapticModule';
-import { hasNativeApi } from '@/native/GlideNative';
 import { metrics, motion, playerTheme, type, Theme } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
 
@@ -722,10 +721,8 @@ interface SheetProps {
     maxHeight?: number;
 }
 
-/** The keyboard's height, from inside the Modal's own window (KeyboardInsetView.kt). Level 19+. */
-const KeyboardInset = hasNativeApi(19)
-    ? requireNativeComponent<{ style: StyleProp<ViewStyle>; onKeyboard: (e: NativeSyntheticEvent<{ height: number }>) => void }>('GlideKeyboardInset')
-    : null;
+/** The keyboard's height, from inside the Modal's own window (KeyboardInsetView.kt). */
+const KeyboardInset = requireNativeComponent<{ style: StyleProp<ViewStyle>; onKeyboard: (e: NativeSyntheticEvent<{ height: number }>) => void }>('GlideKeyboardInset');
 
 /** Sheets and player panels leave quicker than they arrive. */
 export const SHEET_EXIT_MS = 200;
@@ -842,7 +839,7 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
                     {children}
                 </Animated.View>
                 <SnackbarHost />
-                {KeyboardInset && <KeyboardInset style={styles.keyboardInset} onKeyboard={e => { keyboard.value = e.nativeEvent.height; }} />}
+                <KeyboardInset style={styles.keyboardInset} onKeyboard={e => { keyboard.value = e.nativeEvent.height; }} />
             </GestureHandlerRootView>
         </Modal>
     );

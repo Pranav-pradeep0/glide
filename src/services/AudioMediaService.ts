@@ -223,14 +223,7 @@ class AudioMediaServiceClass {
     }
 
     async getAlbumArt(albumId: string, songUri?: string): Promise<string | null> {
-        if (Platform.OS !== 'android' || !this.module) {
-            return null;
-        }
-        try {
-            return await this.module.getAlbumArt(albumId, songUri ?? null);
-        } catch {
-            return null;
-        }
+        return (await this.getAlbumArtDetails(albumId, songUri)).artworkUri;
     }
 
     async getAlbumArtDetails(
@@ -241,17 +234,13 @@ class AudioMediaServiceClass {
             return { artworkUri: null, primaryColor: null, secondaryColor: null, onPrimaryColor: null };
         }
         try {
-            if (typeof this.module.getAlbumArtWithPalette === 'function') {
-                const res = await this.module.getAlbumArtWithPalette(albumId, songUri ?? null);
-                return {
-                    artworkUri: res?.artworkUri ?? null,
-                    primaryColor: res?.primaryColor ?? null,
-                    secondaryColor: res?.secondaryColor ?? null,
-                    onPrimaryColor: res?.onPrimaryColor ?? null,
-                };
-            }
-            const uri = await this.module.getAlbumArt(albumId, songUri ?? null);
-            return { artworkUri: uri ?? null, primaryColor: null, secondaryColor: null, onPrimaryColor: null };
+            const res = await this.module.getAlbumArtWithPalette(albumId, songUri ?? null);
+            return {
+                artworkUri: res?.artworkUri ?? null,
+                primaryColor: res?.primaryColor ?? null,
+                secondaryColor: res?.secondaryColor ?? null,
+                onPrimaryColor: res?.onPrimaryColor ?? null,
+            };
         } catch {
             return { artworkUri: null, primaryColor: null, secondaryColor: null, onPrimaryColor: null };
         }

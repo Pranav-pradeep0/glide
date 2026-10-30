@@ -4,7 +4,6 @@ import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton, ListGroup, ListRow, SectionLabel } from '@/components/ui';
 import { useTheme } from '../hooks/useTheme';
-import { hasNativeApi } from '../native/GlideNative';
 import { metrics, type } from '@/theme/theme';
 import type { RootStackParamList } from '../types';
 import { useVideoHistoryStore } from '../store/videoHistoryStore';
@@ -17,9 +16,7 @@ interface HapticsLab {
     importTruth(mediaPath: string, truthPath: string): Promise<string>;
 }
 
-const lab: HapticsLab | undefined = hasNativeApi(10) ? NativeModules.HapticsLab : undefined;
-const performerTest = hasNativeApi(11);
-const listenerTest = hasNativeApi(12);
+const lab: HapticsLab | undefined = NativeModules.HapticsLab;
 
 /**
  * Haptics Lab: the Phase 0 measurements of docs/haptics-engine-plan.md. Each test records on
@@ -55,16 +52,16 @@ export default function HapticsLabScreen() {
         ['L2 Decode', 'Whole audio of the film below, background lane', () => lab.runDecode(path)],
         ['L4 Tap timing', 'Film through a pass-through tap, 20 s', () => lab.runPlayer(path, startMs, 20)],
         ['L5 Calibration', 'Measures and saves this phone\'s calibration, ~35 s; phone flat on a table', () => lab.runCalibration()],
-        ...(performerTest ? [['Performer test', 'Path below is a fixture clip: plays it with its truth track', async () => {
+        ['Performer test', 'Path below is a fixture clip: plays it with its truth track', async () => {
             const result = await lab.importTruth(path, path.replace(/\.\w+$/, '.truth.tsv'));
             useVideoHistoryStore.getState().clearVideoHistory(path); // start at 0, not where the last run stopped
             navigation.navigate('VideoPlayer', { videoPath: path, videoName: path.split('/').pop() ?? path, playMode: 'with-haptics' });
             return result;
-        }] as [string, string, () => Promise<unknown>]] : []),
-        ...(listenerTest ? [['Listener test', 'Plays the path below with haptics the Listener makes from its audio', async () => {
+        }],
+        ['Listener test', 'Plays the path below with haptics the Listener makes from its audio', async () => {
             useVideoHistoryStore.getState().clearVideoHistory(path);
             navigation.navigate('VideoPlayer', { videoPath: path, videoName: path.split('/').pop() ?? path, playMode: 'with-haptics' });
-        }] as [string, string, () => Promise<unknown>]] : []),
+        }],
     ] : [];
 
     return (

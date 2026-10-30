@@ -7,7 +7,6 @@ import { PermissionService } from '@/services/PermissionService';
 import { EQUALIZER_PRESETS } from '@/config/equalizerPresets';
 import { useMusicHistoryStore } from '@/store/musicHistoryStore';
 import { usePermissionStore } from '@/store/permissionStore';
-import { hasNativeApi } from '@/native/GlideNative';
 import { createUnplayableNotifier } from '@/utils/unplayableToast';
 
 const getAudioModule = () => NativeModules.GlideAudioPlayerModule;
@@ -343,7 +342,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         const audioModule = getAudioModule();
         if (Platform.OS === 'android' && audioModule) {
             try {
-                if (typeof audioModule.setQueueByIds === 'function' && queue.length > 50) {
+                if (queue.length > 50) {
                     const trackIds = queue.map((t) => t.id);
                     await audioModule.setQueueByIds(trackIds, startIndex, 0, true, shuffle, repeatMode, equalizerBands);
                 } else {
@@ -393,7 +392,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         const audioModule = getAudioModule();
         if (Platform.OS === 'android' && audioModule) {
             try {
-                if (typeof audioModule.setQueueByIds === 'function' && queue.length > 50) {
+                if (queue.length > 50) {
                     const trackIds = queue.map((t) => t.id);
                     await audioModule.setQueueByIds(trackIds, safeIndex, 0, true, shuffle, repeatMode, equalizerBands);
                 } else {
@@ -519,7 +518,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         if (shuffle) {
             // Reorder what plays next and leave the queue alone, so turning shuffle off
             // still goes back to the album order.
-            if (shuffledIndices.length !== queue.length || !hasNativeApi(5)) {return;}
+            if (shuffledIndices.length !== queue.length) {return;}
             const order = [...shuffledIndices];
             const [moved] = order.splice(fromIndex, 1);
             order.splice(toIndex, 0, moved);
@@ -606,7 +605,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
                     const state = await audioModule.getCurrentState();
                     if (!state.trackId && queue.length > 0) {
                         const equalizerBands = getPresetBands(equalizerPreset);
-                        if (typeof audioModule.setQueueByIds === 'function' && queue.length > 50) {
+                        if (queue.length > 50) {
                             const trackIds = queue.map((t) => t.id);
                             await audioModule.setQueueByIds(trackIds, currentIndex, position, true, shuffle, repeatMode, equalizerBands);
                         } else {

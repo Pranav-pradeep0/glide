@@ -458,9 +458,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                     return;
                 }
                 console.error('[TrackSelector] Download error:', error);
-                setNotice(error instanceof Error && error.message.includes('latest Glide update')
-                    ? error.message
-                    : 'Couldn’t download that subtitle. Check your connection and try again.');
+                setNotice('Couldn’t download that subtitle. Check your connection and try again.');
             } finally {
                 setDownloadingId((prev) => (prev === currentId ? null : prev));
             }

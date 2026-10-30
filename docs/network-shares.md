@@ -25,9 +25,8 @@ Started 2026-10-27 on `main`. Backlog F ("SMB/WebDAV (L)"); `docs/android-tv.md`
 - **Credentials:** AES-GCM key in AndroidKeyStore, ciphertext in MMKV. Not Jetpack
   security-crypto (deprecated), no Tink.
 - **Android 17 local network permission:** we target SDK 36, so `INTERNET` still grants LAN
-  access. Don't declare `ACCESS_LOCAL_NETWORK` yet, but every SMB connect goes through one place
-  where the runtime request will go when we target 37; then show "Allow nearby devices" rather
-  than a timeout. Test the restriction on an Android 16 phone:
+  access. Don't declare `ACCESS_LOCAL_NETWORK` yet. When we target 37, check it before every SMB
+  connect and discovery, and show "Allow nearby devices" rather than a timeout. Test the restriction on an Android 16 phone:
   `adb shell am compat enable RESTRICT_LOCAL_NETWORK com.glide.player`.
 - **Playback:** a media3 `DataSource` (`BaseDataSource`) for `smb://` URIs, picked by a wrapping
   `DataSource.Factory` (everything else still goes to `DefaultDataSource`). Reused for sidecar
@@ -336,8 +335,9 @@ tests pass. API level **22** (native changes; JS needs no new gate).
   the phone (Wi-Fi off mid-play, phone on USB): ~80 s of buffer plays out, then three native
   retries; the card is up ~94 s after the drop. Retry after Wi-Fi returns reconnects and plays on.
   No timeout change.
-- Android 17: `Smb.gate()` throws `LocalNetworkDenied` when the OS is 17+, our targetSdk 37+ and
-  `ACCESS_LOCAL_NETWORK` isn't granted: inert while we target 36. Network shows "Allow nearby
+- Android 17: `Smb.gate()` (deleted while we target 36; re-add it with the 37 bump, in
+  `Smb.connect`, `Discovery.find` and `PhoneSignIn.start`) threw `LocalNetworkDenied` when the OS
+  is 17+, our targetSdk 37+ and `ACCESS_LOCAL_NETWORK` isn't granted. Network shows "Allow nearby
   devices" (discovery row, folder screen with "Open settings"); the player card says the same
   (`LOCAL_NETWORK_DENIED`, never retried) with Open settings. When targeting 37: declare the
   permission and request it before the first connect.

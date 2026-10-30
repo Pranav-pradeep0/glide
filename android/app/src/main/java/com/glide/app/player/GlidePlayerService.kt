@@ -47,12 +47,10 @@ import java.util.concurrent.Executors
 object GlidePlayerHolder {
 
     /** The video view's player, while a video is open. */
-    @JvmStatic
     var videoPlayer: ExoPlayer? = null
         private set
 
     /** The music player. Process-scoped: it outlives JS reloads and is never released. */
-    @JvmStatic
     var audioPlayer: ExoPlayer? = null
         private set
 
@@ -60,7 +58,6 @@ object GlidePlayerHolder {
      * The Activity the open video is playing in, so its notification reopens that screen
      * rather than a guess. Null while only music is playing.
      */
-    @JvmStatic
     var videoHostActivity: Class<out Activity>? = null
         private set
 

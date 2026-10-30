@@ -205,10 +205,6 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
             return ArtDetails(null, null, null, null)
         }
 
-        fun getArtworkUri(context: Context, albumId: Long, songUriStr: String?): String? {
-            return getArtworkDetails(context, albumId, songUriStr).uri
-        }
-
         /**
          * Under 10 s is a notification sound or voice clip, not a song. A NULL duration --
          * the scanner leaves it unset for some files -- is unknown, not short: in SQL
@@ -419,18 +415,6 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
                 promise.resolve(resultList)
             } catch (e: Exception) {
                 promise.reject("E_MEDIASTORE_SONGS", e.message, e)
-            }
-        }
-    }
-
-    @ReactMethod
-    fun getAlbumArt(albumId: String, songUriStr: String?, promise: Promise) {
-        artExecutor.execute {
-            try {
-                val uri = getArtworkUri(reactContext, albumId.toLongOrNull() ?: 0L, songUriStr)
-                promise.resolve(uri)
-            } catch (e: Exception) {
-                promise.resolve(null)
             }
         }
     }

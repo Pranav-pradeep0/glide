@@ -14,7 +14,7 @@ import { PLAYER_CONSTANTS } from './types';
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
 
 const applyBrightnessDefault = (value: number) => {
-    BrightnessModule?.setBrightness?.(value);
+    BrightnessModule?.setBrightness(value);
 };
 
 // ============================================================================

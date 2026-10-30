@@ -952,10 +952,10 @@ default stays slider 0.6 until the phone test says otherwise; derive it once cal
 ## Marks (2026-10-21)
 
 Layer 5. While playing with haptics, two faint buttons sit over the video at the right edge at all
-times (not with the controls, so a tap lands on the moment): "Too much" (zap-off) and "Missed" (zap). A tap calls `HapticModule.mark`, which logs
+times (not with the controls, so a tap lands on the moment): "Too much" (zap-off) and "Missed" (zap). A tap calls `HapticsLab.mark` (debug builds), which logs
 `mark <file name>\t<media ms>\t<kind>` (`Log.w`, GlideHaptics) and appends the same line to
 `Android/data/com.glide.player/files/haptics-marks.tsv`: outside the app's private files, so adb
-reads it from a release build, and kept until the app is uninstalled.
+reads it, and kept until the app is uninstalled.
 
 `python -I scripts/haptics-marks.py [serial]` adds the phone's new lines to
 `.haptics-fixtures/marks.tsv`. `HapticBenchTest.bench` reports each mark as it does the creature

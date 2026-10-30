@@ -64,10 +64,9 @@ export function setStopPoint(uri: string, position: number, duration: number): v
 
 /**
  * The simple class name of the Activity in front, e.g. 'VideoPlayerActivity', or null.
- * Undefined on APKs from before the native freeze, which lack the method.
  */
 export function currentActivityName(): string | null | undefined {
-    if (Platform.OS !== 'android' || typeof NativePipModule?.currentActivityName !== 'function') {
+    if (Platform.OS !== 'android' || !NativePipModule) {
         return undefined;
     }
     try {

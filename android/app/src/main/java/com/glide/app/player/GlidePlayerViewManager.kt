@@ -133,16 +133,6 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
     fun setProgressUpdateInterval(view: GlidePlayerView, intervalMs: Float) =
         view.setProgressUpdateInterval(intervalMs.toLong())
 
-    // Same command ids as RCTVLCPlayer, so VLCPlayer.tsx dispatches to either engine
-    // without knowing which one it has.
-    override fun getCommandsMap(): Map<String, Int> = mapOf(
-        "pausePlayer" to 4,
-        "stopPlayer" to 5,
-        "enterPictureInPicture" to 6,
-        "seek" to 7,
-        "previewSeek" to 8
-    )
-
     override fun receiveCommand(view: GlidePlayerView, commandId: String, args: ReadableArray?) {
         when (commandId) {
             "pausePlayer" -> view.pausePlayer()
@@ -152,13 +142,6 @@ class GlidePlayerViewManager : SimpleViewManager<GlidePlayerView>() {
             "previewSeek" -> args?.let { view.seekTo(it.getDouble(0).toLong(), exact = false) }
             else -> Unit
         }
-    }
-
-    /** Bundles from before API level 2 send the numeric ids. Kept for them only. */
-    @Deprecated("Use the String overload")
-    override fun receiveCommand(view: GlidePlayerView, commandId: Int, args: ReadableArray?) {
-        val name = commandsMap.entries.firstOrNull { it.value == commandId }?.key ?: return
-        receiveCommand(view, name, args)
     }
 
     private companion object {

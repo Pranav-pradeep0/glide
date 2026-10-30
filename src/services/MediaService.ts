@@ -1,5 +1,4 @@
 import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
-import { hasNativeApi } from '@/native/GlideNative';
 import { PermissionService } from './PermissionService';
 import { VideoFile, VideoFolder } from '@/types';
 
@@ -55,9 +54,6 @@ class MediaServiceClass {
      * `code: 'E_NOT_FOUND'` when MediaStore hasn't indexed the file.
      */
     async shareVideo(pathOrUri: string): Promise<void> {
-        if (!hasNativeApi(6)) {
-            throw Object.assign(new Error('Sharing needs the latest Glide update'), { code: 'E_OLD_APK' });
-        }
         await this.module.shareVideo(pathOrUri);
     }
 
@@ -177,11 +173,8 @@ class MediaServiceClass {
         }
 
         try {
-            if (typeof this.module.getVideos === 'function') {
-                const queryId = bucketId || albumTitle;
-                const videos = await this.module.getVideos(queryId);
-                return (videos || []) as VideoFile[];
-            }
+            const videos = await this.module.getVideos(bucketId || albumTitle);
+            return (videos || []) as VideoFile[];
         } catch (error) {
             console.warn('[MediaService] Failed to getVideos for bucket:', albumTitle, error);
         }
@@ -195,21 +188,15 @@ class MediaServiceClass {
      */
     async getThumbnail(
         videoUriOrPath: string,
-        width?: number,
-        height?: number
+        width = 512,
+        height = 512
     ): Promise<string | null> {
         if (Platform.OS !== 'android' || !this.module || !videoUriOrPath) {
             return null;
         }
 
         try {
-            if (width !== undefined && height !== undefined && typeof this.module.getThumbnailWithSize === 'function') {
-                return await this.module.getThumbnailWithSize(videoUriOrPath, width, height);
-            }
-            if (typeof this.module.getThumbnail === 'function') {
-                return await this.module.getThumbnail(videoUriOrPath);
-            }
-            return null;
+            return await this.module.getThumbnailWithSize(videoUriOrPath, width, height);
         } catch {
             return null;
         }
@@ -218,7 +205,7 @@ class MediaServiceClass {
 
 export const MediaService = new MediaServiceClass();
 
-// A video added or removed outside Glide (API 2): every screen showing the library reloads.
-if (Platform.OS === 'android' && hasNativeApi(2)) {
+// A video added or removed outside Glide: every screen showing the library reloads.
+if (Platform.OS === 'android') {
     DeviceEventEmitter.addListener('onVideoLibraryChanged', () => MediaService.notifyChanged());
 }

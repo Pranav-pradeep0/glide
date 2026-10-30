@@ -1,7 +1,6 @@
 package com.reactnativesimplethumbnail
 
 import android.graphics.Bitmap
-import android.os.Build
 
 /**
  * One colour all over: what a decoder that failed silently hands back. 10-bit HEVC on the
@@ -33,7 +32,7 @@ object FlatFrame {
     /** Samples a [GRID] x [GRID] grid of cell centres. */
     fun isFlat(bitmap: Bitmap): Boolean {
         // getPixel throws on a HARDWARE bitmap, which loadThumbnail may return.
-        val readable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bitmap.config == Bitmap.Config.HARDWARE) {
+        val readable = if (bitmap.config == Bitmap.Config.HARDWARE) {
             bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return false
         } else bitmap
         try {

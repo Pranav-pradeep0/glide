@@ -202,15 +202,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
 
     const setBrightnessNative = useCallback((val: number, isFinal: boolean = false) => {
         const brightness = Math.max(0, Math.min(1, val));
-        // Use window-only sync updates during the gesture, then commit once at the end.
-        if (BrightnessModule?.setBrightnessSync) {
-            BrightnessModule.setBrightnessSync(brightness);
-        } else if (BrightnessModule?.setBrightness) {
-            const result = BrightnessModule.setBrightness(brightness);
-            if (result && typeof result.catch === 'function') {
-                result.catch(() => { });
-            }
-        }
+        BrightnessModule?.setBrightness(brightness);
 
         // Notify JS callback for persistence
         if (onBrightnessChange) {
@@ -232,13 +224,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
                     currentBrightness.value = initialBrightness;
                     if (onBrightnessChange) {onBrightnessChange(initialBrightness);}
 
-                    if (BrightnessModule) {
-                        if (BrightnessModule.setBrightnessSync) {
-                            BrightnessModule.setBrightnessSync(initialBrightness);
-                        } else {
-                            BrightnessModule.setBrightness(initialBrightness);
-                        }
-                    }
+                    BrightnessModule?.setBrightness(initialBrightness);
                 } else if (BrightnessModule) {
                     const deviceBrightness = await BrightnessModule.getBrightness();
                     currentBrightness.value = Math.max(0, Math.min(1, typeof deviceBrightness === 'number' ? deviceBrightness : 0.5));

@@ -28,7 +28,6 @@ import com.glide.app.player.GlidePlayerHolder
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.abs
 
 @UnstableApi
 class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) :

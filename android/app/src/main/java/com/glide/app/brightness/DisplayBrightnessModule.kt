@@ -42,18 +42,7 @@ class DisplayBrightnessModule(private val reactContext: ReactApplicationContext)
     }
 
     @ReactMethod
-    fun setBrightnessSync(brightness: Float) {
-        applyBrightness(brightness)
-    }
-
-    @ReactMethod
-    fun resetBrightness(promise: Promise) {
-        resetWindowBrightness()
-        promise.resolve(true)
-    }
-
-    @ReactMethod
-    fun resetBrightnessSync() {
+    fun resetBrightness() {
         resetWindowBrightness()
     }
 

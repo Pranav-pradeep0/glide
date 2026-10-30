@@ -8,19 +8,5 @@
 
     <application
         tools:targetApi="28"
-        tools:ignore="GoogleAppIndexingWarning">
-
-        <!--
-            Phase 2 spike, debug builds only. Exported so `adb shell am start` can reach
-            it; that is safe here precisely because this manifest never merges into a
-            release build. Delete with HdrSpikeActivity once the question is answered.
-        -->
-        <activity
-            android:name=".HdrSpikeActivity"
-            android:exported="true"
-            android:label="HDR Spike"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
-            android:screenOrientation="landscape"
-            tools:ignore="DiscouragedApi" />
-    </application>
+        tools:ignore="GoogleAppIndexingWarning" />
 </manifest>

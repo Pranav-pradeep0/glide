@@ -17,11 +17,6 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
 
 jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { Text: 'Text' } }));
 
-jest.mock('../src/native/GlideNative', () => ({
-    ...(jest.requireActual('../src/native/GlideNative') as object),
-    hasNativeApi: () => true,
-}));
-
 jest.mock('../src/utils/network', () => {
     return {
         createCoalescedRequest: jest.fn((map: any, key: any, factory: any, signal: any) => factory(signal)),

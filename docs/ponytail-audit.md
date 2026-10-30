@@ -109,28 +109,33 @@ docs). Estimated net: about -8,300 lines and -2 deps. Delete this file when ever
 
 ## Batch 4 — dead native code (~-400)
 
-- [ ] Delete `HdrSpikeActivity` and its debug manifest entry.
-- [ ] Native-API-level scheme: Stallion ties each bundle to its versionName, so these checks are always true.
+- [x] Delete `HdrSpikeActivity` and its debug manifest entry.
+- [x] Native-API-level scheme: Stallion ties each bundle to its versionName, so these checks are always true.
   - delete the changelog in `GlideNativeModule.kt:22-58`
   - delete the numeric `getCommandsMap` and the `Int` `receiveCommand`
   - delete every JS `hasNativeApi()` and `typeof fn === 'function'` fallback (about 22 sites)
   - keep `NATIVE_API_LEVEL` for Settings
-- [ ] `GlidePipController`: delete `logViewChain`, `logTrace`, `isInPipMode`, `isSupported` and the `getReactActivity` alias.
-- [ ] `if (SDK_INT >= M/O)` branches are dead at minSdk 26:
+- [x] `GlidePipController`: delete `logViewChain`, `logTrace`, `isInPipMode`, `isSupported` and the `getReactActivity` alias.
+- [x] `if (SDK_INT >= M/O)` branches are dead at minSdk 26:
   - `AudioVolumeModule` (`detectCurrentRouteLegacy`, `@RequiresApi`)
   - `HapticModule:44-57`
   - `FlatFrame.kt:36`
-- [ ] `AudioVolumeModule`: delete the `LifecycleEventListener`, which only logs; `invalidate()` already cleans up.
-- [ ] `DisplayBrightnessModule`: keep one of `set`/`setSync` and one of `reset`/`resetSync`; drop the empty host callbacks and the JS fallbacks.
-- [ ] `MediaStoreVideoModule`:
+- [-] `AudioVolumeModule`: delete the `LifecycleEventListener`, which only logs; `invalidate()` already cleans up.
+  Skipped: `onHostDestroy` also stops the volume observer and device callback when the Activity goes but the React instance lives on; `invalidate()` only runs at teardown.
+- [x] `DisplayBrightnessModule`: keep one of `set`/`setSync` and one of `reset`/`resetSync`; drop the empty host callbacks and the JS fallbacks.
+  The empty `onHostResume`/`onHostPause` stay: `LifecycleEventListener` has no defaults, and `onHostDestroy` resets the brightness.
+- [x] `MediaStoreVideoModule`:
   - drop `getThumbnail`, which only calls `getThumbnailWithSize`, and its JS branch
   - drop the v1 `video_thumbs` migration
-- [ ] `MediaStoreAudioModule`: drop `getAlbumArt` and `getArtworkUri`; JS uses the palette version only.
-- [ ] Move `HapticModule.mark` (release-shipped, debug-only caller) into `HapticsLabModule`. Replace the `Class.forName` lookup with debug/release source-set objects.
-- [ ] `Smb.gate()` does nothing at targetSdk 36. Delete it and re-add it when bumping to 37.
-- [ ] Delete unused imports (`ReactActivity`, `ReactContext`, `kotlin.math.abs`) and the `@JvmStatic`/`@JvmField` that have no Java caller.
-- [ ] `VideoPlayerActivity:177-178`: drop the `requestedOrientation` set, which repeats the manifest.
-- [ ] `SubtitleSyncModule:575-577`: delete the orphaned KDoc.
+- [x] `MediaStoreAudioModule`: drop `getAlbumArt` and `getArtworkUri`; JS uses the palette version only.
+  JS still called `getAlbumArt` (useAlbumArt, audioStore); `AudioMediaService.getAlbumArt` now reads `artworkUri` from the palette call, which computed the palette anyway.
+- [x] Move `HapticModule.mark` (release-shipped, debug-only caller) into `HapticsLabModule`. Replace the `Class.forName` lookup with debug/release source-set objects.
+- [x] `Smb.gate()` does nothing at targetSdk 36. Delete it and re-add it when bumping to 37.
+  `LocalNetworkDenied` and its Kotlin/JS handling stay for the 37 bump (docs/network-shares.md says where the check goes).
+- [x] Delete unused imports (`ReactActivity`, `ReactContext`, `kotlin.math.abs`) and the `@JvmStatic`/`@JvmField` that have no Java caller.
+- [-] `VideoPlayerActivity:177-178`: drop the `requestedOrientation` set, which repeats the manifest.
+  Skipped: on a restore after process death the system can keep the orientation JS had locked; this line resets it to fullSensor, so it is not just a repeat.
+- [x] `SubtitleSyncModule:575-577`: delete the orphaned KDoc.
 
 ## Batch 5 — player gesture and HUD consolidation (~-800)
 

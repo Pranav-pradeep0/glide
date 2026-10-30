@@ -62,7 +62,6 @@ NativeModules.MediaStoreVideoModule = {
         folders: sampleFolders,
     }),
     getVideos: jest.fn<any>().mockResolvedValue([sampleVideos[0]]),
-    getThumbnail: jest.fn<any>().mockResolvedValue('file:///cache/video_thumbs/1_512x512.jpg'),
     getThumbnailWithSize: jest.fn<any>().mockResolvedValue('file:///cache/video_thumbs/1_320x180.jpg'),
 };
 
@@ -109,8 +108,9 @@ describe('MediaService with MediaStoreVideoModule', () => {
     });
 
     it('fetches system thumbnail via MediaStoreVideoModule', async () => {
-        const thumb = await MediaService.getThumbnail('content://media/external/video/media/1');
-        expect(thumb).toBe('file:///cache/video_thumbs/1_512x512.jpg');
+        await MediaService.getThumbnail('content://media/external/video/media/1');
+        expect(NativeModules.MediaStoreVideoModule.getThumbnailWithSize)
+            .toHaveBeenCalledWith('content://media/external/video/media/1', 512, 512);
     });
 
     it('fetches sized system thumbnail via MediaStoreVideoModule', async () => {

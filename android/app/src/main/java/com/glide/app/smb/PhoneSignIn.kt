@@ -30,7 +30,6 @@ object PhoneSignIn {
     @Synchronized
     fun start(host: String, onLogin: (Map<String, String>) -> Unit): String {
         stop()
-        Smb.gate()
         val ip = Discovery.ownAddress() ?: throw IOException("Not connected to a network")
         val token = token()
         val socket = ServerSocket(0, 8, ip)

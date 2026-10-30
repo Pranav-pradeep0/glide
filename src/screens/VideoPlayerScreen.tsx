@@ -87,7 +87,7 @@ import { useSubtitleCueStore } from '@/store/subtitleCueStore';
 import { ExternalOpen, VideoFile, VideoSort } from '@/types';
 import type { PlayerCarry, PlayerProgressData } from '@/hooks/video-player';
 import { carriedAudio, carriedSubtitle } from '@/hooks/video-player/types';
-import HapticModule, { type HapticMark } from '@/native/HapticModule';
+import { type HapticMark } from '@/native/HapticModule';
 
 // ============================================================================
 // TYPES
@@ -426,14 +426,14 @@ export default function VideoPlayerScreen({ route }: Props) {
             if (pipBrightnessMode === 'system') {
                 // Determine if we need to switch to system brightness
                 // If brightness was modified, revert to system (-1)
-                BrightnessModule?.resetBrightness?.();
+                BrightnessModule?.resetBrightness();
             }
         } else {
             // Exiting PiP - restore player brightness if needed
             if (pipBrightnessMode === 'system' && brightnessRef.current !== undefined) {
                 // Convert 0-1 brightness to 0-1 float for setBrightness
                 // brightnessRef.current is already 0-1
-                BrightnessModule?.setBrightness?.(brightnessRef.current);
+                BrightnessModule?.setBrightness(brightnessRef.current);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -709,7 +709,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         if (exitedRef.current) {return;}
         exitedRef.current = true;
 
-        BrightnessModule?.resetBrightnessSync?.();
+        BrightnessModule?.resetBrightness();
         savePlaybackProgress(true);
         persistNow();
         player.stop();
@@ -861,7 +861,8 @@ export default function VideoPlayerScreen({ route }: Props) {
     // The panel's switch carries the feedback.
     const handleToggleHaptics = useCallback(() => setHapticsEnabled(prev => !prev), []);
     const handleHapticMark = useCallback((kind: HapticMark) => {
-        HapticModule.mark(kind, videoName, player.currentTimeRef.current * 1000);
+        // A tester's mark on the film's haptics at a media time (haptics layer 5); debug builds only.
+        NativeModules.HapticsLab?.mark(kind, videoName, player.currentTimeRef.current * 1000);
     }, [videoName, player]);
 
     const handleEnterPip = useCallback(() => {
@@ -1202,11 +1203,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             if (nextState === 'active' && wasBackgrounded && !isInPipMode) {
                 const brightnessToRestore = brightnessRef.current;
                 if (brightnessToRestore !== undefined) {
-                    if (BrightnessModule?.setBrightnessSync) {
-                        BrightnessModule.setBrightnessSync(brightnessToRestore);
-                    } else {
-                        BrightnessModule?.setBrightness?.(brightnessToRestore);
-                    }
+                    BrightnessModule?.setBrightness(brightnessToRestore);
                 }
             }
 

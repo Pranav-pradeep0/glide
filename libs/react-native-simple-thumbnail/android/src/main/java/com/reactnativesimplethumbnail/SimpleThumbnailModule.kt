@@ -310,7 +310,6 @@ class SimpleThumbnailModule(reactContext: ReactApplicationContext) : ReactContex
 
     companion object {
         /** Reads `smb://` (and anything else media3 can); the app sets it at startup. Null: no smb:// thumbnails. */
-        @JvmStatic
         var dataSourceFactory: DataSource.Factory? = null
 
         private const val TAG = "SimpleThumbnail"

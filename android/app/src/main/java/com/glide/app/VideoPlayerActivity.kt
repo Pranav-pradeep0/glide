@@ -4,7 +4,6 @@ import android.content.res.Configuration
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Build
-import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
@@ -42,7 +41,7 @@ class VideoPlayerActivity : GlideBaseActivity() {
   // The last stop point JS reported; survives a recreate so the reopened player resumes there.
   private var stopPositionMs: Long = -1
   /** Set by the player view: background play keeps this alive when it leaves the screen. */
-  @JvmField var playInBackground = false
+  var playInBackground = false
 
   /** Where the caller wants playback to start. Senders disagree on int vs long, so take any number. */
   private fun resolveStartPositionMs(): Long {

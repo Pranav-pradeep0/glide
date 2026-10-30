@@ -23,7 +23,6 @@ object GlideEqualizer {
     private const val PRIORITY = 0
 
     /** Ten band gains in dB, or null when the array is absent or empty (equalizer off). */
-    @JvmStatic
     fun toBandLevels(bands: ReadableArray?): FloatArray? =
         bands?.takeIf { it.size() > 0 }?.let { array ->
             FloatArray(array.size()) { array.getDouble(it).toFloat() }
@@ -38,7 +37,6 @@ object GlideEqualizer {
      * priority. Losing the equalizer must not take playback down with it, so a failure
      * returns null rather than throwing.
      */
-    @JvmStatic
     fun apply(existing: Equalizer?, bands: FloatArray?, audioSessionId: Int): Equalizer? {
         // Flat counts as off. An enabled 0 dB effect sounds the same but still holds the
         // audio session, which keeps offload from engaging while isFlat says it may.
@@ -76,11 +74,9 @@ object GlideEqualizer {
      * big background-battery win, but it bypasses the audio session the system equalizer
      * attaches to -- so offload is only safe while the equalizer changes nothing.
      */
-    @JvmStatic
     fun isFlat(bands: FloatArray?): Boolean = bands == null || bands.all { it == 0f }
 
     /** Gain of whichever UI band sits closest to this device band's centre frequency. */
-    @JvmStatic
     fun nearestGainDb(bands: FloatArray, centreHz: Int): Float {
         if (bands.isEmpty()) return 0f
         val index = (0 until minOf(bands.size, BAND_HZ.size))

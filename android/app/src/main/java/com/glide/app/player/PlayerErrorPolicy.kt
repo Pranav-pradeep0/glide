@@ -38,7 +38,6 @@ object PlayerErrorPolicy {
      * -- a dropped connection, a timeout, a server that refused one range request --
      * recovers; the rest does not.
      */
-    @JvmStatic
     fun shouldRetry(errorCode: Int, retriesSoFar: Int): Boolean =
         errorCode in IO_ERROR_CODES &&
             errorCode !in PERMANENT &&
@@ -50,7 +49,6 @@ object PlayerErrorPolicy {
      * whose history belongs to the old one. Played from zero the same file is fine, so
      * starting over beats an error card the user can never get past.
      */
-    @JvmStatic
     fun shouldRestartFromBeginning(errorCode: Int, openingAtResumePoint: Boolean): Boolean =
         openingAtResumePoint &&
             errorCode == PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE
@@ -60,7 +58,6 @@ object PlayerErrorPolicy {
      * Bounded like IO retries: a stream whose window keeps moving past the player (a
      * server publishing faster than the device can load) would otherwise loop forever.
      */
-    @JvmStatic
     fun shouldRejoinLiveEdge(errorCode: Int, retriesSoFar: Int): Boolean =
         errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW &&
             retriesSoFar < MAX_IO_RETRIES
@@ -71,7 +68,6 @@ object PlayerErrorPolicy {
      * fails at decoder init, so the caller has to handle it first. Exceeding capabilities still counts
      * as playable: the track selector picks such a track when there is nothing better.
      */
-    @JvmStatic
     fun hasNoPlayableAudio(tracks: Tracks): Boolean =
         tracks.containsType(C.TRACK_TYPE_AUDIO) &&
             !tracks.isTypeSupported(C.TRACK_TYPE_AUDIO, /* allowExceedsCapabilities = */ true)

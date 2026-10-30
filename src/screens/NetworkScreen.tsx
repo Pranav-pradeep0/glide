@@ -14,7 +14,7 @@ import { Button, Card, IconButton, ListGroup, ListRow, SectionLabel, Sheet, show
 import { EmptyState, ListHeader, VideoCard, VideoItemCell, VideoItemComponent, VideoRow, listContentStyle } from '@/components/VideoRow';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
-import { isLocalNetworkDenied, PHONE_SIGN_IN, SMB_AVAILABLE, SmbEntry, SmbHost, SmbLogin, SmbServer, SmbService } from '@/services/SmbService';
+import { isLocalNetworkDenied, SMB_AVAILABLE, SmbEntry, SmbHost, SmbLogin, SmbServer, SmbService } from '@/services/SmbService';
 import { NavigationService } from '@/services/NavigationService';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { formatFileSize } from '@/utils/formatUtils';
@@ -197,7 +197,8 @@ function SignInSheet({ target, visible, onClose, onAdded }: {
     // TV: while the sheet is open, a phone can type the login instead of the remote. What it
     // sends fills the fields and signs in, so a wrong password shows here like a typed one.
     useEffect(() => {
-        if (!visible || !PHONE_SIGN_IN) { return; }
+        // TV only: a phone types the login (docs/network-shares.md, step (d)).
+        if (!visible || !IS_TV) { return; }
         const { page, stop } = SmbService.servePhoneSignIn(target.host, sent => {
             const l = { ...sent, host: (target.host || sent.host).trim(), user: sent.user.trim(), domain: sent.domain.trim() };
             setHost(l.host);

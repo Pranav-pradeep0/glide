@@ -19,7 +19,6 @@ import {
     ViewStyle,
     StyleProp,
 } from 'react-native';
-import { hasNativeApi } from '@/native/GlideNative';
 import type { HapticPreset } from '@/types';
 
 const NATIVE_NAME = 'RCTGlidePlayer';
@@ -122,15 +121,8 @@ const GlidePlayer = forwardRef<GlidePlayerRef, GlidePlayerProps>((props, ref) =>
         if (!nativeRef.current) { return; }
         const handle = findNodeHandle(nativeRef.current);
         if (handle == null) { return; }
-        const config = UIManager.getViewManagerConfig(NATIVE_NAME) as {
-            Commands: Record<string, number>;
-        };
-        // By name from API 2 (the numeric form is deprecated); older APKs only know the ids.
-        // The typings say number, but the runtime takes either: Fabric stringifies the id
-        // and parses digits back into the Int overload.
-        UIManager.dispatchViewManagerCommand(
-            handle, (hasNativeApi(2) ? command : config.Commands[command]) as number, args,
-        );
+        // By name; the typings say number, but the runtime takes a string too.
+        UIManager.dispatchViewManagerCommand(handle, command as unknown as number, args);
     }, []);
 
     useImperativeHandle(ref, () => ({

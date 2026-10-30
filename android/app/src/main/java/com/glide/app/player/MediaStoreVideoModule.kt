@@ -143,7 +143,6 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         private const val TAG = "MediaStoreVideoModule"
         private const val DELETE_REQUEST_CODE = 42001
         private val thumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
-        private val oldThumbsDropped = java.util.concurrent.atomic.AtomicBoolean()
 
         private val VIDEO_PROJECTION = arrayOf(
             MediaStore.Video.Media._ID,
@@ -190,10 +189,6 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
         fun loadThumbnailSync(context: Context, videoUriOrPath: String, width: Int, height: Int): String? {
             return try {
-                // v2: v1 holds flat green frames cached before the flat check below.
-                if (oldThumbsDropped.compareAndSet(false, true)) {
-                    File(context.cacheDir, "video_thumbs").deleteRecursively()
-                }
                 val cacheDir = File(context.cacheDir, "video_thumbs2")
                 if (!cacheDir.exists()) {
                     cacheDir.mkdirs()
@@ -598,11 +593,6 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 promise.reject("E_MEDIASTORE_VIDEOS", e.message, e)
             }
         }
-    }
-
-    @ReactMethod
-    fun getThumbnail(videoUriOrPath: String?, promise: Promise) {
-        getThumbnailWithSize(videoUriOrPath, 512, 512, promise)
     }
 
     @ReactMethod

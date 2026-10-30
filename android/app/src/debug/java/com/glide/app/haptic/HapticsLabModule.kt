@@ -54,6 +54,23 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
 
     override fun getName() = "HapticsLab"
 
+    /**
+     * A tester's "too much" / "missed" mark during playback (haptics layer 5): film, media time,
+     * kind, to the log and to Android/data/<package>/files/haptics-marks.tsv, which adb can pull
+     * (scripts/haptics-marks.py); each becomes a case in HapticBenchTest.
+     */
+    @ReactMethod
+    fun mark(kind: String, film: String, positionMs: Double) {
+        val line = "${film.replace('\t', ' ')}\t${Math.round(positionMs)}\t$kind"
+        Log.w("GlideHaptics", "mark $line")
+        val dir = reactApplicationContext.getExternalFilesDir(null) ?: return
+        try {
+            File(dir, "haptics-marks.tsv").appendText("$line\n")
+        } catch (e: java.io.IOException) {
+            Log.w("GlideHaptics", "mark not saved", e)
+        }
+    }
+
     private val vibrator = context.getSystemService(Vibrator::class.java)
 
     /** USAGE_MEDIA, so the system's media-vibration setting and history bucket apply. */

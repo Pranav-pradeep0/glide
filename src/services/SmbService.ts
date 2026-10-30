@@ -1,7 +1,5 @@
 import { DeviceEventEmitter, NativeModules } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
-import { hasNativeApi } from '@/native/GlideNative';
-import { IS_TV } from '@/utils/tv';
 
 /** A share the user added. One login per host: native keys sessions by host. */
 export interface SmbServer {
@@ -42,11 +40,7 @@ const native = NativeModules.GlideSmb as
 const mmkv = createMMKV({ id: 'glide_smb_v1' });
 const KEY = 'servers';
 
-/** Level 20+: older APKs have no SMB (18 and 19 had parts of it, never released). */
-export const SMB_AVAILABLE = hasNativeApi(20) && !!native;
-
-/** TV only: a phone types the login (docs/network-shares.md, step (d)). */
-export const PHONE_SIGN_IN = IS_TV && hasNativeApi(21);
+export const SMB_AVAILABLE = !!native;
 
 /** Android 17's local network permission is off (native `Smb.gate`): offer the app's settings. */
 export const isLocalNetworkDenied = (e: unknown) => (e as { code?: string } | null)?.code === 'local-network';

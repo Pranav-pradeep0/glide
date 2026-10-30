@@ -590,8 +590,6 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
     }
 
-    fun getReactActivity(): Activity? = getHostActivity()
-
     /**
      * Notification and lock-screen metadata. Applied to the live item rather than only at
      * open, because the title arrives from JS after the source does.

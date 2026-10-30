@@ -44,7 +44,6 @@ NativeModules.GlideAudioPlayerModule = {
 
 NativeModules.MediaStoreAudioModule = {
     getSongs: jest.fn<any>().mockReturnValue(Promise.resolve([])),
-    getAlbumArt: jest.fn<any>().mockReturnValue(Promise.resolve('file:///cache/album_art/201.jpg')),
     getAlbumArtWithPalette: jest.fn<any>().mockReturnValue(Promise.resolve({
         artworkUri: 'file:///cache/album_art/201.jpg',
         primaryColor: '#123456',
@@ -65,7 +64,6 @@ jest.mock('../src/services/PermissionService', () => ({
     },
 }));
 
-jest.mock('../src/native/GlideNative', () => ({ NATIVE_API_LEVEL: 5, hasNativeApi: () => true }));
 
 jest.mock('@dr.pogodin/react-native-fs', () => ({
     exists: jest.fn(async () => false),

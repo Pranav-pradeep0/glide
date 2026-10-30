@@ -6,11 +6,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.os.SystemClock
-import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
-import com.facebook.react.bridge.ReactContext
 import com.glide.app.pip.PipModule
 
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen

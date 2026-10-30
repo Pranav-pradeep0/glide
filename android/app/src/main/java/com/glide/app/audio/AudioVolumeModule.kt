@@ -52,11 +52,7 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
 
         fun detectRoute(am: AudioManager?): String {
             if (am == null) return ROUTE_SPEAKER
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                detectCurrentRouteModern(am)
-            } else {
-                detectCurrentRouteLegacy(am)
-            }
+            return detectCurrentRouteModern(am)
         }
 
         /**
@@ -64,11 +60,9 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
          * video player asks this before applying any boost above 100%, which a phone speaker
          * must never get. Static, so the answer never depends on a module having been built.
          */
-        @JvmStatic
         fun isOnSpeaker(context: Context): Boolean =
             ROUTE_SPEAKER == detectRoute(context.getSystemService(AudioManager::class.java))
 
-        @RequiresApi(Build.VERSION_CODES.M)
         private fun detectCurrentRouteModern(am: AudioManager): String {
             // The real route for music, rather than every port the device owns. Only
             // Android 13 and newer can answer that; below it, fall back to the scan.
@@ -119,16 +113,6 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
             return null
         }
 
-        @Suppress("DEPRECATION")
-        private fun detectCurrentRouteLegacy(am: AudioManager): String {
-            return when {
-                am.isBluetoothA2dpOn -> ROUTE_BLUETOOTH
-                am.isWiredHeadsetOn -> ROUTE_WIRED
-                else -> ROUTE_SPEAKER
-            }
-        }
-
-        @RequiresApi(Build.VERSION_CODES.M)
         private fun classifyDevice(device: AudioDeviceInfo): String = routeForDeviceType(device.type)
 
         /**
@@ -136,7 +120,6 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
          * unrecognised stays [ROUTE_UNKNOWN], and every caller treats that as the speaker:
          * boost reaching the built-in speaker is the one outcome worth failing safe on.
          */
-        @JvmStatic
         fun routeForDeviceType(type: Int): String {
             return when (type) {
                 AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
@@ -519,7 +502,7 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
     }
 
     private fun registerAudioDeviceCallback() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || audioManager == null) {
+        if (audioManager == null) {
             return
         }
 
@@ -544,7 +527,7 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
     }
 
     private fun unregisterAudioDeviceCallback() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || audioManager == null || audioDeviceCallback == null) {
+        if (audioManager == null || audioDeviceCallback == null) {
             return
         }
 

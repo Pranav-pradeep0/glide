@@ -29,7 +29,6 @@ object Discovery {
 
     /** IP → name, when one was found. Takes about [WINDOW_MS]. */
     fun find(context: Context): Map<String, String?> {
-        Smb.gate()
         val found = ConcurrentHashMap<String, String>()
         val names = ConcurrentHashMap<String, String>()
         listOf(
