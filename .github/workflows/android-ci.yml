@@ -54,11 +54,15 @@ jobs:
         env:
           STALLION_PROJECT_ID: ${{ secrets.STALLION_PROJECT_ID }}
           STALLION_APP_TOKEN: ${{ secrets.STALLION_APP_TOKEN }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
           cat << EOF > .env
           AI_PROXY_URL=$AI_PROXY_URL
           STALLION_PROJECT_ID=$STALLION_PROJECT_ID
           STALLION_APP_TOKEN=$STALLION_APP_TOKEN
+          TELEGRAM_API_ID=$TELEGRAM_API_ID
+          TELEGRAM_API_HASH=$TELEGRAM_API_HASH
           EOF
 
       - name: Typecheck
@@ -236,11 +240,15 @@ jobs:
         env:
           STALLION_PROJECT_ID: ${{ secrets.STALLION_PROJECT_ID }}
           STALLION_APP_TOKEN: ${{ secrets.STALLION_APP_TOKEN }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
           cat << EOF > .env
           AI_PROXY_URL=$AI_PROXY_URL
           STALLION_PROJECT_ID=$STALLION_PROJECT_ID
           STALLION_APP_TOKEN=$STALLION_APP_TOKEN
+          TELEGRAM_API_ID=$TELEGRAM_API_ID
+          TELEGRAM_API_HASH=$TELEGRAM_API_HASH
           EOF
 
       - name: Typecheck

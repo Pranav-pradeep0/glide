@@ -81,6 +81,10 @@ android {
         // Inject Stallion keys from env
         resValue "string", "StallionProjectId", env.get("STALLION_PROJECT_ID", "")
         resValue "string", "StallionAppToken", env.get("STALLION_APP_TOKEN", "")
+        // Telegram (docs/telegram.md): ships readable in the APK, as in every Telegram client.
+        // Empty = the feature is hidden.
+        buildConfigField "int", "TELEGRAM_API_ID", (env.get("TELEGRAM_API_ID") ?: "0").toInteger().toString()
+        buildConfigField "String", "TELEGRAM_API_HASH", '"' + (env.get("TELEGRAM_API_HASH") ?: "") + '"'
         buildConfigField "String", "JS_ENV", '"' + jsEnvJson.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
         // Play builds per-ABI APKs from the bundle. This keeps prebuilt AARs (the FFmpeg one
