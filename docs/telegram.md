@@ -108,12 +108,27 @@ hosting are free). Users with Telegram Premium may download faster; that's their
   ~2 GB MKV and an MP4: time to first frame, sustained MB/s on a free account (Telegram is
   reported to slow free accounts: measure), APK size per ABI after R8.
   **Go if:** first frame ≤ 5 s, a 1080p film plays without stalls on the phone over 5 GHz.
-- **(b) Sign-in for real.** Phone + code (phones) and QR (TV), each offering the other, 2-step
-  password, log out, "Signed in as". Errors: wrong password, flood wait ("Try again in N minutes").
-- **(c) Browse.** Chat list, chat videos (video + document), thumbnails, paging, empty states,
-  cache cap + Settings "Clear".
-- **(d) Seeking and playback hardening.** The seek matrix below, all on the Mi TV.
-- **(e) History/Recents/resume, drops, Data safety + `privacy.html`**, Play listing text.
+Re-planned 2026-11-01 with the owner: (b)–(e) become four sessions. Build everything first,
+then **one** device session. Each session reads/edits a file once; automatic checks only (build,
+unit tests, typecheck) until session 3. Step (a) already proved TDLib, streaming and speed.
+
+- **Session 1, native (no device).** The whole `TelegramModule` in one pass: sign-in (phone +
+  code on phones, QR on TV, each offering the other; 2-step password; errors: wrong code/password,
+  flood wait "Try again in N minutes"; log out wiping `filesDir/tdlib` + cache; "Signed in as"),
+  chats, videos (video + document, paged), thumbnails, MKV head+tail prefetch (`prefetch(uri)`,
+  called when a film is opened/focused), cache cap + size + clear, `API_LEVEL` bump. Check:
+  build + unit tests.
+- **Session 2, JS (no device).** `TelegramService`, sign-in / chat list / chat videos screens
+  (reusing `VideoRow`/`VideoCard`, empty states, paging), entries (phone Videos header, TV rail),
+  Settings cache row, the `tg` flags (`isReplayable`, `isNetworkStream`, `isNetwork`, History,
+  Recents, Continue watching). Check: typecheck + tests.
+- **Session 3, one device session (phone + Mi TV).** Before it: phone on a fixed IP (DHCP
+  reservation) or USB; test films in Saved Messages. Sign in **once** (Telegram rate-limits codes
+  for hours; the session survives app updates). A script drives taps and seeks and prints one
+  table from logcat (`open @`/`downloadFile @` lines); read the screen as text (`uiautomator
+  dump`), screenshots only when something looks wrong. Covers the seek matrix, the MKV start, the
+  Mi TV numbers from (a), D-pad focus everywhere; fix what breaks.
+- **Session 4, paperwork.** Data safety, `privacy.html`, Play listing text, release notes.
 - **(f) Later, maybe:** channels with sponsored messages (`getChatSponsoredMessages`, shown in the
   chat list, `viewMessages`/`clickChatSponsoredMessage` reported), forwarded-to-Glide shortcuts.
 
@@ -208,7 +223,7 @@ free account, debug screen, every run from a cold cache:
   the step (d) seek matrix reads its timings from these.
 - **Mi TV: not measured yet** (owner: later). The debug screen shows the QR on TV.
 
-**Next: step (b), sign-in for real.**
+**Next: session 1 (native), see Steps.**
 
 **Next (was):** `gh run download <run> -R Pranav-pradeep0/glide-tdlib -n tdlib-aar -D android/app/libs`
 (AAR + `.sha256`), build, fix compile errors, commit step 2 (stage files explicitly). Then step 4:
