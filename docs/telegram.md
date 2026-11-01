@@ -20,8 +20,9 @@ hosting are free). Users with Telegram Premium may download faster; that's their
   closed Glide). Not the Bot API: a normal bot can't download files over **20 MB**, and lifting that
   means running our own Bot API server that relays every film (bandwidth bill, legal exposure).
 - **Phones and TV both get it.** D-pad usable everywhere (AGENTS.md "Android TV").
-- **Sign-in by QR code first** (scan with the Telegram app on the phone: no typing on TV), then the
-  2-step password if the account has one. Phone number + code is the fallback.
+- **Sign-in: phones by phone number + code, TV by QR code** (scanned with Telegram on the phone: no
+  typing on TV), then the 2-step password if the account has one. Each offers the other as "Use …
+  instead". (Changed 2026-11-01: a phone can't scan its own screen, so QR-first is wrong there.)
 - **Scope of the first release: private chats, groups and Saved Messages. No channels.** Telegram's
   API terms require official sponsored messages wherever an app shows channel content; skipping
   channels keeps us compliant without building that. Channels + sponsored messages = step (f),
@@ -107,8 +108,8 @@ hosting are free). Users with Telegram Premium may download faster; that's their
   ~2 GB MKV and an MP4: time to first frame, sustained MB/s on a free account (Telegram is
   reported to slow free accounts: measure), APK size per ABI after R8.
   **Go if:** first frame ≤ 5 s, a 1080p film plays without stalls on the phone over 5 GHz.
-- **(b) Sign-in for real.** QR, 2-step password, phone + code fallback, log out, "Signed in as".
-  TV: QR is the main path. Errors: wrong password, flood wait ("Try again in N minutes").
+- **(b) Sign-in for real.** Phone + code (phones) and QR (TV), each offering the other, 2-step
+  password, log out, "Signed in as". Errors: wrong password, flood wait ("Try again in N minutes").
 - **(c) Browse.** Chat list, chat videos (video + document), thumbnails, paging, empty states,
   cache cap + Settings "Clear".
 - **(d) Seeking and playback hardening.** The seek matrix below, all on the Mi TV.
@@ -180,6 +181,34 @@ pinned commit. glide-tdlib run 1 built TDLib but failed its own 16 KB check on `
 committed in `android/app/libs` like the FFmpeg one (`.gitignore` exception: CI checks it). Only
 fix needed against the real `TdApi`: none (one Kotlin return-type slip in the debug screen).
 Debug and R8 release builds pass.
+
+**2026-11-01: step (a) part 4, measured on the phone. GO.** Nothing Phone (AIN065), 5 GHz Wi-Fi,
+free account, debug screen, every run from a cold cache:
+
+| Film | First frame | Download | Stalls |
+|---|---|---|---|
+| Gone Girl, 1.9 GB 1080p 10-bit HEVC MKV | 5.9–6.2 s (7–8.5 s first play in a process) | 2.8–2.9 MB/s | 0 in 90 s |
+| Spartacus S01E01, 529 MB MP4 | 1.0 s | 4.1–4.2 MB/s | 0 |
+| 26 MB clip sent as video | 5.5 s | 1.4 MB/s | 0 |
+
+- RAM, whole app while playing: 150–190 MB.
+- APK per ABI after R8: `libtdjni.so` 17.6 MB arm64 / 15.6 MB armv7 (stored uncompressed; ~8.7 /
+  8.4 MB in the download) + `TdApi` dex 1.3 MB (0.4 MB compressed). So **~+9 MB download, +17–19 MB
+  installed** per ABI.
+- Verdict: 1080p plays without stalls (download ~1.7× the film's average bitrate). First frame
+  meets ≤ 5 s for MP4 but not MKV: Matroska needs two fetches before the first frame (header, then
+  the Cues at the end; logcat `open … @ 2025065804`), each ~3 s from that file's DC. Go anyway;
+  the MKV start is a step (d) target. Idea: start fetching the head and the tail when the film is
+  focused/opened (details, `⋯`), before Play is pressed.
+- Bug found and fixed: `deleteFile` during a download unlinked the partial file while TDLib kept
+  writing into it and counting the bytes; the next play failed with ENOENT. `Td.delete` cancels
+  first; `Td.open` restarts a download TDLib lists but the cache no longer has (Android also
+  clears `cacheDir` on low storage).
+- `TelegramDataSource`/`Td` log each `open @ position` and `downloadFile @ offset` (debug level):
+  the step (d) seek matrix reads its timings from these.
+- **Mi TV: not measured yet** (owner: later). The debug screen shows the QR on TV.
+
+**Next: step (b), sign-in for real.**
 
 **Next (was):** `gh run download <run> -R Pranav-pradeep0/glide-tdlib -n tdlib-aar -D android/app/libs`
 (AAR + `.sha256`), build, fix compile errors, commit step 2 (stage files explicitly). Then step 4:
