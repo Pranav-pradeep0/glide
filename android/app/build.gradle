@@ -179,6 +179,8 @@ dependencies {
     // replace with its GitHub Packages coordinate (plan section 4.3) so a fresh clone can
     // build at all.
     implementation files("libs/lib-decoder-ffmpeg-release.aar")
+    // TDLib for Telegram, built by the private glide-tdlib repo (docs/telegram.md).
+    implementation files("libs/glide-tdlib-release.aar")
 
     // Haptics sound recognition (HapticRecognizer): YAMNet, assets/yamnet.tflite, on the CPU.
     // 1.x, the plain Java build: 2.0-2.2 fail the manifest merge (litert and litert-api share

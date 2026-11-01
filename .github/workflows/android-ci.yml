@@ -39,6 +39,11 @@ jobs:
         working-directory: android/app/libs
         run: sha256sum -c lib-decoder-ffmpeg-release.aar.sha256
 
+      - name: Verify the TDLib AAR
+        # Same check for the AAR from glide-tdlib's CI.
+        working-directory: android/app/libs
+        run: sha256sum -c glide-tdlib-release.aar.sha256
+
       - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
@@ -161,6 +166,11 @@ jobs:
         # See the verify job.
         working-directory: android/app/libs
         run: sha256sum -c lib-decoder-ffmpeg-release.aar.sha256
+
+      - name: Verify the TDLib AAR
+        # Same check for the AAR from glide-tdlib's CI.
+        working-directory: android/app/libs
+        run: sha256sum -c glide-tdlib-release.aar.sha256
 
       - name: Validate release tag and version identity
         run: |

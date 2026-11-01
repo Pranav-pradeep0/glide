@@ -949,7 +949,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             .setDefaultRequestProperties(requestHeaders)
 
         val p = ExoPlayer.Builder(context, renderers)
-            // smb:// to the network-share reader, everything else as before.
+            // smb:// to the network-share reader, tg:// to Telegram, everything else as before.
             .setMediaSourceFactory(DefaultMediaSourceFactory(SmbAwareDataSource.Factory(DefaultDataSource.Factory(context, httpSource))))
             // The entire audio-focus subsystem of the VLC view is this one argument. With
             // handleAudioFocus = true the app must not request or respond to focus itself;

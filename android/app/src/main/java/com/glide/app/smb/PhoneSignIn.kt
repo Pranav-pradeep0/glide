@@ -59,12 +59,16 @@ object PhoneSignIn {
         return QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, raw.width * 8, raw.height * 8, hints)
     }
 
-    /** [qr] as a PNG data URI for an `<Image>`. */
-    fun qrPng(url: String): String {
+    fun qrBitmap(url: String): Bitmap {
         val m = qr(url)
         val pixels = IntArray(m.width * m.height) { if (m[it % m.width, it / m.width]) Color.BLACK else Color.WHITE }
+        return Bitmap.createBitmap(pixels, m.width, m.height, Bitmap.Config.ARGB_8888)
+    }
+
+    /** [qr] as a PNG data URI for an `<Image>`. */
+    fun qrPng(url: String): String {
         val png = ByteArrayOutputStream()
-        Bitmap.createBitmap(pixels, m.width, m.height, Bitmap.Config.ARGB_8888).compress(Bitmap.CompressFormat.PNG, 100, png)
+        qrBitmap(url).compress(Bitmap.CompressFormat.PNG, 100, png)
         return "data:image/png;base64," + Base64.encodeToString(png.toByteArray(), Base64.NO_WRAP)
     }
 

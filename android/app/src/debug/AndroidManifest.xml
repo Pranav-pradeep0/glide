@@ -8,5 +8,14 @@
 
     <application
         tools:targetApi="28"
-        tools:ignore="GoogleAppIndexingWarning" />
+        tools:ignore="GoogleAppIndexingWarning">
+        <!-- Telegram step (a) spike: adb shell am start -n
+             com.glide.player/com.glide.app.telegram.TelegramDebugActivity -->
+        <activity
+            android:name="com.glide.app.telegram.TelegramDebugActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+    </application>
 </manifest>

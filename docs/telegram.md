@@ -145,9 +145,9 @@ logic with fake `updateFile` sequences (holes, offset jumps, out-of-order update
 
 ## Owner to-do
 
-- [ ] Register the app at my.telegram.org (API development tools): app title "Glide", platform
+- [x] Register the app at my.telegram.org (API development tools): app title "Glide", platform
       Android. Put `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` in `.env` and as GitHub secrets.
-- [ ] Create the private `glide-tdlib` repo (or say to reuse the FFmpeg one's pattern under a new
+- [x] Create the private `glide-tdlib` repo (or say to reuse the FFmpeg one's pattern under a new
       name).
 - [ ] A test account or your own, with a few films in Saved Messages: a ~2 GB MKV, an MP4 with
       `moov` at the end, a short video sent as "video".
@@ -165,3 +165,25 @@ pages, checked), then packs `glide-tdlib-release.aar` (+ `.sha256`): `jni/<abi>/
 `classes.jar` (`Client`, `TdApi`), `proguard.txt` keeping `org.drinkless.tdlib.**`.
 `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` go `.env` → `BuildConfig` (0/empty = hidden); CI writes them
 from secrets of the same names.
+
+**2026-11-01: step (a) parts 2–3.** Committed: `TgWindow` (the download window, no TDLib types)
+and `TgWindowTest` (10 fake-`updateFile` cases, pass): step 3 done. **Written, not committed**
+(needs the AAR to compile): `Td.kt`, `TelegramDataSource.kt`, the `tg://` branch in
+`SmbAwareDataSource` (`smb/SmbDataSource.kt`), `Td.init` in `MainApplication`,
+`PhoneSignIn.qrBitmap`, the debug-only `TelegramDebugActivity` (+ `src/debug/AndroidManifest.xml`),
+the `files("libs/glide-tdlib-release.aar")` dependency, the AAR `sha256sum -c` steps in
+`android-ci.yml`, `.env.example`, and this doc. TdApi names checked against `td_api.tl` at the
+pinned commit. glide-tdlib run 1 built TDLib but failed its own 16 KB check on `armeabi-v7a`
+(fixed: 64-bit only); run 2 is `41300091949`.
+
+**2026-11-01: step (a) part 2 committed.** Run `41300091949` green; its AAR (+ `.sha256`) is
+committed in `android/app/libs` like the FFmpeg one (`.gitignore` exception: CI checks it). Only
+fix needed against the real `TdApi`: none (one Kotlin return-type slip in the debug screen).
+Debug and R8 release builds pass.
+
+**Next (was):** `gh run download <run> -R Pranav-pradeep0/glide-tdlib -n tdlib-aar -D android/app/libs`
+(AAR + `.sha256`), build, fix compile errors, commit step 2 (stage files explicitly). Then step 4:
+on the phone and Mi TV, `adb shell am start -n
+com.glide.player/com.glide.app.telegram.TelegramDebugActivity`, sign in by QR, play each test
+film; the screen and logcat `GlideTelegram` give first frame, MB/s, stalls, RAM. APK size per ABI
+from a debug-signed release build (R8), before vs after. Record here with the go/no-go.

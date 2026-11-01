@@ -10,6 +10,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceException
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
+import com.glide.app.telegram.TelegramDataSource
 import com.hierynomus.msdtyp.AccessMask
 import com.hierynomus.mserref.NtStatus
 import com.hierynomus.mssmb2.SMB2CreateDisposition
@@ -155,19 +156,25 @@ class SmbDataSource(private val chunk: Int = CHUNK, private val depth: Int = DEP
     }
 }
 
-/** `smb://` to [SmbDataSource], everything else to [upstream]. */
+/** `smb://` to [SmbDataSource], `tg://` to [TelegramDataSource], everything else to [upstream]. */
 @OptIn(UnstableApi::class)
 class SmbAwareDataSource(private val upstream: DataSource) : DataSource {
     private val smb = SmbDataSource()
+    private val tg = TelegramDataSource()
     private var active: DataSource? = null
 
     override fun addTransferListener(transferListener: TransferListener) {
         upstream.addTransferListener(transferListener)
         smb.addTransferListener(transferListener)
+        tg.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        val source = if (dataSpec.uri.scheme == "smb") smb else upstream
+        val source = when (dataSpec.uri.scheme) {
+            "smb" -> smb
+            "tg" -> tg
+            else -> upstream
+        }
         active = source
         return source.open(dataSpec)
     }
