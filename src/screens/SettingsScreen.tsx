@@ -39,7 +39,9 @@ import { AppSettings, ShakeAction } from '../types';
 import pkg from '../../package.json';
 import { NATIVE_API_LEVEL } from '@/native/GlideNative';
 import { ACTIVE_RELEASE_HASH } from 'react-native-stallion';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { TelegramService } from '@/services/TelegramService';
+import { formatFileSize } from '@/utils/formatUtils';
 import { IS_TV } from '@/utils/tv';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types';
@@ -258,6 +260,29 @@ export default function SettingsScreen() {
                     onPress: async () => {
                         await FileService.cleanSubtitleCache();
                         showSnackbar({ text: 'Subtitle cache cleared', tone: 'confirm' });
+                    },
+                },
+            ]
+        );
+    }
+
+    // Null until Telegram has been used here, so the row stays hidden.
+    const [telegramBytes, setTelegramBytes] = React.useState<number | null>(null);
+    useFocusEffect(useCallback(() => { TelegramService.cacheSize().then(setTelegramBytes, () => {}); }, []));
+
+    function handleClearTelegram() {
+        showDialog(
+            'Clear Telegram downloads',
+            'Videos downloaded from Telegram are deleted from this device. They stay in Telegram.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Clear',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await TelegramService.clearCache();
+                        setTelegramBytes(0);
+                        showSnackbar({ text: 'Telegram downloads cleared', tone: 'confirm' });
                     },
                 },
             ]
@@ -615,6 +640,9 @@ export default function SettingsScreen() {
                 <SectionLabel title="Storage" />
                 <ListGroup>
                     <ListRow icon="trash-2" title="Clear subtitle cache" destructive onPress={handleClearCache} />
+                    {telegramBytes !== null && (
+                        <ListRow icon="trash-2" title="Clear Telegram downloads" value={formatFileSize(telegramBytes)} destructive onPress={handleClearTelegram} />
+                    )}
                     <ListRow icon="trash-2" title="Clear watch history" destructive onPress={handleClearHistory} />
                 </ListGroup>
             </ScrollView>

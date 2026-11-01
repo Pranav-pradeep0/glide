@@ -117,13 +117,17 @@ object Td {
     }
 
     /** The film in message [messageId] of [chatId] (a video, or a video sent as a file). */
-    fun file(chatId: Long, messageId: Long): TdApi.File {
-        send(TdApi.GetChat(chatId))
-        return when (val c = send(TdApi.GetMessage(chatId, messageId)).content) {
+    fun file(chatId: Long, messageId: Long): TdApi.File =
+        when (val c = message(chatId, messageId).content) {
             is TdApi.MessageVideo -> c.video.video
             is TdApi.MessageDocument -> c.document.document
             else -> throw TdException(404, "message $messageId is not a video")
         }
+
+    /** A message, its chat loaded first (TDLib knows no message of a chat it hasn't seen). */
+    fun message(chatId: Long, messageId: Long): TdApi.Message {
+        send(TdApi.GetChat(chatId))
+        return send(TdApi.GetMessage(chatId, messageId))
     }
 
     /**

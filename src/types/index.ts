@@ -177,6 +177,9 @@ export type RootStackParamList = {
     NetworkShares: undefined;
     /** A folder on a network share: `smb://host/share/path`. */
     NetworkFolder: { uri: string; title: string };
+    /** Telegram, phones only: TV has it in the rail (MainTabParamList). */
+    TelegramHome: undefined;
+    TelegramChat: { chatId: number; title: string };
     NowPlaying: undefined;
     AlbumDetail: {
         albumId: string;
@@ -284,6 +287,8 @@ export type MainTabParamList = {
     Recents: undefined;
     /** TV only. */
     Network: undefined;
+    /** TV only. */
+    Telegram: undefined;
     Music: undefined;
     Settings: undefined;
 };

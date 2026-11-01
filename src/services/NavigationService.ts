@@ -10,7 +10,8 @@ export class NavigationService {
         return videoPath.startsWith('http://') ||
             videoPath.startsWith('https://') ||
             videoPath.startsWith('rtsp://') ||
-            videoPath.startsWith('smb://');
+            videoPath.startsWith('smb://') ||
+            videoPath.startsWith('tg://');
     }
 
     /**

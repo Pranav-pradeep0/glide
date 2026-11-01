@@ -19,6 +19,7 @@ import { usePermissionStore } from '@/store/permissionStore';
 import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { NavigationService } from '@/services/NavigationService';
 import { SMB_AVAILABLE } from '@/services/SmbService';
+import { TELEGRAM_AVAILABLE } from '@/services/TelegramService';
 import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { metrics, type } from '@/theme/theme';
 import { getResumablePosition } from '@/utils/playbackResume';
@@ -261,7 +262,10 @@ export default function FoldersScreen() {
                         onPress={() => setViewMode(grid ? 'list' : 'grid')}
                         accessibilityLabel={grid ? 'Show as list' : 'Show as grid'}
                     />
-                    {/* TV has Network in the rail. */}
+                    {/* TV has Network and Telegram in the rail. */}
+                    {!IS_TV && TELEGRAM_AVAILABLE && (
+                        <IconButton icon="send" onPress={() => navigation.navigate('TelegramHome')} accessibilityLabel="Telegram" />
+                    )}
                     {!IS_TV && SMB_AVAILABLE && (
                         <IconButton icon="server" onPress={() => navigation.navigate('NetworkShares')} accessibilityLabel="Network shares" />
                     )}

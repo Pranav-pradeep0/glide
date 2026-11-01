@@ -1,7 +1,6 @@
 package com.glide.app.telegram
 
 import android.net.Uri
-import android.util.Base64
 import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -137,8 +136,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
 
     /**
      * Saved Messages (`saved: true`) then the first [limit] chats of the main list, channels left
-     * out (docs/telegram.md "Decisions"): `{ id, title, saved, photo, mini }`, `photo` a file id
-     * for [thumbnail] (0: none), `mini` a tiny blurred JPEG data URI or null.
+     * out (docs/telegram.md "Decisions"): `{ id, title, saved, group }`.
      */
     @ReactMethod
     fun chats(limit: Int, promise: Promise) = td(promise) {
@@ -162,7 +160,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             val c = Td.send(TdApi.GetChat(id))
             val t = c.type
             if (t is TdApi.ChatTypeSecret || (t is TdApi.ChatTypeSupergroup && t.isChannel)) continue
-            out.pushMap(chat(c, false))
+            out.pushMap(chat(c, false).apply { putBoolean("group", t !is TdApi.ChatTypePrivate) })
         }
         promise.resolve(out)
     }
@@ -171,14 +169,14 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         putDouble("id", c.id.toDouble())
         putString("title", c.title)
         putBoolean("saved", saved)
-        putInt("photo", c.photo?.small?.id ?: 0)
-        putString("mini", mini(c.photo?.minithumbnail))
+        putBoolean("group", false)
     }
 
     /**
      * A page of the chat's videos, newest first, older than message [from] (0: from the newest):
      * `{ items, next }`, `next` the [from] of the following page, 0 at the end. Items: `{ uri,
-     * name, size, duration, width, height, date, thumb, mini }`; documents carry no duration (0).
+     * name, size, duration, width, height, date }`; documents carry no duration (0); [poster]
+     * gives the picture.
      */
     @ReactMethod
     fun videos(chatId: Double, from: Double, limit: Int, promise: Promise) = td(promise) {
@@ -214,15 +212,11 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         val caption: TdApi.FormattedText?
         val name: String
         val file: TdApi.File
-        val thumb: TdApi.Thumbnail?
-        val blur: TdApi.Minithumbnail?
         when (val c = m.content) {
             is TdApi.MessageVideo -> c.video.run {
                 caption = c.caption
                 name = fileName
                 file = video
-                thumb = thumbnail
-                blur = minithumbnail
                 row.putInt("duration", duration)
                 row.putInt("width", width)
                 row.putInt("height", height)
@@ -232,8 +226,6 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
                 caption = c.caption
                 name = fileName
                 file = document
-                thumb = thumbnail
-                blur = minithumbnail
                 row.putInt("duration", 0)
                 row.putInt("width", 0)
                 row.putInt("height", 0)
@@ -244,18 +236,28 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         row.putString("name", name.ifEmpty { caption?.text?.lineSequence()?.firstOrNull()?.trim().orEmpty() }.ifEmpty { "Video" })
         row.putDouble("size", file.total.toDouble())
         row.putDouble("date", m.date * 1000.0)
-        row.putInt("thumb", thumb?.file?.id ?: 0)
-        row.putString("mini", mini(blur))
         return m.id to row
     }
 
-    private fun mini(m: TdApi.Minithumbnail?) = m?.let { "data:image/jpeg;base64," + Base64.encodeToString(it.data, Base64.NO_WRAP) }
-
-    /** A thumbnail or chat photo by file id (`thumb`, `photo`): resolves a `file://` URI. */
+    /**
+     * The picture Telegram keeps for a `tg://` film (never a frame: that would download part of
+     * it): resolves a `file://` URI, or null when it has none.
+     */
     @ReactMethod
-    fun thumbnail(fileId: Int, promise: Promise) = td(promise) {
-        val path = Td.download(fileId)
-        if (path.isEmpty()) promise.reject("telegram", "No thumbnail") else promise.resolve("file://$path")
+    fun poster(uri: String, promise: Promise) = td(promise) {
+        val (chatId, messageId) = parse(uri) ?: return@td promise.resolve(null)
+        val thumb = when (val c = Td.message(chatId, messageId).content) {
+            is TdApi.MessageVideo -> c.video.thumbnail
+            is TdApi.MessageDocument -> c.document.thumbnail
+            else -> null
+        }
+        val path = thumb?.let { Td.download(it.file.id) }.orEmpty()
+        promise.resolve(if (path.isEmpty()) null else "file://$path")
+    }
+
+    private fun parse(uri: String): Pair<Long, Long>? {
+        val u = Uri.parse(uri)
+        return (u.host?.toLongOrNull() ?: return null) to (u.pathSegments.firstOrNull()?.toLongOrNull() ?: return null)
     }
 
     private val prefetching = AtomicReference<String?>()
@@ -270,9 +272,8 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         if (!Td.available || prefetching.getAndSet(uri) != null) return
         prefetcher.execute {
             while (true) {
-                val u = Uri.parse(prefetching.getAndSet(null) ?: break)
-                val chatId = u.host?.toLongOrNull() ?: continue
-                val messageId = u.pathSegments.firstOrNull()?.toLongOrNull() ?: continue
+                val u = prefetching.getAndSet(null) ?: break
+                val (chatId, messageId) = parse(u) ?: continue
                 runCatching { Td.prefetch(chatId, messageId) }.onFailure { Log.w(TAG, "prefetch $u", it) }
             }
         }

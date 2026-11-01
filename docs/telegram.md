@@ -239,12 +239,12 @@ and a message fit to show):
   **QR → phone is `logOut()`**: TDLib can't leave the QR state, so it wipes and restarts at `phone`.
 - `logOut()`: signs out, deletes `filesDir/tdlib` + `cacheDir/tdlib`, ends at `phone`.
 - `chats(limit)` → Saved Messages first (`saved: true`), then the main list minus channels and
-  secret chats: `{ id, title, saved, photo, mini }`. Page by asking a bigger `limit`.
+  secret chats: `{ id, title, saved, group }`. Page by asking a bigger `limit`.
 - `videos(chatId, from, limit)` → `{ items, next }`, newest first; `next` 0 at the end (never an
   empty page with more to come). Item: `{ uri: "tg://chat/msg", name, size, duration (0 for
-  files), width, height, date (ms), thumb, mini }`.
-- `thumbnail(fileId)` (`thumb`/`photo`) → `file://` path; show `mini` (tiny blurred JPEG) until
-  it resolves; 0 = none.
+  files), width, height, date (ms) }`.
+- `poster(uri)` → `file://` path of Telegram's own thumbnail, or null (session 2: by URI, so
+  Recents and Continue watching get it through `ThumbnailService` too; chat photos dropped).
 - `prefetch(uri)`: head + tail 2 MB each at low priority, latest call wins; stops once the film
   plays. Call on details/`⋯`, or after a short focus dwell on TV (not on every focus move).
 - `cacheSize()` (bytes), `clearCache()`. The cap (min(4 GB, a quarter of free space)) is applied
@@ -254,4 +254,19 @@ Skipped, add if session 3 shows the need: resend code (`resendAuthenticationCode
 film's download when playback ends (the cap covers it), `deleteFile` while playing on Clear
 (Settings isn't reachable mid-film).
 
-**Next: session 2 (JS), see Steps.**
+**2026-11-01: session 2 (JS) done.** `TelegramService`, `screens/TelegramScreen.tsx` (sign-in,
+chats, `TelegramChatScreen`), routes `TelegramHome`/`TelegramChat` (phones, from the Videos
+header's paper-plane icon) and the `Telegram` rail page (TV). Sign-in: TV asks for the QR at
+once; phones start on the number. Chats: Saved Messages always, then each of the first 100 chats
+probed in turn for a first page of videos (shown as found; kept for opening the chat). `tg`
+added to `isNetworkStream`, `isReplayable` (History, Recents, Continue watching follow),
+`EmbeddedSubtitles.isNetwork`; `ThumbnailService` answers `tg://` with `poster`; the ⋯ sheet
+skips metadata and folder for `tg://` and calls `prefetch`. Settings > Storage: "Clear Telegram
+downloads" with the size, shown once Telegram was used. Typecheck, jest (36 suites), native unit
+tests pass.
+
+Left for session 3 to judge on device: whether the chat probe hits Telegram's flood limit on
+big accounts (it stops quietly), TV focus prefetch (only the ⋯ sheet prefetches now; Play from
+the grid doesn't), D-pad paths through sign-in.
+
+**Next: session 3 (device), see Steps.**

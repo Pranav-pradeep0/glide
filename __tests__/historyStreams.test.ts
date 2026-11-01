@@ -17,6 +17,7 @@ describe('history for shares and app links', () => {
     it('knows what Recents can open again', () => {
         expect(isReplayable('/storage/emulated/0/Movies/a.mkv')).toBe(true);
         expect(isReplayable('smb://192.168.1.37/GlideTest/Spider-Man.mkv')).toBe(true);
+        expect(isReplayable('tg://-1001234567890/5242880')).toBe(true);
         expect(isReplayable('https://torrentio.strem.fun/resolve/realdebrid/x/y/1/a.mkv')).toBe(true);
         expect(isReplayable('http://127.0.0.1:11470/abc/0')).toBe(false);
         expect(isReplayable('http://LOCALHOST:11470/abc/0')).toBe(false);

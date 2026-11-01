@@ -83,7 +83,7 @@ object EmbeddedSubtitles {
         }
     }
 
-    fun isNetwork(uri: Uri) = uri.scheme == "http" || uri.scheme == "https" || uri.scheme == "smb"
+    fun isNetwork(uri: Uri) = uri.scheme in setOf("http", "https", "smb", "tg")
 
     fun toUri(path: String): Uri = if (path.startsWith("/")) Uri.fromFile(File(path)) else Uri.parse(path)
 

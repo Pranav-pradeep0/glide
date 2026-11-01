@@ -10,6 +10,7 @@ import { ListGroup, ListRow, Sheet } from '@/components/ui';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { getResumablePosition, isFinished } from '@/utils/playbackResume';
 import { metrics, type } from '@/theme/theme';
+import { isTelegram, TelegramService } from '@/services/TelegramService';
 
 interface VideoOptionsProps {
     visible: boolean;
@@ -51,7 +52,9 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
     const smb = path.startsWith('smb://');
     // An app's link: its "folder" is a server path (a debrid token, say), and secure_uri hides it anyway.
     const link = /^https?:/.test(path);
-    const folder = link ? undefined : path.split('/').slice(0, -1).pop();
+    // Telegram: the "folder" is a chat id, and reading metadata would download part of the film.
+    const tg = isTelegram(path);
+    const folder = link || tg ? undefined : path.split('/').slice(0, -1).pop();
 
     // The store, not `video`: a Recents entry handed in is a snapshot.
     const entry = useVideoHistoryStore((s) => (path ? s.getVideoHistory(path) : null));
@@ -73,12 +76,14 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
             return;
         }
         if (!path) {return;}
+        // Details or ⋯ usually comes before Play: start the film's head and tail now.
+        if (tg) {TelegramService.prefetch(path);}
         let cancelled = false;
         setExtendedMeta({ loading: true });
 
         const syncModule = NativeModules.SubtitleSyncModule;
         // It reads local files only.
-        if (syncModule?.getVideoMetadata && !smb && !link) {
+        if (syncModule?.getVideoMetadata && !smb && !link && !tg) {
             syncModule.getVideoMetadata(path).then((data: any) => {
                 if (cancelled) {return;}
                 if (!data) {
@@ -106,7 +111,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
         }
 
         return () => { cancelled = true; };
-    }, [visible, path, smb, link]);
+    }, [visible, path, smb, link, tg]);
 
     const formattedDate = useMemo(() => {
         if (!date) { return null; }

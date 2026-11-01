@@ -4,6 +4,7 @@ import { FileService } from './FileService';
 import { MediaService } from './MediaService';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { hashPath } from '@/utils/hashPath';
+import { isTelegram, TelegramService } from './TelegramService';
 
 /** v2: v1 holds flat green frames cached before native rejected them. */
 const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails2`;
@@ -89,6 +90,13 @@ class ThumbnailServiceClass {
         const known = this.resolved.get(memo);
         if (known) {
             return known;
+        }
+
+        // Telegram's own picture at any time: a frame would download part of the film.
+        if (isTelegram(videoPath)) {
+            const poster = await TelegramService.poster(videoPath);
+            if (poster) { this.remember(memo, poster); }
+            return poster;
         }
 
         // Fast-path: try MediaStore system thumbnail (timeMs === 0)

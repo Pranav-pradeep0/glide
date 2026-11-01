@@ -65,12 +65,12 @@ export function prune(history: Map<string, VideoHistoryEntry>): VideoHistoryEntr
 const isLocalPath = (p: string) => p.startsWith('/') || p.startsWith('file://');
 
 /**
- * What Recents can open again, keyed by its path: files, shares, and app links (an addon's
+ * What Recents can open again, keyed by its path: files, shares, Telegram, and app links (an addon's
  * link redirects to a fresh one each time). Not the sending app's own server on this device
  * (Stremio's 127.0.0.1, gone once it closes), and not content://, whose grant ends with the task.
  */
 export function isReplayable(path: string): boolean {
-    if (isLocalPath(path) || path.startsWith('smb://')) {return true;}
+    if (isLocalPath(path) || path.startsWith('smb://') || path.startsWith('tg://')) {return true;}
     const host = /^https?:\/\/([^/:?#]+)/i.exec(path)?.[1]?.toLowerCase();
     return !!host && host !== 'localhost' && !host.startsWith('127.');
 }

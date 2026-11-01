@@ -280,7 +280,7 @@ function SignInSheet({ target, visible, onClose, onAdded }: {
 }
 
 /** A labelled text field with a focus ring, so the D-pad shows where it is on TV. */
-function Field({ label, ref, ...input }: TextInputProps & { label: string; ref?: React.Ref<TextInputInstance> }) {
+export function Field({ label, ref, ...input }: TextInputProps & { label: string; ref?: React.Ref<TextInputInstance> }) {
     const { colors } = useTheme();
     const [focused, setFocused] = useState(false);
     return (

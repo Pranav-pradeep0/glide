@@ -54,10 +54,10 @@ class MainApplication : Application(), ReactApplication {
     // Subtitle font. An XML family (res/font) so fontWeight and italic pick real faces.
     com.facebook.react.common.assets.ReactFontManager.getInstance()
         .addCustomFont(this, "AtkinsonHyperlegibleNext", R.font.atkinson_hyperlegible_next)
+    com.glide.app.telegram.Td.init(this)
     // Thumbnails of smb:// films: the library can't see app classes, so it is handed the reader.
     // A small read-ahead: a thumbnail opens and seeks a few times and reads little after each,
     // and playback's 8 MB per open took an MKV stop frame past its 20 s timeout at ~3 MB/s.
-    com.glide.app.telegram.Td.init(this)
     SimpleThumbnailModule.dataSourceFactory =
       androidx.media3.datasource.DataSource.Factory { SmbDataSource(chunk = 256 shl 10, depth = 4) }
   }

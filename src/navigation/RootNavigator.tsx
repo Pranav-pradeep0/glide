@@ -32,6 +32,7 @@ import { AudioTrack, MainTabParamList, RootStackParamList } from '@/types';
 import { useAudioStore } from '@/store/audioStore';
 import { AudioMediaService } from '@/services/AudioMediaService';
 import { PermissionService } from '@/services/PermissionService';
+import { TELEGRAM_AVAILABLE } from '@/services/TelegramService';
 
 /**
  * The player gets its own error boundary.
@@ -348,6 +349,16 @@ function MainTabs() {
                     }}
                 />
             )}
+            {IS_TV && TELEGRAM_AVAILABLE && (
+                <Tab.Screen
+                    name="Telegram"
+                    getComponent={() => require('@/screens/TelegramScreen').default}
+                    options={{
+                        title: 'Telegram',
+                        tabBarIcon: ({ color }) => <Feather name="send" size={22} color={color} />,
+                    }}
+                />
+            )}
             {/* TV is videos only for now. */}
             {!IS_TV && (
                 <Tab.Screen
@@ -541,6 +552,24 @@ export default function RootNavigator({ onReady }: RootNavigatorProps) {
                         <Stack.Screen
                             name="NetworkFolder"
                             getComponent={() => require('@/screens/NetworkScreen').NetworkFolderScreen}
+                            options={{
+                                headerShown: false,
+                                animation: 'slide_from_right',
+                                freezeOnBlur: true,
+                            }}
+                        />
+                        <Stack.Screen
+                            name="TelegramHome"
+                            getComponent={() => require('@/screens/TelegramScreen').default}
+                            options={{
+                                headerShown: false,
+                                animation: 'slide_from_right',
+                                freezeOnBlur: true,
+                            }}
+                        />
+                        <Stack.Screen
+                            name="TelegramChat"
+                            getComponent={() => require('@/screens/TelegramScreen').TelegramChatScreen}
                             options={{
                                 headerShown: false,
                                 animation: 'slide_from_right',
