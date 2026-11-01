@@ -1,6 +1,7 @@
 package com.glide.app.telegram
 
 import android.app.Activity
+import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -36,7 +37,7 @@ import java.util.concurrent.Executors
 /**
  * Step (a) spike (docs/telegram.md), debug builds only:
  * `adb shell am start -n com.glide.player/com.glide.app.telegram.TelegramDebugActivity`.
- * QR sign-in, then the newest videos of Saved Messages; tap one to play it through
+ * Sign-in (phone: number + code; TV: QR), then the newest videos of Saved Messages; tap one to play it through
  * [TelegramDataSource] and read the numbers (also logged, tag `GlideTelegram`). Leaving a film
  * deletes its download, so every run starts cold.
  */
@@ -62,16 +63,19 @@ class TelegramDebugActivity : Activity() {
         super.onCreate(savedInstanceState)
         status = TextView(this).apply { textSize = 18f }
         qr = ImageView(this).apply { visibility = View.GONE }
-        password = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            visibility = View.GONE
-        }
+        // One field for the phone number, the code and the 2-step password, in turn.
+        password = EditText(this).apply { visibility = View.GONE }
         val passwordGo = Button(this).apply {
-            text = "Check password"
+            text = "Next"
             visibility = View.GONE
             setOnClickListener {
-                val p = password.text.toString()
-                io.execute { runCatching { Td.send(TdApi.CheckAuthenticationPassword(p)) }.onFailure { say("Password: ${it.message}") } }
+                val t = password.text.toString().trim()
+                val f = when (Td.auth) {
+                    is TdApi.AuthorizationStateWaitPhoneNumber -> TdApi.SetAuthenticationPhoneNumber(t, null)
+                    is TdApi.AuthorizationStateWaitCode -> TdApi.CheckAuthenticationCode(t)
+                    else -> TdApi.CheckAuthenticationPassword(t)
+                }
+                io.execute { runCatching { Td.send(f) }.onFailure { say("${status.text}\n${it.message}") } }
             }
         }
         password.tag = passwordGo
@@ -112,26 +116,38 @@ class TelegramDebugActivity : Activity() {
 
     private fun say(text: String) { main.post { status.text = text } }
 
+    private val isTv get() =
+        (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+
+    private fun ask(prompt: String, type: Int) {
+        say(prompt)
+        password.inputType = type
+        password.text.clear()
+        password.visibility = View.VISIBLE
+        (password.tag as View).visibility = View.VISIBLE
+        password.requestFocus()
+    }
+
     private fun show(s: TdApi.AuthorizationState) {
         qr.visibility = View.GONE
         password.visibility = View.GONE
         (password.tag as View).visibility = View.GONE
         when (s) {
-            is TdApi.AuthorizationStateWaitPhoneNumber -> {
+            // TV: QR, scanned with the phone. Phone: number + code (it can't scan its own screen).
+            is TdApi.AuthorizationStateWaitPhoneNumber -> if (isTv) {
                 say("Asking Telegram for a sign-in QR code…")
                 io.execute { runCatching { Td.send(TdApi.RequestQrCodeAuthentication(LongArray(0))) }.onFailure { say("QR: ${it.message}") } }
-            }
+            } else ask("Phone number, with country code (+91…)", InputType.TYPE_CLASS_PHONE)
+            is TdApi.AuthorizationStateWaitCode -> ask("Code Telegram sent to your Telegram app", InputType.TYPE_CLASS_NUMBER)
             is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> {
                 say("On your phone: Telegram → Settings → Devices → Link Desktop Device, and scan this.")
                 qr.setImageBitmap(PhoneSignIn.qrBitmap(s.link))
                 qr.visibility = View.VISIBLE
             }
-            is TdApi.AuthorizationStateWaitPassword -> {
-                say("Two-step password${if (s.passwordHint.isNullOrEmpty()) "" else " (hint: ${s.passwordHint})"}")
-                password.visibility = View.VISIBLE
-                (password.tag as View).visibility = View.VISIBLE
-                password.requestFocus()
-            }
+            is TdApi.AuthorizationStateWaitPassword -> ask(
+                "Two-step password${if (s.passwordHint.isNullOrEmpty()) "" else " (hint: ${s.passwordHint})"}",
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+            )
             is TdApi.AuthorizationStateReady -> {
                 say("Signed in. Newest videos in Saved Messages:")
                 io.execute { loadVideos() }
@@ -251,7 +267,8 @@ class TelegramDebugActivity : Activity() {
         main.removeCallbacksAndMessages(null)
         player?.release()
         player = null
-        if (playingFile != 0) Td.post(TdApi.DeleteFile(playingFile))
+        val id = playingFile
+        if (id != 0) io.execute { runCatching { Td.delete(id) } }
         playingFile = 0
     }
 

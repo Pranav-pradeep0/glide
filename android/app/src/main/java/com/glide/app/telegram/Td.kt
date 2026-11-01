@@ -116,9 +116,24 @@ object Td {
         }
     }
 
+    /**
+     * Drops a file from TDLib's cache. Cancel first: `deleteFile` alone unlinks the partial file
+     * while its download keeps writing into the deleted copy, and TDLib still counts those bytes.
+     */
+    fun delete(fileId: Int) {
+        send(TdApi.CancelDownloadFile(fileId, false))
+        send(TdApi.DeleteFile(fileId))
+    }
+
     /** `tg://chatId/messageId` → its download window and size. One window per file, shared. */
     fun open(chatId: Long, messageId: Long): Pair<TgWindow, Long> {
-        val f = file(chatId, messageId)
+        var f = file(chatId, messageId)
+        // TDLib's database can list a partial file that's gone from disk (Android clears
+        // cacheDir; the app died mid-delete). Make it forget the file and start over.
+        if (f.local.path.isNotEmpty() && !java.io.File(f.local.path).exists()) {
+            delete(f.id)
+            f = file(chatId, messageId)
+        }
         val size = if (f.size > 0) f.size else f.expectedSize
         // Seeded before it's registered, so no update can land ahead of the seed.
         val window = windows[f.id] ?: TgWindow(size, tdlib(f.id)).also {
@@ -132,6 +147,7 @@ object Td {
         override fun prefixAt(pos: Long) = send(TdApi.GetFileDownloadedPrefixSize(fileId, pos)).size
 
         override fun download(offset: Long) {
+            Log.d(TAG, "downloadFile $fileId @ $offset")
             send(TdApi.DownloadFile(fileId, 32, offset, 0, false)) { windows[fileId]?.onUpdate(progress(it)) }
         }
     }

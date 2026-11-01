@@ -1,6 +1,7 @@
 package com.glide.app.telegram
 
 import android.net.Uri
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
@@ -39,6 +40,7 @@ class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
             throw DataSourceException(e, if (e.code in 400..499) PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND else PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         }
         if (dataSpec.position > size) throw DataSourceException(PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE)
+        Log.d("GlideTelegram", "open $chatId/$messageId @ ${dataSpec.position}")
         window = w
         pos = dataSpec.position
         remaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) dataSpec.length else size - pos

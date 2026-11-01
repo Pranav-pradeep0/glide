@@ -16,6 +16,8 @@
             android:exported="true"
             android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+            android:enableOnBackInvokedCallback="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            tools:targetApi="33" />
     </application>
 </manifest>
