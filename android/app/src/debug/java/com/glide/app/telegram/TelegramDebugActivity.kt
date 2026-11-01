@@ -106,13 +106,15 @@ class TelegramDebugActivity : Activity() {
             return
         }
         say("Starting TDLib…")
-        Td.onAuth = { s -> main.post { show(s) } }
+        Td.onAuth += onAuth
         Td.onFile = { f -> if (f.id == playingFile) main.post { sample(f.local.downloadedSize) } }
         io.execute {
             Td.start()
             Td.auth?.let { s -> main.post { show(s) } }
         }
     }
+
+    private val onAuth: (TdApi.AuthorizationState) -> Unit = { s -> main.post { show(s) } }
 
     private fun say(text: String) { main.post { status.text = text } }
 
@@ -284,7 +286,7 @@ class TelegramDebugActivity : Activity() {
 
     override fun onDestroy() {
         stop()
-        Td.onAuth = null
+        Td.onAuth -= onAuth
         Td.onFile = null
         io.shutdown()
         super.onDestroy()

@@ -170,7 +170,7 @@ logic with fake `updateFile` sequences (holes, offset jumps, out-of-order update
 
 ## Status
 
-**2026-11-01: plan written. Nothing built yet.** Next: step (a).
+**2026-11-01: plan written.**
 
 **2026-11-01: step (a) part 1, the TDLib build.** Private repo `Pranav-pradeep0/glide-tdlib`
 (local `C:\glide-tdlib`, branch `main`), workflow "Build TDLib" (manual). Pins in its
@@ -223,11 +223,35 @@ free account, debug screen, every run from a cold cache:
   the step (d) seek matrix reads its timings from these.
 - **Mi TV: not measured yet** (owner: later). The debug screen shows the QR on TV.
 
-**Next: session 1 (native), see Steps.**
+**2026-11-01: session 1 (native) done.** `TelegramModule` (`telegram/TelegramModule.kt`,
+registered in `GlidePlayerPackage`), `API_LEVEL` 26. Unit tests `TgTest` (paging, error wording,
+video documents) + `TgWindowTest` pass; debug and R8 release builds pass. Not run on a device.
+What session 2 calls (`NativeModules.GlideTelegram`; every failure rejects with code `telegram`
+and a message fit to show):
 
-**Next (was):** `gh run download <run> -R Pranav-pradeep0/glide-tdlib -n tdlib-aar -D android/app/libs`
-(AAR + `.sha256`), build, fix compile errors, commit step 2 (stage files explicitly). Then step 4:
-on the phone and Mi TV, `adb shell am start -n
-com.glide.player/com.glide.app.telegram.TelegramDebugActivity`, sign in by QR, play each test
-film; the screen and logcat `GlideTelegram` give first frame, MB/s, stalls, RAM. APK size per ABI
-from a debug-signed release build (R8), before vs after. Record here with the go/no-go.
+- Constant `available` (false: no API ID in this build; hide the feature).
+- `start()` → sign-in state; then event `GlideTelegramAuth` with each new state. States:
+  `starting`, `phone`, `code` (+ `phone`, `sentTo` `telegram`/`sms`/`other`), `qr` (+ `link`,
+  `qr` PNG data URI, renewed by TDLib: redraw on each event), `password` (+ `hint`), `ready`
+  (+ `name`, `phone`: "Signed in as"), `loggingOut`, `unsupported` (+ `what`: Telegram wants an
+  email or sign-up; say "finish in the Telegram app").
+- `phoneNumber(n)`, `code(c)`, `password(p)`, `requestQr()` (from `phone`/`code`/`password`).
+  **QR → phone is `logOut()`**: TDLib can't leave the QR state, so it wipes and restarts at `phone`.
+- `logOut()`: signs out, deletes `filesDir/tdlib` + `cacheDir/tdlib`, ends at `phone`.
+- `chats(limit)` → Saved Messages first (`saved: true`), then the main list minus channels and
+  secret chats: `{ id, title, saved, photo, mini }`. Page by asking a bigger `limit`.
+- `videos(chatId, from, limit)` → `{ items, next }`, newest first; `next` 0 at the end (never an
+  empty page with more to come). Item: `{ uri: "tg://chat/msg", name, size, duration (0 for
+  files), width, height, date (ms), thumb, mini }`.
+- `thumbnail(fileId)` (`thumb`/`photo`) → `file://` path; show `mini` (tiny blurred JPEG) until
+  it resolves; 0 = none.
+- `prefetch(uri)`: head + tail 2 MB each at low priority, latest call wins; stops once the film
+  plays. Call on details/`⋯`, or after a short focus dwell on TV (not on every focus move).
+- `cacheSize()` (bytes), `clearCache()`. The cap (min(4 GB, a quarter of free space)) is applied
+  each time TDLib reaches `ready`.
+
+Skipped, add if session 3 shows the need: resend code (`resendAuthenticationCode`), deleting a
+film's download when playback ends (the cap covers it), `deleteFile` while playing on Clear
+(Settings isn't reachable mid-film).
+
+**Next: session 2 (JS), see Steps.**

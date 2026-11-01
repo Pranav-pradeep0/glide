@@ -8,7 +8,12 @@ import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+/** A file's size, or TDLib's estimate while it isn't known. */
+val TdApi.File.total get() = if (size > 0) size else expectedSize
 
 /** One TDLib client for the process, started on first use (docs/telegram.md). */
 object Td {
@@ -17,7 +22,7 @@ object Td {
     /** Builds without an API ID hide Telegram. */
     val available get() = BuildConfig.TELEGRAM_API_ID != 0 && BuildConfig.TELEGRAM_API_HASH.isNotEmpty()
 
-    class TdException(val code: Int, message: String) : IOException("$code $message")
+    class TdException(val code: Int, val text: String) : IOException("$code $text")
 
     private lateinit var app: Context
     private var client: Client? = null
@@ -28,8 +33,7 @@ object Td {
         private set
 
     /** Sign-in state as it changes, on TDLib's thread. */
-    @Volatile
-    var onAuth: ((TdApi.AuthorizationState) -> Unit)? = null
+    val onAuth = CopyOnWriteArraySet<(TdApi.AuthorizationState) -> Unit>()
 
     /** Every `updateFile`, on TDLib's thread (the debug screen's download speed). */
     @Volatile
@@ -80,8 +84,14 @@ object Td {
                 val s = o.authorizationState
                 auth = s
                 Log.i(TAG, "auth: ${s.javaClass.simpleName}")
-                if (s is TdApi.AuthorizationStateWaitTdlibParameters) post(parameters())
-                onAuth?.invoke(s)
+                when (s) {
+                    is TdApi.AuthorizationStateWaitTdlibParameters -> post(parameters())
+                    is TdApi.AuthorizationStateReady -> post(optimize(cap()))
+                    // This client is finished; the next call starts a new one.
+                    is TdApi.AuthorizationStateClosed -> synchronized(this) { client = null }
+                    else -> {}
+                }
+                onAuth.forEach { it(s) }
             }
             is TdApi.UpdateFile -> {
                 windows[o.file.id]?.onUpdate(progress(o.file))
@@ -125,22 +135,82 @@ object Td {
         send(TdApi.DeleteFile(fileId))
     }
 
+    /**
+     * [file], made to forget a partial file that's gone from disk (Android clears cacheDir; the
+     * app died mid-delete), so its download starts over.
+     */
+    private fun onDisk(chatId: Long, messageId: Long): TdApi.File {
+        val f = file(chatId, messageId)
+        if (f.local.path.isEmpty() || java.io.File(f.local.path).exists()) return f
+        delete(f.id)
+        return file(chatId, messageId)
+    }
+
     /** `tg://chatId/messageId` → its download window and size. One window per file, shared. */
     fun open(chatId: Long, messageId: Long): Pair<TgWindow, Long> {
-        var f = file(chatId, messageId)
-        // TDLib's database can list a partial file that's gone from disk (Android clears
-        // cacheDir; the app died mid-delete). Make it forget the file and start over.
-        if (f.local.path.isNotEmpty() && !java.io.File(f.local.path).exists()) {
-            delete(f.id)
-            f = file(chatId, messageId)
-        }
-        val size = if (f.size > 0) f.size else f.expectedSize
+        val f = onDisk(chatId, messageId)
+        val size = f.total
         // Seeded before it's registered, so no update can land ahead of the seed.
         val window = windows[f.id] ?: TgWindow(size, tdlib(f.id)).also {
             it.onUpdate(progress(f))
             windows.putIfAbsent(f.id, it)
         }
         return windows.getValue(f.id) to size
+    }
+
+    /**
+     * Fetches the film's first and last [PREFETCH] bytes before Play: Matroska needs both (header,
+     * then the Cues at the end) before its first frame, ~3 s each (docs/telegram.md, step (a)).
+     * Low priority, and stops once the film is playing: its own reads lead then.
+     */
+    fun prefetch(chatId: Long, messageId: Long) {
+        val f = onDisk(chatId, messageId)
+        val size = f.total
+        for (offset in listOf(0L, maxOf(0L, size - PREFETCH))) {
+            if (windows.containsKey(f.id)) return
+            val want = minOf(PREFETCH, size - offset)
+            if (send(TdApi.GetFileDownloadedPrefixSize(f.id, offset)).size >= want) continue
+            Log.d(TAG, "prefetch ${f.id} @ $offset")
+            send(TdApi.DownloadFile(f.id, 1, offset, want, true))
+        }
+    }
+
+    /** A small file (thumbnail, chat photo), downloaded whole: its path. */
+    fun download(fileId: Int): String = send(TdApi.DownloadFile(fileId, 16, 0, 0, true)).local.path
+
+    /** Bytes in TDLib's file cache. */
+    fun cacheSize(): Long = send(TdApi.GetStorageStatisticsFast()).filesSize
+
+    /** Empties the file cache; the session and chat lists stay. */
+    fun clearCache() {
+        send(optimize(0))
+        windows.clear()
+    }
+
+    // ponytail: a size cap applied when TDLib signs in, not while a film plays. A long session can
+    // pass it until the next start; trim on playback end if that matters.
+    private fun cap() = minOf(4L shl 30, app.cacheDir.usableSpace / 4)
+
+    private fun optimize(size: Long) = TdApi.OptimizeStorage(size, -1, -1, 0, null, null, null, false, 0)
+
+    /**
+     * Signs out and wipes the session and cache, then starts a fresh client (waiting for a phone
+     * number). Also how sign-in switches from QR to phone: TDLib can't leave the QR state.
+     */
+    fun logOut() {
+        val closed = CountDownLatch(1)
+        val listener: (TdApi.AuthorizationState) -> Unit = { if (it is TdApi.AuthorizationStateClosed) closed.countDown() }
+        onAuth += listener
+        try {
+            send(TdApi.LogOut())
+            closed.await(30, TimeUnit.SECONDS)
+        } finally {
+            onAuth -= listener
+        }
+        windows.clear()
+        app.filesDir.resolve("tdlib").deleteRecursively()
+        app.cacheDir.resolve("tdlib").deleteRecursively()
+        start()
     }
 
     private fun tdlib(fileId: Int) = object : TgWindow.Tdlib {
@@ -151,6 +221,8 @@ object Td {
             send(TdApi.DownloadFile(fileId, 32, offset, 0, false)) { windows[fileId]?.onUpdate(progress(it)) }
         }
     }
+
+    private const val PREFETCH = 2L shl 20
 
     private fun progress(f: TdApi.File) = f.local.run {
         Progress(path, downloadOffset, downloadedPrefixSize, isDownloadingActive, isDownloadingCompleted)

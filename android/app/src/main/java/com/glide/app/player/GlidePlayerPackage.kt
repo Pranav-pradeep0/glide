@@ -13,7 +13,8 @@ class GlidePlayerPackage : ReactPackage {
             SubtitleSyncModule(context),
             MediaStoreVideoModule(context),
             TvRemoteModule(context),
-            com.glide.app.smb.SmbModule(context)
+            com.glide.app.smb.SmbModule(context),
+            com.glide.app.telegram.TelegramModule(context)
         )
 
     override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> =
