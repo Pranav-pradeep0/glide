@@ -419,7 +419,11 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
 - Owner, decided: **no cache-size setting or cleanup rules** (saves are the user's control);
   **Clear watch history doesn't delete downloads** (separate buttons).
 - Checked on the phone: save while playing completes and shows the tick; saved film replays from
-  the file (`open … (saved)` in logcat). **Not yet:** airplane-mode playback, leaving the app
-  mid-save, queue of two, delete (wireless adb drops offline: owner tests by cable with Session D).
+  the file (`open … (saved)` in logcat).
+- **Offline test (owner, read by cable afterwards):** a 499 MB film saved while it played (~3 MB/s,
+  163 s; file moved 2 s after the player closed). Then, offline after an app restart: it resumed
+  from the file and seeks across the whole film (start, 27 %, 73 %, 95 %, 99 %, back to 31 %) each
+  opened at once, with no `downloadFile` at all. The 27 MB clip saved earlier played offline too.
+  Not visible in logs (no log lines): the notification, a queue of two, delete; owner saw them.
 
 **Next: Session B (Steps, re-planned 2026-11-02).**
