@@ -317,17 +317,17 @@ function MainTabs() {
         <Tab.Navigator
             tabBar={renderTabBar}
             // Fade, M3's fade-through for top-level destinations; the bar and mini player sit outside the scenes.
-            // TV: the rail sits left of the page; Back from another tab returns to Videos (the
-            // default 'firstRoute'), and from Videos leaves the app.
+            // TV: the rail sits left of the page; Back from another tab returns to Home (the
+            // default 'firstRoute'), and from Home leaves the app.
             screenOptions={{ headerShown: false, lazy: true, freezeOnBlur: true, animation: 'fade', tabBarPosition: IS_TV ? 'left' : 'bottom' }}
         >
             <Tab.Screen
                 name="Folders"
                 component={FoldersScreen}
                 options={{
-                    // The route stays "Folders"; only what the user sees changed when music arrived.
-                    title: 'Videos',
-                    tabBarIcon: ({ color }) => <Feather name="film" size={22} color={color} />,
+                    // The route stays "Folders"; only what the user sees changed (music, then every source on Home).
+                    title: 'Home',
+                    tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
                 }}
             />
             <Tab.Screen
@@ -338,7 +338,7 @@ function MainTabs() {
                     tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
                 }}
             />
-            {/* Phones open Network from a row in Videos (NetworkShares below): five tabs crowd the bar. */}
+            {/* Phones open Network from the Sources on Home (NetworkShares below): five tabs crowd the bar. */}
             {IS_TV && (
                 <Tab.Screen
                     name="Network"

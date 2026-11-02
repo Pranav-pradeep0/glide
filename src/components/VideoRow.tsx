@@ -17,6 +17,7 @@ import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
 import { Button, Gradient, IconButton, IconName, showDialog, showSnackbar, Touchable } from '@/components/ui';
 import { MediaService } from '@/services/MediaService';
+import { sourceOf } from '@/utils/videoSource';
 
 // ============= HELPERS =============
 
@@ -110,6 +111,19 @@ export function deleteVideo(name: string, target: string): Promise<boolean> {
     });
 }
 
+// ============= SOURCE =============
+
+/** The source as a pill over a picture, so a mixed list shows where each video lives. */
+function SourceBadge({ path, style }: { path: string; style?: object }) {
+    const { icon, label } = sourceOf(path);
+    return (
+        <View style={[styles.source, style]}>
+            <Feather name={icon} size={11} color={playerColors.text} />
+            <Text style={styles.sourceText} numberOfLines={1}>{label}</Text>
+        </View>
+    );
+}
+
 // ============= THUMBNAIL =============
 
 export function ProgressLine({ progress, style }: { progress: number; style?: object }) {
@@ -121,7 +135,9 @@ export function ProgressLine({ progress, style }: { progress: number; style?: ob
     );
 }
 
-function Thumbnail({ path, timeMs, progress, duration, style }: { path: string; timeMs?: number; progress: number; duration?: number; style: object }) {
+function Thumbnail({ path, timeMs, progress, duration, source, style }: {
+    path: string; timeMs?: number; progress: number; duration?: number; source?: boolean; style: object;
+}) {
     const { colors } = useTheme();
     const { thumbnail } = useThumbnail(path, timeMs);
     return (
@@ -129,6 +145,7 @@ function Thumbnail({ path, timeMs, progress, duration, style }: { path: string; 
             {thumbnail
                 ? <Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} resizeMode="cover" />
                 : <Feather name="film" size={20} color={colors.textTertiary} />}
+            {source && <SourceBadge path={path} />}
             {!!duration && duration > 0 && (
                 <View style={styles.badge}>
                     <Text style={styles.badgeText}>{formatDuration(duration)}</Text>
@@ -178,6 +195,8 @@ interface VideoItemProps<T> {
     thumbnailTime?: number;
     /** Search term to mark in the title. */
     highlight?: string;
+    /** Say where the video lives (Local, a share, Telegram): for lists that mix sources. */
+    source?: boolean;
     onPress: (item: T) => void;
     onMore: (item: T) => void;
     /** TV: take the D-pad focus on mount; pass it to a list's first item. */
@@ -187,16 +206,17 @@ interface VideoItemProps<T> {
 /** What a list renders each row with; `VideoRow` and `VideoCard` are interchangeable. */
 export type VideoItemComponent = <T>(props: VideoItemProps<T>) => React.ReactElement;
 
-function useItemText(name: string, meta: string) {
+function useItemText(name: string, meta: string, prefix?: string) {
     return useMemo(() => {
         const { title, detail } = prettyTitle(name);
-        return { title, meta: joinMeta(detail, meta) };
-    }, [name, meta]);
+        return { title, meta: joinMeta(prefix, detail, meta) };
+    }, [name, meta, prefix]);
 }
 
-function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore, preferFocus }: VideoItemProps<T>) {
+function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, source, onPress, onMore, preferFocus }: VideoItemProps<T>) {
     const { colors } = useTheme();
-    const text = useItemText(name, meta);
+    // Rows say it in the meta line; their thumbnail is too small for a pill beside the length.
+    const text = useItemText(name, meta, source ? sourceOf(path).label : undefined);
     return (
         <Touchable
             onPress={() => onPress(item)}
@@ -228,7 +248,7 @@ function VideoRowBase<T>({ item, path, name, meta, duration, progress = 0, thumb
 }
 export const VideoRow = React.memo(VideoRowBase) as VideoItemComponent;
 
-function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, onPress, onMore, preferFocus }: VideoItemProps<T>) {
+function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thumbnailTime, highlight, source, onPress, onMore, preferFocus }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     return (
@@ -242,7 +262,7 @@ function VideoCardBase<T>({ item, path, name, meta, duration, progress = 0, thum
             accessibilityHint={text.meta}
             style={styles.gridCard}
         >
-            <Thumbnail path={path} timeMs={thumbnailTime} progress={progress} duration={duration} style={styles.gridThumb} />
+            <Thumbnail path={path} timeMs={thumbnailTime} progress={progress} duration={duration} source={source} style={styles.gridThumb} />
             <View style={styles.gridInfo}>
                 <View style={styles.info}>
                     <HighlightedTitle title={text.title} highlight={highlight} lines={1} />
@@ -271,7 +291,7 @@ export const VideoCard = React.memo(VideoCardBase) as VideoItemComponent;
 // ============= HERO =============
 
 /** The one thing you were just watching, full width, with the picture doing the work. */
-export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnailTime, onPress, onMore, preferFocus }: VideoItemProps<T>) {
+export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnailTime, source, onPress, onMore, preferFocus }: VideoItemProps<T>) {
     const { colors } = useTheme();
     const text = useItemText(name, meta);
     const { thumbnail } = useThumbnail(path, thumbnailTime);
@@ -294,6 +314,7 @@ export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnai
                 locations={[0.25, 0.55, 1]}
                 style={StyleSheet.absoluteFill}
             />
+            {source && <SourceBadge path={path} style={styles.heroSource} />}
             <IconButton
                 icon="more-horizontal"
                 onPress={() => onMore(item)}
@@ -464,6 +485,21 @@ const styles = StyleSheet.create({
         borderRadius: metrics.radius.xs,
         backgroundColor: 'rgba(0, 0, 0, 0.72)',
     },
+    source: {
+        position: 'absolute',
+        top: 6,
+        left: 6,
+        maxWidth: '80%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: metrics.radius.pill,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    },
+    sourceText: { color: playerColors.text, fontSize: 10.5, lineHeight: 14, fontWeight: '500' },
+    heroSource: { top: 16, left: 16, paddingHorizontal: 9, paddingVertical: 4 },
     badgeText: { color: playerColors.text, fontSize: 10.5, lineHeight: 14, fontWeight: '500', fontVariant: ['tabular-nums'] },
     info: { flex: 1, gap: 3 },
     listCell: { paddingBottom: 2 },

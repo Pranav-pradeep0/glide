@@ -22,6 +22,7 @@ import {
 import { metrics } from '@/theme/theme';
 import { isFinished } from '@/utils/playbackResume';
 import { IS_TV } from '@/utils/tv';
+import { withDays } from '@/utils/videoSource';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'grid' | 'list';
@@ -130,7 +131,13 @@ export default function RecentsScreen() {
     // only while there's something left of it to continue.
     const latest = sortBy === 'recent' ? history[0] : undefined;
     const hero = latest && !isFinished(latest.lastPausedPosition, latest.duration) ? latest : undefined;
-    const rest = hero ? history.slice(1) : history;
+    const data = useMemo(() => {
+        const rest = hero ? history.slice(1) : history;
+        return sortBy === 'recent' ? withDays(rest) : rest;
+    }, [history, hero, sortBy]);
+    // TV starts on the hero, or the first video when there is none.
+    const firstVideo = hero ? -1 : data.findIndex(i => typeof i !== 'string');
+    const pad = listContentStyle(grid).paddingHorizontal;
 
     const metaFor = useCallback((item: VideoHistoryEntry) => joinMeta(
         timeLabel(item.duration, item.lastPausedPosition),
@@ -139,8 +146,10 @@ export default function RecentsScreen() {
             : getRelativeTime(item.lastWatchedTime),
     ), [sortBy]);
 
-    // TV starts on Continue watching, or the first video when there is none.
-    const renderItem = useCallback(({ item, index }: { item: VideoHistoryEntry; index: number }) => {
+    const renderItem = useCallback(({ item, index }: { item: VideoHistoryEntry | string; index: number }) => {
+        if (typeof item === 'string') {
+            return <View style={{ marginHorizontal: -pad }}><SectionTitle title={item} /></View>;
+        }
         const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
         return (
             <VideoItemCell grid={grid}>
@@ -152,34 +161,39 @@ export default function RecentsScreen() {
                     duration={item.duration}
                     progress={progressOf(item.duration, item.lastPausedPosition)}
                     thumbnailTime={item.stopFrameMs}
+                    source
                     onPress={handleVideoPress}
                     onMore={handleOpenOptions}
-                    preferFocus={!hero && index === 0}
+                    preferFocus={index === firstVideo}
                 />
             </VideoItemCell>
         );
-    }, [grid, metaFor, handleVideoPress, handleOpenOptions, hero]);
+    }, [grid, metaFor, handleVideoPress, handleOpenOptions, firstVideo, pad]);
 
+    const sort = <SortButton options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />;
     const header = (
-        <View>
-            {hero && (
-                <>
-                    <SectionTitle title="Continue watching" />
-                    <ContinueCard
-                        item={hero}
-                        path={hero.videoPath}
-                        name={hero.videoName}
-                        meta={timeLabel(hero.duration, hero.lastPausedPosition) ?? ''}
-                        progress={progressOf(hero.duration, hero.lastPausedPosition)}
-                        thumbnailTime={hero.stopFrameMs}
-                        onPress={handleVideoPress}
-                        onMore={handleOpenOptions}
-                        preferFocus
-                    />
-                </>
-            )}
-            {rest.length > 0 && <SectionTitle title={hero ? 'Earlier' : 'All videos'} />}
-            <SortButton options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} style={styles.sortBar} />
+        <View style={{ marginHorizontal: -pad }}>
+            {/* With a video to continue, the sort sits on its title's line: no row just for it. */}
+            {!hero && <View style={styles.filterBar}>
+                <View style={styles.chipScroll} />
+                {sort}
+            </View>}
+            {hero && <>
+                <SectionTitle title="Continue watching">{sort}</SectionTitle>
+                <ContinueCard
+                    item={hero}
+                    path={hero.videoPath}
+                    name={hero.videoName}
+                    meta={timeLabel(hero.duration, hero.lastPausedPosition) ?? ''}
+                    progress={progressOf(hero.duration, hero.lastPausedPosition)}
+                    thumbnailTime={hero.stopFrameMs}
+                    source
+                    onPress={handleVideoPress}
+                    onMore={handleOpenOptions}
+                    preferFocus
+                />
+                <View style={styles.heroGap} />
+            </>}
         </View>
     );
 
@@ -191,12 +205,16 @@ export default function RecentsScreen() {
         />
     ) : (
         <FlashList
-            data={rest}
+            data={data}
             renderItem={renderItem}
-            keyExtractor={(item: VideoHistoryEntry) => item.videoPath}
+            keyExtractor={(item: VideoHistoryEntry | string) => (typeof item === 'string' ? `day:${item}` : item.videoPath)}
+            getItemType={(item: VideoHistoryEntry | string) => (typeof item === 'string' ? 'day' : 'video')}
+            // A day heading spans the grid.
+            overrideItemLayout={(layout: { span?: number }, item: VideoHistoryEntry | string) => {
+                if (typeof item === 'string') { layout.span = 2; }
+            }}
             numColumns={grid ? 2 : 1}
             key={`${viewMode}-${sortBy}`}
-            extraData={sortBy}
             ListHeaderComponent={header}
             contentContainerStyle={listContentStyle(grid)}
             refreshControl={
@@ -267,5 +285,7 @@ export default function RecentsScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     kindRow: { marginHorizontal: metrics.gutter, marginBottom: metrics.space.sm },
-        sortBar: { alignSelf: 'flex-end', marginRight: metrics.gutter, marginTop: metrics.space.sm, marginBottom: metrics.space.sm },
+    filterBar: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm, paddingRight: metrics.gutter, paddingVertical: metrics.space.sm },
+    chipScroll: { flex: 1 },
+    heroGap: { height: metrics.space.lg },
 });

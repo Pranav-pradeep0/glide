@@ -1,29 +1,24 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Image, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { SkeletonList } from '@/components/Skeleton';
-import { IconButton, SortButton, Touchable } from '@/components/ui';
-import {
-    EmptyState, ListHeader, SectionTitle, VideoCard, getRelativeTime, joinMeta, listContentStyle, progressOf, timeLabel,
-} from '@/components/VideoRow';
-import { RootStackParamList, VideoFolder, VideoHistoryEntry } from '@/types';
+import { IconButton, IconName, SortButton, Touchable } from '@/components/ui';
+import { EmptyState, ListHeader, SectionTitle, getRelativeTime, joinMeta, listContentStyle } from '@/components/VideoRow';
+import { RootStackParamList, VideoFolder } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbums } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
-import { useMissingHistory } from '@/hooks/useMissingHistory';
 import { usePermissionStore } from '@/store/permissionStore';
-import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
-import { NavigationService } from '@/services/NavigationService';
-import { SMB_AVAILABLE } from '@/services/SmbService';
-import { TELEGRAM_AVAILABLE } from '@/services/TelegramService';
+import { SMB_AVAILABLE, SmbService } from '@/services/SmbService';
+import { TELEGRAM_AVAILABLE, TelegramService } from '@/services/TelegramService';
 import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { metrics, type } from '@/theme/theme';
-import { getResumablePosition } from '@/utils/playbackResume';
 import { IS_TV } from '@/utils/tv';
+import { SourceKind } from '@/utils/videoSource';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -114,64 +109,81 @@ const AlbumListItem = React.memo(({ item, onPress, preferFocus }: AlbumItemProps
     );
 });
 
-const CONTINUE_LIMIT = 10;
-const NO_HISTORY: VideoHistoryEntry[] = [];
-const noop = () => {};
-
-/** TV: videos left part-way, last watched first. Always empty on phones. */
-function useContinueWatching(): VideoHistoryEntry[] {
-    // The player saves history as it plays; the last map is kept while it is on top, so
-    // this screen doesn't re-render under it. Regaining focus picks up the latest.
-    const isFocused = useIsFocused();
-    const shownRef = useRef<Map<string, VideoHistoryEntry> | null>(null);
-    const historyMap = useVideoHistoryStore(s => {
-        if (!IS_TV) {return null;}
-        if (isFocused || !shownRef.current) { shownRef.current = s.history; }
-        return shownRef.current;
-    });
-    const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
-    const { missing } = useMissingHistory(IS_TV);
-    return useMemo(() => (historyMap
-        ? getAllHistory()
-            .filter(e => !missing.has(e.videoPath) && getResumablePosition(e.lastPausedPosition, e.duration) !== null)
-            .slice(0, CONTINUE_LIMIT)
-        : NO_HISTORY
-    ), [historyMap, getAllHistory, missing]);
+interface Source {
+    key: SourceKind;
+    icon: IconName;
+    title: string;
+    /** What it has now ("2 shares"), or the call to set it up ("Connect"). */
+    status: string;
+    ready: boolean;
+    onPress: () => void;
 }
 
 /**
- * TV home pattern: a row of what you were watching above the folders. Cards are one folder
- * column wide, so they line up with the grid and the next one peeks in from the edge.
- * `pad` is the list's side padding; the row bleeds past it so cards scroll off the screen edge.
+ * Where Glide plays from, so nobody has to guess what an icon means: a tile each, saying what it
+ * has or that it is still to connect. Not on TV: its rail already lists them.
  */
-function ContinueRow({ items, pad }: { items: VideoHistoryEntry[]; pad: number }) {
+function Sources({ albums, onDevice }: { albums: VideoFolder[]; onDevice: () => void }) {
+    const { colors } = useTheme();
     const navigation = useNavigation<NavigationProp>();
-    const [width, setWidth] = useState(0);
-    const play = useCallback((v: VideoHistoryEntry) => {
-        NavigationService.handleVideoNavigation(navigation, v.videoPath, replayParams(v));
-    }, [navigation]);
-    const cellWidth = (width - 2 * pad) / metrics.grid.columns;
+    const [shares, setShares] = useState(0);
+    const [signedIn, setSignedIn] = useState(false);
+    // Only what is stored on the phone: Home never waits on the network or starts TDLib.
+    useFocusEffect(useCallback(() => {
+        setShares(SMB_AVAILABLE ? SmbService.servers().length : 0);
+        setSignedIn(TelegramService.signedIn());
+    }, []));
+
+    const sources = useMemo(() => {
+        const videos = albums.reduce((n, a) => n + a.count, 0);
+        const list: Source[] = [{
+            key: 'device', icon: 'hard-drive', title: 'Local',
+            status: videoCount(videos),
+            ready: true,
+            onPress: onDevice,
+        }];
+        if (SMB_AVAILABLE) {
+            list.push({
+                key: 'network', icon: 'server', title: 'Network',
+                status: shares ? `${shares} share${shares !== 1 ? 's' : ''}` : 'Add a share',
+                ready: shares > 0,
+                onPress: () => navigation.navigate('NetworkShares'),
+            });
+        }
+        if (TELEGRAM_AVAILABLE) {
+            list.push({
+                key: 'telegram', icon: 'send', title: 'Telegram',
+                status: signedIn ? 'Signed in' : 'Connect',
+                ready: signedIn,
+                onPress: () => navigation.navigate('TelegramHome'),
+            });
+        }
+        return list;
+    }, [albums, shares, signedIn, navigation, onDevice]);
+
+    // Only the phone: nothing to discover.
+    if (IS_TV || sources.length < 2) { return null; }
     return (
-        <View onLayout={e => setWidth(e.nativeEvent.layout.width)}>
-            <SectionTitle title="Continue watching" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.continueContent, { paddingHorizontal: pad }]}>
-                {width > 0 && items.map((item, i) => (
-                    <View key={item.videoPath} style={[styles.continueCell, { width: cellWidth }]}>
-                        <VideoCard
-                            item={item}
-                            path={item.videoPath}
-                            name={item.videoName}
-                            meta={timeLabel(item.duration, item.lastPausedPosition) ?? ''}
-                            duration={item.duration}
-                            progress={progressOf(item.duration, item.lastPausedPosition)}
-                            thumbnailTime={item.stopFrameMs}
-                            onPress={play}
-                            onMore={noop}
-                            preferFocus={i === 0}
-                        />
-                    </View>
+        <View>
+            <SectionTitle title="Sources" />
+            <View style={styles.tiles}>
+                {sources.map(s => (
+                    <Touchable
+                        key={s.key}
+                        onPress={s.onPress}
+                        scaleTo={0.97}
+                        accessibilityLabel={`${s.title}, ${s.status}`}
+                        style={[styles.tile, { backgroundColor: colors.surface }]}
+                    >
+                        {/* Filled: set up. Tonal: still to connect. */}
+                        <View style={[styles.tileIcon, { backgroundColor: s.ready ? colors.primary : colors.fillStrong }]}>
+                            <Feather name={s.icon} size={18} color={s.ready ? colors.onPrimary : colors.text} />
+                        </View>
+                        <Text style={[type.label, { color: colors.text }]} numberOfLines={1}>{s.title}</Text>
+                        <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={1}>{s.status}</Text>
+                    </Touchable>
                 ))}
-            </ScrollView>
+            </View>
         </View>
     );
 }
@@ -182,21 +194,24 @@ export default function FoldersScreen() {
     const navigation = useNavigation<NavigationProp>();
 
     const { albums, loading, refetch } = useAlbums();
-    const continueItems = useContinueWatching();
     const videoAccess = usePermissionStore((s) => s.video.access);
 
     // Cards on a TV: bigger targets, and the D-pad moves across as well as down.
     const [viewMode, setViewMode] = useState<ViewMode>(IS_TV ? 'grid' : 'list');
     const [sortBy, setSortBy] = useState<SortByOption>('name');
     const flashListRef = useRef<any>(null);
+    // Where the folders' title sits in the list header, measured, so Local scrolls exactly to it.
+    const foldersY = useRef(0);
 
-    useEffect(() => {
-        // Wait a tick so the list has the new order before scrolling to it.
-        const scrollTimeout = setTimeout(() => {
-            flashListRef.current?.scrollToOffset({ offset: 0, animated: true });
-        }, 100);
-        return () => clearTimeout(scrollTimeout);
-    }, [sortBy]);
+    const scrollToFolders = useCallback(() => {
+        flashListRef.current?.scrollToOffset({ offset: foldersY.current, animated: true });
+    }, []);
+
+    const sort = useCallback((key: SortByOption) => {
+        setSortBy(key);
+        // The list remounts for the new order; wait a tick so it has it before scrolling to it.
+        setTimeout(scrollToFolders, 100);
+    }, [scrollToFolders]);
 
     const sortedAlbums = useMemo(() => {
         return [...albums].sort((a, b) =>
@@ -215,64 +230,64 @@ export default function FoldersScreen() {
 
     const grid = viewMode === 'grid';
 
-    // TV starts on Continue watching, or the first folder when there is none.
-    const focusFirstFolder = continueItems.length === 0;
+    // TV starts on the first folder.
     const renderAlbum = useCallback(({ item, index }: { item: VideoFolder; index: number }) => (
         <View style={grid ? styles.gridCell : styles.listCell}>
             {grid
-                ? <AlbumGridCard item={item} onPress={() => handleAlbumPress(item)} preferFocus={focusFirstFolder && index === 0} />
-                : <AlbumListItem item={item} onPress={() => handleAlbumPress(item)} preferFocus={focusFirstFolder && index === 0} />}
+                ? <AlbumGridCard item={item} onPress={() => handleAlbumPress(item)} preferFocus={index === 0} />
+                : <AlbumListItem item={item} onPress={() => handleAlbumPress(item)} preferFocus={index === 0} />}
         </View>
-    ), [grid, handleAlbumPress, focusFirstFolder]);
+    ), [grid, handleAlbumPress]);
 
     if (videoAccess === 'unknown' || (loading && albums.length === 0 && videoAccess !== 'denied')) {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-                <ListHeader title="Videos" />
+                <ListHeader title="Home" />
                 <SkeletonList kind={grid ? 'folderCard' : 'folder'} />
             </View>
         );
     }
 
-    const isEmpty = sortedAlbums.length === 0;
-    const sortBar = (
-        <View style={styles.sortBar}>
-            <Text style={[type.caption, { color: theme.colors.textSecondary }]}>
-                {sortedAlbums.length} folder{sortedAlbums.length !== 1 ? 's' : ''}
-            </Text>
-            <SortButton options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
+    const pad = listContentStyle(grid).paddingHorizontal;
+    const sources = (
+        <Sources albums={albums} onDevice={scrollToFolders} />
+    );
+    // The Sources scroll away with the folders. Bleeds past the list's padding so section
+    // titles sit on the screen gutter.
+    const { paddingTop } = listContentStyle(grid);
+    const header = (
+        <View style={{ marginHorizontal: -pad }}>
+            {sources}
+            {/* y is from the header's top, which sits the list's top padding down. */}
+            <View onLayout={e => { foldersY.current = e.nativeEvent.layout.y + paddingTop; }}>
+                <SectionTitle title="Local folders">
+                    <SortButton options={SORT_OPTIONS} value={sortBy} onChange={sort} />
+                </SectionTitle>
+            </View>
         </View>
     );
-    // TV: Continue watching leads the list and scrolls away with it; the sort bar moves in
-    // under it so it stays with the folders it sorts.
-    const pad = listContentStyle(grid).paddingHorizontal;
-    const tvHeader = IS_TV ? (
-        <View style={{ marginHorizontal: -pad }}>
-            {continueItems.length > 0 && <ContinueRow items={continueItems} pad={pad} />}
-            {sortBar}
-        </View>
-    ) : undefined;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <View style={{ paddingTop: insets.top }}>
-                <ListHeader title="Videos">
+                <ListHeader title="Home">
                     <IconButton
                         icon={grid ? 'list' : 'grid'}
                         onPress={() => setViewMode(grid ? 'list' : 'grid')}
                         accessibilityLabel={grid ? 'Show as list' : 'Show as grid'}
                     />
-                    {/* TV has Network and Telegram in the rail. */}
-                    {!IS_TV && TELEGRAM_AVAILABLE && (
-                        <IconButton icon="send" onPress={() => navigation.navigate('TelegramHome')} accessibilityLabel="Telegram" />
-                    )}
-                    {!IS_TV && SMB_AVAILABLE && (
-                        <IconButton icon="server" onPress={() => navigation.navigate('NetworkShares')} accessibilityLabel="Network shares" />
-                    )}
                 </ListHeader>
             </View>
 
-            {videoAccess === 'denied' ? <PermissionGate kind="video" /> : <>
+            {/* Shares and Telegram need no storage access, so their way in stays when local videos can't show. */}
+            {videoAccess === 'denied' || sortedAlbums.length === 0 ? (
+                <ScrollView contentContainerStyle={styles.fill}>
+                    {sources}
+                    {videoAccess === 'denied'
+                        ? <PermissionGate kind="video" />
+                        : <EmptyState text="No local videos found" action="Refresh" onAction={refetch} />}
+                </ScrollView>
+            ) : <>
                 <Touchable
                     onPress={() => navigation.navigate('Search')}
                     accessibilityRole="search"
@@ -283,42 +298,36 @@ export default function FoldersScreen() {
                     <Text style={[type.body, { color: theme.colors.textTertiary }]}>Search all videos</Text>
                 </Touchable>
                 <PartialAccessBanner />
-
-                {isEmpty ? (
-                    <EmptyState text="No videos found" action="Refresh" onAction={refetch} />
-                ) : (
-                    <>
-                        {!IS_TV && sortBar}
-                        <FlashList
-                            ref={flashListRef}
-                            data={sortedAlbums}
-                            renderItem={renderAlbum}
-                            ListHeaderComponent={tvHeader}
-                            keyExtractor={(item: VideoFolder) => item.id || item.title}
-                            numColumns={grid ? metrics.grid.columns : 1}
-                            key={`${viewMode}-${sortBy}`}
-                            contentContainerStyle={listContentStyle(grid)}
-                            refreshControl={
-                                <RefreshControl
-                                    refreshing={loading}
-                                    onRefresh={refetch}
-                                    tintColor={theme.colors.primary}
-                                    colors={[theme.colors.primary]}
-                                    progressBackgroundColor={theme.colors.cardElevated}
-                                />
-                            }
-                            extraData={viewMode}
-                            showsVerticalScrollIndicator={false}
+                <FlashList
+                    ref={flashListRef}
+                    data={sortedAlbums}
+                    renderItem={renderAlbum}
+                    ListHeaderComponent={header}
+                    keyExtractor={(item: VideoFolder) => item.id || item.title}
+                    numColumns={grid ? metrics.grid.columns : 1}
+                    key={`${viewMode}-${sortBy}`}
+                    contentContainerStyle={listContentStyle(grid)}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={loading}
+                            onRefresh={refetch}
+                            tintColor={theme.colors.primary}
+                            colors={[theme.colors.primary]}
+                            progressBackgroundColor={theme.colors.cardElevated}
                         />
-                    </>
-                )}
+                    }
+                    extraData={viewMode}
+                    showsVerticalScrollIndicator={false}
+                />
             </>}
+
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    fill: { flexGrow: 1 },
     pill: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -328,14 +337,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: metrics.space.lg,
         borderRadius: metrics.radius.pill,
         gap: metrics.space.sm,
-    },
-    sortBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: metrics.gutter,
-        paddingTop: metrics.space.md,
-        paddingBottom: metrics.space.sm,
     },
     cover: {
         borderRadius: metrics.radius.sm,
@@ -360,7 +361,15 @@ const styles = StyleSheet.create({
     gridCard: { flex: 1, borderRadius: metrics.radius.sm },
     gridCover: { width: '100%', aspectRatio: 16 / 10 },
     gridInfo: { paddingTop: metrics.space.sm, paddingLeft: 2, gap: 2 },
-    // Top room for the focus ring and grow, which the row would otherwise clip.
-    continueContent: { paddingTop: metrics.space.md },
-    continueCell: { paddingHorizontal: GRID_HALF_GAP, paddingBottom: metrics.space.sm },
+
+    tiles: { flexDirection: 'row', paddingHorizontal: metrics.gutter, gap: metrics.space.sm },
+    tile: { flex: 1, padding: metrics.space.md, gap: 2, borderRadius: metrics.radius.lg },
+    tileIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: metrics.space.sm,
+    },
 });
