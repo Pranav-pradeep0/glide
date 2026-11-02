@@ -424,6 +424,6 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
   163 s; file moved 2 s after the player closed). Then, offline after an app restart: it resumed
   from the file and seeks across the whole film (start, 27 %, 73 %, 95 %, 99 %, back to 31 %) each
   opened at once, with no `downloadFile` at all. The 27 MB clip saved earlier played offline too.
-  Not visible in logs (no log lines): the notification, a queue of two, delete; owner saw them.
+  Not visible in logs (no log lines): the notification, a queue of two, delete; owner to confirm.
 
 **Next: Session B (Steps, re-planned 2026-11-02).**
