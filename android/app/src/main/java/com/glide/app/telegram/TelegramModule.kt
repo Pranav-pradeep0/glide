@@ -166,6 +166,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
      */
     @ReactMethod
     fun chats(limit: Int, folderId: Int, promise: Promise) = td(promise) {
+        val start = System.currentTimeMillis()
         val saved = savedChat()
         val ids = chatIds(chatList(folderId), limit)
         val out = Arguments.createArray()
@@ -176,6 +177,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             val c = Td.send(TdApi.GetChat(id))
             if (listable(c)) out.pushMap(chat(c, id == saved.id))
         }
+        Log.d(TAG, "chats $limit folder $folderId: ${out.size()} in ${System.currentTimeMillis() - start} ms")
         promise.resolve(out)
     }
 
@@ -243,13 +245,16 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     @ReactMethod
     fun hasVideos(chatId: Double, promise: Promise) = td(promise) {
         val id = chatId.toLong()
-        promise.resolve(count(id, TdApi.SearchMessagesFilterVideo()) > 0 ||
+        val start = System.currentTimeMillis()
+        val has = count(id, TdApi.SearchMessagesFilterVideo()) > 0 ||
             (count(id, TdApi.SearchMessagesFilterDocument()) > 0 && Td.send(TdApi.SearchChatMessages().apply {
                 this.chatId = id
                 query = ""
                 limit = 100
                 filter = TdApi.SearchMessagesFilterDocument()
-            }).messages.any { video(it) != null }))
+            }).messages.any { video(it) != null })
+        Log.d(TAG, "hasVideos $id: $has in ${System.currentTimeMillis() - start} ms")
+        promise.resolve(has)
     }
 
     /** Messages of [filter] in the chat: TDLib's local figure, else the server's; a short FLOOD_WAIT waited out once. */

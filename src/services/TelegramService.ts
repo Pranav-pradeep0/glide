@@ -99,7 +99,8 @@ const meta = (uri: string): SaveMeta => {
     return m ? JSON.parse(m) : { name: 'Video', duration: 0 };
 };
 const withMeta = (list: Omit<TgSave, 'name' | 'duration'>[]): TgSave[] => list.map(s => ({ ...s, ...meta(s.uri) }));
-const forgetSaves = () => mmkv.getAllKeys().filter(k => k.startsWith('save:')).forEach(k => mmkv.remove(k));
+const forget = (prefix: string) => mmkv.getAllKeys().filter(k => k.startsWith(prefix)).forEach(k => mmkv.remove(k));
+const forgetSaves = () => forget('save:');
 
 /** Remembers the last settled sign-in, so Home can say "Signed in" without starting TDLib. */
 const noteAuth = (a: TgAuth) => {
@@ -124,7 +125,7 @@ export const TelegramService = {
     password: (p: string) => native!.password(p),
     requestQr: () => native!.requestQr(),
     /** Signs out and wipes (saved films too); also the way back from the QR code to the phone number. */
-    logOut: () => native!.logOut().then(() => { mmkv.set('signedIn', false); forgetSaves(); }),
+    logOut: () => native!.logOut().then(() => { mmkv.set('signedIn', false); forgetSaves(); forget('has:'); }),
 
     folders: () => native!.folders(),
     /** In Telegram's order; `folderId` 0: all chats, Saved Messages first. Page by a bigger `limit`. */
@@ -132,9 +133,14 @@ export const TelegramService = {
     /** `file://` of the chat's small photo, or null. */
     chatPhoto: (chatId: number) => native!.chatPhoto(chatId).catch(() => null),
     /** Chat id → its newest video, from the latest 100 across all chats; {} on an error. */
-    recent: () => native!.recent().catch(() => ({} as Record<string, TgRecent>)),
-    /** Whether the chat has any video; null when Telegram couldn't say (the chat stays shown). */
-    hasVideos: (chatId: number) => native!.hasVideos(chatId).catch(() => null),
+    recent: () => native!.recent().then(r => {
+        Object.keys(r).forEach(id => mmkv.set(`has:${id}`, true));
+        return r;
+    }, () => ({} as Record<string, TgRecent>)),
+    /** Whether the chat has any video, saved for next time; null when Telegram couldn't say (the chat stays shown, nothing saved). */
+    hasVideos: (chatId: number) => native!.hasVideos(chatId).then(h => { mmkv.set(`has:${chatId}`, h); return h; }, () => null),
+    /** The last answer of [hasVideos] (or [recent]) on this device, if any. */
+    savedHasVideos: (chatId: number) => mmkv.getBoolean(`has:${chatId}`),
     videos: (chatId: number, from: number, limit: number) => native!.videos(chatId, from, limit),
 
     /** Telegram's own picture for the film; never a frame (that would download part of it). */

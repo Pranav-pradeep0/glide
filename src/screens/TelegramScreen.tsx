@@ -280,7 +280,8 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
     const [recent, setRecent] = useState<Record<string, TgRecent>>({});
     useEffect(() => {
         TelegramService.recent().then(r => {
-            Object.keys(r).forEach(id => hasVideos.set(Number(id), true));
+            // A video lately settles it for this session: no count needed.
+            Object.keys(r).forEach(id => { hasVideos.set(Number(id), true); asked.add(Number(id)); });
             setRecent(r);
         });
         // Leaving Telegram: stop asking about chats nobody will see.
@@ -330,9 +331,12 @@ const CHATS_PAGE = 100;
 /** Fewer chats with videos than this on screen: look at the next page of chats by itself. */
 const ENOUGH = 20;
 
-// Whether each chat has videos, for the session: true, false, or null when Telegram couldn't say
-// (shown, to be safe). Asked 3 at a time across the app: more brings FLOOD_WAIT.
+// Whether each chat has videos: true, false, or null when Telegram couldn't say (shown, to be
+// safe). Starts from the answers saved last time, so a second visit shows the list at once; each
+// chat is asked again once a session, quietly (the saved answer shows meanwhile). Asked 3 at a
+// time across the app: more brings FLOOD_WAIT.
 const hasVideos = new Map<number, boolean | null>();
+const asked = new Set<number>();
 const asking = new Map<number, Promise<void>>();
 const queue: (() => Promise<void>)[] = [];
 let active = 0;
@@ -346,12 +350,26 @@ function ask(id: number): Promise<void> {
     let p = asking.get(id);
     if (!p) {
         p = new Promise<void>(done => {
-            queue.push(() => TelegramService.hasVideos(id).then(h => { hasVideos.set(id, h); asking.delete(id); done(); }));
+            queue.push(() => TelegramService.hasVideos(id).then(h => {
+                // A failed re-count keeps the saved answer.
+                if (h !== null || !hasVideos.has(id)) { hasVideos.set(id, h); }
+                asked.add(id);
+                asking.delete(id);
+                done();
+            }));
             pump();
         });
         asking.set(id, p);
     }
     return p;
+}
+/** Whether there's an answer for the chat yet, this session's or a saved one. */
+function known(id: number) {
+    if (!hasVideos.has(id)) {
+        const saved = TelegramService.savedHasVideos(id);
+        if (saved !== undefined) { hasVideos.set(id, saved); }
+    }
+    return hasVideos.has(id);
 }
 
 const saveFile = (s: TgSave): VideoFile => ({ name: s.name, path: s.uri, size: s.total, modifiedDate: 0, duration: s.duration, isDirectory: false });
@@ -417,20 +435,22 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
         return () => { live = false; };
     }, [tab.folderId, limit, attempt]);
 
-    // Ask about each chat not known yet; a chat shows once it's known to have videos.
+    // Ask about each chat not asked this session; a chat shows once it's known to have videos. The
+    // unknown go first: they hold the list back, the saved ones are only being checked.
     useEffect(() => {
         if (!chats) { return; }
         let live = true;
-        const unknown = chats.filter(c => !c.saved && !hasVideos.has(c.id));
-        unknown.forEach(c => ask(c.id).then(() => { if (live) { setAnswers(n => n + 1); } }));
+        const others = chats.filter(c => !c.saved && !asked.has(c.id));
+        [...others.filter(c => !known(c.id)), ...others.filter(c => known(c.id))]
+            .forEach(c => ask(c.id).then(() => { if (live) { setAnswers(n => n + 1); } }));
         return () => { live = false; };
     }, [chats]);
 
     const shown = (chats ?? []).filter(c =>
-        (c.saved || (hasVideos.has(c.id) && hasVideos.get(c.id) !== false)) &&
+        (c.saved || (known(c.id) && hasVideos.get(c.id) !== false)) &&
         (!tab.only || (!c.saved && c.group === (tab.only === 'group'))),
     );
-    const counting = (chats ?? []).some(c => !c.saved && !hasVideos.has(c.id));
+    const counting = (chats ?? []).some(c => !c.saved && !known(c.id));
     // Too few to scroll: the next page of chats, without waiting for a scroll that can't happen.
     useEffect(() => {
         if (chats && !counting && more && shown.length < ENOUGH) { setLimit(n => n + CHATS_PAGE); }

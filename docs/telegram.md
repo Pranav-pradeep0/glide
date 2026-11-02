@@ -426,4 +426,17 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
   opened at once, with no `downloadFile` at all. The 27 MB clip saved earlier played offline too.
   Not visible in logs (no log lines): the notification, a queue of two, delete; owner to confirm.
 
-**Next: Session B (Steps, re-planned 2026-11-02).**
+**2026-11-02: Session B (chat list for good) built; device timings not measured yet.**
+
+- Each chat's `hasVideos` answer is saved in MMKV (`has:<chatId>`; `recent()` hits saved as
+  true), so a later visit shows the list from the saved answers at once. A failed count saves
+  nothing and keeps the earlier answer; a chat with no answer at all stays shown. Logout forgets them.
+- Each chat is re-counted once per app launch, in the background: chats with no answer first
+  (they hold the list back), then the saved ones. "< 20 → next 100" waits only for chats with no answer.
+- Unchanged: 3 at a time app-wide, FLOOD_WAIT ≤ 60 s waited out once, `recent()` hints (still run on
+  every visit, so a new video's chat shows at once even if saved as "no videos").
+- Logs: `chats <limit> folder <id>: N in M ms`, `hasVideos <id>: true|false in M ms`.
+- To measure on the phone: time until the list is full on a first and a second visit, no FLOOD_WAIT
+  beyond one wait, no chat with videos missing.
+
+**Next: Session B device check, then Session D.**
