@@ -15,13 +15,13 @@ private const val SIZE = 2000 * MB
 private class FakeTd : TgWindow.Tdlib {
     val window = TgWindow(SIZE, this)
     val ranges = mutableListOf<LongRange>()
-    val requests = mutableListOf<Long>()
+    val requests = mutableListOf<Pair<Long, Long>>()
 
     @Synchronized
     override fun prefixAt(pos: Long): Long = ranges.firstOrNull { pos in it }?.let { it.last + 1 - pos } ?: 0
 
-    override fun download(offset: Long) {
-        synchronized(this) { requests += offset }
+    override fun download(offset: Long, limit: Long) {
+        synchronized(this) { requests += offset to limit }
         update(offset)
     }
 
@@ -34,7 +34,9 @@ private class FakeTd : TgWindow.Tdlib {
     fun update(offset: Long, active: Boolean = true) =
         window.onUpdate(Progress("/tdlib/film.mkv", offset, prefixAt(offset), active, false))
 
-    fun requested(): List<Long> = synchronized(this) { requests.toList() }
+    fun requested(): List<Long> = synchronized(this) { requests.map { it.first } }
+
+    fun limits(): List<Long> = synchronized(this) { requests.map { it.second } }
 }
 
 class TgWindowTest {
@@ -52,11 +54,46 @@ class TgWindowTest {
     }
 
     @Test
-    fun readsWhatIsOnDiskWithoutDownloading() {
+    fun readsWhatIsOnDiskAndAsksForOneWindowAhead() {
         val td = FakeTd()
         td.arrive(0, 10 * MB)
         assertEquals(5 * MB, td.window.await(5 * MB))
-        assertEquals(listOf<Long>(), td.requested())
+        assertEquals(listOf(5 * MB), td.requested())
+        // size / 64: 2000 MB → 31.25 MB.
+        assertEquals(listOf(SIZE / 64), td.limits())
+    }
+
+    @Test
+    fun smallFilesGetTheMinimumWindow() {
+        assertEquals(TgWindow.MIN_SPAN, TgWindow(100 * MB, FakeTd()).span)
+    }
+
+    @Test
+    fun extendsBeforeReadsStarve() {
+        val td = FakeTd()
+        val span = td.window.span
+        td.arrive(0, span)
+        td.window.await(0)
+        // Short of half a window from its end: nothing new.
+        td.window.await(span / 2)
+        assertEquals(listOf(0L), td.requested())
+        // Within half a window: extended while bytes are still on disk ahead (await didn't block).
+        assertEquals(span / 2 - 1, td.window.await(span / 2 + 1))
+        assertEquals(listOf(0L, span / 2 + 1), td.requested())
+    }
+
+    @Test
+    fun seekReAnchorsTheWindow() {
+        val td = FakeTd()
+        td.arrive(0, 10 * MB)
+        td.window.await(0)
+        val ahead = td.awaitAsync(1000 * MB)
+        td.untilRequests(2)
+        td.arrive(1000 * MB, 1001 * MB)
+        ahead.get(5, TimeUnit.SECONDS)
+        // Back into the watched part: on disk, read at once, and the window moves there too.
+        assertEquals(5 * MB, td.window.await(5 * MB))
+        assertEquals(listOf(0L, 1000 * MB, 5 * MB), td.requested())
     }
 
     @Test
@@ -68,8 +105,8 @@ class TgWindowTest {
         assertEquals(MB / 2, td.window.await(1000 * MB + MB / 2))
         // In the hole: the download moves there and the read waits for it.
         val read = td.awaitAsync(20 * MB)
-        td.untilRequests(1)
-        assertEquals(listOf(20 * MB), td.requested())
+        td.untilRequests(2)
+        assertEquals(20 * MB, td.requested().last())
         td.arrive(20 * MB, 21 * MB)
         assertEquals(MB, read.get(5, TimeUnit.SECONDS))
     }
@@ -78,11 +115,12 @@ class TgWindowTest {
     fun waitsForARunningDownloadThatIsAboutToGetThere() {
         val td = FakeTd()
         td.arrive(0, 10 * MB)
+        td.window.await(0)
         val read = td.awaitAsync(10 * MB + 100_000)
         Thread.sleep(50)
         td.arrive(10 * MB, 11 * MB, offset = 0)
         assertEquals(MB - 100_000, read.get(5, TimeUnit.SECONDS))
-        assertEquals(listOf<Long>(), td.requested())
+        assertEquals(listOf(0L), td.requested())
     }
 
     @Test
@@ -139,7 +177,12 @@ class TgWindowTest {
         val td = FakeTd()
         td.arrive(0, SIZE)
         assertEquals(0L, td.window.await(SIZE))
+        td.window.await(SIZE - 10 * MB)
+        td.window.await(SIZE - 5 * MB)
         assertEquals(10L, td.window.await(SIZE - 10))
+        // One request, cut at the end of the file, not repeated as reading nears it.
+        assertEquals(listOf(SIZE - 10 * MB), td.requested())
+        assertEquals(listOf(10 * MB), td.limits())
     }
 
     @Test

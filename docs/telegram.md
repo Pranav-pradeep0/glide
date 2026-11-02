@@ -363,4 +363,38 @@ Seek results (logcat, after the 1000 ms buffer):
 The MP4's long jumps miss: it needs ~4× the bytes per second. Unknown yet whether the time goes
 to TDLib's first byte or to the amount: Session A logs time to first byte and decides.
 
-**Next: Session A (Steps, re-planned 2026-11-02).**
+**2026-11-02: Session A done (streaming window + one-film cache).**
+
+- `TgWindow`: `downloadFile(offset = read position, limit = max(8 MB, size/64))`, moved when
+  reading is within half a window of its end, or goes back before its start (a seek re-anchors);
+  cut at the end of the file. `TgWindowTest` 13 cases pass (extends before reads starve, seek
+  re-anchors, end of file, smallest window).
+- `Td`: opening a film deletes the bytes of every other film streamed or prefetched this run; at
+  `ready`, `optimizeStorage` drops all videos/documents (last run's films; thumbnails and chat
+  photos stay). 4 GB cap gone. `stopStreams()` on player release kept. Log
+  `first byte <file> @ <offset> in N ms` per `downloadFile` (first part, ≤ 1 MB).
+- **Bug fixed:** Settings' size used `getStorageStatisticsFast`, which leaves out partly
+  downloaded films (6.2 MB shown, Android's App info cache 130 MB). Now `getStorageStatistics`.
+
+Phone (Nothing Phone, 5 GHz Wi-Fi), 2 GB MP4 (window 31.6 MB):
+
+| Check | Result |
+|---|---|
+| Data for 5.5 min of playback | 143 MB (≈ 95 MB watched + 31.6 MB window + a short film), extended every ~60 s before reads starved, no stall |
+| Cache after two films | 130 MB = the second film + thumbnails ✓ |
+| Jump ahead (request → playing) | 3.4 / 3.6 / 4.0 / 4.3 / 4.6 s; 6.3 s and 13.6 s after two requests in a row |
+| Back into the watched part | 0.03–0.3 s ✓ |
+| Fast taps | no crash, no stuck buffer ✓ |
+| Last 30 s | 4.7 s, played to the end, ended cleanly ✓ |
+| Deleted video | "file moved or deleted" (`FILE_NOT_FOUND`), no hang ✓; TDLib drops its bytes itself |
+| First frame from the list (no prefetch, `moov` at the end) | 6.9 s (head 3.2 s + tail 3.4 s) |
+| Network cut | not run (would drop wireless adb; owner: fine) |
+| MKV | not re-run; session 3's 1.8–3.1 s stands |
+
+**MP4 long jumps, decided:** the time is TDLib's first byte at the new offset (2.8–4.7 s); once
+it lands, playback starts in 0.1–0.6 s, so the amount of data isn't the cause and no window
+change helps. Accept ~4 s as Telegram's floor. The outliers come from a second `downloadFile` to a
+new offset within ~0.1 s of the first (scrub, then the exact seek): TDLib seems to finish the
+first. If it matters later, a short debounce of new offsets is the lever (reopens "no debounce").
+
+**Next: Session B (Steps, re-planned 2026-11-02).**

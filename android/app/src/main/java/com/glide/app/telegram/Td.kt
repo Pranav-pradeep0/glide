@@ -28,6 +28,12 @@ object Td {
     private var client: Client? = null
     private val windows = ConcurrentHashMap<Int, TgWindow>()
 
+    /** Films streamed or prefetched this run; opening one deletes the others' bytes. */
+    private val films = ConcurrentHashMap.newKeySet<Int>()
+
+    /** Per file, the last `downloadFile`: offset, prefix already on disk, when (for the first-byte log). */
+    private val asked = ConcurrentHashMap<Int, LongArray>()
+
     @Volatile
     var auth: TdApi.AuthorizationState? = null
         private set
@@ -102,7 +108,8 @@ object Td {
                 Log.i(TAG, "auth: ${s.javaClass.simpleName}")
                 when (s) {
                     is TdApi.AuthorizationStateWaitTdlibParameters -> post(parameters())
-                    is TdApi.AuthorizationStateReady -> post(optimize(cap()))
+                    // Last run's streamed films; thumbnails and chat photos stay.
+                    is TdApi.AuthorizationStateReady -> post(optimize(0, FILMS))
                     // This client is finished; the next call starts a new one.
                     is TdApi.AuthorizationStateClosed -> synchronized(this) { client = null }
                     else -> {}
@@ -111,6 +118,7 @@ object Td {
             }
             is TdApi.UpdateChatFolders -> folders = o.chatFolders
             is TdApi.UpdateFile -> {
+                firstByte(o.file)
                 windows[o.file.id]?.onUpdate(progress(o.file))
                 onFile?.invoke(o.file)
             }
@@ -167,9 +175,17 @@ object Td {
         return file(chatId, messageId)
     }
 
-    /** `tg://chatId/messageId` → its download window and size. One window per file, shared. */
+    /**
+     * `tg://chatId/messageId` → its download window and size. One window per file, shared. Keeps
+     * one film's bytes: every other film streamed or prefetched this run is deleted.
+     */
     fun open(chatId: Long, messageId: Long): Pair<TgWindow, Long> {
         val f = onDisk(chatId, messageId)
+        for (id in films) if (id != f.id && films.remove(id)) {
+            windows.remove(id)
+            runCatching { delete(id) }
+        }
+        films += f.id
         val size = f.total
         // Seeded before it's registered, so no update can land ahead of the seed.
         val window = windows[f.id] ?: TgWindow(size, tdlib(f.id)).also {
@@ -187,6 +203,7 @@ object Td {
     fun prefetch(chatId: Long, messageId: Long) {
         val f = onDisk(chatId, messageId)
         val size = f.total
+        films += f.id
         for (offset in listOf(0L, maxOf(0L, size - PREFETCH))) {
             if (windows.containsKey(f.id)) return
             val want = minOf(PREFETCH, size - offset)
@@ -203,8 +220,8 @@ object Td {
     fun download(fileId: Int, done: (String) -> Unit) =
         client().send(TdApi.DownloadFile(fileId, 16, 0, 0, true)) { done((it as? TdApi.File)?.local?.path.orEmpty()) }
 
-    /** Bytes in TDLib's file cache. */
-    fun cacheSize(): Long = send(TdApi.GetStorageStatisticsFast()).filesSize
+    /** Bytes in TDLib's file cache, counted on disk: the fast figure leaves out partly downloaded films. */
+    fun cacheSize(): Long = send(TdApi.GetStorageStatistics(0)).size
 
     /**
      * Stops the films' downloads: each asks for the rest of the file, which TDLib would otherwise
@@ -218,14 +235,14 @@ object Td {
     /** Empties the file cache; the session and chat lists stay. A file still downloading isn't deleted, so stop those first. */
     fun clearCache() {
         stopStreams()
+        films.clear()
         send(optimize(0))
     }
 
-    // ponytail: a size cap applied when TDLib signs in, not while a film plays. A long session can
-    // pass it until the next start; trim on playback end if that matters.
-    private fun cap() = minOf(4L shl 30, app.cacheDir.usableSpace / 4)
+    /** Streamed films: videos, and videos sent as files. Offline saves will live outside TDLib's cache. */
+    private val FILMS = arrayOf<TdApi.FileType>(TdApi.FileTypeVideo(), TdApi.FileTypeDocument())
 
-    private fun optimize(size: Long) = TdApi.OptimizeStorage(size, -1, -1, 0, null, null, null, false, 0)
+    private fun optimize(size: Long, types: Array<TdApi.FileType>? = null) = TdApi.OptimizeStorage(size, -1, -1, 0, types, null, null, false, 0)
 
     /**
      * Signs out and wipes the session and cache, then starts a fresh client (waiting for a phone
@@ -242,6 +259,7 @@ object Td {
             onAuth -= listener
         }
         windows.clear()
+        films.clear()
         app.filesDir.resolve("tdlib").deleteRecursively()
         app.cacheDir.resolve("tdlib").deleteRecursively()
         start()
@@ -250,10 +268,22 @@ object Td {
     private fun tdlib(fileId: Int) = object : TgWindow.Tdlib {
         override fun prefixAt(pos: Long) = send(TdApi.GetFileDownloadedPrefixSize(fileId, pos)).size
 
-        override fun download(offset: Long) {
-            Log.d(TAG, "downloadFile $fileId @ $offset")
-            send(TdApi.DownloadFile(fileId, 32, offset, 0, false)) { windows[fileId]?.onUpdate(progress(it)) }
+        override fun download(offset: Long, limit: Long) {
+            Log.d(TAG, "downloadFile $fileId @ $offset +$limit")
+            val at = System.nanoTime()
+            send(TdApi.DownloadFile(fileId, 32, offset, limit, false)) {
+                asked[fileId] = longArrayOf(offset, it.local.downloadedPrefixSize, at)
+                windows[fileId]?.onUpdate(progress(it))
+            }
         }
+    }
+
+    /** Logs how long TDLib took to bring the first new bytes of a `downloadFile` (one part, up to 1 MB). */
+    private fun firstByte(f: TdApi.File) {
+        val (offset, prefix, at) = asked[f.id] ?: return
+        if (f.local.downloadOffset != offset || f.local.downloadedPrefixSize <= prefix) return
+        asked.remove(f.id)
+        Log.d(TAG, "first byte ${f.id} @ $offset in ${(System.nanoTime() - at) / 1_000_000} ms")
     }
 
     private const val PREFETCH = 2L shl 20
