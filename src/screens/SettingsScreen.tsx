@@ -40,7 +40,7 @@ import pkg from '../../package.json';
 import { NATIVE_API_LEVEL } from '@/native/GlideNative';
 import { ACTIVE_RELEASE_HASH } from 'react-native-stallion';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { TelegramService } from '@/services/TelegramService';
+import { TelegramService, useTelegramSaves } from '@/services/TelegramService';
 import { formatFileSize } from '@/utils/formatUtils';
 import { IS_TV } from '@/utils/tv';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -269,11 +269,31 @@ export default function SettingsScreen() {
     // Null until Telegram has been used here, so the row stays hidden.
     const [telegramBytes, setTelegramBytes] = React.useState<number | null>(null);
     useFocusEffect(useCallback(() => { TelegramService.cacheSize().then(setTelegramBytes, () => {}); }, []));
+    const telegramSaves = useTelegramSaves();
+    const savedBytes = telegramSaves.reduce((n, x) => n + x.done, 0);
+
+    function handleDeleteSaves() {
+        showDialog(
+            'Delete downloaded films',
+            'Films downloaded from Telegram to watch offline are deleted from this device. They stay in Telegram.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await TelegramService.deleteSaves();
+                        showSnackbar({ text: 'Downloaded films deleted', tone: 'confirm' });
+                    },
+                },
+            ]
+        );
+    }
 
     function handleClearTelegram() {
         showDialog(
-            'Clear Telegram downloads',
-            'Videos downloaded from Telegram are deleted from this device. They stay in Telegram.',
+            'Clear Telegram cache',
+            'Parts of Telegram videos kept from streaming are deleted. Downloaded films stay.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -282,7 +302,7 @@ export default function SettingsScreen() {
                     onPress: async () => {
                         await TelegramService.clearCache();
                         setTelegramBytes(0);
-                        showSnackbar({ text: 'Telegram downloads cleared', tone: 'confirm' });
+                        showSnackbar({ text: 'Telegram cache cleared', tone: 'confirm' });
                     },
                 },
             ]
@@ -641,7 +661,10 @@ export default function SettingsScreen() {
                 <ListGroup>
                     <ListRow icon="trash-2" title="Clear subtitle cache" destructive onPress={handleClearCache} />
                     {telegramBytes !== null && (
-                        <ListRow icon="trash-2" title="Clear Telegram downloads" value={formatFileSize(telegramBytes)} destructive onPress={handleClearTelegram} />
+                        <ListRow icon="trash-2" title="Clear Telegram cache" value={formatFileSize(telegramBytes)} destructive onPress={handleClearTelegram} />
+                    )}
+                    {telegramSaves.length > 0 && (
+                        <ListRow icon="trash-2" title="Delete downloaded films" value={formatFileSize(savedBytes)} destructive onPress={handleDeleteSaves} />
                     )}
                     <ListRow icon="trash-2" title="Clear watch history" destructive onPress={handleClearHistory} />
                 </ListGroup>

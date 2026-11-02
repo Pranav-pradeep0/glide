@@ -10,7 +10,7 @@ import { ListGroup, ListRow, Sheet } from '@/components/ui';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { getResumablePosition, isFinished } from '@/utils/playbackResume';
 import { metrics, type } from '@/theme/theme';
-import { isTelegram, TelegramService } from '@/services/TelegramService';
+import { isTelegram, TelegramService, useTelegramSaves } from '@/services/TelegramService';
 
 interface VideoOptionsProps {
     visible: boolean;
@@ -55,6 +55,8 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
     // Telegram: the "folder" is a chat id, and reading metadata would download part of the film.
     const tg = isTelegram(path);
     const folder = link || tg ? undefined : path.split('/').slice(0, -1).pop();
+    const saves = useTelegramSaves();
+    const saved = tg ? saves.find(s => s.uri === path) : undefined;
 
     // The store, not `video`: a Recents entry handed in is a snapshot.
     const entry = useVideoHistoryStore((s) => (path ? s.getVideoHistory(path) : null));
@@ -176,6 +178,15 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
                     {watchedDuration > 0 && (finished
                         ? <ListRow icon="eye-off" title="Mark as unwatched" onPress={() => handleAction(() => setPosition(0))} />
                         : <ListRow icon="check-circle" title="Mark as watched" onPress={() => handleAction(() => setPosition(watchedDuration))} />
+                    )}
+                    {tg && (saved
+                        ? <ListRow
+                            icon={saved.state === 'saved' ? 'trash-2' : 'x-circle'}
+                            title={saved.state === 'saved' ? 'Delete download' : 'Cancel download'}
+                            destructive={saved.state === 'saved'}
+                            onPress={() => handleAction(() => { TelegramService.unsave(path).catch(() => {}); })}
+                        />
+                        : <ListRow icon="download" title="Download" onPress={() => handleAction(() => { TelegramService.save(path, { name, duration }).catch(() => {}); })} />
                     )}
                     {onShare && <ListRow icon="share-2" title="Share" onPress={() => handleAction(onShare)} />}
                     {onClearHistory && (

@@ -397,4 +397,29 @@ change helps. Accept ~4 s as Telegram's floor. The outliers come from a second `
 new offset within ~0.1 s of the first (scrub, then the exact seek): TDLib seems to finish the
 first. If it matters later, a short debounce of new offsets is the lever (reopens "no debounce").
 
+**2026-11-02: Session C (offline saves) built; offline test pending (owner, by cable).**
+
+- Native `telegram/TgSaves.kt`: queue (one at a time), `TelegramSaveService` (`dataSync`, progress
+  notification + Cancel, stops itself when the queue empties; Android 15 `onTimeout` cancels).
+  Whole film via synchronous `downloadFile(priority 1, limit 0)`; done → `renameTo`
+  `filesDir/telegram/<chatId>_<messageId>.<ext>` + `deleteFile` so TDLib forgets its copy. The
+  file name is the record native reads; JS keeps name/duration in MMKV (`save:<uri>`).
+- `TelegramDataSource` reads a saved film straight from the file (no TDLib, no network).
+- Saving while playing: TDLib keeps one download per file, so the player's window runs to the end
+  of the file (`limit 0`) for a film being saved; the save shows complete as soon as TDLib says so
+  and moves the file once the player closes. Films being saved are never evicted by "one film".
+- Module: `saves()`, `save(uri, name)`, `unsave(uri)` (cancel or delete), `deleteSaves()`, event
+  `GlideTelegramSaves`. Logging out wipes saves.
+- UI (owner's calls this session): a **Downloaded tab** on Telegram home (always shown, second
+  after All, so tabs never shift); ⋯ sheet Download / Cancel download / Delete download; row label
+  "Downloaded" / "Downloading 34%"; **player top bar Download button** (ring fills with eased
+  progress, then a tick over the line, YouTube-style); Settings: "Clear Telegram cache" (renamed:
+  streamed bytes) + "Delete downloaded films" with their size. Telegram Continue watching ⋯ opens
+  the sheet.
+- Owner, decided: **no cache-size setting or cleanup rules** (saves are the user's control);
+  **Clear watch history doesn't delete downloads** (separate buttons).
+- Checked on the phone: save while playing completes and shows the tick; saved film replays from
+  the file (`open … (saved)` in logcat). **Not yet:** airplane-mode playback, leaving the app
+  mid-save, queue of two, delete (wireless adb drops offline: owner tests by cable with Session D).
+
 **Next: Session B (Steps, re-planned 2026-11-02).**

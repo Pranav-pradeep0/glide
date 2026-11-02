@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
-    PipIcon, AudioIcon, SubtitleIcon, BookmarkListIcon, VisualEnhancementIcon, OrientationLockIcon, NightModeIcon, SkipRingIcon, getResizeModeIcon, getResizeModeLabel, formatRate,
+    PipIcon, AudioIcon, DownloadIcon, SubtitleIcon, BookmarkListIcon, VisualEnhancementIcon, OrientationLockIcon, NightModeIcon, SkipRingIcon, getResizeModeIcon, getResizeModeLabel, formatRate,
 } from './PlayerIcons';
 import { Button, Gradient, IconButton, Touchable } from '@/components/ui';
 import { haptic } from '@/native/HapticModule';
@@ -441,6 +441,9 @@ interface PlayerControlsProps {
     /** Audio tracks: switched about as often as subtitles, so it sits next to them. */
     onOpenAudio: () => void;
     onAddBookmark?: () => void;
+    /** Telegram films: saved for offline, on its way (percent), or not (null). Absent elsewhere. */
+    download?: 'saved' | number | null;
+    onDownload?: () => void;
     /** Speed chip and ⋮ both open the Playback panel. */
     onOpenPlayback: () => void;
     playbackRate: number;
@@ -524,7 +527,7 @@ export const PlayerControls: FC<PlayerControlsProps> = (props) => {
 };
 
 const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
-    showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, onOpenPlayback, playbackRate,
+    showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, download, onDownload, onOpenPlayback, playbackRate,
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
     onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, chapters = NO_CHAPTERS, buffering = false, isLandscape, insets, cutouts,
@@ -606,6 +609,14 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                 {onToggleVideoEnhancement && (
                     <GlyphButton onPress={onToggleVideoEnhancement} label="Colour enhancement" active={videoEnhancement}>
                         {c => <VisualEnhancementIcon size={22} color={c} active={videoEnhancement} />}
+                    </GlyphButton>
+                )}
+                {onDownload && download !== undefined && (
+                    <GlyphButton
+                        onPress={onDownload}
+                        label={download === 'saved' ? 'Downloaded' : download === null ? 'Download' : `Downloading ${download}%`}
+                    >
+                        {c => <DownloadIcon size={22} color={c} progress={typeof download === 'number' ? download : undefined} done={download === 'saved'} />}
                     </GlyphButton>
                 )}
                 <GlyphButton onPress={onOpenAudio} label="Audio track">

@@ -1,4 +1,5 @@
-import { DeviceEventEmitter, NativeModules } from 'react-native';
+import { useEffect, useState } from 'react';
+import { DeviceEventEmitter, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 
 /** Sign-in as TDLib tells it (TelegramModule.kt `state`). */
@@ -46,6 +47,18 @@ export interface TgVideo {
     date: number;
 }
 
+/** A film saved for offline, or on its way (TgSaves.kt). */
+export interface TgSave {
+    uri: string;
+    state: 'downloading' | 'waiting' | 'saved';
+    /** Bytes so far and in all. */
+    done: number;
+    total: number;
+    /** What the row shows, kept here when Download was pressed. */
+    name: string;
+    duration: number;
+}
+
 const native = NativeModules.GlideTelegram as
     | {
           available: boolean;
@@ -65,6 +78,10 @@ const native = NativeModules.GlideTelegram as
           prefetch(uri: string): void;
           cacheSize(): Promise<number>;
           clearCache(): Promise<null>;
+          saves(): Promise<Omit<TgSave, 'name' | 'duration'>[]>;
+          save(uri: string, name: string): Promise<null>;
+          unsave(uri: string): Promise<null>;
+          deleteSaves(): Promise<null>;
       }
     | undefined;
 
@@ -76,20 +93,38 @@ const mmkv = createMMKV({ id: 'glide_telegram_v1' });
 
 export const isTelegram = (path: string) => path.startsWith('tg://');
 
+type SaveMeta = Pick<TgSave, 'name' | 'duration'>;
+const meta = (uri: string): SaveMeta => {
+    const m = mmkv.getString(`save:${uri}`);
+    return m ? JSON.parse(m) : { name: 'Video', duration: 0 };
+};
+const withMeta = (list: Omit<TgSave, 'name' | 'duration'>[]): TgSave[] => list.map(s => ({ ...s, ...meta(s.uri) }));
+const forgetSaves = () => mmkv.getAllKeys().filter(k => k.startsWith('save:')).forEach(k => mmkv.remove(k));
+
+/** Remembers the last settled sign-in, so Home can say "Signed in" without starting TDLib. */
+const noteAuth = (a: TgAuth) => {
+    if (a.state === 'ready') { mmkv.set('signedIn', true); }
+    else if (a.state !== 'starting' && a.state !== 'loggingOut') { mmkv.set('signedIn', false); }
+    return a;
+};
+
 export const TelegramService = {
     /** Starts TDLib; `onAuth` gets each later state. Returns the current one and an unsubscribe. */
     start(onAuth: (a: TgAuth) => void) {
         mmkv.set('used', true);
-        const sub = DeviceEventEmitter.addListener('GlideTelegramAuth', onAuth);
-        return { auth: native!.start(), stop: () => sub.remove() };
+        const sub = DeviceEventEmitter.addListener('GlideTelegramAuth', (a: TgAuth) => onAuth(noteAuth(a)));
+        return { auth: native!.start().then(noteAuth), stop: () => sub.remove() };
     },
+
+    /** Signed in when the Telegram screen last looked; false if never opened. */
+    signedIn: () => TELEGRAM_AVAILABLE && (mmkv.getBoolean('signedIn') ?? false),
 
     phoneNumber: (n: string) => native!.phoneNumber(n),
     code: (c: string) => native!.code(c),
     password: (p: string) => native!.password(p),
     requestQr: () => native!.requestQr(),
-    /** Signs out and wipes; also the way back from the QR code to the phone number. */
-    logOut: () => native!.logOut(),
+    /** Signs out and wipes (saved films too); also the way back from the QR code to the phone number. */
+    logOut: () => native!.logOut().then(() => { mmkv.set('signedIn', false); forgetSaves(); }),
 
     folders: () => native!.folders(),
     /** In Telegram's order; `folderId` 0: all chats, Saved Messages first. Page by a bigger `limit`. */
@@ -111,4 +146,39 @@ export const TelegramService = {
     /** Bytes of downloaded films; null when Telegram was never used here. */
     cacheSize: () => (TELEGRAM_AVAILABLE && mmkv.getBoolean('used') ? native!.cacheSize() : Promise.resolve(null)),
     clearCache: () => native!.clearCache(),
+
+    saves: () => (TELEGRAM_AVAILABLE ? native!.saves().then(withMeta) : Promise.resolve([] as TgSave[])),
+    /** Saves the film for offline in the background, with a progress notification. */
+    save(uri: string, m: SaveMeta) {
+        mmkv.set(`save:${uri}`, JSON.stringify({ name: m.name, duration: m.duration }));
+        // Android 13+: without it the download still runs, its notification just isn't shown.
+        if (Platform.OS === 'android' && Platform.Version >= 33) {
+            PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
+        }
+        return native!.save(uri, m.name);
+    },
+    /** Cancels a save, or deletes a saved film. */
+    unsave: (uri: string) => native!.unsave(uri).then(() => mmkv.remove(`save:${uri}`)),
+    deleteSaves: () => native!.deleteSaves().then(forgetSaves),
 };
+
+/** Saved films and those on their way, kept current. */
+export function useTelegramSaves(): TgSave[] {
+    const [saves, setSaves] = useState<TgSave[]>([]);
+    useEffect(() => {
+        if (!TELEGRAM_AVAILABLE) { return; }
+        let live = true;
+        TelegramService.saves().then(s => { if (live) { setSaves(s); } }, () => {});
+        const sub = DeviceEventEmitter.addListener('GlideTelegramSaves', (l: Omit<TgSave, 'name' | 'duration'>[]) => setSaves(withMeta(l)));
+        return () => { live = false; sub.remove(); };
+    }, []);
+    return saves;
+}
+
+/** How a save reads on its film's row: "Downloaded", "Downloading 34%", "Waiting to download". */
+export function saveLabel(s: TgSave | undefined): string | undefined {
+    if (!s) { return undefined; }
+    if (s.state === 'saved') { return 'Downloaded'; }
+    if (s.state === 'waiting') { return 'Waiting to download'; }
+    return `Downloading ${s.total ? Math.floor((s.done * 100) / s.total) : 0}%`;
+}

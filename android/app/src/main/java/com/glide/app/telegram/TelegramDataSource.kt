@@ -20,6 +20,9 @@ import java.io.RandomAccessFile
 class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
     private var uri: Uri? = null
     private var window: TgWindow? = null
+    /** A saved film's file, read directly; else the [window]'s. */
+    private var path: String? = null
+    private var size = 0L
     private var file: RandomAccessFile? = null
     private var pos = 0L
     private var remaining = 0L
@@ -34,14 +37,18 @@ class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
         val chatId = dataSpec.uri.host?.toLongOrNull()
         val messageId = dataSpec.uri.pathSegments.firstOrNull()?.toLongOrNull()
         if (chatId == null || messageId == null || !Td.available) throw DataSourceException(PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)
-        val (w, size) = try {
+        // Saved for offline: the file, no network.
+        val saved = TgSaves.file(chatId, messageId)
+        val (w, size) = if (saved != null) null to saved.length() else try {
             Td.open(chatId, messageId)
         } catch (e: Td.TdException) {
             throw DataSourceException(e, if (e.code in 400..499) PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND else PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         }
         if (dataSpec.position > size) throw DataSourceException(PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE)
-        Log.d("GlideTelegram", "open $chatId/$messageId @ ${dataSpec.position}")
+        Log.d("GlideTelegram", "open $chatId/$messageId @ ${dataSpec.position}${if (saved != null) " (saved)" else ""}")
         window = w
+        path = saved?.path
+        this.size = size
         pos = dataSpec.position
         remaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) dataSpec.length else size - pos
         bufLen = 0
@@ -64,12 +71,12 @@ class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
     }
 
     private fun fill() {
-        val w = window!!
-        val n = minOf(w.await(pos), BUFFER.toLong()).toInt()
+        val w = window
+        val n = minOf(w?.await(pos) ?: (size - pos), BUFFER.toLong()).toInt()
         bufStart = pos
         bufLen = 0
-        if (n == 0) return
-        val f = file ?: RandomAccessFile(w.path, "r").also { file = it }
+        if (n <= 0) return
+        val f = file ?: RandomAccessFile(path ?: w!!.path, "r").also { file = it }
         f.seek(pos)
         f.readFully(buf, 0, n)
         bufLen = n
@@ -81,6 +88,7 @@ class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
     override fun close() {
         uri = null
         window = null
+        path = null
         file?.let { runCatching { it.close() } }
         file = null
         bufLen = 0

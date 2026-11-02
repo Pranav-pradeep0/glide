@@ -30,7 +30,7 @@ import { VideoHUD } from '@/components/VideoPlayer/VideoHUD';
 import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
 import { HapticMarkButtons } from '@/components/VideoPlayer/HapticMarkButtons';
-import { SnackbarHost, showSnackbar } from '@/components/ui';
+import { SnackbarHost, showDialog, showSnackbar } from '@/components/ui';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
 import { UpNextCard, UP_NEXT_COUNTDOWN_MS } from '@/components/VideoPlayer/UpNextCard';
 import { SkipChapterButton } from '@/components/VideoPlayer/SkipChapterButton';
@@ -77,6 +77,7 @@ import { useAlbumVideos } from '@/hooks/useMediaService';
 // Services and stores
 import { VideoOrientationService } from '@/services/VideoOrientationService';
 import { NavigationService } from '@/services/NavigationService';
+import { isTelegram, TelegramService, useTelegramSaves } from '@/services/TelegramService';
 import { DeepLinkService } from '@/services/DeepLinkService';
 import { EXTERNAL_SUBTITLE_INDEX } from '@/services/ExternalSubtitleStore';
 import { isReplayable, useVideoHistoryStore } from '@/store/videoHistoryStore';
@@ -257,6 +258,11 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const isLandscape = useMemo(() => width > height, [width, height]);
     const isNetworkStream = useMemo(() => NavigationService.isNetworkStream(videoPath), [videoPath]);
+    // Telegram: Download in the top bar, with its progress.
+    const telegramSaves = useTelegramSaves();
+    const tgSave = isTelegram(videoPath) ? telegramSaves.find(s => s.uri === videoPath) : undefined;
+    const download = !isTelegram(videoPath) ? undefined : !tgSave ? null
+        : tgSave.state === 'saved' ? 'saved' as const : tgSave.total ? Math.floor((tgSave.done * 100) / tgSave.total) : 0;
     // Shares and app links have history too; rtsp and the sending app's own local server don't.
     const keepsHistory = !isNetworkStream || isReplayable(videoPath);
     // No resume prompt: nothing saved, or another app's stream, which sends its own start.
@@ -975,6 +981,22 @@ export default function VideoPlayerScreen({ route }: Props) {
         openPanel('subtitleSelector');
     }, [openPanel]);
 
+    const handleDownload = useCallback(() => {
+        if (!tgSave) {
+            TelegramService.save(videoPath, { name: displayTitle.title, duration: player.state.duration }).catch(() => {});
+            return;
+        }
+        const saved = tgSave.state === 'saved';
+        showDialog(
+            saved ? 'Delete download' : 'Cancel download',
+            saved ? 'The downloaded copy is deleted from this device. The film stays in Telegram.' : 'The download stops.',
+            [
+                { text: 'Keep', style: 'cancel' },
+                { text: saved ? 'Delete' : 'Stop', style: 'destructive', onPress: () => { TelegramService.unsave(videoPath).catch(() => {}); } },
+            ],
+        );
+    }, [tgSave, videoPath, displayTitle.title, player.state.duration]);
+
     const handleAddBookmark = useCallback(() => {
         bookmarksHook.addBookmark();
         scheduleAutoHide();
@@ -1540,6 +1562,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onOpenSubtitles={handleToggleSubtitle}
                     onOpenAudio={handleToggleAudio}
                     onAddBookmark={isNetworkStream ? undefined : handleAddBookmark}
+                    download={download}
+                    onDownload={handleDownload}
                     onOpenPlayback={handleToggleQuickSettings}
                     playbackRate={basePlaybackRate}
                     paused={displayPaused}

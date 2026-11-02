@@ -24,12 +24,16 @@ object Td {
 
     class TdException(val code: Int, val text: String) : IOException("$code $text")
 
-    private lateinit var app: Context
+    lateinit var app: Context
+        private set
     private var client: Client? = null
     private val windows = ConcurrentHashMap<Int, TgWindow>()
 
     /** Films streamed or prefetched this run; opening one deletes the others' bytes. */
     private val films = ConcurrentHashMap.newKeySet<Int>()
+
+    /** Films being saved for offline ([TgSaves]): never deleted for another film. */
+    val saving: MutableSet<Int> = ConcurrentHashMap.newKeySet()
 
     /** Per file, the last `downloadFile`: offset, prefix already on disk, when (for the first-byte log). */
     private val asked = ConcurrentHashMap<Int, LongArray>()
@@ -119,6 +123,7 @@ object Td {
             is TdApi.UpdateChatFolders -> folders = o.chatFolders
             is TdApi.UpdateFile -> {
                 firstByte(o.file)
+                TgSaves.onFile(o.file)
                 windows[o.file.id]?.onUpdate(progress(o.file))
                 onFile?.invoke(o.file)
             }
@@ -181,7 +186,7 @@ object Td {
      */
     fun open(chatId: Long, messageId: Long): Pair<TgWindow, Long> {
         val f = onDisk(chatId, messageId)
-        for (id in films) if (id != f.id && films.remove(id)) {
+        for (id in films) if (id != f.id && id !in saving && films.remove(id)) {
             windows.remove(id)
             runCatching { delete(id) }
         }
@@ -219,6 +224,9 @@ object Td {
      */
     fun download(fileId: Int, done: (String) -> Unit) =
         client().send(TdApi.DownloadFile(fileId, 16, 0, 0, true)) { done((it as? TdApi.File)?.local?.path.orEmpty()) }
+
+    /** The player is reading this file (its download leads). */
+    fun streaming(fileId: Int) = windows.containsKey(fileId)
 
     /** Bytes in TDLib's file cache, counted on disk: the fast figure leaves out partly downloaded films. */
     fun cacheSize(): Long = send(TdApi.GetStorageStatistics(0)).size
@@ -260,6 +268,7 @@ object Td {
         }
         windows.clear()
         films.clear()
+        TgSaves.wipe()
         app.filesDir.resolve("tdlib").deleteRecursively()
         app.cacheDir.resolve("tdlib").deleteRecursively()
         start()
@@ -269,9 +278,12 @@ object Td {
         override fun prefixAt(pos: Long) = send(TdApi.GetFileDownloadedPrefixSize(fileId, pos)).size
 
         override fun download(offset: Long, limit: Long) {
-            Log.d(TAG, "downloadFile $fileId @ $offset +$limit")
+            // Being saved: on to the end, so the save goes on while it plays (TDLib keeps one
+            // download per file); the save fills in the rest once the player closes.
+            val l = if (fileId in saving) 0 else limit
+            Log.d(TAG, "downloadFile $fileId @ $offset +$l")
             val at = System.nanoTime()
-            send(TdApi.DownloadFile(fileId, 32, offset, limit, false)) {
+            send(TdApi.DownloadFile(fileId, 32, offset, l, false)) {
                 asked[fileId] = longArrayOf(offset, it.local.downloadedPrefixSize, at)
                 windows[fileId]?.onUpdate(progress(it))
             }

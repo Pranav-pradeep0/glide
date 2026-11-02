@@ -1,6 +1,5 @@
 package com.glide.app.telegram
 
-import android.net.Uri
 import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -28,8 +27,11 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     private val events = Executors.newSingleThreadExecutor()
     private val onAuth: (TdApi.AuthorizationState) -> Unit = { s -> events.execute { emit(s) } }
 
+    private val onSaves: () -> Unit = { events.execute { emitSaves() } }
+
     init {
         Td.onAuth += onAuth
+        TgSaves.onChange += onSaves
     }
 
     // Telegram's calls mostly wait on the network: their own threads, so a slow search never holds
@@ -38,6 +40,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
 
     override fun invalidate() {
         Td.onAuth -= onAuth
+        TgSaves.onChange -= onSaves
         events.shutdown()
         pool.shutdown()
         super.invalidate()
@@ -373,10 +376,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         Td.download(thumb.file.id) { promise.resolve(if (it.isEmpty()) null else "file://$it") }
     }
 
-    private fun parse(uri: String): Pair<Long, Long>? {
-        val u = Uri.parse(uri)
-        return (u.host?.toLongOrNull() ?: return null) to (u.pathSegments.firstOrNull()?.toLongOrNull() ?: return null)
-    }
+    private fun parse(uri: String) = tgIds(uri)
 
     private val prefetching = AtomicReference<String?>()
     private val prefetcher = Executors.newSingleThreadExecutor()
@@ -409,9 +409,60 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         promise.resolve(null)
     }
 
+    /**
+     * Offline saves: `[{ uri, state, done, total }]`, `state` `downloading` (the first),
+     * `waiting` or `saved` (`done` = `total` = the file's size). Changes follow as [SAVES] events.
+     */
+    @ReactMethod
+    fun saves(promise: Promise) = td(promise) { promise.resolve(savesList()) }
+
+    private fun savesList() = Arguments.createArray().apply {
+        val queue = TgSaves.queue.toList()
+        queue.forEachIndexed { i, it ->
+            pushMap(if (it.complete) save(it.uri, "saved", it.total, it.total) else save(it.uri, if (i == 0) "downloading" else "waiting", it.done, it.total))
+        }
+        // A film being moved is in both for a moment: once.
+        TgSaves.saved().forEach { (uri, f) -> if (queue.none { it.uri == uri }) pushMap(save(uri, "saved", f.length(), f.length())) }
+    }
+
+    private fun save(uri: String, state: String, done: Long, total: Long) = Arguments.createMap().apply {
+        putString("uri", uri)
+        putString("state", state)
+        putDouble("done", done.toDouble())
+        putDouble("total", total.toDouble())
+    }
+
+    private fun emitSaves() = runCatching {
+        reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(SAVES, savesList())
+    }.onFailure { Log.w(TAG, "saves event", it) }
+
+    /** Saves a `tg://` film for offline, queued after any others; [name] goes on the notification. */
+    @ReactMethod
+    fun save(uri: String, name: String, promise: Promise) = td(promise) {
+        val (chatId, messageId) = parse(uri) ?: return@td promise.resolve(null)
+        TgSaves.save(chatId, messageId, name)
+        promise.resolve(null)
+    }
+
+    /** Cancels a save, or deletes a saved film. */
+    @ReactMethod
+    fun unsave(uri: String, promise: Promise) = td(promise) {
+        val (chatId, messageId) = parse(uri) ?: return@td promise.resolve(null)
+        TgSaves.remove(chatId, messageId)
+        promise.resolve(null)
+    }
+
+    /** Cancels every save and deletes every saved film. */
+    @ReactMethod
+    fun deleteSaves(promise: Promise) = td(promise) {
+        TgSaves.wipe()
+        promise.resolve(null)
+    }
+
     companion object {
         private const val TAG = "GlideTelegram"
         private const val AUTH = "GlideTelegramAuth"
+        private const val SAVES = "GlideTelegramSaves"
     }
 }
 

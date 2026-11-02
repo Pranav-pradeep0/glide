@@ -23,6 +23,8 @@
          ForegroundServiceDidNotStartInTimeException about 30s into playback. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Telegram offline saves: the download keeps going after leaving the app. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Android 13+. Media-session notifications are exempt from this permission, so
          playback and its foreground service work without it, and Glide never asks for it.
          Harmless to declare; the media notification is the only one Glide posts. -->
@@ -97,6 +99,12 @@
             <action android:name="android.media.browse.MediaBrowserService" />
         </intent-filter>
       </service>
+
+      <!-- Telegram offline saves (telegram/TgSaves.kt). -->
+      <service
+        android:name="com.glide.app.telegram.TelegramSaveService"
+        android:exported="false"
+        android:foregroundServiceType="dataSync" />
 
       <!-- Playback resumption: a Bluetooth or headset Play with Glide not running starts
            the service, which resumes the saved queue (onPlaybackResumption). Its presence

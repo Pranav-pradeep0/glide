@@ -22,7 +22,9 @@ import {
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
 import { Pager } from '@/components/Pager';
-import { TELEGRAM_AVAILABLE, TelegramService, TgAuth, TgChat, TgRecent, TgVideo, isTelegram } from '@/services/TelegramService';
+import {
+    TELEGRAM_AVAILABLE, TelegramService, TgAuth, TgChat, TgRecent, TgSave, TgVideo, isTelegram, saveLabel, useTelegramSaves,
+} from '@/services/TelegramService';
 import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { getResumablePosition } from '@/utils/playbackResume';
 import { NavigationService } from '@/services/NavigationService';
@@ -245,8 +247,10 @@ function SignIn({ auth }: { auth: TgAuth }) {
 }
 
 /** A tab over the chats: all, one of the user's Telegram folders, or (no folders) a kind of chat. */
-type Tab = { key: string; label: string; folderId?: number; only?: 'group' | 'private' };
+type Tab = { key: string; label: string; folderId?: number; only?: 'group' | 'private'; downloads?: boolean };
 const ALL: Tab = { key: 'all', label: 'All' };
+// Always there, second: tabs never shift when the first film is saved or the last deleted.
+const DOWNLOADED: Tab = { key: 'downloaded', label: 'Downloaded', downloads: true };
 // Accounts without Telegram folders still get something to narrow by.
 const KINDS: Tab[] = [{ key: 'group', label: 'Groups', only: 'group' }, { key: 'private', label: 'Private', only: 'private' }];
 
@@ -267,7 +271,7 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<Nav>();
-    const [tabs, setTabs] = useState<Tab[]>([ALL]);
+    const [tabs, setTabs] = useState<Tab[]>([ALL, DOWNLOADED]);
     const [index, setIndex] = useState(0);
     const bar = useRef<ScrollViewInstance>(null);
     const barWidth = useRef(0);
@@ -285,7 +289,7 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
 
     useEffect(() => {
         TelegramService.folders()
-            .then(f => setTabs([ALL, ...(f.length ? f.map(x => ({ key: `f${x.id}`, label: x.name, folderId: x.id })) : KINDS)]))
+            .then(f => setTabs([ALL, DOWNLOADED, ...(f.length ? f.map(x => ({ key: `f${x.id}`, label: x.name, folderId: x.id })) : KINDS)]))
             .catch(() => {});
     }, []);
     // A swipe can land on a tab whose chip is off screen: centre it, as Music does.
@@ -293,7 +297,7 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
         const chip = chips.current[index];
         if (chip) { bar.current?.scrollTo({ x: Math.max(0, chip.x + chip.width / 2 - barWidth.current / 2), animated: true }); }
     }, [index]);
-    const renderPage = (t: Tab) => <ChatsPage tab={t} recent={recent} />;
+    const renderPage = (t: Tab) => (t.downloads ? <DownloadsPage /> : <ChatsPage tab={t} recent={recent} />);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -350,6 +354,44 @@ function ask(id: number): Promise<void> {
     return p;
 }
 
+const saveFile = (s: TgSave): VideoFile => ({ name: s.name, path: s.uri, size: s.total, modifiedDate: 0, duration: s.duration, isDirectory: false });
+
+/** Films saved for offline and those on their way: plays with no network. */
+function DownloadsPage() {
+    const insets = useSafeAreaInsets();
+    const navigation = useNavigation<Nav>();
+    const saves = useTelegramSaves();
+    const [selected, setSelected] = useState<VideoFile | null>(null);
+    const play = useCallback((f: VideoFile) => NavigationService.handleVideoNavigation(navigation, f.path, { videoName: f.name }), [navigation]);
+
+    const renderItem = useCallback(({ item, index }: { item: TgSave; index: number }) => (
+        <VideoRow
+            item={saveFile(item)}
+            path={item.uri}
+            name={item.name}
+            duration={item.duration}
+            meta={[formatFileSize(item.total), item.state === 'saved' ? undefined : saveLabel(item)].filter(Boolean).join(' · ')}
+            onPress={play}
+            onMore={setSelected}
+            preferFocus={index === 0}
+        />
+    ), [play]);
+
+    if (!saves.length) { return <EmptyState icon="download" text="Films you download show here and play without a connection. Tap ⋯ on a film, then Download." />; }
+    return (
+        <>
+            <FlashList
+                data={saves}
+                renderItem={renderItem}
+                keyExtractor={(x: TgSave) => x.uri}
+                contentContainerStyle={listContentStyle(false, insets.bottom)}
+                showsVerticalScrollIndicator={false}
+            />
+            <VideoOptionsBottomSheet visible={!!selected} video={selected} onClose={() => setSelected(null)} onPlay={() => selected && play(selected)} />
+        </>
+    );
+}
+
 /** One tab's chats in Telegram's order; on All, the video to continue leads. */
 function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent> }) {
     const insets = useSafeAreaInsets();
@@ -362,6 +404,7 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
     const dragged = useRef(false);
     const resume = useTelegramResume();
     const [, setAnswers] = useState(0);
+    const [selected, setSelected] = useState<VideoHistoryEntry | null>(null);
 
     useEffect(() => {
         let live = true;
@@ -414,7 +457,7 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
                 progress={progressOf(hero.duration, hero.lastPausedPosition)}
                 thumbnailTime={hero.stopFrameMs}
                 onPress={v => NavigationService.handleVideoNavigation(navigation, v.videoPath, replayParams(v))}
-                onMore={() => {}}
+                onMore={setSelected}
                 preferFocus
             />
             <SectionTitle title="Chats" />
@@ -425,6 +468,7 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
     if (!chats || (shown.length === 0 && (counting || more))) { return <Loader />; }
     if (shown.length === 0) { return <EmptyState icon="send" text={`No chats with videos in ${tab.label}. Glide doesn't show channels.`} />; }
     return (
+        <>
         <FlashList
             data={shown}
             renderItem={renderChat}
@@ -437,6 +481,13 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
             contentContainerStyle={listContentStyle(false, insets.bottom)}
             showsVerticalScrollIndicator={false}
         />
+        <VideoOptionsBottomSheet
+            visible={!!selected}
+            video={selected}
+            onClose={() => setSelected(null)}
+            onPlay={() => selected && NavigationService.handleVideoNavigation(navigation, selected.videoPath, replayParams(selected))}
+        />
+        </>
     );
 }
 
@@ -528,6 +579,7 @@ export function TelegramChatScreen({ route, navigation }: NativeStackScreenProps
     const next = useRef(0);
     const loading = useRef(false);
     const dragged = useRef(false);
+    const saves = useTelegramSaves();
 
     const load = useCallback(async (first: boolean) => {
         if (loading.current || (!first && next.current === 0)) { return; }
@@ -562,14 +614,14 @@ export function TelegramChatScreen({ route, navigation }: NativeStackScreenProps
                     path={item.path}
                     name={item.name}
                     duration={item.duration}
-                    meta={formatFileSize(item.size)}
+                    meta={[formatFileSize(item.size), saveLabel(saves.find(x => x.uri === item.path))].filter(Boolean).join(' · ')}
                     onPress={play}
                     onMore={setSelected}
                     preferFocus={index === 0}
                 />
             </VideoItemCell>
         );
-    }, [grid, play]);
+    }, [grid, play, saves]);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>

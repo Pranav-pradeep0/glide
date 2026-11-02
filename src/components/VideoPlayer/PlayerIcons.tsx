@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Svg, { Rect, Path, Circle, G } from 'react-native-svg';
+import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 import { playerTheme } from '@/theme/theme';
 
 const DEFAULT_COLOR = playerTheme.colors.text;
@@ -188,6 +189,49 @@ export const BookmarkListIcon = ({ size = 20, color = DEFAULT_COLOR }: { size?: 
         <Rect x="8" y="11" width="5" height="2" rx="1" fill={color} stroke="none" />
     </Svg>
 );
+
+const RING = 2 * Math.PI * 10;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+/**
+ * Telegram download, one circle in every state: outlined (not saved), filling clockwise as it
+ * downloads (`progress` 0–100), solid with the arrow cut out once saved.
+ */
+export const DownloadIcon = ({ size = 20, color = DEFAULT_COLOR, progress, done = false }: { size?: number, color?: string, progress?: number, done?: boolean }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        {done ? (
+            <Circle cx="12" cy="12" r="11" fill={color} stroke="none" />
+        ) : (
+            <>
+                <Circle cx="12" cy="12" r="10" strokeWidth={progress === undefined ? 1.5 : 2} strokeOpacity={progress === undefined ? 0.6 : 0.25} />
+                {progress !== undefined && <ProgressArc progress={progress} color={color} />}
+            </>
+        )}
+        {/* Arrow over a line; once saved the arrow turns into a tick, cut out of the solid disc. */}
+        <Path d={done ? 'M8.5 10.5l2.5 2.5 4.5-4.5M8.5 17.25h7' : 'M12 6.5V14M8.75 10.75L12 14l3.25-3.25M8.5 17.25h7'} stroke={done ? '#000' : color} />
+    </Svg>
+);
+
+/**
+ * The ring's filled part. Progress comes about once a second; each step eases over most of that
+ * second, so the ring fills smoothly instead of jumping.
+ */
+const ProgressArc = ({ progress, color }: { progress: number; color: string }) => {
+    const shown = useSharedValue(progress);
+    useEffect(() => {
+        shown.value = withTiming(Math.min(100, Math.max(0, progress)), { duration: 900, easing: Easing.out(Easing.cubic) });
+    }, [progress, shown]);
+    const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: RING * (1 - shown.value / 100) }));
+    return (
+        <AnimatedCircle
+            cx="12" cy="12" r="10"
+            stroke={color}
+            strokeDasharray={RING}
+            animatedProps={animatedProps}
+            transform="rotate(-90 12 12)"
+        />
+    );
+};
 
 export const VisualEnhancementIcon = ({ size = 20, color = DEFAULT_COLOR, active = false }: { size?: number, color?: string, active?: boolean }) => {
     return (
