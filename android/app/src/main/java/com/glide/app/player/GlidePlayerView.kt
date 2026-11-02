@@ -20,6 +20,7 @@ import androidx.media3.common.C
 import com.glide.app.haptic.HapticDirector
 import com.glide.app.haptic.HapticMeaning
 import com.glide.app.haptic.HapticPerformer
+import com.glide.app.telegram.Td
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -36,6 +37,7 @@ import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.DecoderReuseEvaluation
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
@@ -964,6 +966,13 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(wakeMode)
+            .apply {
+                // Telegram takes ~3 s to answer from a new spot; starting on 1 s of video (media3:
+                // 2.5 s, 5 s after a stall) takes ~1.5 s off each jump (docs/telegram.md seek matrix).
+                if (uri.startsWith("tg://")) setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(
+                    DefaultLoadControl.DEFAULT_MIN_BUFFER_MS, DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, 1000, 2000,
+                ).build())
+            }
             .build()
 
         // Seeded before prepare, so the first track selection is already the right one.
@@ -1050,6 +1059,8 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             GlidePlayerHolder.clear(context, it)
             it.removeListener(listener)
             it.release()
+            // A Telegram film downloads to its end unless stopped: not after the player is gone.
+            Td.stopStreams()
         }
         player = null
         keepScreenOn = false

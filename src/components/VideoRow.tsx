@@ -284,7 +284,7 @@ export function ContinueCard<T>({ item, path, name, meta, progress = 0, thumbnai
             // A ring round the whole picture is heavy; focused, it grows and takes the focus tint.
             focusRing={false}
             accessibilityRole="button"
-            accessibilityLabel={`Resume ${text.title}`}
+            accessibilityLabel={`${progress > 0 ? 'Resume' : 'Play'} ${text.title}`}
             accessibilityHint={text.meta}
             style={[styles.hero, { backgroundColor: colors.surfaceVariant }]}
         >

@@ -43,6 +43,53 @@ hosting are free). Users with Telegram Premium may download faster; that's their
   `JS_ENV`). It still ships readable in the APK, as with every Telegram client; that's expected.
   Builds without it hide the feature.
 
+## Decisions (2026-11-02, ground-up re-plan) — reopen only with the owner
+
+Session 3 on the phone showed three faults in the first design: films downloaded to their end
+whether watched or not (2.16 GB cache after two films; the download even outlived the player),
+the cache only shrank at app start, and the chat list couldn't tell which chats hold videos.
+TMPlayer's answers (`TdByteWindow.kt`, `WatchCache.kt`, `ChatVideoCount.kt`) were read; where
+Glide differs, the reason is given.
+
+- **Chat list: only chats with videos, Telegram's order, Saved Messages first. No picker.**
+  - Each chat is counted with `getChatMessageCount` (video filter, then document filter; TDLib's
+    local figure first, free; the server only if TDLib doesn't know). A chat with documents but
+    no video count gets one `searchChatMessages` page of documents checked for video files (MKVs
+    are sent as files). 3 chats at a time, app-wide.
+  - **Answers are saved (MMKV, by chat id)**, so a second visit shows the list at once; chats are
+    re-counted quietly in the background, at most once a session. A chat Telegram can't answer
+    for stays shown (never hidden by an error).
+  - FLOOD_WAIT ≤ 60 s: that one call waits it out once; longer: unknown (shown).
+  - One `searchMessages` page across all chats (`recent()`, 100 per filter, sent together) gives
+    each chat's newest video: its row's second line, and those chats skip counting.
+  - Too few chats with videos on screen (< 20): the next 100 chats are counted by themselves.
+  - Rejected: TMPlayer's "Add chats" picker (a screen and a stored choice to maintain; the counts
+    already answer the question); per-chat video searches, cross-chat paging, per-folder batches
+    (slow, missed chats, FLOOD_WAIT stalls of 14 s in the logs).
+- **Streaming: a bounded window, always (Wi-Fi too).** `downloadFile` asks for `max(8 MB,
+  size / 64)` bytes from the read position (≈ 2 min of any film whatever its bitrate: size/64 of
+  the bytes is duration/64 of the time) and is extended when reading gets within half a window of
+  its end. Data used ≈ what is watched + ~2 min; seeks unchanged. No setting. TMPlayer bounds it
+  only with "Save mobile data" on; Glide always, because an unbounded download fills the phone and
+  hotspots and capped Wi-Fi are metered too.
+- **Cache: one film.** Starting a film deletes every other film's streamed bytes (not offline
+  saves, not thumbnails or chat photos); at app start all streamed film bytes go. Resume
+  re-downloads from the resume point (seconds). The 4 GB cap goes. Settings "Clear Telegram
+  downloads" stays (streamed bytes; offline saves have their own delete). The player cancels its
+  download when it closes.
+- **Offline saves ("Download" in the ⋯ sheet).** The whole film, TDLib priority below playback,
+  `limit = 0`. Runs in a foreground service (`dataSync`, a progress notification with Cancel) so
+  it survives leaving the app; one at a time, a queue after it. When complete, the file is
+  **moved** (rename, same volume) from `cacheDir/tdlib` to
+  `filesDir/telegram/<chatId>_<messageId>.<ext>` (Android may empty `cacheDir`; saves must not
+  vanish) and recorded in MMKV (`tg://chat/msg` → path, name, size). Playing a `tg://` URI that has
+  a save reads the file (`FileDataSource`), no network. Listed in a "Downloaded" section on
+  Telegram home (above the chats) and marked on its row in the chat; ⋯ → "Delete download".
+  Logging out deletes them. Any network: the user asked for it.
+- **Prefetch stays** (first + last 2 MB on ⋯): it took the MKV first frame from 7.8 s to 2.7 s.
+- **No Details metadata for `tg://`** (owner): reading it means downloading.
+- **Chat videos screen stays** (search pages, paging only on a real scroll, "Look further").
+
 ## How it works
 
 ### Native (Kotlin, `android/app/src/main/java/com/glide/app/telegram/`)
@@ -69,8 +116,8 @@ hosting are free). Users with Telegram Premium may download faster; that's their
 - `TelegramDataSource` (`BaseDataSource`), picked for `tg://` by the same wrapping factory as
   `smb://` (`GlidePlayerView.kt` "smb:// to the network-share reader"):
   - `open(position)`: resolve file, size from `file.size` (or `expected_size`); if
-    `[position, …)` isn't on disk, `downloadFile(file_id, priority=32, offset=position, limit=0,
-    synchronous=false)`.
+    `[position, …)` isn't on disk, `downloadFile(file_id, priority=32, offset=position,
+    limit=window, synchronous=false)`, extended as reading nears its end (Decisions 2026-11-02).
   - `read()`: how much is readable at `position` comes **only** from TDLib's numbers
     (`getFileDownloadedPrefixSize(file_id, position)`, or `local.download_offset` +
     `downloaded_prefix_size` from `updateFile`). Never the file's length on disk: the partial file
@@ -82,9 +129,7 @@ hosting are free). Users with Telegram Premium may download faster; that's their
     fast seeks.
   - `close()`: nothing destructive. Network loss: TDLib reconnects itself; the read keeps waiting,
     media3's load-error retries and our "Can't reach" card cover the rest (time-out to measure).
-- **Cache:** TDLib keeps what it downloaded. Cap it: when playback ends, `deleteFile` for
-  films not being resumed soon, and `optimizeStorage(size = cap)` at app start. Cap to decide in
-  (c) (TV boxes have 8 GB). Settings shows the size and a "Clear" button.
+- **Cache:** one film (Decisions 2026-11-02). Offline saves live in `filesDir/telegram`.
 - Bump `GlideNativeModule.API_LEVEL`; JS checks it before showing Telegram (`TELEGRAM_AVAILABLE`).
 
 ### JS
@@ -129,6 +174,25 @@ unit tests, typecheck) until session 3. Step (a) already proved TDLib, streaming
   dump`), screenshots only when something looks wrong. Covers the seek matrix, the MKV start, the
   Mi TV numbers from (a), D-pad focus everywhere; fix what breaks.
 - **Session 4, paperwork.** Data safety, `privacy.html`, Play listing text, release notes.
+Re-planned again 2026-11-02 (Decisions 2026-11-02). Each session ends with build + unit tests +
+typecheck/jest; on the device the owner taps and the agent reads logcat.
+
+- **Session A, streaming window + one-film cache (native).** `TgWindow`: bounded `downloadFile`
+  and its extension rule, unit-tested with fake updates (the window extends before reads starve;
+  a seek re-anchors it; end of file). `Td`: delete other films' bytes on open, all at start, drop
+  the cap. Log time to first byte per `downloadFile`. Device: data for 5 min of the MP4 ≈ 5 min of
+  bytes + one window; cache after two films = one film; the seek matrix incl. last 30 s, a deleted
+  video, a network cut; MP4 long jumps (decide from the first-byte numbers).
+- **Session B, chat list for good.** Saved counts (MMKV), background re-count. Device: time until
+  the list is full on a first and a second visit, no `FLOOD_WAIT` beyond one wait, no chat with
+  videos missing.
+- **Session C, offline saves.** Foreground service + notification, queue, move into
+  `filesDir/telegram`, MMKV record, `tg://` → file playback, "Downloaded" section, ⋯ Download /
+  Delete download, logout wipe. Device: save on Wi-Fi, leave the app, airplane mode, play it.
+- **Session D, Mi TV + D-pad**, then the NetworkScreen keyboard check (likely the same
+  covered-buttons bug sign-in had).
+- **Session 4 (paperwork)** as above, plus offline saves in Data safety.
+
 - **(f) Later, maybe:** channels with sponsored messages (`getChatSponsoredMessages`, shown in the
   chat list, `viewMessages`/`clickChatSponsoredMessage` reported), forwarded-to-Glide shortcuts.
 
@@ -269,4 +333,34 @@ Left for session 3 to judge on device: whether the chat probe hits Telegram's fl
 big accounts (it stops quietly), TV focus prefetch (only the ⋯ sheet prefetches now; Play from
 the grid doesn't), D-pad paths through sign-in.
 
-**Next: session 3 (device), see Steps.**
+**2026-11-02: session 3 (device), first half.** Built and installed (release, Log.d/i kept):
+
+- Home: chats as Telegram lists them (`chats(limit, folderId)`, local), folder tabs from
+  `updateChatFolders` (swipe; TV: chips), round chat photos, last-message date + preview, Continue
+  watching, Saved first, channels hidden, "load 100 more" on a real scroll.
+- Telegram calls on their own 8-thread pool; thumbnails and chat photos download by callback.
+- Chat videos: paging only on a real scroll + "Load more"; `videos()` searches ≤ 3 pages a call.
+- Sign-in restyled (autofill; `KeyboardAvoidingView`: `adjustResize` fails edge-to-edge).
+- Player: `tg://` `DefaultLoadControl` 1000/2000 ms; the seek bar's loading line covers the first
+  load (no centred spinner: owner).
+- `recent()` (`Td.sendAll`: 2 searches in one round trip; 200 messages in ~1.0 s) and
+  `hasVideos(chatId)` with a JS queue (3 at a time, session map): the first half of the chat list
+  decision; not yet judged on the phone. Saved counts not built.
+- **Bug fixed:** a film's `downloadFile(limit = 0)` kept running after the player closed, and Clear
+  can't delete a file still downloading (cache 2.16 GB; 833 MB right after Clear).
+  `Td.stopStreams()` cancels them on player release and before Clear.
+
+Seek results (logcat, after the 1000 ms buffer):
+
+| Case | MP4 2.0 GB (~226 KB/s) | MKV 570 MB (~58 KB/s) | Target |
+|---|---|---|---|
+| First frame | 0.4 s (head on disk) | **2.7 s** (was 7.8) | ≤ 5 s |
+| Jump ahead | 3.4 / 5.9 / 6.8 s ✗ | 1.8 / 3.1 / 2.7 / 3.1 s ✓ | ≤ 4 s |
+| ±10/20 s taps | 0.1–0.5 s | 0.1–0.4 s | < 1 s |
+| Fast scrub, jump back | ✓ | ✓ | |
+| Last 30 s, deleted video, network cut | not run | not run | |
+
+The MP4's long jumps miss: it needs ~4× the bytes per second. Unknown yet whether the time goes
+to TDLib's first byte or to the amount: Session A logs time to first byte and decides.
+
+**Next: Session A (Steps, re-planned 2026-11-02).**

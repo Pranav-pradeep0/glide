@@ -90,8 +90,8 @@ export class SubtitlePickerService {
      */
     static async findMatchingSubtitles(videoPath: string): Promise<string[]> {
         try {
-            // Content URIs don't have scannable directories
-            if (videoPath.startsWith('content://')) {
+            // Content URIs and Telegram messages don't have scannable directories
+            if (videoPath.startsWith('content://') || videoPath.startsWith('tg://')) {
                 if (__DEV__) {console.log(`${LOG_PREFIX} Skipping external subtitle scan for content URI`);}
                 return [];
             }

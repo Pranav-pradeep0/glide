@@ -9,7 +9,6 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import com.glide.app.player.BackgroundWork
 import com.glide.app.smb.PhoneSignIn
 import org.drinkless.tdlib.TdApi
 import java.util.concurrent.Executors
@@ -33,9 +32,14 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         Td.onAuth += onAuth
     }
 
+    // Telegram's calls mostly wait on the network: their own threads, so a slow search never holds
+    // up the app's file work (BackgroundWork's two threads) or the thumbnails queued behind it.
+    private val pool = Executors.newFixedThreadPool(8)
+
     override fun invalidate() {
         Td.onAuth -= onAuth
         events.shutdown()
+        pool.shutdown()
         super.invalidate()
     }
 
@@ -86,12 +90,16 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         putString("state", state)
     }
 
-    private fun td(promise: Promise, block: () -> Unit) = BackgroundWork.submit(promise) {
+    private fun td(promise: Promise, block: () -> Unit) = pool.execute {
         try {
             block()
         } catch (e: Td.TdException) {
             Log.w(TAG, "${e.code} ${e.text}")
             promise.reject("telegram", Tg.reason(e.code, e.text))
+        } catch (t: Throwable) {
+            // An Error would kill the thread with the Promise unsettled; rejecting a settled one is a no-op.
+            Log.w(TAG, "call failed", t)
+            promise.reject("telegram", t.message ?: "Telegram failed", t)
         }
     }
 
@@ -134,53 +142,162 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         promise.resolve(null)
     }
 
+    /** The user's Telegram chat folders, in their order: `[{ id, name }]`; empty when none. */
+    @ReactMethod
+    fun folders(promise: Promise) = td(promise) {
+        val out = Arguments.createArray()
+        Td.folders.forEach { f ->
+            out.pushMap(Arguments.createMap().apply {
+                putInt("id", f.id)
+                putString("name", f.name.text.text)
+            })
+        }
+        promise.resolve(out)
+    }
+
     /**
-     * Saved Messages (`saved: true`) then the first [limit] chats of the main list, channels left
-     * out (docs/telegram.md "Decisions"): `{ id, title, saved, group }`.
+     * The first [limit] chats of folder [folderId] (0: all chats, with Saved Messages first) in
+     * Telegram's order, channels left out (docs/telegram.md "Decisions"): `{ id, title, saved,
+     * group, date, preview }` (the last message: ms, one line). Local, no search: which chats have
+     * videos is only known by searching each (slow, rate-limited), so a chat says so when opened.
      */
     @ReactMethod
-    fun chats(limit: Int, promise: Promise) = td(promise) {
-        val saved = Td.send(TdApi.CreatePrivateChat(Td.send(TdApi.GetMe()).id, false))
-        var ids = Td.send(TdApi.GetChats(TdApi.ChatListMain(), limit)).chatIds
+    fun chats(limit: Int, folderId: Int, promise: Promise) = td(promise) {
+        val saved = savedChat()
+        val ids = chatIds(chatList(folderId), limit)
+        val out = Arguments.createArray()
+        // A folder keeps its own order; all chats lead with Saved Messages, where videos are sent.
+        if (folderId == 0) out.pushMap(chat(saved, true))
+        for (id in ids) {
+            if (folderId == 0 && id == saved.id) continue
+            val c = Td.send(TdApi.GetChat(id))
+            if (listable(c)) out.pushMap(chat(c, id == saved.id))
+        }
+        promise.resolve(out)
+    }
+
+    /** The first [limit] chats of [list], loading more from Telegram as needed. */
+    private fun chatIds(list: TdApi.ChatList, limit: Int): LongArray {
+        var ids = Td.send(TdApi.GetChats(list, limit)).chatIds
         while (ids.size < limit) {
             try {
-                Td.send(TdApi.LoadChats(TdApi.ChatListMain(), limit - ids.size))
+                Td.send(TdApi.LoadChats(list, limit - ids.size))
             } catch (e: Td.TdException) {
                 if (e.code == 404) break // all loaded
                 throw e
             }
             val before = ids.size
-            ids = Td.send(TdApi.GetChats(TdApi.ChatListMain(), limit)).chatIds
+            ids = Td.send(TdApi.GetChats(list, limit)).chatIds
             if (ids.size == before) break
         }
-        val out = Arguments.createArray()
-        out.pushMap(chat(saved, true))
-        for (id in ids) {
-            if (id == saved.id) continue
-            val c = Td.send(TdApi.GetChat(id))
-            val t = c.type
-            if (t is TdApi.ChatTypeSecret || (t is TdApi.ChatTypeSupergroup && t.isChannel)) continue
-            out.pushMap(chat(c, false).apply { putBoolean("group", t !is TdApi.ChatTypePrivate) })
-        }
-        promise.resolve(out)
+        return ids
     }
+
+    private fun chatList(folderId: Int) = if (folderId == 0) TdApi.ChatListMain() else TdApi.ChatListFolder(folderId)
+
+    private fun savedChat() = Td.send(TdApi.CreatePrivateChat(Td.send(TdApi.GetMe()).id, false))
+
+    /** Not channels (docs/telegram.md "Decisions") and not secret chats. */
+    private fun listable(c: TdApi.Chat) = c.type.let { t -> t !is TdApi.ChatTypeSecret && !(t is TdApi.ChatTypeSupergroup && t.isChannel) }
 
     private fun chat(c: TdApi.Chat, saved: Boolean) = Arguments.createMap().apply {
         putDouble("id", c.id.toDouble())
         putString("title", c.title)
         putBoolean("saved", saved)
-        putBoolean("group", false)
+        putBoolean("group", c.type !is TdApi.ChatTypePrivate)
+        putDouble("date", (c.lastMessage?.date ?: 0) * 1000.0)
+        putString("preview", preview(c.lastMessage))
+    }
+
+    /** The last message in one line, as Telegram's chat list shows it. */
+    private fun preview(m: TdApi.Message?): String = when (val c = m?.content) {
+        null -> ""
+        is TdApi.MessageText -> c.text.text
+        is TdApi.MessageVideo -> c.caption.text.ifBlank { "Video" }
+        is TdApi.MessageDocument -> c.document.fileName.ifBlank { "File" }
+        is TdApi.MessagePhoto -> c.caption.text.ifBlank { "Photo" }
+        is TdApi.MessageAnimation -> "GIF"
+        is TdApi.MessageSticker -> "Sticker"
+        is TdApi.MessageVoiceNote -> "Voice message"
+        is TdApi.MessageVideoNote -> "Video message"
+        is TdApi.MessageAudio -> c.audio.title.ifBlank { "Audio" }
+        else -> ""
+    }.lineSequence().firstOrNull()?.trim()?.take(120).orEmpty()
+
+    /** The chat's small photo as a `file://` URI, or null when it has none. */
+    @ReactMethod
+    fun chatPhoto(chatId: Double, promise: Promise) = td(promise) {
+        val small = Td.send(TdApi.GetChat(chatId.toLong())).photo?.small ?: return@td promise.resolve(null)
+        Td.download(small.id) { promise.resolve(if (it.isEmpty()) null else "file://$it") }
+    }
+
+    /**
+     * Whether the chat has any video, for hiding the chats that don't. Counts only (TDLib's own
+     * figure first, free, then the server's); a chat with files but no video filter hit has its
+     * newest files looked at, since MKVs are usually sent as files. Rejects when it can't tell.
+     * JS asks a few chats at a time: more brings FLOOD_WAIT.
+     */
+    @ReactMethod
+    fun hasVideos(chatId: Double, promise: Promise) = td(promise) {
+        val id = chatId.toLong()
+        promise.resolve(count(id, TdApi.SearchMessagesFilterVideo()) > 0 ||
+            (count(id, TdApi.SearchMessagesFilterDocument()) > 0 && Td.send(TdApi.SearchChatMessages().apply {
+                this.chatId = id
+                query = ""
+                limit = 100
+                filter = TdApi.SearchMessagesFilterDocument()
+            }).messages.any { video(it) != null }))
+    }
+
+    /** Messages of [filter] in the chat: TDLib's local figure, else the server's; a short FLOOD_WAIT waited out once. */
+    private fun count(chatId: Long, filter: TdApi.SearchMessagesFilter): Int {
+        Td.send(TdApi.GetChatMessageCount(chatId, null, filter, true)).count.let { if (it >= 0) return it }
+        return try {
+            Td.send(TdApi.GetChatMessageCount(chatId, null, filter, false)).count
+        } catch (e: Td.TdException) {
+            val wait = Regex("""\d+""").find(e.text)?.value?.toLongOrNull()
+            if (e.code != 429 || wait == null || wait > 60) throw e
+            Log.d(TAG, "count $chatId: FLOOD_WAIT $wait s")
+            Thread.sleep(wait * 1000)
+            Td.send(TdApi.GetChatMessageCount(chatId, null, filter, false)).count
+        }
+    }
+
+    /**
+     * The newest videos across all chats, one page only (docs/telegram.md "Decisions"): `{ chatId:
+     * { name, date } }`, each chat's newest video. A hint for the chat list, never a filter.
+     */
+    @ReactMethod
+    fun recent(promise: Promise) = td(promise) {
+        val start = System.currentTimeMillis()
+        val found = Td.sendAll(listOf(TdApi.SearchMessagesFilterVideo(), TdApi.SearchMessagesFilterDocument()).map {
+            TdApi.SearchMessages(TdApi.ChatListMain(), "", "", 100, it, null, 0, 0)
+        })
+        val out = Arguments.createMap()
+        found.flatMap { it.messages.asList() }.sortedByDescending { it.date }.forEach { m ->
+            val key = m.chatId.toString()
+            if (out.hasKey(key)) return@forEach
+            val row = video(m)?.second ?: return@forEach
+            out.putMap(key, Arguments.createMap().apply {
+                putString("name", row.getString("name"))
+                putDouble("date", row.getDouble("date"))
+            })
+        }
+        Log.d(TAG, "recent: ${found.sumOf { it.messages.size }} messages in ${System.currentTimeMillis() - start} ms")
+        promise.resolve(out)
     }
 
     /**
      * A page of the chat's videos, newest first, older than message [from] (0: from the newest):
      * `{ items, next }`, `next` the [from] of the following page, 0 at the end. Items: `{ uri,
      * name, size, duration, width, height, date }`; documents carry no duration (0); [poster]
-     * gives the picture.
+     * gives the picture. A page can be empty with more to come: a chat of other files is searched
+     * a few pages at a time, not to its end in one call.
      */
     @ReactMethod
     fun videos(chatId: Double, from: Double, limit: Int, promise: Promise) = td(promise) {
         var cursor = from.toLong()
+        var pages = 0
         while (true) {
             val found = listOf(TdApi.SearchMessagesFilterVideo(), TdApi.SearchMessagesFilterDocument()).map { f ->
                 Td.send(TdApi.SearchChatMessages().apply {
@@ -192,8 +309,8 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
                 })
             }
             val (rows, next) = Tg.page(found.flatMap { it.messages.mapNotNull(::video) }, found.map { it.nextFromMessageId }, cursor)
-            // A page of only non-video documents: keep going rather than hand JS an empty page.
-            if (rows.isEmpty() && next != 0L) {
+            // A page of only non-video documents: look a little further before handing JS an empty page.
+            if (rows.isEmpty() && next != 0L && ++pages < 3) {
                 cursor = next
                 continue
             }
@@ -233,6 +350,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             else -> return null
         }
         row.putString("uri", "tg://${m.chatId}/${m.id}")
+        row.putDouble("chatId", m.chatId.toDouble())
         row.putString("name", name.ifEmpty { caption?.text?.lineSequence()?.firstOrNull()?.trim().orEmpty() }.ifEmpty { "Video" })
         row.putDouble("size", file.total.toDouble())
         row.putDouble("date", m.date * 1000.0)
@@ -251,8 +369,8 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             is TdApi.MessageDocument -> c.document.thumbnail
             else -> null
         }
-        val path = thumb?.let { Td.download(it.file.id) }.orEmpty()
-        promise.resolve(if (path.isEmpty()) null else "file://$path")
+        if (thumb == null) return@td promise.resolve(null)
+        Td.download(thumb.file.id) { promise.resolve(if (it.isEmpty()) null else "file://$it") }
     }
 
     private fun parse(uri: String): Pair<Long, Long>? {

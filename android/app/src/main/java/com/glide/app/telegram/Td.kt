@@ -35,6 +35,11 @@ object Td {
     /** Sign-in state as it changes, on TDLib's thread. */
     val onAuth = CopyOnWriteArraySet<(TdApi.AuthorizationState) -> Unit>()
 
+    /** The user's chat folders, in Telegram's order; TDLib sends them once signed in. */
+    @Volatile
+    var folders: Array<TdApi.ChatFolderInfo> = emptyArray()
+        private set
+
     /** Every `updateFile`, on TDLib's thread (the debug screen's download speed). */
     @Volatile
     var onFile: ((TdApi.File) -> Unit)? = null
@@ -75,6 +80,17 @@ object Td {
         return r as R
     }
 
+    /** [fs] sent together, all answers awaited: one round trip instead of one each. */
+    fun <R : TdApi.Object> sendAll(fs: List<TdApi.Function<R>>): List<R> {
+        val latch = CountDownLatch(fs.size)
+        val results = arrayOfNulls<TdApi.Object>(fs.size)
+        fs.forEachIndexed { i, f -> client().send(f) { results[i] = it; latch.countDown() } }
+        latch.await()
+        results.forEach { if (it is TdApi.Error) throw TdException(it.code, it.message) }
+        @Suppress("UNCHECKED_CAST")
+        return results.map { it as R }
+    }
+
     /** Fire and forget; errors only logged. */
     fun post(f: TdApi.Function<*>) = client().send(f) { if (it is TdApi.Error) Log.w(TAG, "${f.javaClass.simpleName}: ${it.code} ${it.message}") }
 
@@ -93,6 +109,7 @@ object Td {
                 }
                 onAuth.forEach { it(s) }
             }
+            is TdApi.UpdateChatFolders -> folders = o.chatFolders
             is TdApi.UpdateFile -> {
                 windows[o.file.id]?.onUpdate(progress(o.file))
                 onFile?.invoke(o.file)
@@ -179,16 +196,29 @@ object Td {
         }
     }
 
-    /** A small file (thumbnail, chat photo), downloaded whole: its path. */
-    fun download(fileId: Int): String = send(TdApi.DownloadFile(fileId, 16, 0, 0, true)).local.path
+    /**
+     * A small file (thumbnail, chat photo), downloaded whole: [done] gets its path ("" on an
+     * error) on TDLib's thread. No thread waits meanwhile: a screen of rows asks for many at once.
+     */
+    fun download(fileId: Int, done: (String) -> Unit) =
+        client().send(TdApi.DownloadFile(fileId, 16, 0, 0, true)) { done((it as? TdApi.File)?.local?.path.orEmpty()) }
 
     /** Bytes in TDLib's file cache. */
     fun cacheSize(): Long = send(TdApi.GetStorageStatisticsFast()).filesSize
 
-    /** Empties the file cache; the session and chat lists stay. */
-    fun clearCache() {
-        send(optimize(0))
+    /**
+     * Stops the films' downloads: each asks for the rest of the file, which TDLib would otherwise
+     * fetch whole in the background after the player has gone. What's downloaded stays.
+     */
+    fun stopStreams() {
+        windows.keys.forEach { post(TdApi.CancelDownloadFile(it, false)) }
         windows.clear()
+    }
+
+    /** Empties the file cache; the session and chat lists stay. A file still downloading isn't deleted, so stop those first. */
+    fun clearCache() {
+        stopStreams()
+        send(optimize(0))
     }
 
     // ponytail: a size cap applied when TDLib signs in, not while a film plays. A long session can

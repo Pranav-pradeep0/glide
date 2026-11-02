@@ -15,11 +15,27 @@ export interface TgChat {
     title: string;
     saved: boolean;
     group: boolean;
+    /** The last message: ms (0 none) and one line of it. */
+    date: number;
+    preview: string;
+}
+
+/** A chat's newest video, from one search across all chats: a hint, not every chat with videos. */
+export interface TgRecent {
+    name: string;
+    date: number;
+}
+
+/** One of the user's Telegram chat folders. */
+export interface TgFolder {
+    id: number;
+    name: string;
 }
 
 export interface TgVideo {
     /** `tg://chatId/messageId`: what the player, History and Recents key on. */
     uri: string;
+    chatId: number;
     name: string;
     size: number;
     /** Seconds; 0 for films sent as files. */
@@ -39,7 +55,11 @@ const native = NativeModules.GlideTelegram as
           password(p: string): Promise<null>;
           requestQr(): Promise<null>;
           logOut(): Promise<null>;
-          chats(limit: number): Promise<TgChat[]>;
+          folders(): Promise<TgFolder[]>;
+          chats(limit: number, folderId: number): Promise<TgChat[]>;
+          chatPhoto(chatId: number): Promise<string | null>;
+          recent(): Promise<Record<string, TgRecent>>;
+          hasVideos(chatId: number): Promise<boolean>;
           videos(chatId: number, from: number, limit: number): Promise<{ items: TgVideo[]; next: number }>;
           poster(uri: string): Promise<string | null>;
           prefetch(uri: string): void;
@@ -71,7 +91,15 @@ export const TelegramService = {
     /** Signs out and wipes; also the way back from the QR code to the phone number. */
     logOut: () => native!.logOut(),
 
-    chats: (limit: number) => native!.chats(limit),
+    folders: () => native!.folders(),
+    /** In Telegram's order; `folderId` 0: all chats, Saved Messages first. Page by a bigger `limit`. */
+    chats: (limit: number, folderId = 0) => native!.chats(limit, folderId),
+    /** `file://` of the chat's small photo, or null. */
+    chatPhoto: (chatId: number) => native!.chatPhoto(chatId).catch(() => null),
+    /** Chat id → its newest video, from the latest 100 across all chats; {} on an error. */
+    recent: () => native!.recent().catch(() => ({} as Record<string, TgRecent>)),
+    /** Whether the chat has any video; null when Telegram couldn't say (the chat stays shown). */
+    hasVideos: (chatId: number) => native!.hasVideos(chatId).catch(() => null),
     videos: (chatId: number, from: number, limit: number) => native!.videos(chatId, from, limit),
 
     /** Telegram's own picture for the film; never a frame (that would download part of it). */

@@ -767,6 +767,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         player.state.isVideoLoaded && player.state.isBuffering && !player.state.isSeeking,
         [player.state.isVideoLoaded, player.state.isBuffering, player.state.isSeeking]
     );
+    // A stream fetches before its first frame too: the seek bar's loading line covers that wait.
+    const streamWaiting = isNetworkStream && !player.state.errorText && (!player.state.isVideoLoaded || player.state.isBuffering);
 
     // ========================================================================
     // NAVIGATION HANDLERS
@@ -1556,7 +1558,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onSeekComplete={handleSliderChangeComplete}
                     bookmarks={isNetworkStream ? undefined : bookmarkTimes}
                     chapters={chapters}
-                    buffering={shouldShowBuffer}
+                    buffering={shouldShowBuffer || streamWaiting}
                     isLandscape={isLandscape}
                     insets={effectiveInsets}
                     cutouts={cutoutRects}
