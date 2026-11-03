@@ -426,7 +426,7 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
   opened at once, with no `downloadFile` at all. The 27 MB clip saved earlier played offline too.
   Not visible in logs (no log lines): the notification, a queue of two, delete; owner to confirm.
 
-**2026-11-02: Session B (chat list for good) built; device timings not measured yet.**
+**2026-11-02: Session B (chat list for good) built; measured on the phone 2026-11-03 (below).**
 
 - Each chat's `hasVideos` answer is saved in MMKV (`has:<chatId>`; `recent()` hits saved as
   true), so a later visit shows the list from the saved answers at once. A failed count saves
@@ -438,6 +438,12 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
 - Logs: `chats <limit> folder <id>: N in M ms`, `hasVideos <id>: true|false in M ms`.
 - To measure on the phone: time until the list is full on a first and a second visit, no FLOOD_WAIT
   beyond one wait, no chat with videos missing.
+- **Measured 2026-11-03** (Nothing Phone, 207 chats; release build with `Log.d` kept for the test,
+  `proguard-rules.pro` strips it otherwise): visit 1 of a launch, first 100 in 147 ms and all 40
+  counted 0.9 s after the tap (slowest 478 ms); scrolling paged to 207 chats, 206 counted, 81 with
+  videos, and the list showed exactly 82 rows (81 + Saved Messages): none missing. After an app
+  restart: 131 ms, all 40 re-counted in 0.14 s. No FLOOD_WAIT anywhere. Not measured: a fresh
+  sign-in with TDLib's cache empty (signing out deletes downloads).
 
 **2026-11-02: Session 4 (paperwork); owner approved 2026-11-03, owner fills the Console.**
 
