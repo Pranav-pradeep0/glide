@@ -7,6 +7,7 @@ import PagerView, {
     PagerViewOnPageSelectedEvent,
 } from 'react-native-pager-view';
 import Animated, { SharedValue, useEvent } from 'react-native-reanimated';
+import { IS_TV } from '@/utils/tv';
 
 const AnimatedPagerView = Animated.createAnimatedComponent(PagerView);
 
@@ -42,12 +43,25 @@ export function Pager({ index, onIndexChange, pages, position, scrollEnabled = t
             ref.current?.setPageWithoutAnimation(index);
         }
         current.current = index;
-    }, [index, build]);
+        if (IS_TV && position) { position.value = index; }
+    }, [index, build, position]);
 
     const onPageScroll = useEvent<PagerViewOnPageScrollEventData>(e => {
         'worklet';
         if (position) { position.value = e.position + e.offset; }
     }, ['onPageScroll']);
+
+    // TV: nothing to swipe, and the native pager's inner list takes the D-pad's focus while
+    // drawing none (Down from the tabs went nowhere). Plain views, the other pages hidden.
+    if (IS_TV) {
+        return (
+            <View style={styles.pager}>
+                {pages.map((render, i) => built.has(i) && (
+                    <View key={i} style={[styles.pager, i !== index && styles.hidden]}>{render()}</View>
+                ))}
+            </View>
+        );
+    }
 
     return (
         <AnimatedPagerView
@@ -79,4 +93,5 @@ export function Pager({ index, onIndexChange, pages, position, scrollEnabled = t
 
 const styles = StyleSheet.create({
     pager: { flex: 1 },
+    hidden: { display: 'none' },
 });

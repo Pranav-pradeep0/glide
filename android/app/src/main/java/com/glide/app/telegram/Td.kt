@@ -50,6 +50,9 @@ object Td {
     var folders: Array<TdApi.ChatFolderInfo> = emptyArray()
         private set
 
+    /** Every new message (`updateNewMessage`), on TDLib's thread: the chat list is kept live from these. */
+    val onMessage = CopyOnWriteArraySet<(TdApi.Message) -> Unit>()
+
     /** Every `updateFile`, on TDLib's thread (the debug screen's download speed). */
     @Volatile
     var onFile: ((TdApi.File) -> Unit)? = null
@@ -121,6 +124,7 @@ object Td {
                 onAuth.forEach { it(s) }
             }
             is TdApi.UpdateChatFolders -> folders = o.chatFolders
+            is TdApi.UpdateNewMessage -> onMessage.forEach { it(o.message) }
             is TdApi.UpdateFile -> {
                 firstByte(o.file)
                 TgSaves.onFile(o.file)

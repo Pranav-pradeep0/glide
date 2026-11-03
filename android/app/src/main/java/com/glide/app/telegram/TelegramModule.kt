@@ -29,9 +29,13 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
 
     private val onSaves: () -> Unit = { events.execute { emitSaves() } }
 
+    // Off TDLib's thread: telling a listed chat needs its type (GetChat), and send can't run there.
+    private val onMessage: (TdApi.Message) -> Unit = { m -> if (isVideo(m)) events.execute { emitVideo(m) } }
+
     init {
         Td.onAuth += onAuth
         TgSaves.onChange += onSaves
+        Td.onMessage += onMessage
     }
 
     // Telegram's calls mostly wait on the network: their own threads, so a slow search never holds
@@ -41,6 +45,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     override fun invalidate() {
         Td.onAuth -= onAuth
         TgSaves.onChange -= onSaves
+        Td.onMessage -= onMessage
         events.shutdown()
         pool.shutdown()
         super.invalidate()
@@ -441,6 +446,19 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(SAVES, savesList())
     }.onFailure { Log.w(TAG, "saves event", it) }
 
+    private fun isVideo(m: TdApi.Message) = when (val c = m.content) {
+        is TdApi.MessageVideo -> true
+        is TdApi.MessageDocument -> Tg.isVideo(c.document.mimeType, c.document.fileName)
+        else -> false
+    }
+
+    /** A video just sent to a chat the list shows: a [VIDEO] event, the video as [videos] gives it. */
+    private fun emitVideo(m: TdApi.Message) = runCatching {
+        if (!listable(Td.send(TdApi.GetChat(m.chatId)))) return@runCatching
+        val row = video(m)?.second ?: return@runCatching
+        reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(VIDEO, row)
+    }.onFailure { Log.w(TAG, "video event", it) }
+
     /** Saves a `tg://` film for offline, queued after any others; [name] goes on the notification. */
     @ReactMethod
     fun save(uri: String, name: String, promise: Promise) = td(promise) {
@@ -468,6 +486,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         private const val TAG = "GlideTelegram"
         private const val AUTH = "GlideTelegramAuth"
         private const val SAVES = "GlideTelegramSaves"
+        private const val VIDEO = "GlideTelegramVideo"
     }
 }
 

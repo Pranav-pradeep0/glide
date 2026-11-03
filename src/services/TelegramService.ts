@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DeviceEventEmitter, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 
@@ -167,6 +167,17 @@ export const TelegramService = {
     unsave: (uri: string) => native!.unsave(uri).then(() => mmkv.remove(`save:${uri}`)),
     deleteSaves: () => native!.deleteSaves().then(forgetSaves),
 };
+
+/** Each video as it's sent to a chat the lists show (Telegram pushes it): keeps them live. */
+export function useTelegramNewVideo(onVideo: (v: TgVideo) => void) {
+    const latest = useRef(onVideo);
+    latest.current = onVideo;
+    useEffect(() => {
+        if (!TELEGRAM_AVAILABLE) { return; }
+        const sub = DeviceEventEmitter.addListener('GlideTelegramVideo', (v: TgVideo) => latest.current(v));
+        return () => sub.remove();
+    }, []);
+}
 
 /** Saved films and those on their way, kept current. */
 export function useTelegramSaves(): TgSave[] {

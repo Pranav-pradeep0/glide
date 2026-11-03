@@ -8,7 +8,7 @@ import {
     ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, ScrollView, ScrollViewInstance, StyleSheet, Text, TextInput, TextInputProps, View,
 } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
@@ -23,7 +23,7 @@ import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
 import { Pager } from '@/components/Pager';
 import {
-    TELEGRAM_AVAILABLE, TelegramService, TgAuth, TgChat, TgRecent, TgSave, TgVideo, isTelegram, saveLabel, useTelegramSaves,
+    TELEGRAM_AVAILABLE, TelegramService, TgAuth, TgChat, TgRecent, TgSave, TgVideo, isTelegram, saveLabel, useTelegramNewVideo, useTelegramSaves,
 } from '@/services/TelegramService';
 import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { getResumablePosition } from '@/utils/playbackResume';
@@ -276,7 +276,8 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
     const bar = useRef<ScrollViewInstance>(null);
     const barWidth = useRef(0);
     const chips = useRef<{ x: number; width: number }[]>([]);
-    // One search per visit: which chats had a video lately, shown on every tab.
+    // One search per visit: which chats had a video lately, shown on every tab. Live after that:
+    // Telegram pushes each new video, so no refresh (Telegram's apps have none either).
     const [recent, setRecent] = useState<Record<string, TgRecent>>({});
     useEffect(() => {
         TelegramService.recent().then(r => {
@@ -287,6 +288,27 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
         // Leaving Telegram: stop asking about chats nobody will see.
         return () => { queue.length = 0; asking.clear(); };
     }, []);
+    // Each new video, and each return here (other messages reorder the chats), moves the chats on:
+    // the shown tab reloads them from TDLib's own copy (no search, so no FLOOD_WAIT), a hidden
+    // one when it's next shown. A burst of videos reloads once.
+    const [version, setVersion] = useState(0);
+    const pending = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const reload = useCallback(() => {
+        clearTimeout(pending.current);
+        pending.current = setTimeout(() => setVersion(n => n + 1), 1000);
+    }, []);
+    useEffect(() => () => clearTimeout(pending.current), []);
+    useTelegramNewVideo(v => {
+        hasVideos.set(v.chatId, true);
+        asked.add(v.chatId);
+        setRecent(r => ({ ...r, [String(v.chatId)]: { name: v.name, date: v.date } }));
+        reload();
+    });
+    const visited = useRef(false);
+    useFocusEffect(useCallback(() => {
+        if (visited.current) { reload(); }
+        visited.current = true;
+    }, [reload]));
 
     useEffect(() => {
         TelegramService.folders()
@@ -298,7 +320,10 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
         const chip = chips.current[index];
         if (chip) { bar.current?.scrollTo({ x: Math.max(0, chip.x + chip.width / 2 - barWidth.current / 2), animated: true }); }
     }, [index]);
-    const renderPage = (t: Tab) => (t.downloads ? <DownloadsPage /> : <ChatsPage tab={t} recent={recent} />);
+    // TV: only the page shown on arrival takes the focus; a tab picked later keeps it on its chip.
+    const renderPage = (t: Tab, i: number) => (t.downloads
+        ? <DownloadsPage focusFirst={i === 0} />
+        : <ChatsPage tab={t} recent={recent} version={version} onScreen={i === index} focusFirst={i === 0} />);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -322,7 +347,7 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
                 </ScrollView>
             )}
             {/* TV: the chips change tabs; Left/Right stay for moving the focus. */}
-            <Pager index={index} onIndexChange={setIndex} scrollEnabled={!IS_TV} pages={tabs.map(t => () => renderPage(t))} />
+            <Pager index={index} onIndexChange={setIndex} scrollEnabled={!IS_TV} pages={tabs.map((t, i) => () => renderPage(t, i))} />
         </View>
     );
 }
@@ -375,7 +400,7 @@ function known(id: number) {
 const saveFile = (s: TgSave): VideoFile => ({ name: s.name, path: s.uri, size: s.total, modifiedDate: 0, duration: s.duration, isDirectory: false });
 
 /** Films saved for offline and those on their way: plays with no network. */
-function DownloadsPage() {
+function DownloadsPage({ focusFirst }: { focusFirst: boolean }) {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<Nav>();
     const saves = useTelegramSaves();
@@ -391,9 +416,9 @@ function DownloadsPage() {
             meta={[formatFileSize(item.total), item.state === 'saved' ? undefined : saveLabel(item)].filter(Boolean).join(' · ')}
             onPress={play}
             onMore={setSelected}
-            preferFocus={index === 0}
+            preferFocus={focusFirst && index === 0}
         />
-    ), [play]);
+    ), [play, focusFirst]);
 
     if (!saves.length) { return <EmptyState icon="download" text="Films you download show here and play without a connection. Tap ⋯ on a film, then Download." />; }
     return (
@@ -411,7 +436,9 @@ function DownloadsPage() {
 }
 
 /** One tab's chats in Telegram's order; on All, the video to continue leads. */
-function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent> }) {
+function ChatsPage({ tab, recent, version, onScreen, focusFirst }: {
+    tab: Tab; recent: Record<string, TgRecent>; version: number; onScreen: boolean; focusFirst: boolean;
+}) {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<Nav>();
     const [chats, setChats] = useState<TgChat[] | null>(null);
@@ -424,16 +451,23 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
     const [, setAnswers] = useState(0);
     const [selected, setSelected] = useState<VideoHistoryEntry | null>(null);
 
+    // The [version] these chats are from: caught up while on screen.
+    const [seen, setSeen] = useState(version);
+    useEffect(() => { if (onScreen) { setSeen(version); } }, [onScreen, version]);
+    const paged = useRef(0);
     useEffect(() => {
         let live = true;
         setError('');
         TelegramService.chats(limit, tab.folderId ?? 0).then(c => {
             if (!live) { return; }
-            // A bigger page that brought nothing new: the list is all here.
-            setChats(prev => { setMore(c.length > (prev?.length ?? 0)); return c; });
+            // A bigger page that brought nothing new: the list is all here. A reload of the same
+            // page says nothing about that.
+            const grew = limit !== paged.current;
+            paged.current = limit;
+            setChats(prev => { if (grew) { setMore(c.length > (prev?.length ?? 0)); } return c; });
         }, e => { if (live) { setError(errorText(e)); } });
         return () => { live = false; };
-    }, [tab.folderId, limit, attempt]);
+    }, [tab.folderId, limit, attempt, seen]);
 
     // Ask about each chat not asked this session; a chat shows once it's known to have videos. The
     // unknown go first: they hold the list back, the saved ones are only being checked.
@@ -462,9 +496,9 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
             chat={item}
             video={recent[String(item.id)]}
             onPress={() => navigation.navigate('TelegramChat', { chatId: item.id, title: chatTitle(item) })}
-            preferFocus={!hero && index === 0}
+            preferFocus={focusFirst && !hero && index === 0}
         />
-    ), [hero, navigation, recent]);
+    ), [hero, navigation, recent, focusFirst]);
 
     const header = hero && (
         <View>
@@ -478,7 +512,7 @@ function ChatsPage({ tab, recent }: { tab: Tab; recent: Record<string, TgRecent>
                 thumbnailTime={hero.stopFrameMs}
                 onPress={v => NavigationService.handleVideoNavigation(navigation, v.videoPath, replayParams(v))}
                 onMore={setSelected}
-                preferFocus
+                preferFocus={focusFirst}
             />
             <SectionTitle title="Chats" />
         </View>
@@ -620,6 +654,10 @@ export function TelegramChatScreen({ route, navigation }: NativeStackScreenProps
     }, [chatId]);
 
     useEffect(() => { load(true); }, [load]);
+    // A video sent here while it's open: on top, as Telegram shows it.
+    useTelegramNewVideo(v => {
+        if (v.chatId === chatId) { setFilms(f => (f && !f.some(x => x.path === v.uri) ? [toFile(v), ...f] : f)); }
+    });
 
     const play = useCallback((film: VideoFile) => {
         NavigationService.handleVideoNavigation(navigation, film.path, { videoName: film.name });
