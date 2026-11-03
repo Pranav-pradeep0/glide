@@ -23,6 +23,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaButtonReceiver
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
@@ -164,6 +165,23 @@ object GlidePlayerHolder {
     fun isPlaybackOngoing(): Boolean = listOfNotNull(videoPlayer, audioPlayer).any {
         it.playWhenReady && it.mediaItemCount > 0 &&
             it.playbackState != Player.STATE_ENDED && it.playbackState != Player.STATE_IDLE
+    }
+}
+
+/**
+ * A headset or Bluetooth Play with Glide not running. Media3 starts the service in the
+ * foreground, which promises a notification within seconds; with no saved queue that
+ * still resolves, onPlaybackResumption fails, none is posted, and Android kills the app
+ * (ForegroundServiceDidNotStartInTimeException). So only start it when there is music to
+ * resume: the same check onPlaybackResumption makes.
+ */
+@UnstableApi
+class GlideMediaButtonReceiver : MediaButtonReceiver() {
+    override fun shouldStartForegroundService(context: Context, intent: Intent): Boolean {
+        if ((GlidePlayerHolder.audioPlayer?.mediaItemCount ?: 0) > 0) return true
+        val saved = MusicPlayback.savedQueue(context) ?: return false
+        // A revoked audio permission makes the lookup throw: nothing to resume either.
+        return runCatching { MediaStoreAudioModule.getSongsByIds(context, saved.ids).isNotEmpty() }.getOrDefault(false)
     }
 }
 

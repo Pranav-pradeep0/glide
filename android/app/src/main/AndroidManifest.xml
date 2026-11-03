@@ -110,7 +110,7 @@
            the service, which resumes the saved queue (onPlaybackResumption). Its presence
            also lets Android 13+ show Glide's resume card in the media controls. -->
       <receiver
-        android:name="androidx.media3.session.MediaButtonReceiver"
+        android:name="com.glide.app.player.GlideMediaButtonReceiver"
         android:exported="true">
         <intent-filter>
             <action android:name="android.intent.action.MEDIA_BUTTON" />
