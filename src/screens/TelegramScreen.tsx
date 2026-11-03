@@ -5,7 +5,7 @@
 // Telegram's order, Saved Messages first); a chat's videos with the library's rows and cards.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, ScrollView, ScrollViewInstance, StyleSheet, Text, TextInput, TextInputProps, View,
+    ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Linking, ScrollView, ScrollViewInstance, StyleSheet, Text, TextInput, TextInputProps, View,
 } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -31,6 +31,7 @@ import { NavigationService } from '@/services/NavigationService';
 import { formatFileSize } from '@/utils/formatUtils';
 import { metrics, type } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
+import { PRIVACY_POLICY_URL } from '@/utils/constants';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -90,7 +91,7 @@ export default function TelegramScreen() {
  * The one thing each sign-in step asks for, big: a number to read back at a glance. No border on
  * phones (the caret shows focus); TV outlines it, as the remote needs a visible focus.
  */
-function BigInput({ label, ...input }: TextInputProps & { label: string }) {
+function BigInput({ label, centered, ...input }: TextInputProps & { label: string; centered?: boolean }) {
     const { colors } = useTheme();
     const [focused, setFocused] = useState(false);
     return (
@@ -103,7 +104,7 @@ function BigInput({ label, ...input }: TextInputProps & { label: string }) {
             selectionColor={colors.primary}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            style={[styles.bigInput, { color: colors.text, backgroundColor: colors.fill, borderColor: IS_TV && focused ? colors.primary : colors.fill }]}
+            style={[styles.bigInput, centered && styles.bigInputCentered, { color: colors.text, backgroundColor: colors.fill, borderColor: IS_TV && focused ? colors.primary : colors.fill }]}
         />
     );
 }
@@ -151,30 +152,34 @@ function SignIn({ auth }: { auth: TgAuth }) {
     // TDLib can't go back from these steps; signing out starts over at the phone number.
     const startOver = (phone = true) => { setWantPhone(phone); run(TelegramService.logOut); };
 
-    const errorLine = !!error && <Text style={[type.body, styles.center, { color: colors.error }]}>{error}</Text>;
-    const field = (props: React.ComponentProps<typeof BigInput>) => <>
-        <BigInput value={text} onChangeText={setText} autoFocus returnKeyType="go" submitBehavior="submit" onSubmitEditing={submit} {...props} />
-        {errorLine}
-        <Button label="Next" variant="primary" block loading={busy} onPress={submit} />
-    </>;
+    const errorLine = !!error && <Text style={[type.body, { color: colors.error }]}>{error}</Text>;
+    // A label over the field, the field, and what went wrong right under it.
+    const field = (props: React.ComponentProps<typeof BigInput>) => (
+        <View style={styles.field}>
+            <Text style={[type.label, { color: colors.textSecondary }]}>{props.label}</Text>
+            <BigInput value={text} onChangeText={setText} autoFocus returnKeyType="go" submitBehavior="submit" onSubmitEditing={submit} {...props} />
+            {errorLine}
+        </View>
+    );
+    const next = <Button label="Next" variant="primary" size="lg" block loading={busy} disabled={!text.trim()} onPress={submit} />;
     const other = (label: string, onPress: () => void) => <Button label={label} variant="ghost" block onPress={onPress} />;
 
     let title = 'Sign in to Telegram';
     let lead = '';
-    let body: React.ReactNode = null;
+    // What the step asks for, under its heading; then its buttons (at the bottom on phones).
+    let prompt: React.ReactNode = null;
+    let actions: React.ReactNode = null;
     switch (auth.state) {
         case 'phone':
             if (wantPhone) {
-                lead = 'Enter the phone number of your Telegram account, with its country code.';
-                body = <>
-                    {field({ label: 'Phone number', keyboardType: 'phone-pad', placeholder: '+91 98765 43210', autoComplete: 'tel' })}
-                    {other('Use QR code instead', () => setWantPhone(false))}
-                </>;
+                lead = 'Use the phone number of your Telegram account.';
+                prompt = field({ label: 'Phone number, with country code', keyboardType: 'phone-pad', placeholder: '+91 98765 43210', autoComplete: 'tel' });
+                actions = <>{next}{other('Use QR code instead', () => setWantPhone(false))}</>;
             } else {
-                lead = 'Show a QR code and scan it with Telegram on your phone.';
-                body = busy ? <Loader fullScreen={false} /> : <>
-                    {errorLine}
-                    <Button label="Show QR code" variant="primary" block onPress={() => run(TelegramService.requestQr)} />
+                lead = 'Scan a QR code with Telegram on your phone. No typing needed.';
+                prompt = busy ? <Loader fullScreen={false} /> : errorLine;
+                actions = !busy && <>
+                    <Button label="Show QR code" variant="primary" size="lg" block onPress={() => run(TelegramService.requestQr)} />
                     {other('Use phone number instead', () => setWantPhone(true))}
                 </>;
             }
@@ -182,30 +187,28 @@ function SignIn({ auth }: { auth: TgAuth }) {
         case 'qr':
             title = 'Scan to sign in';
             lead = 'In Telegram on your phone, open Settings → Devices → Link Desktop Device, then point the camera at this code.';
-            body = <>{errorLine}{other('Use phone number instead', () => startOver(true))}</>;
+            prompt = errorLine;
+            actions = other('Use phone number instead', () => startOver(true));
             break;
         case 'code':
             title = 'Enter the code';
             lead = auth.sentTo === 'telegram'
                 ? `Telegram sent a code to your Telegram app on another device (${auth.phone}).`
                 : `Telegram sent a code to ${auth.phone}.`;
-            body = <>
-                {field({ label: 'Code', keyboardType: 'number-pad', placeholder: '•••••', autoComplete: 'sms-otp' })}
-                {other('Use a different number', () => startOver(true))}
-            </>;
+            prompt = field({ label: 'Code', keyboardType: 'number-pad', placeholder: '•••••', autoComplete: 'sms-otp', centered: true });
+            actions = <>{next}{other('Use a different number', () => startOver(true))}</>;
             break;
         case 'password':
             title = 'Enter your password';
             lead = `Your account has two-step verification.${auth.hint ? ` Hint: ${auth.hint}` : ''}`;
-            body = <>
-                {field({ label: 'Password', placeholder: 'Password', secureTextEntry: true, autoComplete: 'current-password' })}
-                {other('Start again', () => startOver(!IS_TV))}
-            </>;
+            prompt = field({ label: 'Password', placeholder: 'Password', secureTextEntry: true, autoComplete: 'current-password' });
+            actions = <>{next}{other('Start again', () => startOver(!IS_TV))}</>;
             break;
         case 'unsupported':
             title = 'Finish in Telegram';
             lead = 'Telegram needs you to finish setting up your account in the Telegram app first. Then come back and sign in.';
-            body = <>{errorLine}<Button label="Start again" variant="primary" block loading={busy} onPress={() => startOver(!IS_TV)} /></>;
+            prompt = errorLine;
+            actions = <Button label="Start again" variant="primary" size="lg" block loading={busy} onPress={() => startOver(!IS_TV)} />;
             break;
     }
 
@@ -218,9 +221,16 @@ function SignIn({ auth }: { auth: TgAuth }) {
         <Text style={[type.title, !side && styles.center, { color: colors.text }]} accessibilityRole="header">{title}</Text>
         {!!lead && <Text style={[type.body, !side && styles.center, { color: colors.textSecondary }]}>{lead}</Text>}
     </>;
+    // Where the login goes and how to undo it, said plainly. TV has no browser for the policy.
     const footer = (
         <Text style={[type.caption, !side && styles.center, { color: colors.textTertiary }]}>
-            Nothing passes through Glide's servers. Signing out deletes the session and the downloaded videos from this {IS_TV ? 'TV' : 'phone'}.
+            Glide connects straight to Telegram, so your login and messages never pass through us. Signing out removes your account and downloads from this {IS_TV ? 'TV' : 'phone'}.
+            {!IS_TV && <>
+                {' '}
+                <Text style={[styles.link, { color: colors.textSecondary }]} accessibilityRole="link" onPress={() => { Linking.openURL(PRIVACY_POLICY_URL).catch(() => {}); }}>
+                    Privacy policy
+                </Text>
+            </>}
         </Text>
     );
 
@@ -228,10 +238,11 @@ function SignIn({ auth }: { auth: TgAuth }) {
         return (
             <View style={styles.qrTv}>
                 {qr}
-                <View style={styles.qrTvText}>{heading}<View style={styles.signInBody}>{body}</View>{footer}</View>
+                <View style={styles.qrTvText}>{heading}<View style={styles.signInBody}>{prompt}{actions}</View>{footer}</View>
             </View>
         );
     }
+    // Phones: one column near the top, as Telegram lays it out: badge, heading, field, buttons, note.
     return (
         <View style={styles.signIn}>
             {qr || (!typing &&
@@ -239,9 +250,10 @@ function SignIn({ auth }: { auth: TgAuth }) {
                     <Feather name="send" size={30} color={colors.text} style={styles.badgeNudge} />
                 </View>
             )}
-            {heading}
-            <View style={styles.signInBody}>{body}</View>
-            {footer}
+            <View style={styles.signInHeading}>{heading}</View>
+            {prompt}
+            <View style={styles.signInActions}>{actions}</View>
+            <View style={styles.signInNote}>{footer}</View>
         </View>
     );
 }
@@ -735,10 +747,16 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { textAlign: 'center' },
     signInScroll: { flexGrow: 1, paddingHorizontal: metrics.gutter, paddingTop: metrics.space.lg, paddingBottom: metrics.space.xl },
-    signIn: { width: '100%', maxWidth: 440, alignSelf: 'center', gap: metrics.space.md },
+    signIn: { width: '100%', maxWidth: 400, alignSelf: 'center', paddingTop: metrics.space.xxl },
+    signInHeading: { gap: metrics.space.sm, paddingHorizontal: metrics.space.sm },
+    signInActions: { gap: metrics.space.xs, marginTop: metrics.space.lg },
+    signInNote: { marginTop: metrics.space.xl, paddingHorizontal: metrics.space.lg },
+    field: { gap: metrics.space.sm, marginTop: metrics.space.xl },
+    link: { textDecorationLine: 'underline' },
     signInBody: { gap: metrics.space.sm, marginTop: metrics.space.sm },
-    bigInput: { height: 64, borderRadius: metrics.radius.lg, borderWidth: IS_TV ? 2 : 0, paddingHorizontal: metrics.space.lg, fontSize: 24, fontWeight: '600', letterSpacing: 1, textAlign: 'center' },
-    badge: { width: 72, height: 72, borderRadius: 36, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginBottom: metrics.space.sm },
+    bigInput: { height: 56, borderRadius: metrics.radius.lg, borderWidth: IS_TV ? 2 : 0, paddingHorizontal: metrics.space.lg, fontSize: 20, fontWeight: '600', letterSpacing: 0.5 },
+    bigInputCentered: { textAlign: 'center', letterSpacing: 6 },
+    badge: { width: 72, height: 72, borderRadius: 36, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginBottom: metrics.space.xl },
     // Feather's paper plane sits right of centre.
     badgeNudge: { marginLeft: -3, marginTop: 2 },
     // White around the code is the quiet zone a camera needs to find it.
