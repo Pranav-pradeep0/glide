@@ -64,19 +64,6 @@ class TgWindowTest {
     }
 
     @Test
-    fun refetchAsksForTheLastRangeAgain() {
-        val td = FakeTd()
-        // Nothing asked yet: nothing to ask again.
-        td.window.refetch()
-        assertEquals(emptyList<Long>(), td.requested())
-        td.arrive(0, 10 * MB)
-        td.window.await(5 * MB)
-        td.window.refetch()
-        assertEquals(listOf(5 * MB, 5 * MB), td.requested())
-        assertEquals(listOf(SIZE / 64, SIZE / 64), td.limits())
-    }
-
-    @Test
     fun smallFilesGetTheMinimumWindow() {
         assertEquals(TgWindow.MIN_SPAN, TgWindow(100 * MB, FakeTd()).span)
     }

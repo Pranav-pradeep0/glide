@@ -207,6 +207,8 @@ object Td {
      */
     fun prefetch(chatId: Long, messageId: Long) {
         val f = onDisk(chatId, messageId)
+        // Being saved: its download is under way, and a prefetch would only take it over.
+        if (f.id in saving) return
         val size = f.total
         films += f.id
         for (offset in listOf(0L, maxOf(0L, size - PREFETCH))) {
@@ -227,10 +229,6 @@ object Td {
 
     /** The player is reading this file (its download leads). */
     fun streaming(fileId: Int) = windows.containsKey(fileId)
-
-    /** A save of a file the player is reading: its download goes on to the end from now on. */
-    fun saveWhileStreaming(fileId: Int) = windows[fileId]?.refetch()
-
     /** Bytes in TDLib's file cache, counted on disk: the fast figure leaves out partly downloaded films. */
     fun cacheSize(): Long = send(TdApi.GetStorageStatistics(0)).size
 

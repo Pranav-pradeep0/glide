@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -95,16 +97,26 @@ object TgSaves {
             Td.saving += f.id
             // The notification's bar, with the size known now.
             changed()
-            // Saved from the player: its download carries the save from now, even paused.
-            Td.saveWhileStreaming(f.id)
             while (item in queue) {
-                // The player leads (TDLib keeps one download per file); carry on once it closes.
+                // The player leads (TDLib keeps one download per file, and [Td] sends the player's
+                // asks on to the end while saving). When that stops short (paused after a window,
+                // or its last ask was the film's tail), fill the first hole; the player moves the
+                // download back when it needs another range. Kept from TDLib's cache once it closes.
                 if (Td.streaming(f.id)) {
+                    val now = Td.send(TdApi.GetFile(f.id)).local
+                    if (!now.isDownloadingActive && !now.isDownloadingCompleted) {
+                        val hole = Td.send(TdApi.GetFileDownloadedPrefixSize(f.id, 0)).size
+                        Td.post(TdApi.DownloadFile(f.id, 1, hole, 0, false))
+                    }
                     Thread.sleep(2000)
                     continue
                 }
-                // Returns when complete, cancelled, or the player asked for another range.
-                val r = Td.send(TdApi.DownloadFile(f.id, 1, 0, 0, true))
+                // Returns when complete or cancelled; the player opening replaces it (code 200).
+                val r = try {
+                    Td.send(TdApi.DownloadFile(f.id, 1, 0, 0, true))
+                } catch (e: Td.TdException) {
+                    if (e.code == 200) continue else throw e
+                }
                 if (r.local.isDownloadingCompleted) {
                     keep(item, r)
                     break
@@ -112,7 +124,8 @@ object TgSaves {
                 Thread.sleep(1000)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "save ${item.uri}", e)
+            // A cancel ends the download with an error too.
+            if (item in queue) Log.w(TAG, "save ${item.uri}", e)
         } finally {
             Td.saving -= item.fileId
             queue.remove(item)
@@ -152,7 +165,11 @@ object TgSaves {
 
 /** Keeps the app alive while [TgSaves] downloads, with a progress notification and Cancel. */
 class TelegramSaveService : Service() {
-    private val update = { show() }
+    // Changes come from TDLib's thread and the save's; one thread, so no notify lands after
+    // the service has stopped (an ongoing notification left behind with no way to clear it).
+    private val main = Handler(Looper.getMainLooper())
+    private var alive = true
+    private val update: () -> Unit = { main.post { show() } }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -177,11 +194,13 @@ class TelegramSaveService : Service() {
     }
 
     override fun onDestroy() {
+        alive = false
         TgSaves.onChange -= update
         super.onDestroy()
     }
 
     private fun show() {
+        if (!alive) return
         if (TgSaves.queue.isEmpty()) {
             stopSelf()
             return
