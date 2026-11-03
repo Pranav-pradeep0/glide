@@ -98,8 +98,9 @@ object PhoneSignIn {
                     URLDecoder.decode(it.substringBefore('='), "UTF-8") to URLDecoder.decode(it.substringAfter('=', ""), "UTF-8")
                 }
                 onLogin(listOf("host", "user", "password", "domain").associateWith { fields[it].orEmpty() })
-                page("Sent", "<p>Sent to your TV. Look at the TV: it signs in and shows your shares.</p>" +
-                    "<p>Wrong password? <a href=\"/$token\">Try again</a>.</p>")
+                page("Sent to your TV", "<div class=\"card\"><svg class=\"tick\" viewBox=\"0 0 24 24\"><path d=\"M5 12.5l4.5 4.5L19 7.5\"/></svg>" +
+                    "<p>Look at the TV: it signs in and shows your shares.</p></div>" +
+                    "<p class=\"note\">Wrong password? <a href=\"/$token\">Try again</a></p>")
             }
             else -> form(host)
         }
@@ -120,23 +121,36 @@ object PhoneSignIn {
             "<label>$label<input name=\"$name\" type=\"$type\" autocapitalize=\"none\" autocorrect=\"off\" spellcheck=\"false\" $extra></label>"
         }
         val server = if (host.isEmpty()) field("IP address", "host", "text", "inputmode=\"decimal\" placeholder=\"192.168.1.5\" required")
-        else "<p>Signing in to <b>${escape(host)}</b>.</p>"
-        return page("Sign in", "<form method=\"post\" autocomplete=\"off\">$server" +
+        else "<p>Signing in to <b>${escape(host)}</b></p>"
+        // Disabled once sent, so a second tap doesn't send the login twice.
+        return page("Sign in", "<form method=\"post\" autocomplete=\"off\" onsubmit=\"var b=this.querySelector('button');b.disabled=true;b.textContent='Sending…'\">" +
+            "<div class=\"card\">$server" +
             field("Username", "user", "text", "placeholder=\"Empty for guest\" autocomplete=\"off\"") +
             field("Password", "password", "password", "autocomplete=\"off\"") +
             field("Domain (optional)", "domain", "text", "") +
-            "<button>Send to TV</button></form>" +
+            "</div><button>Send to TV</button></form>" +
             "<p class=\"note\">Windows 11 needs your Windows username and password. This page is on your home Wi-Fi " +
             "and isn't encrypted, like your router's settings page.</p>")
     }
 
+    // The app's look (src/theme/colors.ts, theme.ts, NetworkScreen's Field and the primary Button).
+    // Inputs are 16 px so iPhones don't zoom in on focus.
     private fun page(title: String, body: String) = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Glide · $title</title><style>
-:root{color-scheme:light dark}body{font:16px system-ui,sans-serif;max-width:28rem;margin:0 auto;padding:1.5rem 1rem}
-h1{font-size:1.4rem}label{display:block;margin:0 0 1rem;font-size:.9rem;opacity:.85}
-input{display:block;box-sizing:border-box;width:100%;margin-top:.3rem;padding:.7rem;font-size:1rem;border-radius:.5rem;border:1px solid #8888}
-button{width:100%;padding:.8rem;font-size:1rem;border:0;border-radius:.5rem;background:#3478f6;color:#fff}.note{font-size:.85rem;opacity:.7}
-</style></head><body><h1>Glide · $title</h1>$body</body></html>"""
+:root{color-scheme:light dark;--bg:#F6F6F8;--surface:#FFF;--fill:rgba(0,0,0,.05);--text:#111113;--text2:#5E5E66;--text3:#8E8E96;--primary:#111113;--on:#FFF}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--surface:#121214;--fill:rgba(255,255,255,.08);--text:#EDEDEF;--text2:#A1A1A8;--text3:#6E6E76;--primary:#FFF;--on:#000}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/20px system-ui,Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:28rem;margin:0 auto;padding:32px 16px}p{margin:0}
+.brand{font-size:13.5px;line-height:18px;font-weight:500;color:var(--text2)}
+h1{margin:4px 0 24px;font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.5px}
+.card{display:grid;gap:16px;padding:16px;border-radius:20px;background:var(--surface)}
+label{display:block;font-size:12px;line-height:16px;color:var(--text2)}
+input{display:block;width:100%;margin-top:4px;padding:8px 12px;font:inherit;font-size:16px;font-weight:500;color:var(--text);background:var(--fill);border:2px solid transparent;border-radius:12px;outline:0}
+input:focus{border-color:var(--primary)}input::placeholder{color:var(--text3);font-weight:400}
+button{width:100%;height:48px;margin-top:24px;border:0;border-radius:24px;background:var(--primary);color:var(--on);font:inherit;font-size:13.5px;font-weight:500}
+button:disabled{opacity:.5}.note{margin-top:16px;font-size:12px;line-height:16px;color:var(--text3)}a{color:var(--text);font-weight:500}
+.tick{width:40px;height:40px;fill:none;stroke:var(--text);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style></head><body><main><p class="brand">Glide</p><h1>$title</h1>$body</main></body></html>"""
 
     private fun escape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 }
