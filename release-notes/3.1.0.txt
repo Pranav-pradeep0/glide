@@ -1,0 +1,6 @@
+Glide 3.1: watch the videos in your Telegram chats.
+- Sign in to Telegram and play videos from your chats, groups and Saved Messages
+- Videos start in seconds and skip ahead without downloading the whole film
+- Download films from Telegram to watch offline
+- Home now has your videos and every place they come from in one screen
+- The seek bar no longer creeps forward while a video is paused or buffering

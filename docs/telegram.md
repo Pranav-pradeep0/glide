@@ -439,4 +439,47 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
 - To measure on the phone: time until the list is full on a first and a second visit, no FLOOD_WAIT
   beyond one wait, no chat with videos missing.
 
-**Next: Session B device check, then Session D.**
+**2026-11-02: Session 4 (paperwork); owner approved 2026-11-03, owner fills the Console.**
+
+- `docs/privacy.html` (dated 2 November 2026): a Telegram row (phone number, code, 2-step password
+  or QR; chat/video requests; device model, Android and Glide version as in Telegram's active
+  sessions; straight to Telegram, not Glide's server), the session, chat list and downloads kept on
+  the phone, "no Glide account; the only sign-in is your own Telegram account", the notification
+  for download progress, sign out deletes the session and downloads. 2026-11-03: a Network shares
+  row added (user name/password and requests go to the user's own PC/NAS; logins kept encrypted
+  on the phone); "the only sign-ins are to your own network shares and Telegram account".
+- `release-notes/3.1.0.txt` (406 chars, "chats, groups and Saved Messages"), from `v3.0.0..HEAD`.
+  Version 3.1.0 (owner bumps package.json).
+- **Data safety, what changes** (Console → App content → Data safety):
+  - Collected: **Personal info → Phone number**. Optional, for account management (signing in to
+    Telegram), not shared (it goes to Telegram because the user asks to sign in: Play's
+    user-initiated exemption), encrypted in transit (MTProto). Not processed ephemerally: TDLib
+    keeps the session.
+  - Not collected: messages (chat titles, previews and video lists come *to* the phone, nothing of
+    them is sent), photos and videos (downloaded, never uploaded), offline saves (on the phone only).
+  - Deletion: signing out in Glide deletes everything Telegram-related on the device; the Telegram
+    account itself is Telegram's (no Glide account to delete).
+- **Other Console forms:** foreground service `dataSync` (`TelegramSaveService`) needs a
+  declaration: "downloads a film the user chose to save for offline viewing, with a progress
+  notification and Cancel"; a short video of ⋯ → Download and the notification.
+- **Play listing, done 2026-11-03:** the owner's text, checked line by line against the code, is in
+  `Desktop/glide-play-screenshots/store-listing.txt`. It names Telegram, so it goes live with 3.1.0.
+  Short: "Play local media, stream SMB shares, and watch Telegram videos." Owner's rules: plain,
+  factual (VLC style), no pricing or promo claims (Play discourages them: no "free, no ads"), no
+  speed claims (Telegram sets download speed), phone-only features marked "on your phone".
+
+**2026-11-03: TV install.**
+
+- The Mi TV (MiTV-AXSO0, Android 9, `192.168.1.34:5555`, plain adb on 5555, no pairing) is
+  **32-bit: `abilist` = `armeabi-v7a,armeabi`**. The build and the TDLib AAR carry both ABIs; a
+  phone build made with `-PreactNativeArchitectures=arm64-v8a` doesn't install on it.
+- TV build, from `android`: `./gradlew assembleRelease -PallowDebugSigning=true
+  -PreactNativeArchitectures=armeabi-v7a` (debug key, same as the TV's install, so `adb install -r`
+  keeps its data). Installed fa4e269 (shows 3.0.0, version not bumped yet); not opened.
+- Sizes (fa4e269, estimated from the AAB): Play download ~27 MB armv7 / ~29 MB arm64; APK 50 / 61 MB.
+  TDLib is 8.7 MB of the download, most of the growth since 3.0.0.
+
+**Next: TV tests by remote (Telegram: QR sign-in, focus, play, seek, download; shares: focus,
+phone signs the TV in by QR, keyboard not covering buttons); Session B device check; Session C
+notification/queue/delete by eye; Play closed test shows 0 testers opted in (owner checks the
+Testers tab and opt-in link); then Session D.**
