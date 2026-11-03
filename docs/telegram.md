@@ -487,6 +487,20 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
 - Sizes (fa4e269, estimated from the AAB): Play download ~27 MB armv7 / ~29 MB arm64; APK 50 / 61 MB.
   TDLib is 8.7 MB of the download, most of the growth since 3.0.0.
 
+**2026-11-03: sign-in redesign, Data safety file, store art.**
+
+- Committed: downloads start from the player at once and survive opening the film (db924ed,
+  194ed56); the chat list is live from `updateNewMessage`, refresh removed (6409a90); the sign-in
+  page redesign (66d3725).
+- Data safety: `Desktop/data_safety_upload.csv`, made from the Console export. Phone number filled
+  in (collected, optional, account management, not ephemeral); email's purpose is app
+  functionality only (it arrives only when a user emails a crash report); "accounts created
+  outside the app" = yes, Other, Telegram. Upload only once main is pushed: the Telegram section of
+  `privacy.html` (6440a1c) must be live first.
+- Store art: 8 slides and the feature graphic in `Desktop/glide-play-screenshots/posters-3.1`.
+  Home and Network still need recapturing on the owner's user (sources connected, a share's
+  folders listed).
+
 **Next: TV tests by remote (Telegram: QR sign-in, focus, play, seek, download; shares: focus,
 phone signs the TV in by QR, keyboard not covering buttons); Session C
 notification/queue/delete by eye; Play closed test shows 0 testers opted in (owner checks the
