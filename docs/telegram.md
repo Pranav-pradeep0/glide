@@ -481,11 +481,13 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
   phone build made with `-PreactNativeArchitectures=arm64-v8a` doesn't install on it.
 - TV build, from `android`: `./gradlew assembleRelease -PallowDebugSigning=true
   -PreactNativeArchitectures=armeabi-v7a` (debug key, same as the TV's install, so `adb install -r`
-  keeps its data). Installed fa4e269 (shows 3.0.0, version not bumped yet); not opened.
+  keeps its data). Installed 8d14052 on the TV and the phone (shows 3.0.0, version not bumped yet).
+- Release builds strip `Log.d`/`Log.i` (`proguard-rules.pro`), so the timing logs need a one-off
+  build with that rule commented out; put the file back after.
 - Sizes (fa4e269, estimated from the AAB): Play download ~27 MB armv7 / ~29 MB arm64; APK 50 / 61 MB.
   TDLib is 8.7 MB of the download, most of the growth since 3.0.0.
 
 **Next: TV tests by remote (Telegram: QR sign-in, focus, play, seek, download; shares: focus,
-phone signs the TV in by QR, keyboard not covering buttons); Session B device check; Session C
+phone signs the TV in by QR, keyboard not covering buttons); Session C
 notification/queue/delete by eye; Play closed test shows 0 testers opted in (owner checks the
 Testers tab and opt-in link); then Session D.**
