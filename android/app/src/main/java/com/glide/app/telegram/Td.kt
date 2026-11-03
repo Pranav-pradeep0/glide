@@ -228,6 +228,9 @@ object Td {
     /** The player is reading this file (its download leads). */
     fun streaming(fileId: Int) = windows.containsKey(fileId)
 
+    /** A save of a file the player is reading: its download goes on to the end from now on. */
+    fun saveWhileStreaming(fileId: Int) = windows[fileId]?.refetch()
+
     /** Bytes in TDLib's file cache, counted on disk: the fast figure leaves out partly downloaded films. */
     fun cacheSize(): Long = send(TdApi.GetStorageStatistics(0)).size
 

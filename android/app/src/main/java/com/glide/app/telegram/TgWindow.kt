@@ -82,6 +82,15 @@ class TgWindow(private val size: Long, private val td: Tdlib, private val slack:
         td.download(pos, limit)
     }
 
+    /**
+     * Asks again for the last range, if any: a save started while this plays, and [Td] sends a
+     * saved file's downloads on to its end, so the save goes on now, not at the next extension.
+     */
+    fun refetch() {
+        val (s, e) = synchronized(lock) { start to end }
+        if (e > s) td.download(s, e - s)
+    }
+
     /** A running download started at or before [pos] and has got, or nearly got, there. */
     private fun coming(pos: Long): Boolean = synchronized(lock) {
         val p = last ?: return false

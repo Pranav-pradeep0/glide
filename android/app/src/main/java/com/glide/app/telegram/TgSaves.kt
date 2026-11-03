@@ -93,6 +93,10 @@ object TgSaves {
             item.total = f.total
             // Not deleted when another film is opened.
             Td.saving += f.id
+            // The notification's bar, with the size known now.
+            changed()
+            // Saved from the player: its download carries the save from now, even paused.
+            Td.saveWhileStreaming(f.id)
             while (item in queue) {
                 // The player leads (TDLib keeps one download per file); carry on once it closes.
                 if (Td.streaming(f.id)) {
