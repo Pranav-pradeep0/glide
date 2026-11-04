@@ -86,12 +86,14 @@ export function useAudioController(
         playerRef.current?.setVolume(percent);
     }, [playerRef]);
 
-    /** Adopt a system-reported level (0-100) as the whole volume, with no boost. */
+    /**
+     * Adopt a system-reported level (0-100) as the whole volume, with no boost. Not a set of
+     * ours, so no quiet window: a held TV remote key reports every 1% step.
+     */
     const adoptSystemVolume = useCallback((percentage: number) => {
         currentVolumeShared.value = percentage / 100;
         setVolumeState(percentage);
         lastSetVolumeRef.current = percentage;
-        lastSetTimeRef.current = Date.now();
         setBoost(100);
     }, [currentVolumeShared, setBoost]);
 
@@ -148,11 +150,6 @@ export function useAudioController(
                 // Boosted, and the system stream is still at max: a re-report of the max
                 // must not knock the boost back down to 100%.
                 if (newVolume >= 100 && lastSetVolumeRef.current > 100) {
-                    return;
-                }
-
-                // Ignore if the value is within 5% of what we last set (quantization)
-                if (Math.abs(newVolume - lastSetVolumeRef.current) <= 5) {
                     return;
                 }
 

@@ -1,21 +1,21 @@
 package com.glide.app.audio
 
-import android.content.ContentResolver
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
-import android.database.ContentObserver
 import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
@@ -160,6 +160,10 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
         private const val EVENT_ROUTE_CHANGE = "onAudioRouteChange"
         private const val EVENT_VOLUME_KEY = "onVolumeKey"
 
+        // AudioManager's, hidden from the SDK but sent on every Android version.
+        private const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
+        private const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+
         // Timing constants
         private const val APP_CHANGE_DEBOUNCE_MS = 200L
         private const val VOLUME_FLAG_CLEAR_DELAY_MS = 50L
@@ -169,7 +173,6 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var audioManager: AudioManager? = null
-    private var contentResolver: ContentResolver? = null
 
     /** See [getMaxVolumeForRoute]. */
     private val isTv = (reactContext.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
@@ -206,14 +209,13 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
     private var lastEmittedVolumeEventTime: Long = 0
 
     // Observers and callbacks
-    private var volumeObserver: ContentObserver? = null
+    private var volumeReceiver: BroadcastReceiver? = null
     private var audioDeviceCallback: AudioDeviceCallback? = null
 
     init {
         reactContext.addLifecycleEventListener(this)
         try {
             audioManager = reactContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            contentResolver = reactContext.contentResolver
             if (audioManager == null) {
                 Log.e(TAG, "AudioManager is null - audio features will be disabled")
             }
@@ -410,59 +412,36 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
         unregisterAudioDeviceCallback()
     }
 
+    /**
+     * Android's own volume broadcast, sent the moment the level changes. The settings it used
+     * to watch are saved about half a second late and once per held key, so on a TV (whose
+     * remote's keys go to the system, 100 steps of 1%) the HUD lagged and skipped.
+     */
     private fun registerVolumeObserver() {
-        if (volumeObserver != null || contentResolver == null) {
-            return
+        if (volumeReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent) {
+                if (intent.getIntExtra(EXTRA_VOLUME_STREAM_TYPE, -1) != AudioManager.STREAM_MUSIC) return
+                synchronized(this@AudioVolumeModule) {
+                    val now = System.currentTimeMillis()
+                    if (isAppChangingVolume || (now - lastAppVolumeChangeTime < APP_CHANGE_DEBOUNCE_MS)) return
+                }
+                handleHardwareVolumeChange()
+            }
         }
-
         try {
-            volumeObserver = object : ContentObserver(mainHandler) {
-                override fun onChange(selfChange: Boolean) {
-                    handleVolumeObserverChange(null)
-                }
-
-                override fun onChange(selfChange: Boolean, uri: Uri?) {
-                    handleVolumeObserverChange(uri)
-                }
-            }
-
-            contentResolver?.registerContentObserver(
-                Settings.System.CONTENT_URI,
-                true,
-                volumeObserver!!
-            )
-            Log.d(TAG, "Volume observer registered")
+            ContextCompat.registerReceiver(reactContext, receiver, IntentFilter(VOLUME_CHANGED_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED)
+            volumeReceiver = receiver
         } catch (e: Exception) {
-            Log.e(TAG, "Error registering volume observer", e)
+            Log.e(TAG, "Error registering volume receiver", e)
         }
-    }
-
-    private fun handleVolumeObserverChange(uri: Uri?) {
-        if (uri != null && !isVolumeRelatedSettingsUri(uri)) {
-            return
-        }
-
-        synchronized(this) {
-            val now = System.currentTimeMillis()
-            if (isAppChangingVolume || (now - lastAppVolumeChangeTime < APP_CHANGE_DEBOUNCE_MS)) {
-                return
-            }
-        }
-
-        handleHardwareVolumeChange()
     }
 
     private fun unregisterVolumeObserver() {
-        val observer = volumeObserver
-        if (observer != null && contentResolver != null) {
-            try {
-                contentResolver?.unregisterContentObserver(observer)
-                volumeObserver = null
-                Log.d(TAG, "Volume observer unregistered")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error unregistering volume observer", e)
-            }
-        }
+        val receiver = volumeReceiver ?: return
+        volumeReceiver = null
+        runCatching { reactContext.unregisterReceiver(receiver) }
+            .onFailure { Log.e(TAG, "Error unregistering volume receiver", it) }
     }
 
     private fun getSystemVolumePercentage(): Int {
@@ -657,14 +636,5 @@ class AudioVolumeModule(private val reactContext: ReactApplicationContext) :
         stopListening()
         reactContext.removeLifecycleEventListener(this)
         super.invalidate()
-    }
-
-    private fun isVolumeRelatedSettingsUri(uri: Uri): Boolean {
-        val uriString = uri.toString().lowercase(Locale.US)
-        return uriString.contains("volume_music") ||
-            uriString.contains("volume_ring") ||
-            uriString.contains("volume_alarm") ||
-            uriString.contains("stream_volume") ||
-            uriString.contains("/volume")
     }
 }
