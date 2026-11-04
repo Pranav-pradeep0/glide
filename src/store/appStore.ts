@@ -50,6 +50,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     showSeekButtons: true,
     seekDuration: 10,
     autoPlayNext: false,
+    volumeLevelerDefault: false,
     defaultAudioLanguage: null,
     shakeThreshold: 1.2,
     shakeEnabled: false,

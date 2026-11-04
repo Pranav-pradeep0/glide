@@ -14,7 +14,9 @@ reference the owner uses on TV.
 ## Decisions (owner, 2026-10-23)
 
 - **Name:** "Volume leveler", caption "Quieter action, clearer voices", in the player's Audio
-  panel (TrackSelector, Effects tab). Remembered across videos like the equalizer.
+  panel (TrackSelector, Effects tab). Settings → Playback "Volume leveler" is the default for
+  every video (owner, 2026-11-04: TVs want it always on); turned the other way in the player, a
+  video keeps its own choice in its history entry, like its audio and subtitle track.
 - **Keep** today's visual "Night mode" (a 50% black overlay, `VideoPlayerScreen.tsx` style
   `nightMode`, `onToggleNightMode`, `NightModeIcon`) exactly as it is, name included.
 - **Remove** the equalizer's "Night Mode" preset: an EQ changes tone, not dynamics; the volume

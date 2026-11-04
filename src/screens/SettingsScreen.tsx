@@ -192,6 +192,7 @@ export default function SettingsScreen() {
     const versionTaps = useRef(0);
 
     const settings = useAppStore((state) => state.settings);
+    const updateSettings = useAppStore((state) => state.updateSettings);
     const toggleDarkMode = useAppStore((state) => state.toggleDarkMode);
     const toggleHaptics = useAppStore((state) => state.toggleHaptics);
     const setSubtitleFontSize = useAppStore((state) => state.setSubtitleFontSize);
@@ -409,6 +410,12 @@ export default function SettingsScreen() {
                             onValueChange={setSeekDuration}
                         />
                     )}
+                    <ListRow
+                        icon="volume-2"
+                        title="Volume leveler"
+                        caption="Evens out loud action and quiet voices. Best on TV and 2.1 audio systems"
+                        toggle={{ value: settings.volumeLevelerDefault, onChange: on => updateSettings({ volumeLevelerDefault: on }) }}
+                    />
                     <ListRow
                         icon="globe"
                         title="Audio language"

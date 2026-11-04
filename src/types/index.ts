@@ -105,6 +105,8 @@ export interface AppSettings {
     seekDuration: number; // Seek duration in seconds (5, 10, 15, 30, 60)
 
     autoPlayNext: boolean; // Auto-play next video in folder
+    /** Volume leveller for every video; one turned the other way in the player keeps its own. */
+    volumeLevelerDefault: boolean;
     defaultAudioLanguage: string | null; // Preferred audio language (matches substring in track name)
     shakeThreshold: number; // Shake intensity threshold in g units
     shakeEnabled: boolean; // Shake-to-control enabled
@@ -276,6 +278,8 @@ export interface VideoHistoryEntry {
     /** Frame-rate retiming from auto sync; unset means 1. */
     subtitleRatio?: number;
     brightness?: number;
+    /** Volume leveller for this video, set only where it differs from Settings' default. */
+    volumeLeveler?: boolean;
     /** An app link's request headers, sent again on replay. */
     headers?: Record<string, string>;
     /** secure_uri: never show the link. */

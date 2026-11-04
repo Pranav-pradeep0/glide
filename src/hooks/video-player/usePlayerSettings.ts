@@ -19,6 +19,8 @@ interface UsePlayerSettingsOptions {
     initialAudioDelay?: number;
     initialSubtitleDelay?: number;
     initialSubtitleRatio?: number;
+    /** This video's leveller from history; the previous video's carries over it. */
+    initialVolumeLeveler?: boolean;
     /** The previous video's settings, when Next / Previous / autoplay opened this one. */
     carried?: PlayerSettings;
 }
@@ -80,11 +82,13 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         initialAudioDelay = 0,
         initialSubtitleDelay = 0,
         initialSubtitleRatio = 1,
+        initialVolumeLeveler = false,
         carried,
     } = options;
 
     const [settings, setSettings] = useState<PlayerSettings>({
         ...(carried ?? initialSettings),
+        volumeLeveler: carried?.volumeLeveler ?? initialVolumeLeveler,
         audioDelay: initialAudioDelay,
         subtitleDelay: initialSubtitleDelay,
         subtitleRatio: initialSubtitleRatio,

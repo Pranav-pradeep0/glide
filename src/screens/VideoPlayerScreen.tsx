@@ -201,6 +201,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const defaultAudioLanguage = useAppStore(state => state.settings.defaultAudioLanguage);
     const seekDuration = useAppStore(state => state.settings.seekDuration);
     const autoPlayNext = useAppStore(state => state.settings.autoPlayNext);
+    const volumeLevelerDefault = useAppStore(state => state.settings.volumeLevelerDefault);
     const shakeThreshold = useAppStore(state => state.settings.shakeThreshold);
     const shakeEnabled = useAppStore(state => state.settings.shakeEnabled ?? false);
     const shakeAction = useAppStore(state => state.settings.shakeAction ?? 'play_pause');
@@ -343,6 +344,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 subtitleDelay: history.subtitleDelay,
                 subtitleRatio: history.subtitleRatio,
                 brightness: history.brightness,
+                volumeLeveler: history.volumeLeveler,
                 duration: history.duration,
             };
         }
@@ -358,6 +360,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         subtitleDelay: initialSubtitleDelay,
         subtitleRatio: initialSubtitleRatio,
         brightness: initialVideoBrightness,
+        volumeLeveler: initialVolumeLeveler,
         duration: savedDuration,
     } = useMemo(() => getResumeState(), [getResumeState]);
 
@@ -396,6 +399,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         initialAudioDelay,
         initialSubtitleDelay,
         initialSubtitleRatio,
+        initialVolumeLeveler: initialVolumeLeveler ?? volumeLevelerDefault,
         carried: carry?.settings,
     });
 
@@ -575,7 +579,9 @@ export default function VideoPlayerScreen({ route }: Props) {
                     settingsHook.settings.audioDelay,
                     settingsHook.settings.subtitleDelay,
                     settingsHook.settings.subtitleRatio,
-                    brightnessMode === 'video' ? brightnessRef.current : undefined
+                    brightnessMode === 'video' ? brightnessRef.current : undefined,
+                    undefined,
+                    settingsHook.settings.volumeLeveler === volumeLevelerDefault ? undefined : settingsHook.settings.volumeLeveler,
                 );
                 persistNow();
             }
@@ -662,7 +668,10 @@ export default function VideoPlayerScreen({ route }: Props) {
                 settingsHook.settings.subtitleDelay,
                 settingsHook.settings.subtitleRatio,
                 // Only save brightness to history if in video mode
-                brightnessMode === 'video' ? brightnessRef.current : undefined
+                brightnessMode === 'video' ? brightnessRef.current : undefined,
+                undefined,
+                // This video's own choice only where it differs from Settings' default.
+                settingsHook.settings.volumeLeveler === volumeLevelerDefault ? undefined : settingsHook.settings.volumeLeveler,
             );
             // Recents shows the frame you stopped at; a finished video goes back to the
             // usual one rather than the end credits.
@@ -683,6 +692,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         settingsHook.settings.audioDelay,
         settingsHook.settings.subtitleDelay,
         settingsHook.settings.subtitleRatio,
+        settingsHook.settings.volumeLeveler,
+        volumeLevelerDefault,
         brightnessMode,
         resumePosition,
         creditsAt,
