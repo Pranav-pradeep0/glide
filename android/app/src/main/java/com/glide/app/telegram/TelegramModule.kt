@@ -31,11 +31,15 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
 
     // Off TDLib's thread: telling a listed chat needs its type (GetChat), and send can't run there.
     private val onMessage: (TdApi.Message) -> Unit = { m -> if (isVideo(m)) events.execute { emitVideo(m) } }
+    private val onChat: (Long) -> Unit = { id -> events.execute { emitChat(id) } }
+    /** Whether the list shows a chat, by id: a chat's type never changes. */
+    private val listed = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
 
     init {
         Td.onAuth += onAuth
         TgSaves.onChange += onSaves
         Td.onMessage += onMessage
+        Td.onChat += onChat
     }
 
     // Telegram's calls mostly wait on the network: their own threads, so a slow search never holds
@@ -46,8 +50,10 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         Td.onAuth -= onAuth
         TgSaves.onChange -= onSaves
         Td.onMessage -= onMessage
+        Td.onChat -= onChat
         events.shutdown()
         pool.shutdown()
+        prefetcher.shutdown()
         super.invalidate()
     }
 
@@ -376,7 +382,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
      */
     @ReactMethod
     fun poster(uri: String, promise: Promise) = td(promise) {
-        val (chatId, messageId) = parse(uri) ?: return@td promise.resolve(null)
+        val (chatId, messageId) = tgIds(uri) ?: return@td promise.resolve(null)
         val thumb = when (val c = Td.message(chatId, messageId).content) {
             is TdApi.MessageVideo -> c.video.thumbnail
             is TdApi.MessageDocument -> c.document.thumbnail
@@ -385,8 +391,6 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         if (thumb == null) return@td promise.resolve(null)
         Td.download(thumb.file.id) { promise.resolve(if (it.isEmpty()) null else "file://$it") }
     }
-
-    private fun parse(uri: String) = tgIds(uri)
 
     private val prefetching = AtomicReference<String?>()
     private val prefetcher = Executors.newSingleThreadExecutor()
@@ -401,7 +405,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         prefetcher.execute {
             while (true) {
                 val u = prefetching.getAndSet(null) ?: break
-                val (chatId, messageId) = parse(u) ?: continue
+                val (chatId, messageId) = tgIds(u) ?: continue
                 runCatching { Td.prefetch(chatId, messageId) }.onFailure { Log.w(TAG, "prefetch $u", it) }
             }
         }
@@ -459,10 +463,17 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(VIDEO, row)
     }.onFailure { Log.w(TAG, "video event", it) }
 
+    /** A chat the list shows changed (a message of any kind): a [CHAT] event, so the list reloads. */
+    private fun emitChat(chatId: Long) = runCatching {
+        // Asked once per chat: TDLib sends an update for every chat as it loads the list.
+        if (!listed.getOrPut(chatId) { listable(Td.send(TdApi.GetChat(chatId))) }) return@runCatching
+        reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)?.emit(CHAT, chatId.toDouble())
+    }.onFailure { Log.w(TAG, "chat event", it) }
+
     /** Saves a `tg://` film for offline, queued after any others; [name] goes on the notification. */
     @ReactMethod
     fun save(uri: String, name: String, promise: Promise) = td(promise) {
-        val (chatId, messageId) = parse(uri) ?: return@td promise.resolve(null)
+        val (chatId, messageId) = tgIds(uri) ?: return@td promise.resolve(null)
         TgSaves.save(chatId, messageId, name)
         promise.resolve(null)
     }
@@ -470,7 +481,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     /** Cancels a save, or deletes a saved film. */
     @ReactMethod
     fun unsave(uri: String, promise: Promise) = td(promise) {
-        val (chatId, messageId) = parse(uri) ?: return@td promise.resolve(null)
+        val (chatId, messageId) = tgIds(uri) ?: return@td promise.resolve(null)
         TgSaves.remove(chatId, messageId)
         promise.resolve(null)
     }
@@ -487,6 +498,7 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         private const val AUTH = "GlideTelegramAuth"
         private const val SAVES = "GlideTelegramSaves"
         private const val VIDEO = "GlideTelegramVideo"
+        private const val CHAT = "GlideTelegramChat"
     }
 }
 

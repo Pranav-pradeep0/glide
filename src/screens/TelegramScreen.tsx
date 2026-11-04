@@ -8,7 +8,7 @@ import {
     ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Linking, ScrollView, ScrollViewInstance, StyleSheet, Text, TextInput, TextInputProps, View,
 } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
@@ -23,7 +23,7 @@ import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
 import { Loader } from '@/components/Loader';
 import { Pager } from '@/components/Pager';
 import {
-    TELEGRAM_AVAILABLE, TelegramService, TgAuth, TgChat, TgRecent, TgSave, TgVideo, isTelegram, saveLabel, useTelegramNewVideo, useTelegramSaves,
+    TELEGRAM_AVAILABLE, TelegramService, TgAuth, TgChat, TgRecent, TgSave, TgVideo, isTelegram, saveLabel, useTelegramChatChanged, useTelegramNewVideo, useTelegramSaves,
 } from '@/services/TelegramService';
 import { replayParams, useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { getResumablePosition } from '@/utils/playbackResume';
@@ -59,7 +59,7 @@ export default function TelegramScreen() {
 
     const logOut = () => showDialog('Sign out of Telegram?', 'Videos downloaded from Telegram are deleted from this device.', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign out', style: 'destructive', onPress: () => { TelegramService.logOut().catch(e => setError(errorText(e))); } },
+        { text: 'Sign out', style: 'destructive', onPress: () => { TelegramService.logOut().catch(e => showDialog("Couldn't sign out", errorText(e))); } },
     ]);
 
     if (auth.state === 'ready' && !error) {
@@ -300,27 +300,21 @@ function Home({ name, onLogOut }: { name: string; onLogOut: () => void }) {
         // Leaving Telegram: stop asking about chats nobody will see.
         return () => { queue.length = 0; asking.clear(); };
     }, []);
-    // Each new video, and each return here (other messages reorder the chats), moves the chats on:
-    // the shown tab reloads them from TDLib's own copy (no search, so no FLOOD_WAIT), a hidden
-    // one when it's next shown. A burst of videos reloads once.
+    // Any message in a listed chat moves the chats on: the shown tab reloads them from TDLib's own
+    // copy (no search, so no FLOOD_WAIT), a hidden one when it's next shown. At most once a
+    // second: a debounce would never fire while a busy group keeps talking.
     const [version, setVersion] = useState(0);
     const pending = useRef<ReturnType<typeof setTimeout>>(undefined);
-    const reload = useCallback(() => {
-        clearTimeout(pending.current);
-        pending.current = setTimeout(() => setVersion(n => n + 1), 1000);
-    }, []);
+    useTelegramChatChanged(() => {
+        if (pending.current) { return; }
+        pending.current = setTimeout(() => { pending.current = undefined; setVersion(n => n + 1); }, 1000);
+    });
     useEffect(() => () => clearTimeout(pending.current), []);
     useTelegramNewVideo(v => {
         hasVideos.set(v.chatId, true);
         asked.add(v.chatId);
         setRecent(r => ({ ...r, [String(v.chatId)]: { name: v.name, date: v.date } }));
-        reload();
     });
-    const visited = useRef(false);
-    useFocusEffect(useCallback(() => {
-        if (visited.current) { reload(); }
-        visited.current = true;
-    }, [reload]));
 
     useEffect(() => {
         TelegramService.folders()

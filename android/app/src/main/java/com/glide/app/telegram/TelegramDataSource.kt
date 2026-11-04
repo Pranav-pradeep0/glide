@@ -24,6 +24,7 @@ class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
     private var path: String? = null
     private var size = 0L
     private var file: RandomAccessFile? = null
+    private var filePath: String? = null
     private var pos = 0L
     private var remaining = 0L
     private val buf = ByteArray(BUFFER)
@@ -76,7 +77,15 @@ class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
         bufStart = pos
         bufLen = 0
         if (n <= 0) return
-        val f = file ?: RandomAccessFile(path ?: w!!.path, "r").also { file = it }
+        // TDLib's path can change under a read: Android emptied cacheDir and the download began
+        // a new file, which the old handle never sees. Empty for a moment while TDLib resets it.
+        val p = path ?: w!!.path
+        if (p.isNotEmpty() && p != filePath || file == null) {
+            file?.let { runCatching { it.close() } }
+            file = RandomAccessFile(p, "r")
+            filePath = p
+        }
+        val f = file!!
         f.seek(pos)
         f.readFully(buf, 0, n)
         bufLen = n
@@ -91,6 +100,7 @@ class TelegramDataSource : BaseDataSource(/* isNetwork = */ true) {
         path = null
         file?.let { runCatching { it.close() } }
         file = null
+        filePath = null
         bufLen = 0
         if (opened) {
             opened = false

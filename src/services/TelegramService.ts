@@ -179,6 +179,17 @@ export function useTelegramNewVideo(onVideo: (v: TgVideo) => void) {
     }, []);
 }
 
+/** A listed chat changed (a message of any kind in, the last one deleted, a pin): its row moves. */
+export function useTelegramChatChanged(onChange: () => void) {
+    const latest = useRef(onChange);
+    latest.current = onChange;
+    useEffect(() => {
+        if (!TELEGRAM_AVAILABLE) { return; }
+        const sub = DeviceEventEmitter.addListener('GlideTelegramChat', () => latest.current());
+        return () => sub.remove();
+    }, []);
+}
+
 /** Saved films and those on their way, kept current. */
 export function useTelegramSaves(): TgSave[] {
     const [saves, setSaves] = useState<TgSave[]>([]);

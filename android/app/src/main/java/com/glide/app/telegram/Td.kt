@@ -53,6 +53,9 @@ object Td {
     /** Every new message (`updateNewMessage`), on TDLib's thread: the chat list is kept live from these. */
     val onMessage = CopyOnWriteArraySet<(TdApi.Message) -> Unit>()
 
+    /** A chat's last message or place in a list changed, on TDLib's thread. */
+    val onChat = CopyOnWriteArraySet<(Long) -> Unit>()
+
     /** Every `updateFile`, on TDLib's thread (the debug screen's download speed). */
     @Volatile
     var onFile: ((TdApi.File) -> Unit)? = null
@@ -80,11 +83,16 @@ object Td {
     fun <R : TdApi.Object> send(f: TdApi.Function<R>, inOrder: (R) -> Unit = {}): R {
         val latch = CountDownLatch(1)
         var result: TdApi.Object? = null
+        if (f is TdApi.DownloadFile) dirs()
         client().send(f) {
-            @Suppress("UNCHECKED_CAST")
-            if (it !is TdApi.Error) inOrder(it as R)
-            result = it
-            latch.countDown()
+            // An [inOrder] that throws must not leave the caller waiting forever.
+            try {
+                @Suppress("UNCHECKED_CAST")
+                if (it !is TdApi.Error) inOrder(it as R)
+            } finally {
+                result = it
+                latch.countDown()
+            }
         }
         latch.await()
         val r = result
@@ -105,7 +113,7 @@ object Td {
     }
 
     /** Fire and forget; errors only logged. */
-    fun post(f: TdApi.Function<*>) = client().send(f) { if (it is TdApi.Error) Log.w(TAG, "${f.javaClass.simpleName}: ${it.code} ${it.message}") }
+    fun post(f: TdApi.Function<*>) = client().also { if (f is TdApi.DownloadFile) dirs() }.send(f) { if (it is TdApi.Error) Log.w(TAG, "${f.javaClass.simpleName}: ${it.code} ${it.message}") }
 
     private fun onUpdate(o: TdApi.Object) {
         when (o) {
@@ -125,6 +133,9 @@ object Td {
             }
             is TdApi.UpdateChatFolders -> folders = o.chatFolders
             is TdApi.UpdateNewMessage -> onMessage.forEach { it(o.message) }
+            // Any message in, deleted or edited last, or a chat pinned: the chat list moves.
+            is TdApi.UpdateChatLastMessage -> onChat.forEach { it(o.chatId) }
+            is TdApi.UpdateChatPosition -> onChat.forEach { it(o.chatId) }
             is TdApi.UpdateFile -> {
                 firstByte(o.file)
                 TgSaves.onFile(o.file)
@@ -228,8 +239,10 @@ object Td {
      * A small file (thumbnail, chat photo), downloaded whole: [done] gets its path ("" on an
      * error) on TDLib's thread. No thread waits meanwhile: a screen of rows asks for many at once.
      */
-    fun download(fileId: Int, done: (String) -> Unit) =
+    fun download(fileId: Int, done: (String) -> Unit) {
+        dirs()
         client().send(TdApi.DownloadFile(fileId, 16, 0, 0, true)) { done((it as? TdApi.File)?.local?.path.orEmpty()) }
+    }
 
     /** The player is reading this file (its download leads). */
     fun streaming(fileId: Int) = windows.containsKey(fileId)
@@ -251,6 +264,14 @@ object Td {
         films.clear()
         send(optimize(0))
     }
+
+    /**
+     * Remakes TDLib's file folder before every `downloadFile` (player, prefetch, saves, pictures):
+     * Android empties cacheDir when storage runs low (an hour of a film on a 4 GB TV), and TDLib
+     * makes only the last level of `tdlib/temp/`, so every download kept failing, even after
+     * reopening the film.
+     */
+    private fun dirs() = app.cacheDir.resolve("tdlib/temp").mkdirs()
 
     /** Streamed films: videos, and videos sent as files. Offline saves will live outside TDLib's cache. */
     private val FILMS = arrayOf<TdApi.FileType>(TdApi.FileTypeVideo(), TdApi.FileTypeDocument())
