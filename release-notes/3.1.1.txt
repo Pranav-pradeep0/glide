@@ -1,0 +1,5 @@
+Glide 3.1.1: Telegram and TV fixes.
+- Telegram films no longer stop partway when your device is low on space
+- On TV, the volume bar follows every press of the remote
+- Each video remembers whether the volume leveler was on
+- New in Settings: turn the volume leveler on for every video
