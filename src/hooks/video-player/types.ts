@@ -346,6 +346,8 @@ export interface UsePlayerCoreReturn {
     commitSeek: (timeInSeconds: number) => boolean;
     setIsSeeking: (seeking: boolean) => void;
     clearResumePosition: () => void;
+    /** Non-null until onLoad: the saved position the player opens at has not landed yet. */
+    resumePosRef: React.MutableRefObject<number | null>;
 
     // Player event handlers
     handleLoad: (data: PlayerLoadData) => void;

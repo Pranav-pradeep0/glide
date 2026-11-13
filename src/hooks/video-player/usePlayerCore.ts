@@ -676,6 +676,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         commitSeek,
         setIsSeeking,
         clearResumePosition,
+        /** Non-null until onLoad: the saved position the player opens at hasn't landed yet. */
+        resumePosRef,
         handleLoad,
         handleProgress,
         handleEnd,

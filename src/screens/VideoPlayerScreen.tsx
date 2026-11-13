@@ -646,14 +646,13 @@ export default function VideoPlayerScreen({ route }: Props) {
         if (!keepsHistory) {return;}
 
         if (player.state.duration > 0) {
-            // Guard: If we have a resume position but the player is still at 0 (or near 0),
-            // and we haven't played past it, assume the resume seek hasn't happened yet.
-            // This prevents overwriting deep history with 0 on immediate exit.
+            // Exiting before the player opened at the saved position would overwrite it with 0.
+            // Only until then: a scrub back to 0:00 afterwards is a real position to keep.
             // In the credits is finished: no resume prompt, and Recents moves on.
             const inCredits = creditsAt !== null && player.currentTimeRef.current >= creditsAt;
             const currentTime = inCredits ? player.state.duration : player.currentTimeRef.current;
-            if (resumePosition && resumePosition > 10 && currentTime < 2) {
-                if (__DEV__) {console.log('[VideoPlayer] Skipping save: Player at start but resume expected at', resumePosition);}
+            if (player.resumePosRef.current !== null) {
+                if (__DEV__) {console.log('[VideoPlayer] Skipping save: the saved position has not loaded yet');}
                 return;
             }
 
@@ -687,6 +686,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         setStopFrame,
         player.state.duration,
         player.currentTimeRef,
+        player.resumePosRef,
         tracksHook.selectedAudioTrackId,
         tracksHook.selectedSubtitleTrackIndex,
         settingsHook.settings.audioDelay,
@@ -695,7 +695,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         settingsHook.settings.volumeLeveler,
         volumeLevelerDefault,
         brightnessMode,
-        resumePosition,
         creditsAt,
         inExternalPlayer,
         keepsHistory,
