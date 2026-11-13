@@ -2,10 +2,11 @@ import React, { memo, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, type HostInstance } from 'react-native';
 import { useTvFocusScope } from '@/hooks/video-player/useTvRemote';
 import { IS_TV } from '@/utils/tv';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { useFadePresence } from '@/hooks/useFadePresence';
+import Animated from 'react-native-reanimated';
 import { Button, SheetHeader } from '@/components/ui';
 import { PLAYER_BACKDROP } from '@/theme/colors';
-import { metrics, motion, playerTheme, type } from '@/theme/theme';
+import { metrics, playerTheme, type } from '@/theme/theme';
 
 const { colors } = playerTheme;
 
@@ -58,7 +59,8 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
     const resumeRef = useRef<HostInstance>(null);
     useTvFocusScope(overlayRef, visible, resumeRef);
 
-    if (!visible) {return null;}
+    const fade = useFadePresence(visible);
+    if (!fade.mounted) {return null;}
 
     const formattedRemaining = remainingTime !== undefined ? formatVerboseTime(remainingTime) : '';
     const caption = [
@@ -70,12 +72,11 @@ export const ResumeModal: React.FC<ResumeModalProps> = memo(({
         <Animated.View
             ref={overlayRef}
             collapsable={false}
-            style={styles.overlay}
-            entering={FadeIn.duration(motion.fadeIn)}
-            exiting={FadeOut.duration(motion.fadeOut)}
+            style={[styles.overlay, fade.style]}
+            pointerEvents={visible ? 'auto' : 'none'}
             accessibilityViewIsModal
         >
-            {/* Same as the close button: dismissing never starts playback. */}
+            {/* Same as the close button: dismissing carries on playing. */}
             <Pressable
                 focusable={!IS_TV}
                 accessible={!IS_TV}

@@ -9,10 +9,11 @@ import {
     useWindowDimensions,
     type HostInstance,
 } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { Button, SheetHeader } from '@/components/ui';
 import { useTvFocusScope } from '@/hooks/video-player/useTvRemote';
 import { IS_TV } from '@/utils/tv';
+import { useFadePresence } from '@/hooks/useFadePresence';
 import { PLAYER_BACKDROP } from '@/theme/colors';
 import { metrics, motion, playerTheme, type } from '@/theme/theme';
 import { parseEmphasis } from '@/utils/markdownEmphasis';
@@ -59,7 +60,8 @@ export const RecapModal: React.FC<RecapModalProps> = memo(({
     const resumeRef = useRef<HostInstance>(null);
     useTvFocusScope(overlayRef, visible, resumeRef);
 
-    if (!visible) {return null;}
+    const fade = useFadePresence(visible);
+    if (!fade.mounted) {return null;}
 
     const report = (text: string) => {
         setReported({ text, status: 'sending' });
@@ -75,9 +77,8 @@ export const RecapModal: React.FC<RecapModalProps> = memo(({
         <Animated.View
             ref={overlayRef}
             collapsable={false}
-            style={styles.overlay}
-            entering={FadeIn.duration(motion.fadeIn)}
-            exiting={FadeOut.duration(motion.fadeOut)}
+            style={[styles.overlay, fade.style]}
+            pointerEvents={visible ? 'auto' : 'none'}
             accessibilityViewIsModal
         >
             <Pressable
