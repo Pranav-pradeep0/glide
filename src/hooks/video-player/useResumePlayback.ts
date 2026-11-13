@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type RefObject } from 'react';
+import { AppState } from 'react-native';
 import { formatTime } from './types';
 import { RECAP_AVAILABLE } from '@/utils/constants';
 
@@ -72,30 +73,40 @@ export function useResumePlayback({
         };
     }, [resumePosition, savedDuration, imdbId, albumName, noResume, isRecapEligible, recapChecked]);
 
-    // Inactivity prompt: if paused for > threshold, offer resume/recap
-    useEffect(() => {
-        if (isPaused) {
-            if (!lastPauseTimeRef.current) {
-                lastPauseTimeRef.current = Date.now();
-            }
-        } else {
-            if (lastPauseTimeRef.current) {
-                const pauseDuration = Date.now() - lastPauseTimeRef.current;
-                if (!noResume && !promptBlocked && pauseDuration > RECAP_INACTIVITY_THRESHOLD && !resumeModalVisible && !recapVisible) {
-                    onPromptPosition(currentTimeRef.current);
-                    setResumeModalVisible(true);
-                    onPause();
-                }
-            }
-            lastPauseTimeRef.current = null;
-        }
-    }, [isPaused, resumeModalVisible, recapVisible, noResume, promptBlocked, onPause, onPromptPosition, currentTimeRef]);
+    // A long break, paused 5+ minutes: offer Continue watching (and Recap). Time spent in the
+    // prompt or in Recap is not a break, or Resume after a slow read would ask again.
+    const promptAfterBreak = useCallback(() => {
+        const since = lastPauseTimeRef.current;
+        lastPauseTimeRef.current = null;
+        if (since === null || noResume || promptBlocked || Date.now() - since <= RECAP_INACTIVITY_THRESHOLD) { return false; }
+        onPromptPosition(currentTimeRef.current);
+        setResumeModalVisible(true);
+        return true;
+    }, [noResume, promptBlocked, onPromptPosition, currentTimeRef]);
 
-    // The modal holds playback paused while it's up; closing it must leave the player paused.
+    useEffect(() => {
+        if (resumeModalVisible || recapVisible) { lastPauseTimeRef.current = null; return; }
+        if (isPaused) { lastPauseTimeRef.current ??= Date.now(); return; }
+        // Played after a break nobody was asked about (no return to the app in between).
+        if (promptAfterBreak()) { onPause(); }
+    }, [isPaused, resumeModalVisible, recapVisible, promptAfterBreak, onPause]);
+
+    // Back in the app after a long time away (the video paused when it was minimised): ask
+    // now, rather than after Play, which used to start the video only to pause it again.
+    const pausedRef = useRef(isPaused);
+    pausedRef.current = isPaused;
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', (state) => {
+            if (state === 'active' && pausedRef.current) { promptAfterBreak(); }
+        });
+        return () => sub.remove();
+    }, [promptAfterBreak]);
+
+    // Closing the prompt any way (X, outside, Back) carries on playing, like Resume.
     const closeResumeModal = useCallback(() => {
         setResumeModalVisible(false);
-        onPause();
-    }, [onPause]);
+        onPlay();
+    }, [onPlay]);
 
     // The screen passes fresh closures each render; a ref keeps this handler (and the modal's memo) stable.
     const actionsRef = useRef({ onPlay, onRestartPersist, onSeekToStart, onRecap });

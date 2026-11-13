@@ -17,6 +17,8 @@ interface UsePlayerRecapOptions {
     subtitleCues: SubtitleCue[];
     onPause: () => void;
     onDismissResumeModal: () => void;
+    /** A recap that could not be made closes and the video carries on. */
+    onPlay: () => void;
     showToast: (msg: string) => void;
 }
 
@@ -33,6 +35,7 @@ export function usePlayerRecap({
     subtitleCues,
     onPause,
     onDismissResumeModal,
+    onPlay,
     showToast,
 }: UsePlayerRecapOptions) {
     const [recapVisible, setRecapVisible] = useState(false);
@@ -169,6 +172,7 @@ export function usePlayerRecap({
                 setIsGeneratingRecap(false);
                 setRecapLoadingMessage(undefined);
                 showToast('Not enough dialogue for a recap');
+                onPlay();
                 return;
             }
 
@@ -185,6 +189,7 @@ export function usePlayerRecap({
                 setRecapVisible(false);
                 setRecapLoadingMessage(undefined);
                 showToast('Recap generation failed');
+                onPlay();
             }
         } catch (error) {
             console.error('[usePlayerRecap] Recap error:', error);
@@ -193,6 +198,7 @@ export function usePlayerRecap({
                 setRecapVisible(false);
                 setRecapLoadingMessage(undefined);
                 showToast('Recap generation error');
+                onPlay();
             }
         } finally {
             if (isMounted.current) {
@@ -206,6 +212,7 @@ export function usePlayerRecap({
         isRecapEligible,
         onPause,
         onDismissResumeModal,
+        onPlay,
         showToast,
         videoPath,
         subtitleTracks,

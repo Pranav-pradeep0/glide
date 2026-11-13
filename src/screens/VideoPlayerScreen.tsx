@@ -537,6 +537,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         subtitleCues: tracksHook.subtitleCues,
         onPause: player.pause,
         onDismissResumeModal: handleDismissResumeModal,
+        onPlay: player.play,
         showToast: bookmarksHook.showToastWithMessage,
     });
 
@@ -601,11 +602,14 @@ export default function VideoPlayerScreen({ route }: Props) {
     } = recap;
 
     // Like Continue watching: closing never starts playback; only Resume does.
+    // Closing Recap any way (X, outside, Back, Resume) carries on playing.
+    const playerPlay = player.play;
     const closeRecap = useCallback(() => {
         setRecapVisible(false);
         setIsGeneratingRecap(false);
         setRecapLoadingMessage(undefined);
-    }, [setRecapVisible, setIsGeneratingRecap, setRecapLoadingMessage]);
+        playerPlay();
+    }, [setRecapVisible, setIsGeneratingRecap, setRecapLoadingMessage, playerPlay]);
 
     const {
         resumeModalVisible,
@@ -1040,11 +1044,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         setCustomEqualizerBands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }, [setEqualizerPreset, setCustomEqualizerBands]);
     const handleToggleShake = useCallback(() => setShakeEnabled(!shakeEnabled), [setShakeEnabled, shakeEnabled]);
-    const playerPlay = player.play;
-    const handleRecapResume = useCallback(() => {
-        closeRecap();
-        playerPlay();
-    }, [closeRecap, playerPlay]);
     const handleResumeResume = useCallback(() => handleResumeModalAction('resume'), [handleResumeModalAction]);
     const handleResumeRestart = useCallback(() => handleResumeModalAction('restart'), [handleResumeModalAction]);
     const handleResumeRecap = useCallback(() => handleResumeModalAction('recap'), [handleResumeModalAction]);
@@ -1784,7 +1783,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     <RecapModal
                         visible={recapVisible}
                         onClose={closeRecap}
-                        onResume={handleRecapResume}
+                        onResume={closeRecap}
                         recapText={recapText}
                         videoName={cleanTitle || albumName || videoName}
                         isLoading={isGeneratingRecap}
