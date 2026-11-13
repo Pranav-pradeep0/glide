@@ -19,6 +19,7 @@ import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate
 import { metrics, type } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
 import { SourceKind } from '@/utils/videoSource';
+import { usePref } from '@/storage/prefs';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -197,8 +198,8 @@ export default function FoldersScreen() {
     const videoAccess = usePermissionStore((s) => s.video.access);
 
     // Cards on a TV: bigger targets, and the D-pad moves across as well as down.
-    const [viewMode, setViewMode] = useState<ViewMode>(IS_TV ? 'grid' : 'list');
-    const [sortBy, setSortBy] = useState<SortByOption>('name');
+    const [viewMode, setViewMode] = usePref<ViewMode>('folders.viewMode', IS_TV ? 'grid' : 'list');
+    const [sortBy, setSortBy] = usePref<SortByOption>('folders.sortBy', 'name');
     const flashListRef = useRef<any>(null);
     // Where the folders' title sits in the list header, measured, so Local scrolls exactly to it.
     const foldersY = useRef(0);
@@ -211,7 +212,7 @@ export default function FoldersScreen() {
         setSortBy(key);
         // The list remounts for the new order; wait a tick so it has it before scrolling to it.
         setTimeout(scrollToFolders, 100);
-    }, [scrollToFolders]);
+    }, [scrollToFolders, setSortBy]);
 
     const sortedAlbums = useMemo(() => {
         return [...albums].sort((a, b) =>

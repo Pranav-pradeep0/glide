@@ -21,6 +21,7 @@ import {
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { metrics, type } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
+import { usePref } from '@/storage/prefs';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AlbumVideosRouteProp = RouteProp<RootStackParamList, 'AlbumVideos'>;
@@ -40,12 +41,14 @@ export default function AlbumVideosScreen() {
     const clearHistoryForPath = useVideoHistoryStore(state => state.clearVideoHistory);
     const history = useVideoHistoryStore(state => state.history);
     const { albumTitle, bucketId } = route.params;
-    // Unpicked: episode order for a series, newest first otherwise (useAlbumVideos).
-    const [sort, setSort] = useState<VideoSort>();
+    // Per folder, as a series and a camera folder want different orders. Unpicked: episode
+    // order for a series, newest first otherwise (useAlbumVideos).
+    const [storedSort, setSort] = usePref<VideoSort | ''>(`albumVideos.sort.${bucketId ?? albumTitle}`, '');
+    const sort = storedSort || undefined;
     const { videos, order, loading, loadingMore, hasMore, loadMore } = useAlbumVideos(albumTitle, bucketId, sort);
     const videoAccess = usePermissionStore((s) => s.video.access);
     // Cards on a TV: bigger targets, and the D-pad moves across as well as down.
-    const [viewMode, setViewMode] = useState<ViewMode>(IS_TV ? 'grid' : 'list');
+    const [viewMode, setViewMode] = usePref<ViewMode>('albumVideos.viewMode', IS_TV ? 'grid' : 'list');
     const [selectedVideo, setSelectedVideo] = useState<VideoFile | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
 

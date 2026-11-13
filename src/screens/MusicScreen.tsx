@@ -31,6 +31,7 @@ import { AudioAlbum, AudioArtist, AudioFolder, AudioTrack, RootStackParamList } 
 import { SkeletonList } from '@/components/Skeleton';
 import { Pager } from '@/components/Pager';
 import { letterJumpIndex } from '@/utils/alphabetIndex';
+import { usePref } from '@/storage/prefs';
 
 type LibraryTab = 'tracks' | 'albums' | 'artists' | 'folders' | 'favorites';
 /** In page order. */
@@ -121,7 +122,7 @@ export default function MusicScreen() {
 
     // Search and Sort
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<TrackSortBy>('title');
+    const [sortBy, setSortBy] = usePref<TrackSortBy>('music.sortBy', 'title');
 
     // Data lists
     const [tracks, setTracks] = useState<AudioTrack[]>([]);

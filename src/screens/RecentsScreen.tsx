@@ -23,6 +23,7 @@ import { metrics } from '@/theme/theme';
 import { isFinished } from '@/utils/playbackResume';
 import { IS_TV } from '@/utils/tv';
 import { withDays } from '@/utils/videoSource';
+import { usePref } from '@/storage/prefs';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'grid' | 'list';
@@ -66,13 +67,13 @@ export default function RecentsScreen() {
     const getAllHistory = useVideoHistoryStore(s => s.getAllHistory);
     const clearVideoHistory = useVideoHistoryStore(s => s.clearVideoHistory);
 
-    const [kind, setKind] = useState<RecentsKind>('videos');
+    const [kind, setKind] = usePref<RecentsKind>('recents.kind', 'videos');
     // 0 on Videos, 1 on Music, in between mid-swipe.
-    const kindPosition = useSharedValue(0);
+    const kindPosition = useSharedValue(KINDS.findIndex(k => k.key === kind));
     const backdropStyle = useAnimatedStyle(() => ({ opacity: 1 - kindPosition.value }));
     const [refreshing, setRefreshing] = useState(false);
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
-    const [sortBy, setSortBy] = useState<SortByOption>('recent');
+    const [viewMode, setViewMode] = usePref<ViewMode>('recents.viewMode', 'list');
+    const [sortBy, setSortBy] = usePref<SortByOption>('recents.sortBy', 'recent');
     const [selectedVideo, setSelectedVideo] = useState<VideoHistoryEntry | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
 

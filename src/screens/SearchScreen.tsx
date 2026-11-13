@@ -31,6 +31,7 @@ import {
     EmptyState, VideoCard, VideoItemCell, VideoItemComponent, VideoRow,
     deleteVideo, joinMeta, listContentStyle, shareVideo,
 } from '@/components/VideoRow';
+import { usePref } from '@/storage/prefs';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ViewMode = 'grid' | 'list';
@@ -42,7 +43,7 @@ export default function SearchScreen() {
     const inputRef = useRef<TextInputInstance>(null);
     const clearHistoryForPath = useVideoHistoryStore(state => state.clearVideoHistory);
 
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
+    const [viewMode, setViewMode] = usePref<ViewMode>('search.viewMode', 'list');
     const [refreshing, setRefreshing] = useState(false);
     const [selectedVideo, setSelectedVideo] = useState<VideoFile | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
