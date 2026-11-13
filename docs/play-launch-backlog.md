@@ -22,9 +22,11 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
   old keys revoked, TV pass (Telegram + shares) all working.
 - Owner, Console: App content → Foreground service permissions → declare `dataSync`
   (`TelegramSaveService`, text in docs/telegram.md "Other Console forms") with a short video.
-- Next code work (new session): the library-refresh bug below, then the docs/improvements.md
-  fixes for a 3.1.2 closed-test release: landscape-player panel Back, playlist pick at 0:00 not
-  saved, MiniPlayer can't pause while buffering, library view mode/sort reset every launch.
+- 3.1.2 fixes committed on main, not pushed (2026-11-13): library refresh on Android ≤10
+  (952b0d2), 0:00 save (39cccde), pause while buffering (7d8b2c9), view/sort remembered
+  (cfa9f60). Panel Back was already fixed in ef45193. `release-notes/3.1.2.txt` drafted,
+  awaiting owner's wording; then bump version, tag. Untested on a device: the library fix
+  (TV has the Play build; a debug install would wipe its data) and the UI changes.
 
 ## State at end of 2026-10-23
 
@@ -33,9 +35,12 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 - Store listing done: 7 captioned screenshots, feature graphic, 512 icon, text (owner's Desktop
   `glide-play-screenshots`). Closed test: all countries; needs 12+ testers opted in for 14 days.
 - Folders sort by Newest (e0bad70); Music action bar fits (bdfd85a).
-- **Bug, not fixed:** the library does not refresh after a folder rename or a copy made outside
-  Glide until a manual refresh, though `MediaStoreVideoModule` observes MediaStore and
-  `MediaService.notifyChanged` reloads lists. Check over adb whether the observer fires at all.
+- ~~**Bug, not fixed:** library does not refresh after a folder rename or outside copy~~ Root
+  cause (2026-11-13, adb on the Mi TV, Android 9): the observer is registered and fires, and
+  lists reload live; but Android ≤10's MediaScanner never reindexes a renamed folder or an
+  unscanned copy (scanning a folder doesn't recurse), so MediaStore keeps the old path.
+  Fixed in 952b0d2: on each resume Glide scans gone and new video files one by one.
+  Android 11+ keeps MediaStore in step itself; not re-checked on the phone (not connected).
 - Old keys revoked (owner, confirmed 2026-11-13). Still open: Console forms (Data safety, permissions).
 
 ## State at end of 2026-10-22

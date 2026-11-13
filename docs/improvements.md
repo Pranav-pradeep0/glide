@@ -7,14 +7,14 @@ Started 2026-10-11 from a walk of the main screens.
 ## Bugs
 
 - **AlbumVideos** (`AlbumVideosScreen.tsx:130-150`) — no pull-to-refresh; ~~"Play all" only opens the first video (one file if auto-play-next is off)~~ ✅ *(a `playAll` route flag runs the Up next countdown whatever the setting, kept through Next / Previous / playlist picks; it opens the player directly, skipping the detail page)*; ✅ the button took a whole row *(now a pill at the right of the video count, which moved out of the app bar)* — S
-- **Landscape player panels** (`VideoPlayerScreen.tsx:1114`) — Back on a sub-page (Quick Settings page, track options) or a panel opened from ⋮ Playback closes everything instead of going back a step; side panels are plain views and the screen's single Back listener calls `closeAllPanels`. A per-panel listener would race the screen's re-subscription and could take Back from the library during PiP — S
+- ✅ *(already in ef45193, shipped since 2.6.0: each panel registers its back step through `PanelBackContext`)* ~~**Landscape player panels** (`VideoPlayerScreen.tsx:1114`) — Back on a sub-page (Quick Settings page, track options) or a panel opened from ⋮ Playback closes everything instead of going back a step; side panels are plain views and the screen's single Back listener calls `closeAllPanels`. A per-panel listener would race the screen's re-subscription and could take Back from the library during PiP — S~~
 
 ### Reported by Pranav (2026-10-11)
 
 
 ### Video player
 
-- **Playlist pick** — scrub to 0:00 then exit doesn't save — S
+- ~~**Playlist pick** — scrub to 0:00 then exit doesn't save — S~~ ✅ *(39cccde: the save guard waits for the resume load, not for the position to leave 0)*
 - **Perf** — measured on a Nothing Phone 2 (release build, temporary render counter) — S–M
   - hardware volume keys re-render the whole player on every press (7–11 renders/s while held): the HUD show dispatches go through `useReducer`, which has no eager bail-out
   - PlayerDetail: an embedded-subtitle extraction already running when Play is tapped still finishes natively; a native cancel (API bump) would free it at once
@@ -24,11 +24,11 @@ Started 2026-10-11 from a walk of the main screens.
 
 - **Now Playing** — heart uses the app primary while every other control uses the cover accent; equalizer icon never shows "active" when a preset is on — S
 - **Music › A–Z scroller** — 10 px letters with ~14 dp targets, tap-only (no drag along the strip) — S
-- **Folders / Recents / Music / Search / AlbumVideos** — view mode, sort and Recents' Videos/Music chip reset every launch (roadmap Phase 6) — S
+- ~~**Folders / Recents / Music / Search / AlbumVideos** — view mode, sort and Recents' Videos/Music chip reset every launch (roadmap Phase 6) — S~~ ✅ *(cfa9f60, `usePref` in `src/storage/prefs.ts`; folder sort is per folder)*
 - **Headers** — Settings uses a raw title (4 dp different inset from other tabs); Album/Artist use a centred bar with `chevron-left`, AlbumVideos/Search a left bar with `arrow-left`, PlayerDetail a floating chevron — M
 - **Wording** — "Play All" vs "Play all", "Song Options", "Grant Permission", "Access your Music" in title case against sentence case elsewhere; Album/Artist have no primary action button — S
 - **Settings** — "Reset to default" for subtitle appearance has no confirm; "Clear subtitle cache" always says Done — S
-- **MiniPlayer** (`MiniPlayer.tsx:181`) — Next has no haptic (swipe does); while buffering the spinner replaces play/pause so you can't pause — S
+- **MiniPlayer** (`MiniPlayer.tsx:181`) — Next has no haptic (swipe does); ~~while buffering the spinner replaces play/pause so you can't pause~~ ✅ *(7d8b2c9: a ring around the button; native reports buffering-to-play as playing, so the tap pauses, Now Playing too)* — S
 - **Touch targets** — TrackRow "more" 28 dp, Album/Artist "more" 32 dp, ~~queue buttons 32 dp~~ (✅ with the queue drag) — S
 - **Small features** — theme "Auto" (follow system); re-tapping a tab scrolls to top; ~~AlbumVideos sort~~ ✅ + folder-scoped search; consider "Third-party licences" as the Settings label so nobody reads it as Glide being open source — S each
 
