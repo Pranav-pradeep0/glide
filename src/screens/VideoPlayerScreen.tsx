@@ -345,6 +345,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 subtitleRatio: history.subtitleRatio,
                 brightness: history.brightness,
                 volumeLeveler: history.volumeLeveler,
+                videoEnhancement: history.videoEnhancement,
                 duration: history.duration,
             };
         }
@@ -361,6 +362,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         subtitleRatio: initialSubtitleRatio,
         brightness: initialVideoBrightness,
         volumeLeveler: initialVolumeLeveler,
+        videoEnhancement: initialVideoEnhancement,
         duration: savedDuration,
     } = useMemo(() => getResumeState(), [getResumeState]);
 
@@ -400,6 +402,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         initialSubtitleDelay,
         initialSubtitleRatio,
         initialVolumeLeveler: initialVolumeLeveler ?? volumeLevelerDefault,
+        initialVideoEnhancement,
         carried: carry?.settings,
     });
 
@@ -583,6 +586,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     brightnessMode === 'video' ? brightnessRef.current : undefined,
                     undefined,
                     settingsHook.settings.volumeLeveler === volumeLevelerDefault ? undefined : settingsHook.settings.volumeLeveler,
+                    settingsHook.settings.videoEnhancement ? settingsHook.settings.videoEnhancementStrength : undefined,
                 );
                 persistNow();
             }
@@ -675,6 +679,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 undefined,
                 // This video's own choice only where it differs from Settings' default.
                 settingsHook.settings.volumeLeveler === volumeLevelerDefault ? undefined : settingsHook.settings.volumeLeveler,
+                settingsHook.settings.videoEnhancement ? settingsHook.settings.videoEnhancementStrength : undefined,
             );
             // Recents shows the frame you stopped at; a finished video goes back to the
             // usual one rather than the end credits.
@@ -697,6 +702,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         settingsHook.settings.subtitleDelay,
         settingsHook.settings.subtitleRatio,
         settingsHook.settings.volumeLeveler,
+        settingsHook.settings.videoEnhancement,
+        settingsHook.settings.videoEnhancementStrength,
         volumeLevelerDefault,
         brightnessMode,
         creditsAt,

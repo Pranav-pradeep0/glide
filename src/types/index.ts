@@ -280,6 +280,8 @@ export interface VideoHistoryEntry {
     brightness?: number;
     /** Volume leveller for this video, set only where it differs from Settings' default. */
     volumeLeveler?: boolean;
+    /** Colour enhancement's strength for this video; unset means off. */
+    videoEnhancement?: number;
     /** An app link's request headers, sent again on replay. */
     headers?: Record<string, string>;
     /** secure_uri: never show the link. */
