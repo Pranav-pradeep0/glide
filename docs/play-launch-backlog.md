@@ -24,8 +24,7 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 - **Bug, not fixed:** the library does not refresh after a folder rename or a copy made outside
   Glide until a manual refresh, though `MediaStoreVideoModule` observes MediaStore and
   `MediaService.notifyChanged` reloads lists. Check over adb whether the observer fires at all.
-- Still open: revoke the old Groq key + spending limit; delete the stale January repo secrets
-  (`GROQ_*`, `OMDB_*`, `SUBDL_*`, now Worker-side); Console forms (Data safety, permissions).
+- Old keys revoked (owner, confirmed 2026-11-13). Still open: Console forms (Data safety, permissions).
 
 ## State at end of 2026-10-22
 

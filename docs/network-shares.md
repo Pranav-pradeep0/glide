@@ -382,7 +382,7 @@ tests pass. API level **22** (native changes; JS needs no new gate).
 **2026-10-29: speed test removed** (folder button, `GlideSmb.speedTest`, `Smb.security`,
 `scripts/smb-bench.js`). API level **25**. BouncyCastle stays on the classpath for NTLM (above).
 
-**Next:** the TV pass (owner: not yet). D-pad reaches every row, the refresh button, the sheet's
+**2026-11-13: TV pass done by the owner, all working.** Was: D-pad reaches every row, the refresh button, the sheet's
 fields and the share list; focus shows. Read the `discovery:` log line there too. Step (c) on
 TV: the grid opens focused on `Extras`, D-pad from the folder row into the cards and between them,
 long-press/`⋯` from list view, thumbnails over 2.4 GHz (slow: ~3 MB/s), sidecar under Files.

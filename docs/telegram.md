@@ -501,7 +501,6 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
   Home and Network still need recapturing on the owner's user (sources connected, a share's
   folders listed).
 
-**Next: TV tests by remote (Telegram: QR sign-in, focus, play, seek, download; shares: focus,
-phone signs the TV in by QR, keyboard not covering buttons); Session C
-notification/queue/delete by eye; Play closed test shows 0 testers opted in (owner checks the
-Testers tab and opt-in link); then Session D.**
+**2026-11-13: TV pass done by the owner** (Telegram QR sign-in, focus, play, seek, download;
+Session C notification/queue/delete; Session D D-pad and the keyboard check): all working.
+Closed test: 12 testers opted in since 2026-11-11, so production can be applied for ~2026-11-25.
