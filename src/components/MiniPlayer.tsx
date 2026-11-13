@@ -204,18 +204,16 @@ export function MiniPlayer() {
     
                         {/* Controls */}
                         <View style={styles.actions} pointerEvents="box-none">
-                            {isBuffering ? (
-                                <View style={styles.spinnerSlot}>
-                                    <ActivityIndicator size="small" color={colors.primary} />
-                                </View>
-                            ) : (
+                            {/* Buffering rings the button rather than replacing it: you can still pause. */}
+                            <View style={styles.spinnerSlot}>
+                                {isBuffering && <BufferingRing color={colors.primary} />}
                                 <IconButton
                                     icon={isPlaying ? 'pause' : 'play'}
                                     onPress={togglePlayPause}
                                     accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
                                     iconSize={20}
                                 />
-                            )}
+                            </View>
                             <IconButton
                                 icon="skip-forward"
                                 onPress={handleSkipNext}
@@ -234,6 +232,10 @@ export function MiniPlayer() {
 }
 
 const noop = () => {};
+
+function BufferingRing({ color }: { color: string }) {
+    return <ActivityIndicator pointerEvents="none" style={StyleSheet.absoluteFill} size={metrics.touch - 8} color={color} />;
+}
 
 /**
  * The mini player's look without its behaviour: same styles, same layout, no gestures.
@@ -271,13 +273,10 @@ export function MiniPlayerReplica() {
                     </Text>
                 </View>
                 <View style={styles.actions}>
-                    {isBuffering ? (
-                        <View style={styles.spinnerSlot}>
-                            <ActivityIndicator size="small" color={colors.primary} />
-                        </View>
-                    ) : (
+                    <View style={styles.spinnerSlot}>
+                        {isBuffering && <BufferingRing color={colors.primary} />}
                         <IconButton icon={isPlaying ? 'pause' : 'play'} onPress={noop} accessibilityLabel="" iconSize={20} />
-                    )}
+                    </View>
                     <IconButton icon="skip-forward" onPress={noop} accessibilityLabel="" iconSize={20} />
                 </View>
             </View>

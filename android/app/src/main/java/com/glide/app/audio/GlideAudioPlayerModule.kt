@@ -157,6 +157,11 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                     emitPlaybackState()
                 }
 
+                // Pausing while buffering changes nothing above: isPlaying was already false.
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    emitPlaybackState()
+                }
+
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     emitTrackChanged()
                 }
@@ -224,10 +229,16 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         }
     }
 
+    /**
+     * Media3's isPlaying is false while buffering, so a play/pause button reading it offered
+     * Play mid-buffer and its tap played instead of pausing. Buffering towards playback counts.
+     */
+    private fun Player.willPlay() = isPlaying || (playWhenReady && playbackState == Player.STATE_BUFFERING)
+
     private fun emitPlaybackState() {
         val p = player ?: return
         val map = Arguments.createMap().apply {
-            putBoolean("isPlaying", p.isPlaying)
+            putBoolean("isPlaying", p.willPlay())
             putBoolean("isBuffering", p.playbackState == Player.STATE_BUFFERING)
             putBoolean("isEnded", p.playbackState == Player.STATE_ENDED)
             putInt("currentIndex", p.currentMediaItemIndex)
@@ -685,7 +696,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
             try {
                 val p = player ?: if (GlidePlayerHolder.audioPlayer != null) ensurePlayer() else null
                 val map = Arguments.createMap().apply {
-                    putBoolean("isPlaying", p?.isPlaying ?: false)
+                    putBoolean("isPlaying", p?.willPlay() ?: false)
                     putBoolean("isBuffering", p?.playbackState == Player.STATE_BUFFERING)
                     putInt("currentIndex", p?.currentMediaItemIndex ?: 0)
                     putDouble("position", (p?.currentPosition ?: 0L) / 1000.0)
