@@ -222,7 +222,10 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         putBoolean("saved", saved)
         putBoolean("group", c.type !is TdApi.ChatTypePrivate)
         putDouble("date", (c.lastMessage?.date ?: 0) * 1000.0)
-        putString("preview", preview(c.lastMessage))
+        // A film last: its name, as the newest-video hint names it, so a stale hint can't win.
+        val film = c.lastMessage?.let(::video)?.second
+        putBoolean("video", film != null)
+        putString("preview", film?.getString("name") ?: preview(c.lastMessage))
     }
 
     /** The last message in one line, as Telegram's chat list shows it. */

@@ -589,8 +589,9 @@ const ChatRow = React.memo(({ chat, video, onPress, preferFocus }: {
     chat: TgChat; video?: TgRecent; onPress: () => void; preferFocus?: boolean;
 }) => {
     const { colors } = useTheme();
-    // A chat with a recent video says so: its newest video instead of the last message.
-    const preview = video?.name || chat.preview || (chat.saved ? 'Forward videos here to watch them in Glide' : '');
+    // A chat with a recent video says so: its newest video instead of the last message. The last
+    // message is live and the hint is one search per visit, so a video last always wins.
+    const preview = (chat.video ? chat.preview : video?.name) || chat.preview || (chat.saved ? 'Forward videos here to watch them in Glide' : '');
     return (
         <Touchable
             onPress={onPress}

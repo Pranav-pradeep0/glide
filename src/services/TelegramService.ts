@@ -19,6 +19,8 @@ export interface TgChat {
     /** The last message: ms (0 none) and one line of it. */
     date: number;
     preview: string;
+    /** The last message is a video: [preview] is its name. */
+    video: boolean;
 }
 
 /** A chat's newest video, from one search across all chats: a hint, not every chat with videos. */
