@@ -11,15 +11,16 @@ import android.media.MediaScannerConnection
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.storage.StorageManager
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
+import android.webkit.MimeTypeMap
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.BaseActivityEventListener
+import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -32,6 +33,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @ReactModule(name = MediaStoreVideoModule.NAME)
 class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
@@ -113,15 +115,34 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    // A second init, after the observer: Kotlin initialises in source order, so registering
+    private val reconciling = AtomicBoolean(false)
+
+    private val legacyResumeListener = object : LifecycleEventListener {
+        override fun onHostResume() {
+            if (!reconciling.compareAndSet(false, true)) return
+            BackgroundWork.submit {
+                try { reconcileLegacyIndex() } finally { reconciling.set(false) }
+            }
+        }
+        override fun onHostPause() {}
+        override fun onHostDestroy() {}
+    }
+
+    // A second init, after the observer and listener: Kotlin initialises in source order, so registering
     // from the first one passed a null observer and crashed the module on construction.
     init {
         reactContext.contentResolver.registerContentObserver(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, libraryObserver
         )
+        // Android 10 and below only (see reconcileLegacyIndex). Changes outside Glide happen
+        // while it is away, so each return checks; added while resumed, this runs at once.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            reactContext.addLifecycleEventListener(legacyResumeListener)
+        }
     }
 
     override fun invalidate() {
+        reactContext.removeLifecycleEventListener(legacyResumeListener)
         reactContext.contentResolver.unregisterContentObserver(libraryObserver)
         mainHandler.removeCallbacks(announceLibraryChange)
         super.invalidate()
@@ -335,17 +356,57 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
     }
 
     private fun rescanVolumes() {
-        val roots = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            reactContext.getSystemService(StorageManager::class.java).storageVolumes.mapNotNull { it.directory?.path }
-        } else {
-            @Suppress("DEPRECATION")
-            listOf(Environment.getExternalStorageDirectory().path)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            reconcileLegacyIndex()
+            return
         }
-        val done = CountDownLatch(roots.size)
-        MediaScannerConnection.scanFile(reactContext, roots.toTypedArray(), null) { _, _ -> done.countDown() }
+        val roots = reactContext.getSystemService(StorageManager::class.java).storageVolumes.mapNotNull { it.directory?.path }
+        scanAndWait(roots)
+    }
+
+    private fun scanAndWait(paths: List<String>) {
+        if (paths.isEmpty()) return
+        val done = CountDownLatch(paths.size)
+        MediaScannerConnection.scanFile(reactContext, paths.toTypedArray(), null) { _, _ -> done.countDown() }
         // ponytail: fixed cap; a slow card just returns the library as it stands so far.
         done.await(30, TimeUnit.SECONDS)
     }
+
+    /**
+     * Android 10 and below keep the old MediaScanner, which never notices a folder renamed or
+     * a file copied without a scan: MediaStore keeps the old path until the next mount or
+     * reboot, so the observer has nothing to report, and scanning a folder does not recurse.
+     * Scanning each file does work: a gone path drops its row, a new one is added, and the
+     * observer then reloads every list. (Android 11+ keeps MediaStore in step by itself.)
+     *
+     * ponytail: walks every folder on each resume (a stat per file, background lane). Fine for
+     * a phone or TV library; keep a last-walk time per volume if a huge USB drive makes it slow.
+     */
+    private fun reconcileLegacyIndex() {
+        val indexed = HashSet<String>()
+        val paths = ArrayList<String>()
+        reactContext.contentResolver.query(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Video.Media.DATA), null, null, null
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val path = c.getString(0) ?: continue
+                if (File(path).exists()) indexed += path else paths += path
+            }
+        }
+        // Each app-files dir sits under its volume's root: primary storage and any SD card.
+        val roots = reactContext.getExternalFilesDirs(null).filterNotNull().map { it.path.substringBefore("/Android/data/") }
+        for (root in roots) {
+            // Hidden and .nomedia folders never become videos, so scanning them would repeat forever.
+            File(root).walkTopDown()
+                .onEnter { it.path != "$root/Android" && !it.name.startsWith(".") && !File(it, ".nomedia").exists() }
+                .filter { it.isFile && !it.name.startsWith(".") && it.path !in indexed && isVideoName(it.name) }
+                .forEach { paths += it.path }
+        }
+        scanAndWait(paths)
+    }
+
+    private fun isVideoName(name: String) = MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())?.startsWith("video/") == true
 
     /**
      * [rescan] first asks Android to re-index every storage volume. Files written by some

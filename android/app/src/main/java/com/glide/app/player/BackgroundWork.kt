@@ -44,6 +44,11 @@ object BackgroundWork {
 
     fun submitLong(promise: Promise, block: () -> Unit) = long.execute(guarded(promise, block))
 
+    /** Library work nobody awaits: a failure is logged, there is no Promise to settle. */
+    fun submit(block: () -> Unit) = quick.execute {
+        try { block() } catch (t: Throwable) { Log.e("BackgroundWork", "task failed", t) }
+    }
+
     /**
      * Callers catch [Exception], but an [Error] -- OOM on a huge library or a 4K frame,
      * a class that failed to initialise -- would escape to the pool thread and kill the
