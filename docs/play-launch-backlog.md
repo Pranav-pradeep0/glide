@@ -14,7 +14,19 @@ RN layer, competitor gap). Line numbers are from that date; re-check before edit
 - Play developer account: created on owner's personal Google account, in verification.
 - Done: `3da5cef` screens 4.30.0 (fixes reanimated #10734 SIGSEGV; reanimated 4.7.1 now unblocked).
 
-## RESUME HERE (state at end of 2026-10-23)
+## RESUME HERE (state at 2026-11-13)
+
+- 3.1.1 is in Closed testing: 12 testers opted in since 2026-11-11; apply for production
+  ~2026-11-25 (owner adds 2-3 spare testers so one drop-out doesn't reset the 14 days).
+- Done: Data safety uploaded, privacy page has the Telegram section, store screenshots uploaded,
+  old keys revoked, TV pass (Telegram + shares) all working.
+- Owner, Console: App content → Foreground service permissions → declare `dataSync`
+  (`TelegramSaveService`, text in docs/telegram.md "Other Console forms") with a short video.
+- Next code work (new session): the library-refresh bug below, then the docs/improvements.md
+  fixes for a 3.1.2 closed-test release: landscape-player panel Back, playlist pick at 0:00 not
+  saved, MiniPlayer can't pause while buffering, library view mode/sort reset every launch.
+
+## State at end of 2026-10-23
 
 - v2.6.0: version bumped, pushed, tagged. CI keeps the AAB as a workflow artifact (no
   `PLAY_SERVICE_ACCOUNT_JSON` yet): upload it to Closed testing by hand. `PLAY_RELEASE_STATUS=draft` set.

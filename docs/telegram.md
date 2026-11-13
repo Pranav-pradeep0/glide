@@ -495,11 +495,10 @@ first. If it matters later, a short debounce of new offsets is the lever (reopen
 - Data safety: `Desktop/data_safety_upload.csv`, made from the Console export. Phone number filled
   in (collected, optional, account management, not ephemeral); email's purpose is app
   functionality only (it arrives only when a user emails a crash report); "accounts created
-  outside the app" = yes, Other, Telegram. Upload only once main is pushed: the Telegram section of
-  `privacy.html` (6440a1c) must be live first.
+  outside the app" = yes, Other, Telegram. Uploaded (owner, 2026-11-13); the Telegram section of
+  `privacy.html` is live.
 - Store art: 8 slides and the feature graphic in `Desktop/glide-play-screenshots/posters-3.1`.
-  Home and Network still need recapturing on the owner's user (sources connected, a share's
-  folders listed).
+  All uploaded to Play (2026-11-13).
 
 **2026-11-13: TV pass done by the owner** (Telegram QR sign-in, focus, play, seek, download;
 Session C notification/queue/delete; Session D D-pad and the keyboard check): all working.
