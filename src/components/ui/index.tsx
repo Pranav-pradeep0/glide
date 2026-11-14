@@ -496,20 +496,20 @@ export function ListGroup({ children, onPlayer, inset, style }: ListGroupProps) 
     return (
         <View style={[styles.group, style]}>
             {rows.map((row, i) => (
-                <View
-                    key={i}
-                    style={[
-                        styles.groupItem,
-                        { backgroundColor: bg },
-                        i === 0 && styles.groupFirst,
-                        i === rows.length - 1 && styles.groupLast,
-                    ]}
-                >
+                <View key={i} style={[groupItemStyle(i, rows.length), { backgroundColor: bg }]}>
                     {row}
                 </View>
             ))}
         </View>
     );
+}
+
+/**
+ * ListGroup's row shape, for a list too long for one: wrap each FlatList row in a View with this,
+ * a `fill` background, and 2 dp separators.
+ */
+export function groupItemStyle(index: number, count: number): StyleProp<ViewStyle> {
+    return [styles.groupItem, index === 0 && styles.groupFirst, index === count - 1 && styles.groupLast];
 }
 
 interface ListRowProps {

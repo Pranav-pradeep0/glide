@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FlatList, Linking, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { ListRow, Sheet } from '@/components/ui';
+import { groupItemStyle, ListGroup, ListRow, Sheet } from '@/components/ui';
 import { useTheme } from '@/hooks/useTheme';
 import { metrics, type } from '@/theme/theme';
 import licences from '@/data/licences.json';
@@ -37,14 +37,14 @@ export function LicencesSheet({ visible, onClose }: { visible: boolean; onClose:
                         <Text style={[type.body, { color: colors.text }]}>{open.notice}</Text>
                     ) : null}
                     {open.source ? (
-                        <View style={[styles.row, { backgroundColor: colors.fill }]}>
+                        <ListGroup inset>
                             <ListRow
                                 icon="external-link"
                                 title="Source code"
                                 caption={open.source}
                                 onPress={() => Linking.openURL(open.source!).catch(() => {})}
                             />
-                        </View>
+                        </ListGroup>
                     ) : null}
                     <Text selectable style={[type.caption, { color: colors.textSecondary }]}>
                         {texts[open.text]}
@@ -56,8 +56,8 @@ export function LicencesSheet({ visible, onClose }: { visible: boolean; onClose:
                     data={licences.entries as Entry[]}
                     keyExtractor={(item) => item.name}
                     ItemSeparatorComponent={Gap}
-                    renderItem={({ item }) => (
-                        <View style={[styles.row, { backgroundColor: colors.fill }]}>
+                    renderItem={({ item, index }) => (
+                        <View style={[groupItemStyle(index, licences.entries.length), { backgroundColor: colors.fill }]}>
                             <ListRow title={item.name} caption={item.license} chevron onPress={() => setOpen(item)} />
                         </View>
                     )}
@@ -71,6 +71,5 @@ const Gap = () => <View style={styles.gap} />;
 
 const styles = StyleSheet.create({
     text: { gap: metrics.space.md, paddingBottom: metrics.space.lg },
-    row: { borderRadius: 4, overflow: 'hidden' },
     gap: { height: 2 },
 });

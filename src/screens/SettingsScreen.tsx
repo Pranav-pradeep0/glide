@@ -25,6 +25,7 @@ import { LicencesSheet } from '@/components/LicencesSheet';
 import { TvStepper } from '@/components/ui/TvStepper';
 import {
     Chip,
+    groupItemStyle,
     IconButton,
     ListGroup,
     ListRow,
@@ -718,13 +719,7 @@ export default function SettingsScreen() {
                             ? settings.defaultAudioLanguage === null
                             : settings.defaultAudioLanguage === item.name;
                         return (
-                            // ListGroup's corners, kept in a FlatList for the long list.
-                            <View style={[
-                                styles.languageRow,
-                                index === 0 && styles.groupFirst,
-                                index === filteredLanguages.length - 1 && styles.groupLast,
-                                { backgroundColor: colors.fill },
-                            ]}>
+                            <View style={[groupItemStyle(index, filteredLanguages.length), { backgroundColor: colors.fill }]}>
                                 <ListRow
                                     title={item.name}
                                     caption={item.code !== 'auto' ? item.nativeName : undefined}
@@ -877,9 +872,6 @@ const styles = StyleSheet.create({
         marginBottom: metrics.space.sm,
     },
     searchInput: { flex: 1, paddingVertical: 0, fontWeight: '400' },
-    languageRow: { borderRadius: 4, overflow: 'hidden' },
-    groupFirst: { borderTopLeftRadius: metrics.radius.card, borderTopRightRadius: metrics.radius.card },
-    groupLast: { borderBottomLeftRadius: metrics.radius.card, borderBottomRightRadius: metrics.radius.card },
     languageGap: { height: 2 },
     foldersEmpty: { textAlign: 'center', paddingVertical: metrics.space.xxl },
     sheetList: { paddingTop: metrics.space.xs, paddingBottom: metrics.space.sm },
