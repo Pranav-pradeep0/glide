@@ -1192,7 +1192,9 @@ const styles = StyleSheet.create({
     switchOn: { borderRadius: SWITCH.h / 2 },
     switchThumb: { width: SWITCH.thumb, height: SWITCH.thumb, borderRadius: SWITCH.thumb / 2 },
 
-    sectionLabel: { paddingHorizontal: metrics.space.lg + metrics.space.md, paddingTop: metrics.space.xl, paddingBottom: metrics.space.sm },
+    // Well clear of the group above and 12 dp over its own: the title reads as the next group's.
+    // Inset like the rows, so it lines up with their icons.
+    sectionLabel: { paddingHorizontal: metrics.space.lg, paddingTop: metrics.space.xxl, paddingBottom: metrics.space.md },
     group: { gap: 2 },
     groupItem: { borderRadius: 4, overflow: 'hidden' },
     groupFirst: { borderTopLeftRadius: metrics.radius.card, borderTopRightRadius: metrics.radius.card },

@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Image, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NavigationProp as TabNavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Feather from '@react-native-vector-icons/feather';
 import { FlashList } from '@shopify/flash-list';
 import { SkeletonList } from '@/components/Skeleton';
 import { IconButton, IconName, SortButton, Touchable } from '@/components/ui';
 import { EmptyState, ListHeader, SectionTitle, getRelativeTime, joinMeta, listContentStyle } from '@/components/VideoRow';
-import { RootStackParamList, VideoFolder } from '@/types';
+import { MainTabParamList, RootStackParamList, VideoFolder } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbums } from '@/hooks/useMediaService';
 import { useThumbnail } from '@/hooks/useThumbnails';
@@ -19,7 +19,7 @@ import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate
 import { metrics, type } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
 import { SourceKind } from '@/utils/videoSource';
-import { usePref } from '@/storage/prefs';
+import { useHiddenFolders, usePref } from '@/storage/prefs';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -193,6 +193,7 @@ export default function FoldersScreen() {
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<NavigationProp>();
+    const tabs = useNavigation<TabNavigationProp<MainTabParamList>>();
 
     const { albums, loading, refetch } = useAlbums();
     const videoAccess = usePermissionStore((s) => s.video.access);
@@ -214,13 +215,14 @@ export default function FoldersScreen() {
         setTimeout(scrollToFolders, 100);
     }, [scrollToFolders, setSortBy]);
 
+    const [hiddenFolders] = useHiddenFolders();
     const sortedAlbums = useMemo(() => {
-        return [...albums].sort((a, b) =>
+        return albums.filter(a => !hiddenFolders.has(a.id)).sort((a, b) =>
             sortBy === 'count' ? b.count - a.count
                 : sortBy === 'date' ? b.newestTimestamp - a.newestTimestamp
                 : a.title.localeCompare(b.title)
         );
-    }, [albums, sortBy]);
+    }, [albums, sortBy, hiddenFolders]);
 
     const handleAlbumPress = useCallback((album: VideoFolder) => {
         navigation.navigate('AlbumVideos', {
@@ -286,7 +288,9 @@ export default function FoldersScreen() {
                     {sources}
                     {videoAccess === 'denied'
                         ? <PermissionGate kind="video" />
-                        : <EmptyState text="No local videos found" action="Refresh" onAction={refetch} />}
+                        : albums.length > 0
+                            ? <EmptyState icon="eye-off" text="All folders are hidden from Home" action="Choose folders" onAction={() => tabs.navigate('Settings')} />
+                            : <EmptyState text="No local videos found" action="Refresh" onAction={refetch} />}
                 </ScrollView>
             ) : <>
                 <Touchable

@@ -45,6 +45,8 @@ import { formatFileSize } from '@/utils/formatUtils';
 import { IS_TV } from '@/utils/tv';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types';
+import { useAlbums } from '@/hooks/useMediaService';
+import { useHiddenFolders } from '@/storage/prefs';
 
 const AnimatedText = Animated.createAnimatedComponent(Text);
 const noop = () => {};
@@ -218,6 +220,7 @@ export default function SettingsScreen() {
     const setCrashReportsEnabled = useAppStore((state) => state.setCrashReportsEnabled);
     const clearAllHistory = useVideoHistoryStore((state) => state.clearAllHistory);
     const [languageModalVisible, setLanguageModalVisible] = React.useState(false);
+    const [foldersVisible, setFoldersVisible] = React.useState(false);
     const [licencesVisible, setLicencesVisible] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const [shakeTestEnabled, setShakeTestEnabled] = React.useState(false);
@@ -376,7 +379,7 @@ export default function SettingsScreen() {
                 contentContainerStyle={[styles.content, IS_TV && styles.contentTv, { paddingTop: insets.top + metrics.space.lg }]}
                 keyboardShouldPersistTaps="handled"
             >
-                <Text style={[type.title, styles.title, { color: colors.text }]} accessibilityRole="header">Settings</Text>
+                <Text style={[type.title, { color: colors.text }]} accessibilityRole="header">Settings</Text>
 
                 <SectionLabel title="Playback" />
                 <ListGroup>
@@ -450,6 +453,11 @@ export default function SettingsScreen() {
                             onChange: (val) => setPipBrightnessMode(val ? 'system' : 'player'),
                         }}
                     />}
+                </ListGroup>
+
+                <SectionLabel title="Home" />
+                <ListGroup>
+                    <HomeFoldersRow onPress={() => setFoldersVisible(true)} />
                 </ListGroup>
 
                 {/* Shaking and vibration need a phone in hand. */}
@@ -705,12 +713,18 @@ export default function SettingsScreen() {
                     keyExtractor={(item) => item.code}
                     keyboardShouldPersistTaps="handled"
                     ItemSeparatorComponent={Gap}
-                    renderItem={({ item }) => {
+                    renderItem={({ item, index }) => {
                         const isSelected = item.code === 'auto'
                             ? settings.defaultAudioLanguage === null
                             : settings.defaultAudioLanguage === item.name;
                         return (
-                            <View style={[styles.languageRow, { backgroundColor: colors.fill }]}>
+                            // ListGroup's corners, kept in a FlatList for the long list.
+                            <View style={[
+                                styles.languageRow,
+                                index === 0 && styles.groupFirst,
+                                index === filteredLanguages.length - 1 && styles.groupLast,
+                                { backgroundColor: colors.fill },
+                            ]}>
                                 <ListRow
                                     title={item.name}
                                     caption={item.code !== 'auto' ? item.nativeName : undefined}
@@ -726,6 +740,10 @@ export default function SettingsScreen() {
                 />
             </Sheet>
 
+            <Sheet visible={foldersVisible} onClose={() => setFoldersVisible(false)} title="Folders on Home" maxHeight={0.8}>
+                <HomeFolders maxHeight={windowHeight * 0.65} />
+            </Sheet>
+
             <LicencesSheet visible={licencesVisible} onClose={() => setLicencesVisible(false)} />
         </View>
     );
@@ -733,12 +751,83 @@ export default function SettingsScreen() {
 
 const Gap = () => <View style={styles.languageGap} />;
 
+/**
+ * "Folders on Home", with how many show. Its own component: the library loading in (cached, Home
+ * already read it) re-renders this row, not all of Settings.
+ */
+function HomeFoldersRow({ onPress }: { onPress: () => void }) {
+    const { albums } = useAlbums();
+    const [hidden] = useHiddenFolders();
+    // Only folders still there count: a hidden one that is gone (card out) is not "hidden" now.
+    const shown = albums.filter(a => !hidden.has(a.id)).length;
+    return (
+        <ListRow
+            icon="folder"
+            title="Folders on Home"
+            value={albums.length === 0 ? undefined : shown === albums.length ? 'All' : `${shown} of ${albums.length}`}
+            chevron
+            onPress={onPress}
+        />
+    );
+}
+
+/**
+ * Every local folder, ticked when Home shows it: the grouped, ticked list of the player's track
+ * pickers. Hidden ones still turn up in Search and Recents.
+ */
+function HomeFolders({ maxHeight }: { maxHeight: number }) {
+    const { colors } = useTheme();
+    const { albums, loading } = useAlbums();
+    const [hidden, setHidden] = useHiddenFolders();
+    const sorted = React.useMemo(() => [...albums].sort((a, b) => a.title.localeCompare(b.title)), [albums]);
+    if (sorted.length === 0) {
+        return (
+            <Text style={[type.body, styles.foldersEmpty, { color: colors.textSecondary }]}>
+                {loading ? 'Loading folders…' : 'No local folders found'}
+            </Text>
+        );
+    }
+    // To keep only a few: Hide all, then tick those.
+    const allShown = sorted.every(a => !hidden.has(a.id));
+    // ponytail: not virtualised; phones have tens of video folders. FlatList if hundreds show up.
+    return (
+        <ScrollView style={{ maxHeight }} contentContainerStyle={styles.sheetList} showsVerticalScrollIndicator={false}>
+            <Text style={[type.caption, styles.sheetHint, { color: colors.textSecondary }]}>
+                Ticked folders show on Home. Search and Recents still find every video.
+            </Text>
+            <ListGroup inset>
+                <ListRow
+                    icon={allShown ? 'eye-off' : 'eye'}
+                    title={allShown ? 'Hide all' : 'Show all'}
+                    preferFocus
+                    onPress={() => setHidden(sorted.map(a => a.id), allShown)}
+                />
+            </ListGroup>
+            <ListGroup inset style={styles.sheetGroup}>
+                {sorted.map(item => {
+                    const shown = !hidden.has(item.id);
+                    return (
+                        <ListRow
+                            key={item.id}
+                            title={item.title}
+                            caption={`${item.count} video${item.count !== 1 ? 's' : ''}`}
+                            selected={shown}
+                            // Ticks are not a single choice: focus starts on Show/Hide all.
+                            preferFocus={false}
+                            onPress={() => setHidden([item.id], shown)}
+                        />
+                    );
+                })}
+            </ListGroup>
+        </ScrollView>
+    );
+}
+
 const styles = StyleSheet.create({
     flex: { flex: 1 },
     content: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl },
     // TV overscan: keep rows clear of the screen edges.
     contentTv: { paddingHorizontal: 48 },
-    title: { marginBottom: metrics.space.sm, paddingHorizontal: metrics.space.xs },
     gap: { marginTop: metrics.space.sm },
     regular: { fontWeight: '400' },
     tnum: { fontVariant: ['tabular-nums'] },
@@ -789,5 +878,11 @@ const styles = StyleSheet.create({
     },
     searchInput: { flex: 1, paddingVertical: 0, fontWeight: '400' },
     languageRow: { borderRadius: 4, overflow: 'hidden' },
+    groupFirst: { borderTopLeftRadius: metrics.radius.card, borderTopRightRadius: metrics.radius.card },
+    groupLast: { borderBottomLeftRadius: metrics.radius.card, borderBottomRightRadius: metrics.radius.card },
     languageGap: { height: 2 },
+    foldersEmpty: { textAlign: 'center', paddingVertical: metrics.space.xxl },
+    sheetList: { paddingTop: metrics.space.xs, paddingBottom: metrics.space.sm },
+    sheetHint: { paddingHorizontal: metrics.space.lg, paddingBottom: metrics.space.md },
+    sheetGroup: { marginTop: metrics.space.md },
 });
