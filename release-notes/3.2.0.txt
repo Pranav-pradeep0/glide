@@ -1,0 +1,8 @@
+Glide 3.2: choose your Home folders.
+- Choose which folders show on Home, in Settings
+- Grid or list, sort and each video's colour enhancement are remembered
+- Continue watching no longer looks see-through; closing it or Recap keeps playing
+- After a break, Continue watching shows on return, not after Play
+- Renamed folders and copied videos appear without a refresh (Android 10 and older, TV)
+- Music can be paused while loading
+- A Telegram chat's newest film shows when it's the last message
