@@ -389,7 +389,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             const tracks = data.audioTracks
                 .filter(t => t.id !== -1)
                 // language too: without it every carried track looked untagged and matched by position.
-                .map(t => ({ id: t.id, name: t.name || `Track ${t.id}`, language: t.language, isSelected: Boolean(t.isSelected) }));
+                // formatId: auto sync names the heard track to native by it, since id is the player's order.
+                .map(t => ({ id: t.id, name: t.name || `Track ${t.id}`, language: t.language, isSelected: Boolean(t.isSelected), formatId: t.formatId }));
             if (__DEV__) {console.log('[LOAD] audioTracks:', tracks.map(t => `${t.name}${t.isSelected ? ' (selected)' : ''}`).join(', '));}
             onAudioTracksLoaded(tracks);
         }

@@ -17,18 +17,22 @@ import kotlin.math.sqrt
  *
  * 1. [speechLevels]: the audio, band-passed to the speech band (300-3000 Hz), as loudness in
  *    dB every 10 ms, minus the loudness of the surrounding [DETREND_S] so a music bed or a
- *    loud scene does not count as speech.
- * 2. [align]: slide the cue intervals across that loudness, +/-[MAX_SHIFT_S]. At each lag the
- *    score is mean loudness inside cues minus mean loudness outside them, which prefix sums
- *    make O(cues) per lag instead of O(frames). The best lag is the delay.
- * 3. The same search at the common frame-rate ratios ([RATIOS]) catches subtitles timed for a
- *    different frame rate, whose error grows through the film and no constant delay can fix.
- *    [confirmRatio] names the exact ratio from a second window far away.
+ *    loud scene does not count as speech. Where YAMNet ran, its Speech score ([scoreFrames]) too.
+ * 2. [align] over short [Clip]s spread through the film: in each clip, slide the cue intervals
+ *    across the signal, +/-[MAX_SHIFT_S]; at each lag the score is mean level inside cues minus
+ *    mean level outside, as a robust z. A clip's loudness and Speech curves are averaged (they
+ *    hear the same dialogue, so they count once) and the clips' curves summed / sqrt(count):
+ *    the true lag lines up in every clip, chance peaks do not. Every ratio in [RATIOS] is tried
+ *    the same way, so a subtitle timed for another frame rate is retimed exactly.
+ * 3. A mid-film edit (the delay changes partway) splits the clips into two camps; [align] then
+ *    answers for the viewer's side only, or refuses.
  *
- * Where loudness is unsure, YAMNet's Speech score ([scoreFrames]) goes through the same [align].
- *
- * Pure arithmetic, so [SubtitleAlignerTest] runs it on the JVM. The bridge is
- * [SubtitleSyncModule].
+ * Tuned on 12 real films with scripts/subsync-bench.py (8 x 60 s clips): 94.8% of shifted
+ * subtitles right (one more 0.32 s off), 44/48 frame-rate drifts retimed, none wrong; no other
+ * film's subtitle applied (0/132); mid-film edits 49/72 right for the viewer's side, the rest
+ * refused. Loudness alone (YAMNet unavailable): 80.2%, likewise none wrong. Pure arithmetic, so
+ * [SubtitleAlignerTest] runs it on the JVM.
+ * The bridge is [SubtitleSyncModule].
  */
 internal object SubtitleAligner {
 
@@ -36,69 +40,46 @@ internal object SubtitleAligner {
     /** On 12 real films, +/-150 s found 130 s errors with no more refusals or false matches than +/-60. */
     const val MAX_SHIFT_S = 150.0
 
-    /**
-     * The least audio worth aligning. Not 2 * [MAX_SHIFT_S]: that is the whole 300 s window, and
-     * a decoder's first sample lands a few ms after the window starts, which would refuse them all.
-     */
-    const val MIN_AUDIO_S = 120.0
-
     /** Subtitle timed at one rate, video at another: cue times scale by these. */
     val RATIOS = doubleArrayOf(1.0, 25 / 23.976, 23.976 / 25, 25.0 / 24, 24.0 / 25, 24 / 23.976, 23.976 / 24)
 
     /**
-     * Apply only when the peak stands this many robust sigmas above the typical lag, and no
-     * other lag (further than [RUNNER_UP_GUARD_S] away) comes within [MAX_RUNNER_UP] of it.
-     * Both guard against confidently applying a wrong delay, which is worse than none.
+     * Apply only when the summed peak stands this many robust sigmas up, and no other lag (further
+     * than [RUNNER_UP_GUARD_S] away) reaches [MAX_RUNNER_UP] of it. A wrong delay applied is worse
+     * than none: on the benchmark, other films' subtitles peaked at up to z 5.9.
      */
     const val MIN_PEAK_Z = 6.0
-    const val MAX_RUNNER_UP = 0.75
+    const val MAX_RUNNER_UP = 0.6
     const val RUNNER_UP_GUARD_S = 1.0
 
-    /**
-     * The other way to be sure: each half of the window, searched on its own over the full
-     * range, lands on the same delay. A chance peak lands anywhere in +/-[MAX_SHIFT_S], so two
-     * independent ones agreeing within [AGREE_TOLERANCE_S] is ~0.5% likely; real dialogue in a
-     * busy mix often scores a low z yet agrees every time.
-     */
-    const val AGREE_MIN_Z = 2.0
-    const val AGREE_TOLERANCE_S = 0.25
+    /** A frame-rate answer had six more chances at a fluke than a plain delay: it needs this much more z. */
+    const val RATIO_EXTRA_Z = 1.0
 
-    /**
-     * [confirmRatio]: how close the two windows' delays must be at a ratio. At a ratio 0.1% off
-     * (25/24 for 25/23.976) the delay creeps 1 ms per second of film, so windows 1200 s apart
-     * find delays at least 1.2 s apart; at the right ratio they differ by the peak's jitter only.
-     * On 12 real films (scripts/subsync-bench.py) 0.4 confirmed 99-100% of 25 fps drifts with no
-     * wrong ratio; 0.25 lost a tenth of them to peak jitter.
-     */
-    const val RATIO_AGREE_S = 0.4
+    /** A clip scoring this at a lag backs it; a clip whose own peak is [DISAGREE_Z] elsewhere opposes it. */
+    const val SUPPORT_Z = 2.0
+    const val DISAGREE_Z = 5.0
+
+    /** A frame-rate answer misses a clip whose own peak this tall, within 1.5 s, is further than [TIGHT_S] off. */
+    const val TIGHT_Z = 6.0
+    const val TIGHT_S = 0.25
 
     /** Long enough to keep a line of dialogue, short enough to drop a scene's music bed. */
     const val DETREND_S = 8.0
 
-    /** Minimum speech-cue time that must overlap the audio, or the score means nothing. */
-    const val MIN_CUE_SECONDS = 20.0
+    /** Speech-cue time that must overlap a clip at a lag, as a share of the clip, or that lag means nothing. */
+    private const val MIN_CUE_SHARE = 1 / 15.0
+
+    /** A clip of the film: [energy] from [speechLevels], [speech] from [scoreFrames] or null, both from [startS]. */
+    class Clip(val startS: Double, val energy: FloatArray, val speech: FloatArray? = null)
 
     data class Result(
         /** Positive = show subtitles later, the app's `subtitleDelay` convention. */
         val delayS: Double,
+        /** A cue at subtitle time c belongs at c * ratio + delayS. */
         val ratio: Double,
         val peakZ: Double,
         val runnerUp: Double,
-        val plainDelayS: Double = delayS,
-        val plainPeakZ: Double = peakZ,
-        val plainRunnerUp: Double = runnerUp,
-        /** Both halves of the window found this delay on their own. */
-        val agreed: Boolean = false,
-        /** A second window found the same delay at this ratio ([confirmRatio]): its delay. */
-        val secondDelayS: Double? = null,
-    ) {
-        /** The peak stands out on its own, or both halves agree. */
-        private val fits get() = agreed || (peakZ >= MIN_PEAK_Z && runnerUp <= MAX_RUNNER_UP)
-        /** Safe to apply [delayS] at [ratio] as they are: a plain delay that fits, or a confirmed ratio. */
-        val confident get() = secondDelayS != null || (fits && ratio == 1.0)
-        /** The best fit needs a frame-rate change no second window has confirmed: apply nothing. */
-        val drift get() = fits && ratio != 1.0 && secondDelayS == null
-    }
+    )
 
     /** 16-bit mono PCM to speech-band loudness in dB, one value per [FRAME_S]. */
     fun speechLevels(pcm: ShortArray, sampleRate: Int): FloatArray {
@@ -138,39 +119,131 @@ internal object SubtitleAligner {
     }
 
     /**
-     * Where the cues ([starts]/[ends], seconds of video time) best line up with [levels], whose
-     * first frame is at [windowStartS]. Null if too little cue time overlaps the audio.
-     * [clampDb] floors dB levels; off for a 0..1 score series ([scoreFrames]), which it would flatten.
+     * The subtitle delay and ratio that line [starts]/[ends] (speech cues, subtitle seconds) up
+     * with [clips], for a viewer at [positionS]; null when nothing is sure enough to apply.
      */
-    fun align(
-        levels: FloatArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, clampDb: Boolean = true,
-    ): Result? {
-        if (levels.size < MIN_AUDIO_S / FRAME_S) return null
-        val a = standardised(levels, clampDb) ?: return null
-        val prefix = prefixSums(a, 0, a.size)
+    fun align(clips: List<Clip>, starts: DoubleArray, ends: DoubleArray, positionS: Double): Result? {
+        // Every clip at every ratio, on all cores: independent, and most of the run's time.
+        val jobs = RATIOS.flatMap { q -> clips.indices.map { q to it } }
+        val computed: List<DoubleArray?> = jobs.parallelStream()
+            .map { (q, i) -> clipCurve(clips[i], starts, ends, q) }
+            .collect(java.util.stream.Collectors.toList())
+        val curves = RATIOS.withIndex().associate { (r, q) -> q to computed.subList(r * clips.size, (r + 1) * clips.size) }
+        val all = clips.indices.toList()
+        val a = solve(curves, all) ?: return null
+        val opposed = all.filter { i -> curves.getValue(a.ratio)[i]?.let { disagrees(it, a.peak) } == true }
+        val (answer, kept) = if (opposed.isEmpty()) a to all
+        else viewerSide(curves, clips, positionS, a, opposed) ?: return null
+        if (!answer.fits || (answer.ratio != 1.0 && answer.z < MIN_PEAK_Z + RATIO_EXTRA_Z)) return null
+        // One of the two clips nearest the viewer must back it: an edit on a side with no clear
+        // dialogue opposes nothing, and would otherwise hand the viewer the other side's delay.
+        val chosen = curves.getValue(answer.ratio)
+        val near = kept.filter { chosen[it] != null }.sortedBy { abs(centre(clips[it]) - positionS) }.take(2)
+        if (near.none { at(chosen[it]!!, answer.peak) >= SUPPORT_Z }) return null
+        // A frame-rate answer must sit on every clip's own sharp peak: a 24/23.976 retime (0.1%)
+        // can pass for a mid-film step of a second or two, and then misses the clips at the ends.
+        if (answer.ratio != 1.0 && kept.any { chosen[it]?.let { c -> !tight(c, answer.peak) } == true }) return null
+        return Result(answer.delayS, answer.ratio, answer.z, answer.runnerUp)
+    }
 
-        // A plain delay wins whenever it fits. 24/23.976 is only 0.1% from 1, so inside one window
-        // it scores about the same as a delay, and letting the higher z win would randomly call
-        // an in-sync subtitle "drifting". Other ratios are only for when no delay fits at all.
-        val plain = alignAt(prefix, windowStartS, starts, ends, 1.0)
-        if (plain?.confident == true) return plain
-        if (plain != null && halvesAgree(a, windowStartS, starts, ends, plain)) return plain.copy(agreed = true)
-
-        val best = (listOfNotNull(plain) + RATIOS.drop(1).mapNotNull { alignAt(prefix, windowStartS, starts, ends, it) })
-            .maxByOrNull { it.peakZ } ?: return null
-        return if (plain == null) best
-        else best.copy(plainDelayS = plain.delayS, plainPeakZ = plain.peakZ, plainRunnerUp = plain.runnerUp)
+    /** The clip's sharpest peak within 1.5 s of [peak], if it stands [TIGHT_Z] tall, is within [TIGHT_S] of it. */
+    private fun tight(c: DoubleArray, peak: Int): Boolean {
+        var own = max(0, peak - 150)
+        for (i in own..min(c.size - 1, peak + 150)) if (c[i] > c[own]) own = i
+        return c[own] < TIGHT_Z || abs(own - peak) <= (TIGHT_S / FRAME_S).roundToInt()
     }
 
     /**
-     * Loudness floored so digital silence does not dominate, minus its moving average over
-     * [DETREND_S] -- a music bed or a loud scene lifts cues and gaps alike, and only the change
-     * where speech starts and stops should score -- then standardised.
+     * Some clips are sure of another lag. If they and the rest split the film at one point (an
+     * edit), the answer from the clips on the viewer's side, with those clips; else null.
      */
-    private fun standardised(levels: FloatArray, clampDb: Boolean = true): DoubleArray? {
+    private fun viewerSide(
+        curves: Map<Double, List<DoubleArray?>>, clips: List<Clip>, positionS: Double, a: Solved, opposed: List<Int>,
+    ): Pair<Solved, List<Int>>? {
+        val b = (if (opposed.size >= 2) solve(curves, opposed) else null) ?: return null
+        // Each clip votes for the answer it backs more, if it backs either.
+        val vote = clips.indices.map { i ->
+            val va = curves.getValue(a.ratio)[i]?.let { at(it, a.peak) } ?: 0.0
+            val vb = curves.getValue(b.ratio)[i]?.let { at(it, b.peak) } ?: 0.0
+            if (max(va, vb) < SUPPORT_Z) null else va >= vb
+        }
+        val voters = clips.indices.filter { vote[it] != null }
+        if (voters.zipWithNext().count { (x, y) -> vote[x] != vote[y] } != 1) return null
+        val near = voters.minBy { abs(centre(clips[it]) - positionS) }
+        val side = if (vote[near] == true) a else b
+        val others = voters.filter { vote[it] != vote[near] }
+        val kept = clips.indices.filter { if (near < others.first()) it < others.first() else it > others.last() }
+        val r = solve(curves, kept) ?: return null
+        return if (r.ratio == side.ratio && abs(r.delayS - side.delayS) <= 0.3) r to kept else null
+    }
+
+    private class Solved(val ratio: Double, val peak: Int, val delayS: Double, val z: Double, val runnerUp: Double) {
+        val fits get() = z >= MIN_PEAK_Z && runnerUp <= MAX_RUNNER_UP
+    }
+
+    /** The best ratio and lag over clips [idx], their curves summed / sqrt(count). */
+    private fun solve(curves: Map<Double, List<DoubleArray?>>, idx: List<Int>): Solved? {
+        val guard = (RUNNER_UP_GUARD_S / FRAME_S).roundToInt()
+        val maxLag = (MAX_SHIFT_S / FRAME_S).roundToInt()
+        var best: Solved? = null
+        for ((q, per) in curves) {
+            val ps = idx.mapNotNull { per[it] }
+            if (ps.size < 2) continue
+            val norm = sqrt(ps.size.toDouble())
+            val tot = DoubleArray(ps[0].size) { i -> ps.sumOf { it[i] } / norm }
+            // A maximum on the edge of the search is not a peak, only a slope the range cut off.
+            var p = guard
+            for (i in guard until tot.size - guard) if (tot[i] > tot[p]) p = i
+            var runner = Double.NEGATIVE_INFINITY
+            for (i in tot.indices) if (abs(i - p) > guard && tot[i] > runner) runner = tot[i]
+            // Sub-frame peak by parabola through the three samples around it.
+            val curvature = tot[p - 1] - 2 * tot[p] + tot[p + 1]
+            val fraction = if (curvature < 0) (0.5 * (tot[p - 1] - tot[p + 1]) / curvature).coerceIn(-0.5, 0.5) else 0.0
+            if (best == null || tot[p] > best.z) best = Solved(q, p, (p - maxLag + fraction) * FRAME_S, tot[p], runner / tot[p])
+        }
+        return best
+    }
+
+    /** A clip's robust-z curve over every lag at [ratio]: loudness and Speech averaged, or whichever exists. */
+    private fun clipCurve(clip: Clip, starts: DoubleArray, ends: DoubleArray, ratio: Double): DoubleArray? {
+        val minCueS = clip.energy.size * FRAME_S * MIN_CUE_SHARE
+        val curves = listOfNotNull(
+            standardised(clip.energy, clampDb = true)?.let { lagCurve(it, clip.startS, starts, ends, ratio, minCueS) },
+            clip.speech?.takeIf { it.size == clip.energy.size }
+                ?.let { standardised(it, clampDb = false) }
+                ?.let { lagCurve(it, clip.startS, starts, ends, ratio, minCueS) },
+        )
+        if (curves.isEmpty()) return null
+        return DoubleArray(curves[0].size) { i -> curves.sumOf { it[i] } / curves.size }
+    }
+
+    private fun centre(clip: Clip) = clip.startS + clip.energy.size * FRAME_S / 2
+
+    /** The curve's best value within 3 frames of [peak]: lags that close are the same answer. */
+    private fun at(c: DoubleArray, peak: Int): Double {
+        var m = Double.NEGATIVE_INFINITY
+        for (i in max(0, peak - 3)..min(c.size - 1, peak + 3)) m = max(m, c[i])
+        return m
+    }
+
+    /** Sure of a lag of its own, more than 0.5 s from [peak], and weak at [peak]. */
+    private fun disagrees(c: DoubleArray, peak: Int): Boolean {
+        var own = 0
+        for (i in c.indices) if (c[i] > c[own]) own = i
+        return c[own] >= DISAGREE_Z && abs(own - peak) > 50 && at(c, peak) < SUPPORT_Z
+    }
+
+    /**
+     * Loudness floored so digital silence does not dominate (off for a 0..1 score series, which
+     * it would flatten), minus its moving average over [DETREND_S] -- a music bed or a loud scene
+     * lifts cues and gaps alike, and only the change where speech starts and stops should score --
+     * then standardised. Null if flat.
+     */
+    private fun standardised(levels: FloatArray, clampDb: Boolean): DoubleArray? {
         val n = levels.size
+        if (n == 0) return null
         val a = DoubleArray(n) { (if (clampDb) levels[it].coerceIn(-80f, 0f) else levels[it]).toDouble() }
-        val p = prefixSums(a, 0, n)
+        val p = prefixSums(a)
         val half = (DETREND_S / 2 / FRAME_S).roundToInt()
         val d = DoubleArray(n) {
             val lo = max(0, it - half)
@@ -184,40 +257,11 @@ internal object SubtitleAligner {
     }
 
     /**
-     * Which frame-rate ratio an [align] drift in window A ([levelsA] from [startA]) really is, by
-     * window B far away. Inside one window 25/23.976 and 25/24, 0.1% apart, fit about as well; at
-     * the wrong one the two windows find delays [RATIO_AGREE_S] or more apart, at the right one
-     * the same delay. Of the ratios where both peak at z >= [AGREE_MIN_Z] and runner-up <=
-     * [MAX_RUNNER_UP] with delays that agree, the one whose weaker window is strongest wins,
-     * returned with window A's delay and [Result.secondDelayS] set. Null when none agrees, and 1.0 is never tried: a plain delay is
-     * [align]'s call, and must never come back as a ratio. Pass the [clampDb] the drift was found with.
-     */
-    fun confirmRatio(
-        levelsA: FloatArray, startA: Double, levelsB: FloatArray, startB: Double,
-        starts: DoubleArray, ends: DoubleArray, clampDb: Boolean = true,
-    ): Result? {
-        if (min(levelsA.size, levelsB.size) < MIN_AUDIO_S / FRAME_S) return null
-        val pa = standardised(levelsA, clampDb)?.let { prefixSums(it, 0, it.size) } ?: return null
-        val pb = standardised(levelsB, clampDb)?.let { prefixSums(it, 0, it.size) } ?: return null
-        return RATIOS.drop(1).mapNotNull { q ->
-            val a = alignAt(pa, startA, starts, ends, q) ?: return@mapNotNull null
-            val b = alignAt(pb, startB, starts, ends, q) ?: return@mapNotNull null
-            val weaker = min(a.peakZ, b.peakZ)
-            // Six ratios, two low-z peaks each: a chance pair lands within RATIO_AGREE_S often
-            // enough (unrelated audio did, z 2.2, runner-up 0.94) that each peak must also stand clear.
-            if (weaker < AGREE_MIN_Z || max(a.runnerUp, b.runnerUp) > MAX_RUNNER_UP ||
-                abs(a.delayS - b.delayS) > RATIO_AGREE_S) null
-            else a.copy(secondDelayS = b.delayS) to weaker
-        }.maxByOrNull { it.second }?.first
-    }
-
-    /**
      * YAMNet Speech scores, one per sound window (window k hears [k * HOP_MS, k * HOP_MS +
      * WINDOW_MS) of the film, as the haptics sounds lane holds them), as up to [frames] levels
-     * [FRAME_S] apart from [windowStartS], for [align] with clampDb off. A score sits at its
-     * window's centre and frames between two centres take the straight line between them;
-     * frames before the first centre take its score, and frames past the last are left out, as
-     * where the audio ends.
+     * [FRAME_S] apart from [windowStartS], for a [Clip]'s speech. A score sits at its window's
+     * centre and frames between two centres take the straight line between them; frames before
+     * the first centre take its score, and frames past the last are left out, as where the audio ends.
      */
     fun scoreFrames(scores: FloatArray, windowStartS: Double, frames: Int): FloatArray {
         if (scores.isEmpty()) return FloatArray(0)
@@ -233,47 +277,18 @@ internal object SubtitleAligner {
         }
     }
 
-    private fun prefixSums(a: DoubleArray, from: Int, to: Int): DoubleArray {
-        val p = DoubleArray(to - from + 1)
-        for (i in from until to) p[i - from + 1] = p[i - from] + a[i]
-        return p
-    }
-
     /**
-     * Each half of the window, searched on its own, finds [result]'s delay. The YAMNet fallback
-     * must pass this even at a high z: on real films it matched another film's subtitle at z 10.8
-     * with halves that disagreed, while 32 of its 42 right answers had halves that agreed.
+     * Mean of [a] (a standardised clip from [windowStartS]) inside the cues minus outside, at
+     * every lag in +/-[MAX_SHIFT_S], as a robust z; 0 where too little cue time overlaps.
+     * Prefix sums make each lag O(cues), not O(frames). Null if most lags overlap too little.
      */
-    fun halvesConfirm(
-        levels: FloatArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, result: Result,
-        clampDb: Boolean = true,
-    ): Boolean = result.agreed ||
-        standardised(levels, clampDb)?.let { halvesAgree(it, windowStartS, starts, ends, result) } == true
-
-    private fun halvesAgree(
-        a: DoubleArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, plain: Result,
-    ): Boolean {
-        if (plain.peakZ < AGREE_MIN_Z) return false
-        val half = a.size / 2
-        return (0..1).all { k ->
-            val from = k * half
-            val r = alignAt(
-                prefixSums(a, from, from + half), windowStartS + from * FRAME_S, starts, ends, 1.0,
-                minCueS = MIN_CUE_SECONDS / 2,
-            )
-            r != null && abs(r.delayS - plain.delayS) <= AGREE_TOLERANCE_S
-        }
-    }
-
-    private fun alignAt(
-        prefix: DoubleArray, windowStartS: Double,
-        starts: DoubleArray, ends: DoubleArray, ratio: Double,
-        minCueS: Double = MIN_CUE_SECONDS,
-    ): Result? {
-        val n = prefix.size - 1
+    private fun lagCurve(
+        a: DoubleArray, windowStartS: Double, starts: DoubleArray, ends: DoubleArray, ratio: Double, minCueS: Double,
+    ): DoubleArray? {
+        val prefix = prefixSums(a)
+        val n = a.size
         val maxLag = (MAX_SHIFT_S / FRAME_S).roundToInt()
-        // Cue intervals in audio frames at lag 0, merged, keeping only those that can reach the
-        // window at some lag.
+        // Cue intervals in frames at lag 0, merged, keeping only those that can reach the clip at some lag.
         val intervals = starts.indices
             .map { (starts[it] * ratio - windowStartS) / FRAME_S to (ends[it] * ratio - windowStartS) / FRAME_S }
             .filter { (s, e) -> e > s && e > -maxLag && s < n + maxLag }
@@ -285,50 +300,37 @@ internal object SubtitleAligner {
                 merged
             }
         if (intervals.isEmpty()) return null
+        // Rounded once: round(x + lag) == round(x) + lag for a whole-frame lag, so the 30,000-lag
+        // loop below is integer adds over primitive arrays (4.6 s -> well under 1 s on a phone).
+        val lo0 = IntArray(intervals.size) { intervals[it].first.roundToInt() }
+        val hi0 = IntArray(intervals.size) { intervals[it].second.roundToInt() }
         val minIn = (minCueS / FRAME_S).roundToInt()
         val total = prefix[n]
-
         val scores = DoubleArray(2 * maxLag + 1) { idx ->
             val lag = idx - maxLag
             var sumIn = 0.0
             var nIn = 0
-            for ((s, e) in intervals) {
-                val lo = (s + lag).roundToInt().coerceIn(0, n)
-                val hi = (e + lag).roundToInt().coerceIn(0, n)
+            for (k in lo0.indices) {
+                val lo = (lo0[k] + lag).coerceIn(0, n)
+                val hi = (hi0[k] + lag).coerceIn(0, n)
                 if (hi > lo) { sumIn += prefix[hi] - prefix[lo]; nIn += hi - lo }
             }
             if (nIn < minIn || n - nIn < minIn) Double.NaN
             else sumIn / nIn - (total - sumIn) / (n - nIn)
         }
-
-        val finite = scores.filter { !it.isNaN() }.sorted()
+        val finite = scores.filter { !it.isNaN() }.toDoubleArray().apply { sort() }
         if (finite.size < scores.size / 2) return null
         val median = finite[finite.size / 2]
-        val mad = finite.map { abs(it - median) }.sorted()[finite.size / 2]
-        val sigma = 1.4826 * mad
-        val guard = (RUNNER_UP_GUARD_S / FRAME_S).roundToInt()
-        // A maximum on the edge of the search is not a peak, only a slope the range cut off.
-        val peak = (guard until scores.size - guard)
-            .filter { !scores[it].isNaN() }
-            .maxByOrNull { scores[it] } ?: return null
-        val runner = scores.indices
-            .filter { abs(it - peak) > guard && !scores[it].isNaN() }
-            .maxOfOrNull { scores[it] } ?: median
-        val height = scores[peak] - median
-        if (sigma <= 0 || height <= 0) return null
+        val spread = DoubleArray(finite.size) { abs(finite[it] - median) }.apply { sort() }
+        val sigma = 1.4826 * spread[finite.size / 2]
+        if (sigma <= 0) return null
+        return DoubleArray(scores.size) { if (scores[it].isNaN()) 0.0 else (scores[it] - median) / sigma }
+    }
 
-        // Sub-frame peak by parabola through the three samples around it.
-        val left = scores[peak - 1].takeUnless { it.isNaN() } ?: scores[peak]
-        val right = scores[peak + 1].takeUnless { it.isNaN() } ?: scores[peak]
-        val curvature = left - 2 * scores[peak] + right
-        val fraction = if (curvature < 0) (0.5 * (left - right) / curvature).coerceIn(-0.5, 0.5) else 0.0
-
-        return Result(
-            delayS = (peak - maxLag + fraction) * FRAME_S,
-            ratio = ratio,
-            peakZ = height / sigma,
-            runnerUp = (runner - median) / height,
-        )
+    private fun prefixSums(a: DoubleArray): DoubleArray {
+        val p = DoubleArray(a.size + 1)
+        for (i in a.indices) p[i + 1] = p[i] + a[i]
+        return p
     }
 
     /** RBJ cookbook second-order filter, Q = 1/sqrt(2). */

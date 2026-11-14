@@ -8,11 +8,12 @@ import kotlin.math.roundToInt
  * Puts an SDH subtitle on the film's own dialogue before its captions direct haptics
  * (docs/haptics-decisions.md, Events): a subtitle from another release can sit seconds off, and a
  * caption then names the wrong sound. The app's subtitle sync ([SubtitleAligner]) on YAMNet's
- * Speech score from the haptic track itself, accepted as the player's own speech fit is: a plain
- * delay it is sure of, both halves of the window agreeing. Anything less applies nothing.
+ * Speech score from the haptic track itself, accepted as the player's own fit is, and only as a
+ * plain delay. Anything less applies nothing.
  */
 internal object HapticCaptions {
     private const val WINDOW_S = 300.0
+    private const val CLIP_S = 60.0
     private val NEED = (WINDOW_S * 1000 / HapticSounds.HOP_MS).toInt() // sound windows in one fit
     private val BRACKETS = Regex("""\[[^\]]*]|\([^)]*\)|<[^>]*>|\{[^}]*\}|♪|♫""")
 
@@ -34,12 +35,16 @@ internal object HapticCaptions {
         val speechAt = HapticSounds.KEPT.indexOf(HapticSounds.SPEECH)
         val speech = FloatArray(sounds.size) { sounds[it][speechAt] }
         val startS = k0 * HapticSounds.HOP_MS / 1000.0
-        val levels = SubtitleAligner.scoreFrames(speech, startS, (WINDOW_S / SubtitleAligner.FRAME_S).toInt())
+        // The window as back-to-back clips, Speech only: the loudness lane is left flat, which align skips.
+        val frames = (CLIP_S / SubtitleAligner.FRAME_S).toInt()
+        val clips = (0 until (WINDOW_S / CLIP_S).toInt()).map { c ->
+            val at = startS + c * CLIP_S
+            SubtitleAligner.Clip(at, FloatArray(frames), SubtitleAligner.scoreFrames(speech, at, frames))
+        }
         val starts = DoubleArray(lines.size) { lines[it].startMs / 1000.0 }
         val ends = DoubleArray(lines.size) { lines[it].endMs / 1000.0 }
-        val r = SubtitleAligner.align(levels, startS, starts, ends, clampDb = false)
-        val sure = r != null && r.confident && r.ratio == 1.0 && SubtitleAligner.halvesConfirm(levels, startS, starts, ends, r, clampDb = false)
-        val d = if (sure) (r!!.delayS * 1000).roundToInt() else return Fit(null, k0 + NEED)
+        val r = SubtitleAligner.align(clips, starts, ends, startS + WINDOW_S / 2)
+        val d = if (r != null && r.ratio == 1.0) (r.delayS * 1000).roundToInt() else return Fit(null, k0 + NEED)
         return Fit(if (abs(d) < MIN_SHIFT_MS) 0 else d, k0 + NEED)
     }
 

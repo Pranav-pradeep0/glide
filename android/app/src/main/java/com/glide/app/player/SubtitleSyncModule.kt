@@ -161,91 +161,101 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     }
 
     /**
-     * Decodes up to [durationS] of audio from [windowStartS] and measures its speech-band
-     * loudness. The file is read with Media3's extractors -- the player's own, which see every
+     * One clip of [clipS] from [startS]: its speech-band loudness, and YAMNet's Speech score
+     * from the same decode pass (or from [cachedSpeech], the haptics track's, when it covers
+     * the clip). The file is read with Media3's extractors -- the player's own, which see every
      * track it can play; Android's MediaExtractor hides DTS and TrueHD inside MKV -- and the
      * first audio track a decoder exists for is used: a platform decoder, else the Media3 FFmpeg
      * extension the player already ships, for the AC-3, E-AC-3, DTS and TrueHD soundtracks
      * most phones cannot decode and that are often a film's only audio.
      */
+    /**
+     * The container ids (Media3 Format.id) of [videoPath]'s audio tracks, in the file's order, as
+     * [decodeAudio] numbers them. Reads only the header.
+     */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private fun decodeAudioWindow(
-        videoPath: String,
-        windowStartS: Double,
-        durationS: Double = 300.0,
-        targetTrackIndex: Int = -1,
-    ): DecodedLevels? {
-        val startUs = (windowStartS * 1_000_000).toLong().coerceAtLeast(0L)
-        val window = WindowMeter(startUs, startUs + (durationS * 1_000_000).toLong())
-        val using = decodeAudio(reactApplicationContext, videoPath, window, startUs, targetTrackIndex)
-        val result = window.result(windowStartS)
-        android.util.Log.i(
-            NAME, "auto-sync: $using decoded " +
-                "${"%.1f".format(Locale.US, (result?.levels?.size ?: 0) * SubtitleAligner.FRAME_S)} s"
-        )
-        return result
+    private fun audioTrackIds(videoPath: String): List<String?> {
+        val ids = ArrayList<String?>()
+        var ended = false
+        val output = object : androidx.media3.extractor.ExtractorOutput {
+            override fun track(id: Int, type: Int): androidx.media3.extractor.TrackOutput {
+                if (type != androidx.media3.common.C.TRACK_TYPE_AUDIO) return androidx.media3.extractor.DiscardingTrackOutput()
+                val index = ids.size
+                ids.add(null)
+                return object : androidx.media3.extractor.TrackOutput by androidx.media3.extractor.DiscardingTrackOutput() {
+                    override fun format(format: androidx.media3.common.Format) { ids[index] = format.id }
+                }
+            }
+            override fun endTracks() { ended = true }
+            override fun seekMap(seekMap: androidx.media3.extractor.SeekMap) {}
+        }
+        EmbeddedSubtitles.read(reactApplicationContext, EmbeddedSubtitles.toUri(videoPath), output) { ended && ids.none { it == null } }
+        return ids
     }
 
-    /**
-     * YAMNet's Speech level for [frames] frames from [startS] ([SubtitleAligner.scoreFrames]):
-     * from the haptics cache when it has heard this window, else heard again here (~9 s per
-     * 5-min window on a phone, against ~2 s for loudness). Null if YAMNet can't load.
-     */
-    private fun speechLevels(videoPath: String, startS: Double, frames: Int, trackIndex: Int): FloatArray? {
-        val durationS = frames * SubtitleAligner.FRAME_S
-        val t0 = android.os.SystemClock.elapsedRealtime()
-        val cached = cachedSpeech(videoPath, startS, durationS, trackIndex)
-        val scores = cached ?: recognizeSpeech(videoPath, startS, durationS, trackIndex) ?: return null
-        android.util.Log.i(
-            NAME, "auto-sync: speech from ${if (cached != null) "haptics cache" else "yamnet"} " +
-                "window=${startS}s took=${android.os.SystemClock.elapsedRealtime() - t0}ms"
-        )
-        return SubtitleAligner.scoreFrames(scores, startS, frames)
-    }
+    /** The last clip's decoder and time, for the run's log line. */
+    @Volatile private var lastDecode = ""
 
-    /**
-     * Speech scores of every sound window from the haptics track cached for this file, when it
-     * is the current analyser's and covers [startS, startS + durationS) (or up to the film's end).
-     * HapticAnalysis caches a track only once the whole film is heard, but its sounds lane is
-     * zeros where YAMNet did not run, so a window with many all-zero rows counts as not covered.
-     * It is the first decodable audio track's, so another track never reads from it.
-     */
-    private fun cachedSpeech(videoPath: String, startS: Double, durationS: Double, trackIndex: Int): FloatArray? {
-        if (trackIndex > 0) return null
-        val context = reactApplicationContext
-        val track = runCatching {
-            val file = HapticPerformer.cacheFile(context, HapticPerformer.fingerprint(context, videoPath))
-            DataInputStream(file.inputStream().buffered()).use { HapticTrack.read(it) }
-        }.getOrNull()?.takeIf { it.analyzerVersion == HapticListener.VERSION } ?: return null
-        val hopS = HapticSounds.HOP_MS / 1000.0
-        val endS = minOf(startS + durationS, track.bedIntensity.size * HapticTrack.BED_FRAME_MS / 1000.0)
-        val rows = Math.ceil(startS / hopS).toInt()..Math.floor((endS - HapticSounds.WINDOW_MS / 1000.0) / hopS).toInt()
-        if (rows.isEmpty() || rows.first < 0 || rows.last >= track.sounds.size) return null
-        // ponytail: a fixed 10% share; a genuinely silent stretch only costs a fresh YAMNet pass.
-        if (rows.count { k -> track.sounds[k].all { it == 0f } } * 10 > rows.count()) return null
-        return FloatArray(track.sounds.size) { track.sounds[it][SPEECH] }
-    }
-
-    /** The window decoded again through YAMNet, as HapticAnalysis hears it: Speech score per sound window. */
-    private fun recognizeSpeech(videoPath: String, startS: Double, durationS: Double, trackIndex: Int): FloatArray? {
-        val (classify, interpreter) = HapticRecognizer.open(reactApplicationContext) ?: return null
+    private fun decodeClip(
+        videoPath: String, startS: Double, clipS: Double, trackIndex: Int, cachedSpeech: FloatArray?,
+    ): SubtitleAligner.Clip? {
+        val startUs = (startS * 1_000_000).toLong().coerceAtLeast(0L)
+        val endUs = startUs + (clipS * 1_000_000).toLong()
+        val meter = WindowMeter(startUs, endUs)
+        val yamnet = if (cachedSpeech == null) HapticRecognizer.open(reactApplicationContext) else null
         try {
-            val recognizer = HapticRecognizer(classify)
-            // A sound window either side, so the first and last frames lie between two centres.
-            val margin = 1.5
-            val endUs = ((startS + durationS + margin) * 1_000_000).toLong()
+            val recognizer = yamnet?.let { HapticRecognizer(it.first) }
+            // A sound window either side, so the clip's first and last frames lie between two centres.
+            val marginUs = if (recognizer != null) 1_500_000L else 0L
             val sink = object : PcmSink {
                 override var done = false
                 override fun add(ptsUs: Long, data: java.nio.ByteBuffer, channels: Int, rate: Int, isFloat: Boolean) {
-                    if (ptsUs >= endUs) done = true
-                    if (!done && channels > 0 && rate > 0) recognizer.add(ptsUs, data, channels, rate, isFloat)
+                    if (ptsUs >= endUs + marginUs) done = true
+                    if (done || channels <= 0 || rate <= 0) return
+                    // Both read the buffer by index and leave its position alone.
+                    meter.add(ptsUs, data, channels, rate, isFloat)
+                    recognizer?.add(ptsUs, data, channels, rate, isFloat)
+                    if (recognizer == null && meter.done) done = true
                 }
             }
-            decodeAudio(reactApplicationContext, videoPath, sink, ((startS - margin).coerceAtLeast(0.0) * 1_000_000).toLong(), trackIndex)
-            return FloatArray(recognizer.windows.size) { recognizer.windows[it][SPEECH] }
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            val using = decodeAudio(reactApplicationContext, videoPath, sink, (startUs - marginUs).coerceAtLeast(0L), trackIndex)
+            lastDecode = "$using took=${android.os.SystemClock.elapsedRealtime() - t0}ms"
+            val levels = meter.result(startS) ?: return null
+            val scores = cachedSpeech ?: recognizer?.let { r -> FloatArray(r.windows.size) { r.windows[it][SPEECH] } }
+            val speech = scores?.let { SubtitleAligner.scoreFrames(it, levels.actualStartS, levels.levels.size) }
+            return SubtitleAligner.Clip(levels.actualStartS, levels.levels, speech)
         } finally {
-            interpreter.close()
+            yamnet?.second?.close()
         }
+    }
+
+    /**
+     * The Speech score of every sound window in the haptics track cached for this file, when it
+     * is the current analyser's; null otherwise. It is the first decodable audio track's, so
+     * another track never reads from it. [coveredBy] says whether it heard a given clip.
+     */
+    private fun cachedSpeech(videoPath: String, trackIndex: Int): HapticTrack? {
+        if (trackIndex > 0) return null
+        val context = reactApplicationContext
+        return runCatching {
+            val file = HapticPerformer.cacheFile(context, HapticPerformer.fingerprint(context, videoPath))
+            DataInputStream(file.inputStream().buffered()).use { HapticTrack.read(it) }
+        }.getOrNull()?.takeIf { it.analyzerVersion == HapticListener.VERSION }
+    }
+
+    /**
+     * Whether [track] heard [startS, startS + durationS) (or up to the film's end). HapticAnalysis
+     * caches a track only once the whole film is heard, but its sounds lane is zeros where YAMNet
+     * did not run, so a clip with many all-zero rows counts as not heard.
+     */
+    private fun coveredBy(track: HapticTrack, startS: Double, durationS: Double): Boolean {
+        val hopS = HapticSounds.HOP_MS / 1000.0
+        val endS = minOf(startS + durationS, track.bedIntensity.size * HapticTrack.BED_FRAME_MS / 1000.0)
+        val rows = Math.ceil(startS / hopS).toInt()..Math.floor((endS - HapticSounds.WINDOW_MS / 1000.0) / hopS).toInt()
+        if (rows.isEmpty() || rows.first < 0 || rows.last >= track.sounds.size) return false
+        // ponytail: a fixed 10% share; a genuinely silent stretch only costs a fresh YAMNet pass.
+        return rows.count { k -> track.sounds[k].all { it == 0f } } * 10 <= rows.count()
     }
 
     /** PCM out of compressed audio samples, into a [WindowMeter]. */
@@ -501,70 +511,53 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
 
 
     /**
-     * Aligns the cues against the 300 s of audio from [windowStartS]: speech-band loudness first;
-     * where that is unsure (neither confident nor drift), YAMNet's Speech score, right more often
-     * on real films but coarser, used only if it is sure. A drift is then checked at window
-     * [secondWindowStartS] (negative: none) with the signal that found it
-     * ([SubtitleAligner.confirmRatio]): a confirmed ratio comes back confident, else it stays drift.
+     * Aligns the speech cues ([starts]/[ends], subtitle seconds) against [clipS]-second clips of
+     * the audio from each of [clipStarts], decoded in parallel, for a viewer at [positionS]
+     * ([SubtitleAligner.align]). Resolves the delay and ratio to apply, or null when unsure.
      */
     @ReactMethod
     fun alignVideo(
-        videoPath: String, windowStartS: Double, starts: ReadableArray, ends: ReadableArray,
-        audioTrackIndex: Int, secondWindowStartS: Double, promise: Promise,
+        videoPath: String, clipStarts: ReadableArray, clipS: Double, starts: ReadableArray, ends: ReadableArray,
+        audioFormatId: String?, positionS: Double, promise: Promise,
     ) {
         BackgroundWork.submitLong(promise) {
             try {
-                val decoded = decodeAudioWindow(videoPath, windowStartS, 300.0, audioTrackIndex)
-                    ?: return@submitLong promise.reject("E_NO_AUDIO", "No decodable audio in this video")
-
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                // The heard track, by its container id: the player's track list is in renderer order.
+                val audioTrackIndex = audioFormatId?.let { audioTrackIds(videoPath).indexOf(it) } ?: -1
                 val s = DoubleArray(starts.size()) { starts.getDouble(it) }
                 val e = DoubleArray(ends.size()) { ends.getDouble(it) }
-
-                var result = SubtitleAligner.align(decoded.levels, decoded.actualStartS, s, e)
-                var source = "energy"
-                var levels = decoded.levels
-                android.util.Log.i(NAME, "auto-sync: energy window=${decoded.actualStartS}s cues=${s.size} $result")
-
-                if (result?.confident != true && result?.drift != true) {
-                    speechLevels(videoPath, decoded.actualStartS, decoded.levels.size, audioTrackIndex)?.let { speech ->
-                        val r = SubtitleAligner.align(speech, decoded.actualStartS, s, e, clampDb = false)
-                        val sure = r != null && (r.drift ||
-                            (r.confident && SubtitleAligner.halvesConfirm(speech, decoded.actualStartS, s, e, r, clampDb = false)))
-                        if (sure) { result = r; source = "speech"; levels = speech }
-                        android.util.Log.i(NAME, "auto-sync: speech $r")
-                    }
+                val at = List(clipStarts.size()) { clipStarts.getDouble(it) }
+                val track = cachedSpeech(videoPath, audioTrackIndex)
+                val speech = track?.let { t -> FloatArray(t.sounds.size) { t.sounds[it][SPEECH] } }
+                // ponytail: a fixed 4 decoders; each runs its own extractor, decoder and YAMNet.
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(4, at.size).coerceAtLeast(1))
+                val clips = try {
+                    at.map { start ->
+                        val cached = track?.takeIf { coveredBy(it, start, clipS) }?.let { speech }
+                        pool.submit<SubtitleAligner.Clip?> { decodeClip(videoPath, start, clipS, audioTrackIndex, cached) }
+                    }.mapNotNull { it.get() }
+                } finally {
+                    pool.shutdown()
                 }
+                val decodedMs = android.os.SystemClock.elapsedRealtime() - t0
+                if (clips.isEmpty()) return@submitLong promise.reject("E_NO_AUDIO", "No decodable audio in this video")
 
-                if (result?.drift == true && secondWindowStartS >= 0) {
-                    val second = if (source == "energy") {
-                        decodeAudioWindow(videoPath, secondWindowStartS, 300.0, audioTrackIndex)?.let { it.levels to it.actualStartS }
-                    } else {
-                        speechLevels(videoPath, secondWindowStartS, (300.0 / SubtitleAligner.FRAME_S).toInt(), audioTrackIndex)
-                            ?.let { it to secondWindowStartS }
-                    }
-                    val confirmed = second?.let { (b, startB) ->
-                        SubtitleAligner.confirmRatio(levels, decoded.actualStartS, b, startB, s, e, clampDb = source == "energy")
-                    }
-                    // Its delayS is window A's, secondDelayS window B's.
-                    android.util.Log.i(NAME, "auto-sync: ratio check windowB=${second?.second}s $confirmed")
-                    if (confirmed != null) result = confirmed
-                }
-
-                val chosen = result
-                android.util.Log.i(
-                    NAME, "auto-sync: source=$source window=${decoded.actualStartS}s cues=${s.size} $chosen " +
-                        "confident=${chosen?.confident} drift=${chosen?.drift}"
+                val result = SubtitleAligner.align(clips, s, e, positionS)
+                // Warn, not info: release builds strip Log.i, and this one line per run is how a
+                // device's timing and answer are checked.
+                android.util.Log.w(
+                    NAME, "auto-sync: clips=${clips.size}/${at.size} at=${clips.map { it.startS.toInt() }} " +
+                        "speech=${clips.count { it.speech != null }} cached=${track != null} cues=${s.size} " +
+                        "position=${positionS.toInt()}s track=$audioFormatId->$audioTrackIndex decoded=${decodedMs}ms " +
+                        "total=${android.os.SystemClock.elapsedRealtime() - t0}ms $result last clip: $lastDecode"
                 )
-                if (chosen == null) return@submitLong promise.resolve(null)
-
+                if (result == null) return@submitLong promise.resolve(null)
                 promise.resolve(Arguments.createMap().apply {
-                    putDouble("delayMs", chosen.delayS * 1000)
-                    putDouble("ratio", chosen.ratio)
-                    putDouble("peakZ", chosen.peakZ)
-                    putDouble("runnerUp", chosen.runnerUp)
-                    putBoolean("confident", chosen.confident)
-                    putBoolean("drift", chosen.drift)
-                    putString("source", source)
+                    putDouble("delayMs", result.delayS * 1000)
+                    putDouble("ratio", result.ratio)
+                    putDouble("peakZ", result.peakZ)
+                    putDouble("runnerUp", result.runnerUp)
                 })
             } catch (t: Throwable) {
                 promise.reject("E_ALIGN", t.message ?: "Alignment error", t)

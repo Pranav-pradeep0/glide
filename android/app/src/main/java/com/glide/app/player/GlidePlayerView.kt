@@ -1412,6 +1412,9 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
                 putInt("id", id)
                 putString("name", audioTrackName(mediaTrackGroup.getFormat(index), id))
                 mediaTrackGroup.getFormat(index).language?.let { putString("language", it) }
+                // The container's own track id: [id] is this list's order, which follows the
+                // renderers (an FFmpeg-decoded E-AC-3 lists after platform AAC), not the file's.
+                mediaTrackGroup.getFormat(index).id?.let { putString("formatId", it) }
                 putBoolean("isSelected", isSelected)
             })
         }

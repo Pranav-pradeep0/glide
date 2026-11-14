@@ -1,13 +1,15 @@
 """
 Auto subtitle sync benchmark on the haptics fixture films: a Python port of SubtitleAligner.kt and
-SubtitleAutoSync.ts (speech cues, 5-minute window, energy first, YAMNet Speech fallback, frame-rate
-ratio confirmed in a second window). Each film's subtitle in .haptics-fixtures/films is in sync
-(-0.1 to +0.2 s); it is shifted by known delays, retimed for other frame rates, or swapped for another
-film's, then scored: applied & right (|err| <= 0.3 s, ratio mapping within 0.3 s at 10/50/90% of the film),
-gross (> 0.5 s or wrong ratio), refused. Speech-band loudness (as the phone meters it) is cached next to
-each film as <name>.levels.npy; needs ffmpeg on PATH and <name>.sounds from haptics-yamnet.py.
+SubtitleAutoSync.ts (speech cues, 8 x 60 s clips, loudness and YAMNet Speech per clip, summed over
+clips, every frame-rate ratio, the viewer's side of a mid-film edit). Each film's subtitle in
+.haptics-fixtures/films is in sync (-0.1 to +0.2 s); it is shifted by known delays, retimed for other
+frame rates, swapped for each other film's, or given a delay that changes halfway (viewer at 25% and
+75%). Scored: right (|err| <= 0.3 s; ratio mapping within 0.3 s at 10/50/90% of the film), wrong
+(anything else applied), refused. Speech-band loudness (as the phone meters it) is cached next to each
+film as <name>.levels.npy; needs ffmpeg on PATH and <name>.sounds from haptics-yamnet.py.
 
-Run: .haptics-fixtures/venv/Scripts/python -I scripts/subsync-bench.py [pool size, default 4]
+Run: .haptics-fixtures/venv/Scripts/python -I scripts/subsync-bench.py [pool size, default 8] [energy]
+("energy" leaves YAMNet out, as the phone does when it cannot load.) ~3 min with 8 workers.
 """
 import os, re, struct, subprocess, sys
 os.environ['OPENBLAS_NUM_THREADS'] = os.environ['OMP_NUM_THREADS'] = '1'
@@ -18,12 +20,13 @@ FILMS = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.haptics
 F, MAX_SHIFT = 0.01, 150.0
 MAXLAG = round(MAX_SHIFT / F)
 RATIOS = [1.0, 25 / 23.976, 23.976 / 25, 25 / 24, 24 / 25, 24 / 23.976, 23.976 / 24]
-MIN_Z, MAX_RUNNER, GUARD, AGREE_MIN_Z, AGREE_TOL, DETREND, MIN_CUE = 6.0, 0.75, 100, 2.0, 0.25, 8.0, 20.0
-WINDOW_S, AROUND_S, MIN_SPEECH, MAX_CUE_S = 300, 900, 25, 12
-RATIO_AGREE_S, MIN_APART_S = 0.4, 1200
+MIN_Z, MAX_RUNNER, GUARD, RATIO_EXTRA_Z, SUPPORT_Z, DISAGREE_Z, DETREND = 6.0, 0.6, 100, 1.0, 2.0, 5.0, 8.0
+CLIP_S, CLIPS, MIN_CLIP_CUES, MAX_CUE_S = 60, 8, 5, 12
+TIGHT_Z, TIGHT_FRAMES = 6.0, 25
 DELAYS = [0, 0.8, -2.3, 6.7, -18.4, 41.2, -95.5, 130.2]
 DRIFTS = {'25/23.976': 25 / 23.976, '23.976/25': 23.976 / 25, '25/24': 25 / 24, '24/23.976': 24 / 23.976}
-NW = round(WINDOW_S / F)
+EDITS = [2.0, -5.0, 12.0]  # delay 0 for the first half of the film, then this
+ENERGY_ONLY = 'energy' in sys.argv[1:]
 
 
 def levels(name):
@@ -49,6 +52,7 @@ def levels(name):
 
 
 def yamnet_speech(name, n_frames):
+    """SubtitleAligner.scoreFrames over the whole film's YAMNet Speech scores."""
     raw = open(os.path.join(FILMS, name + '.sounds'), 'rb').read(); n = struct.unpack('>i', raw[:4])[0]
     sp = np.frombuffer(raw[4:4 + n * 521], np.uint8).reshape(n, 521)[:, 0] / 255.0
     return np.interp(np.arange(n_frames) * F, np.arange(n) * 0.48 + 0.4875, sp).astype(np.float32)
@@ -72,17 +76,18 @@ def speech_cues(name):
     return np.array([c[0] for c in cues]), np.array([c[1] for c in cues])
 
 
-def densest(starts, ends, keep):
-    """Start of the WINDOW_S stretch with the most cues among starts keep() accepts (closest wins ties)."""
-    best, hi = None, 0
-    for lo in range(len(starts)):
-        start = max(0.0, starts[lo] - 20)
-        hi = max(hi, lo)
-        while hi < len(starts) and ends[hi] <= start + WINDOW_S:
-            hi += 1
-        if (rank := keep(start)) is not None and (best is None or (hi - lo, -rank) > (best[1], -best[2])):
-            best = (start, hi - lo, rank)
-    return best[0] if best and best[1] >= MIN_SPEECH else None
+def choose_clips(starts, ends):
+    """SubtitleAutoSync.chooseClips: densest CLIP_S stretch in each of CLIPS parts of the dialogue."""
+    span, out = ends.max(), []
+    for j in range(CLIPS):
+        a = max(span * j / CLIPS, out[-1] + CLIP_S if out else 0)  # never overlapping: same audio twice
+        z = span * (j + 1) / CLIPS - CLIP_S
+        best, bc = None, 0
+        for t in np.arange(a, max(a, z) + 1e-9, 5.0):
+            c = np.sum((starts >= t) & (ends <= t + CLIP_S))
+            if c > bc: best, bc = t, c
+        if bc >= MIN_CLIP_CUES: out.append(best)
+    return out if len(out) >= 2 else []
 
 
 def standardised(lv, clip):
@@ -93,128 +98,119 @@ def standardised(lv, clip):
     return None if d.std() < 1e-6 else (d - d.mean()) / d.std()
 
 
-def prefix(a, f, t):
-    return np.concatenate([[0], np.cumsum(a[f:t])])
-
-
-def align_at(pre, ws, starts, ends, ratio, min_cue=MIN_CUE):
-    """Mean level inside the cues minus outside, at every lag; the peak as a robust z-score."""
-    n = len(pre) - 1
+def lag_curve(a, ws, starts, ends, ratio, min_cue):
+    """SubtitleAligner.lagCurve, by FFT correlation (same numbers, ~15x faster than per-lag sums)."""
+    n = len(a)
     S, E = (starts * ratio - ws) / F, (ends * ratio - ws) / F
     k = (E > S) & (E > -MAXLAG) & (S < n + MAXLAG)
     if not k.any():
         return None
-    merged = []
-    for s, e in sorted(zip(S[k], E[k])):
-        if merged and s <= merged[-1][1]:
-            merged[-1][1] = max(merged[-1][1], e)
-        else:
-            merged.append([s, e])
-    iv, lags = np.array(merged), np.arange(-MAXLAG, MAXLAG + 1)
-    sum_in, n_in = np.empty(len(lags)), np.empty(len(lags), np.int64)
-    for c in range(0, len(lags), 1000):  # chunked: the lag x cue matrices stay small
-        L = lags[c:c + 1000]
-        lo = np.clip(np.floor(iv[:, :1] + L + 0.5).astype(np.int64), 0, n); hi = np.clip(np.floor(iv[:, 1:] + L + 0.5).astype(np.int64), 0, n)
-        ok = hi > lo
-        sum_in[c:c + 1000] = np.where(ok, pre[hi] - pre[lo], 0).sum(0); n_in[c:c + 1000] = np.where(ok, hi - lo, 0).sum(0)
+    L = n + 2 * MAXLAG  # mask index j <-> clip frame j - MAXLAG
+    mask = np.zeros(L + 1)
+    np.add.at(mask, np.clip(np.floor(S[k] + 0.5).astype(np.int64) + MAXLAG, 0, L), 1)
+    np.add.at(mask, np.clip(np.floor(E[k] + 0.5).astype(np.int64) + MAXLAG, 0, L), -1)
+    mask = (np.cumsum(mask)[:L] > 0).astype(float)  # merged intervals
+    size = 1 << int(np.ceil(np.log2(L + n)))
+    fm = np.conj(np.fft.rfft(mask, size))
+    d = (np.arange(-MAXLAG, MAXLAG + 1) - MAXLAG) % size
+    si = np.fft.irfft(fm * np.fft.rfft(a, size), size)[d]
+    ni = np.rint(np.fft.irfft(fm * np.fft.rfft(np.ones(n), size), size)[d])
     with np.errstate(divide='ignore', invalid='ignore'):
-        sc = sum_in / n_in - (pre[n] - sum_in) / (n - n_in)
-    sc[(n_in < round(min_cue / F)) | (n - n_in < round(min_cue / F))] = np.nan
+        sc = si / ni - (a.sum() - si) / (n - ni)
+    sc[(ni < round(min_cue / F)) | (n - ni < round(min_cue / F))] = np.nan
     fin = np.sort(sc[~np.isnan(sc)])
-    inner = sc[GUARD:len(sc) - GUARD]
-    if len(fin) < len(sc) // 2 or np.all(np.isnan(inner)):
+    if len(fin) < len(sc) // 2:
         return None
-    med = fin[len(fin) // 2]; sigma = 1.4826 * np.sort(np.abs(fin - med))[len(fin) // 2]
-    peak = GUARD + int(np.nanargmax(inner))
-    rv = sc[(np.abs(np.arange(len(sc)) - peak) > GUARD) & ~np.isnan(sc)]
-    height = sc[peak] - med
-    if sigma <= 0 or height <= 0:
+    med = fin[len(fin) // 2]; sig = 1.4826 * np.sort(np.abs(fin - med))[len(fin) // 2]
+    return None if sig <= 0 else np.nan_to_num((sc - med) / sig)
+
+
+def clip_curve(sigs, i0, n, starts, ends, q):
+    """SubtitleAligner.clipCurve: each signal's curve, averaged (they hear the same dialogue)."""
+    cs = []
+    for sig, clamp in sigs:
+        lv = sig[i0:i0 + n]
+        a = standardised(lv, clamp) if len(lv) == n else None
+        c = None if a is None else lag_curve(a, i0 * F, starts, ends, q, n * F / 15)
+        if c is not None: cs.append(c)
+    return np.mean(cs, 0) if cs else None
+
+
+def solve(cur, idx):
+    best = None
+    for q, per in cur.items():
+        ps = [per[i] for i in idx if per[i] is not None]
+        if len(ps) < 2: continue
+        tot = np.sum(ps, 0) / np.sqrt(len(ps))
+        p = GUARD + int(np.argmax(tot[GUARD:-GUARD]))
+        rv = tot[np.abs(np.arange(len(tot)) - p) > GUARD].max()
+        L, R = tot[p - 1], tot[p + 1]; c2 = L - 2 * tot[p] + R
+        frac = float(np.clip(0.5 * (L - R) / c2, -.5, .5)) if c2 < 0 else 0.0
+        if best is None or tot[p] > best[2]:
+            best = (q, (p - MAXLAG + frac) * F, float(tot[p]), float(rv / tot[p]), p)
+    return best
+
+
+def at(c, p):
+    return float(c[max(0, p - 3):p + 4].max())
+
+
+def align(sigs, starts, ends, pos):
+    """SubtitleAligner.align: (ratio, delay) to apply, or None."""
+    clips = choose_clips(starts, ends)
+    if not clips:
         return None
-    L = sc[peak - 1] if not np.isnan(sc[peak - 1]) else sc[peak]
-    R = sc[peak + 1] if not np.isnan(sc[peak + 1]) else sc[peak]
-    cur = L - 2 * sc[peak] + R
-    frac = float(np.clip(0.5 * (L - R) / cur, -0.5, 0.5)) if cur < 0 else 0.0
-    return dict(delay=(peak - MAXLAG + frac) * F, ratio=ratio, z=height / sigma,
-                runner=((rv.max() if len(rv) else med) - med) / height, agreed=False)
+    n = round(CLIP_S / F)
+    i0s = [int(round(t / F)) for t in clips]
+    cur = {q: [clip_curve(sigs, i0, n, starts, ends, q) for i0 in i0s] for q in RATIOS}
+    centre = lambda i: clips[i] + CLIP_S / 2
+    every = list(range(len(clips)))
+    A = solve(cur, every)
+    if A is None: return None
+    dis = [i for i in every if (c := cur[A[0]][i]) is not None
+           and c.max() >= DISAGREE_Z and abs(int(np.argmax(c)) - A[4]) > 50 and at(c, A[4]) < SUPPORT_Z]
+    r, keep = A, every
+    if dis:  # two camps? each clip votes for the answer it backs more; one switch = an edit
+        B = solve(cur, dis) if len(dis) >= 2 else None
+        if B is None: return None
+        vote = []
+        for i in every:
+            va = at(cur[A[0]][i], A[4]) if cur[A[0]][i] is not None else 0
+            vb = at(cur[B[0]][i], B[4]) if cur[B[0]][i] is not None else 0
+            vote.append(None if max(va, vb) < SUPPORT_Z else va >= vb)
+        voters = [i for i in every if vote[i] is not None]
+        if sum(vote[x] != vote[y] for x, y in zip(voters, voters[1:])) != 1: return None
+        near = min(voters, key=lambda i: abs(centre(i) - pos))
+        side = A if vote[near] else B
+        others = [i for i in voters if vote[i] != vote[near]]
+        keep = [i for i in every if i < others[0]] if near < others[0] else [i for i in every if i > others[-1]]
+        r = solve(cur, keep)
+        if r is None or r[0] != side[0] or abs(r[1] - side[1]) > 0.3: return None
+    q, d, z, run, p = r
+    if z < MIN_Z or run > MAX_RUNNER or (q != 1.0 and z < MIN_Z + RATIO_EXTRA_Z): return None
+    near = sorted((i for i in keep if cur[q][i] is not None), key=lambda i: abs(centre(i) - pos))[:2]
+    if not any(at(cur[q][i], p) >= SUPPORT_Z for i in near): return None
+    if q != 1.0 and not all(tight(cur[q][i], p) for i in keep if cur[q][i] is not None): return None
+    return q, d
 
 
-def confident(r):
-    return r is not None and (r['agreed'] or (r['z'] >= MIN_Z and r['runner'] <= MAX_RUNNER))
-
-
-def align(lv, ws, starts, ends, clip):
-    """SubtitleAligner.align: plain delay; else two half-windows agreeing; else the best frame-rate ratio."""
-    a = None if len(lv) < round(120 / F) else standardised(lv, clip)  # SubtitleAligner.MIN_AUDIO_S
-    if a is None:
-        return None
-    pre = prefix(a, 0, len(a))
-    plain = align_at(pre, ws, starts, ends, 1.0)
-    if confident(plain):
-        return plain
-    if plain is not None and plain['z'] >= AGREE_MIN_Z:
-        half = len(a) // 2
-        halves = [align_at(prefix(a, f, f + half), ws + f * F, starts, ends, 1.0, MIN_CUE / 2) for f in (0, half)]
-        if all(r is not None and abs(r['delay'] - plain['delay']) <= AGREE_TOL for r in halves):
-            return dict(plain, agreed=True)
-    cands = [r for r in [plain] + [align_at(pre, ws, starts, ends, q) for q in RATIOS[1:]] if r]
-    return max(cands, key=lambda r: r['z']) if cands else None
-
-
-def halves_agree(lv, ws, starts, ends, r):
-    a = standardised(lv, False); half = len(a) // 2
-    rs = [align_at(prefix(a, f, f + half), ws + f * F, starts, ends, 1.0, MIN_CUE / 2) for f in (0, half)]
-    return all(x is not None and abs(x['delay'] - r['delay']) <= AGREE_TOL for x in rs)
-
-
-def cut(sig, t):
-    i0 = int(np.clip(np.floor(t / F + 0.5), 0, max(0, len(sig) - NW)))
-    return sig[i0:i0 + NW], i0 * F
-
-
-def sync(energy, yam, starts, ends, pos):
-    """The app's decision: (ratio, delay) to apply, 'drift' (refused, ratio unconfirmed), or None (refused)."""
-    ws = densest(starts, ends, lambda s: abs(s - pos) if abs(s - pos) <= AROUND_S else None)
-    if ws is None:
-        return None, False
-    for sig, clip in ((energy, True), (yam, False)):
-        lv, ws = cut(sig, ws)
-        r = align(lv, ws, starts, ends, clip)
-        # SubtitleAligner.halvesConfirm: a plain YAMNet delay must also be found by each half alone.
-        if confident(r) and (clip or r['ratio'] != 1.0 or r['agreed'] or halves_agree(lv, ws, starts, ends, r)):
-            break
-    else:
-        return None, False
-    if r['ratio'] == 1.0:
-        return (1.0, r['delay']), False
-    wb = densest(starts, ends, lambda s: 0 if abs(s - ws) >= MIN_APART_S else None)
-    if wb is None:
-        return None, True
-    pa = prefix(standardised(lv, clip), 0, NW)
-    lvb, wb = cut(sig, wb)
-    sb = standardised(lvb, clip)
-    if sb is None:
-        return None, False
-    pb, best = prefix(sb, 0, len(sb)), None
-    for q in RATIOS[1:]:
-        a, b = align_at(pa, ws, starts, ends, q), align_at(pb, wb, starts, ends, q)
-        if (a and b and min(a['z'], b['z']) >= AGREE_MIN_Z and max(a['runner'], b['runner']) <= MAX_RUNNER
-                and abs(a['delay'] - b['delay']) <= RATIO_AGREE_S):
-            if best is None or min(a['z'], b['z']) > best[0]:
-                best = (min(a['z'], b['z']), q, a['delay'])
-    return (best[1:] if best else None), False
+def tight(c, p):
+    """A clip's sharpest peak near p is on p: a ratio answer fits every clip, a step faked as a drift misses its ends."""
+    lo = max(0, p - 150); lp = lo + int(np.argmax(c[lo:p + 151]))
+    return c[lp] < TIGHT_Z or abs(lp - p) <= TIGHT_FRAMES
 
 
 def run(job):
-    name, other = job
-    energy = levels(name); yam = yamnet_speech(name, len(energy))
+    name, others = job
+    energy = levels(name)
+    sigs = [(energy, True)] + ([] if ENERGY_ONLY else [(yamnet_speech(name, len(energy)), False)])
     S, E = speech_cues(name); dur = len(energy) * F
-    rows = []
-    for pos in np.arange(300, dur - 600, 600):
-        for d in DELAYS:  # subtitle d s early: the fix is +d
-            rows.append((name, 'shift', d, 1.0, dur) + sync(energy, yam, S - d, E - d, pos))
-        for tag, q in DRIFTS.items():  # timed for another frame rate: media = subtitle * q
-            rows.append((name, tag, 0.0, q, dur) + sync(energy, yam, S / q, E / q, pos / q))
-        rows.append((name, 'unrelated', None, None, dur) + sync(energy, yam, other[0], other[1], pos))
+    rows = [('shift', d, dur, align(sigs, S - d, E - d, dur / 2)) for d in DELAYS]  # subtitle d s early: fix is +d
+    rows += [(tag, q, dur, align(sigs, S / q, E / q, dur / 2)) for tag, q in DRIFTS.items()]  # media = subtitle * q
+    rows += [('unrelated', None, dur, align(sigs, o[0], o[1], dur / 2)) for o in others]
+    for d2 in EDITS:
+        sh = np.where(S < dur / 2, 0.0, d2)
+        rows += [('edit', (d2, f), dur, align(sigs, S - sh, E - sh, f * dur)) for f in (0.25, 0.75)]
     print(f'{name}: {len(rows)} trials', flush=True)
     return rows
 
@@ -224,23 +220,26 @@ def main():
     for n in names:
         levels(n)  # extract one at a time, before the pool: ffmpeg per film is the RAM peak
     cues = [speech_cues(n) for n in names]
-    with Pool(int(sys.argv[1]) if len(sys.argv) > 1 else 4, maxtasksperchild=1) as p:
-        rows = [r for rs in p.map(run, [(n, cues[(i + 1) % len(names)]) for i, n in enumerate(names)]) for r in rs]
-    sh = [r for r in rows if r[1] == 'shift']
-    err = [abs(r[5][1] - r[2]) for r in sh if r[5] and r[5][0] == 1.0]
+    pool = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8
+    with Pool(pool) as p:
+        rows = [r for rs in p.map(run, [(n, [c for j, c in enumerate(cues) if j != i]) for i, n in enumerate(names)]) for r in rs]
+    sh = [r for r in rows if r[0] == 'shift']
+    err = [abs(r[3][1] - r[1]) for r in sh if r[3] and r[3][0] == 1.0]
     right = [e for e in err if e <= 0.3]
-    print(f'\nshifted ({len(sh)}): right {100 * len(right) / len(sh):.1f}%, median {1000 * np.median(right):.0f} ms, '
-          f'gross {sum(e > 0.5 for e in err) + sum(1 for r in sh if r[5] and r[5][0] != 1.0)}, '
-          f'ratio != 1 {sum(1 for r in sh if r[5] and r[5][0] != 1.0)}, refused {sum(1 for r in sh if not r[5])}')
+    print(f'\n{"energy only" if ENERGY_ONLY else "energy + YAMNet"}')
+    print(f'shifted ({len(sh)}): right {100 * len(right) / len(sh):.1f}%, median {1000 * np.median(right):.0f} ms, '
+          f'wrong {sum(1 for r in sh if r[3]) - len(right)}, refused {sum(1 for r in sh if not r[3])}')
     for tag, q in DRIFTS.items():
-        dr = [r for r in rows if r[1] == tag]
-        T = lambda r: np.array([0.1, 0.5, 0.9]) * r[4]
-        ok = sum(1 for r in dr if r[5] and np.abs(T(r) / q * r[5][0] + r[5][1] - T(r)).max() <= 0.3)
-        print(f'{tag:10s} ({len(dr)}): exact ratio {sum(1 for r in dr if r[5] and r[5][0] == q)}, mapping within 0.3 s {ok}, '
-              f'wrong ratio {sum(1 for r in dr if r[5] and r[5][0] not in (q, 1.0))}, plain delay {sum(1 for r in dr if r[5] and r[5][0] == 1.0)}, '
-              f'drift refused for want of a second window {sum(1 for r in dr if r[6])}')
-    un = [r for r in rows if r[1] == 'unrelated']
-    print(f'unrelated ({len(un)}): applied {sum(1 for r in un if r[5])}')
+        dr = [r for r in rows if r[0] == tag]
+        T = lambda r: np.array([0.1, 0.5, 0.9]) * r[2]
+        ok = sum(1 for r in dr if r[3] and np.abs(T(r) / q * r[3][0] + r[3][1] - T(r)).max() <= 0.3)
+        print(f'{tag:10s} ({len(dr)}): right {ok}, wrong {sum(1 for r in dr if r[3]) - ok}, refused {sum(1 for r in dr if not r[3])}')
+    un = [r for r in rows if r[0] == 'unrelated']
+    print(f'unrelated ({len(un)}): applied {sum(1 for r in un if r[3])}')
+    ed = [r for r in rows if r[0] == 'edit']
+    ok = lambda r: r[3] and r[3][0] == 1.0 and abs(r[3][1] - (0 if r[1][1] < 0.5 else r[1][0])) <= 0.3
+    print(f'mid-film edit ({len(ed)}): viewer side right {sum(1 for r in ed if ok(r))}, '
+          f'wrong {sum(1 for r in ed if r[3] and not ok(r))}, refused {sum(1 for r in ed if not r[3])}')
 
 
 if __name__ == '__main__':

@@ -3,7 +3,7 @@ import { describe, expect, it, jest } from '@jest/globals';
 // Only the renderer half of SubtitleHtmlParser needs reanimated; cue lookup does not.
 jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { Text: 'Text' } }));
 
-import { chooseSecondWindow, chooseWindow, interpret, isSpeechCue, WINDOW_S } from '../src/services/SubtitleAutoSync';
+import { chooseClips, CLIP_S, interpret, isSpeechCue } from '../src/services/SubtitleAutoSync';
 import { SubtitleSyncService } from '../src/services/SubtitleSyncService';
 import { SubtitleParser } from '../src/utils/SubtitleParser';
 import { describeAutoSync } from '../src/hooks/video-player/useSubtitleAutoSync';
@@ -68,61 +68,39 @@ describe('Pick a line in any script', () => {
     });
 });
 
-describe('chooseWindow', () => {
-    it('picks the densest dialogue near the viewer', () => {
-        // Sparse dialogue, then a dense scene from 1200 s.
-        const cues = [...dialogue(0, 1200, 30), ...dialogue(1200, 1800, 3)];
-        const start = chooseWindow(cues, 1000)!;
-        expect(start).toBeGreaterThanOrEqual(1150);
-        expect(start + WINDOW_S).toBeLessThanOrEqual(1800 + 20);
+describe('chooseClips', () => {
+    it('spreads 8 clips over the film, each on the densest dialogue of its part', () => {
+        // An hour of sparse dialogue with one dense scene in each eighth, at 200 s into it.
+        const dense = Array.from({ length: 8 }, (_, k) => dialogue(k * 450 + 200, k * 450 + 260, 3));
+        const clips = chooseClips([...dialogue(0, 3600, 40), ...dense.flat()]);
+        expect(clips).toHaveLength(8);
+        clips.forEach((start, k) => {
+            expect(start).toBeGreaterThanOrEqual(k * 450 + 140);
+            expect(start + CLIP_S).toBeLessThanOrEqual(k * 450 + 262);
+        });
     });
 
-    it('stays near the viewer, since an edit can change sync mid-film', () => {
-        const cues = [...dialogue(0, 600, 3), ...dialogue(4000, 4600, 3)];
-        expect(chooseWindow(cues, 4300)!).toBeGreaterThan(3000);
-    });
-
-    it('refuses when there is too little dialogue to align', () => {
-        expect(chooseWindow(dialogue(0, 600, 60), 100)).toBeNull();
-        expect(chooseWindow([], 0)).toBeNull();
-    });
-});
-
-describe('chooseSecondWindow', () => {
-    it('picks the densest dialogue at least 20 minutes from the first window', () => {
-        // Dense at 0-600 (too close to a first window at 100), denser at 3000-3600, sparse between.
-        const cues = [...dialogue(0, 600, 4), ...dialogue(600, 3000, 30), ...dialogue(3000, 3600, 3)];
-        const start = chooseSecondWindow(cues, 100)!;
-        expect(start).toBeGreaterThanOrEqual(2950);
-        expect(start + WINDOW_S).toBeLessThanOrEqual(3600 + 20);
-    });
-
-    it('looks before the first window too', () => {
-        const cues = [...dialogue(0, 600, 3), ...dialogue(4000, 4600, 3)];
-        expect(chooseSecondWindow(cues, 4100)!).toBeLessThan(600);
-    });
-
-    it('returns null for a film too short or with no other dense stretch', () => {
-        expect(chooseSecondWindow(dialogue(0, 1200, 3), 0)).toBeNull();
-        expect(chooseSecondWindow([...dialogue(0, 600, 3), ...dialogue(600, 5000, 60)], 100)).toBeNull();
-        expect(chooseSecondWindow([], 0)).toBeNull();
+    it('skips parts with too little dialogue, and needs two clips at least', () => {
+        const cues = [...dialogue(0, 600, 3), ...dialogue(3000, 3600, 3)];
+        expect(chooseClips(cues).length).toBeGreaterThanOrEqual(2);
+        expect(chooseClips(dialogue(0, 600, 3).slice(0, 12))).toEqual([]);   // one clip's worth
+        expect(chooseClips(dialogue(0, 3600, 60))).toEqual([]);              // one line a minute
+        expect(chooseClips([])).toEqual([]);
     });
 });
 
 describe('interpret', () => {
-    const base = { delayMs: 1834, ratio: 1, peakZ: 12, runnerUp: 0.3, confident: true, drift: false, source: 'energy' as const };
+    const base = { delayMs: 1834, ratio: 1, peakZ: 12, runnerUp: 0.3 };
 
-    it('applies a confident plain delay, rounded to the 10 ms the panel works in', () => {
+    it('applies the delay, rounded to the 10 ms the panel works in', () => {
         expect(interpret(base)).toEqual({ kind: 'synced', delayMs: 1830, ratio: 1 });
     });
 
-    it('applies a confirmed frame-rate ratio with its delay', () => {
+    it('applies a frame-rate ratio with its delay', () => {
         expect(interpret({ ...base, ratio: 25 / 23.976 })).toEqual({ kind: 'synced', delayMs: 1830, ratio: 25 / 23.976 });
     });
 
-    it('never applies an unsure or unconfirmed drifting answer', () => {
-        expect(interpret({ ...base, confident: false })).toEqual({ kind: 'unsure' });
-        expect(interpret({ ...base, confident: false, drift: true, ratio: 25 / 23.976 })).toEqual({ kind: 'drift' });
+    it('applies nothing when native is unsure', () => {
         expect(interpret(null)).toEqual({ kind: 'unsure' });
     });
 });

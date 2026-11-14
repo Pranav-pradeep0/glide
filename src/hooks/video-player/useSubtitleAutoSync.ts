@@ -26,7 +26,8 @@ interface Options {
     setDelay: (ms: number) => void;
     setRatio: (ratio: number) => void;
     showToast: (message: string) => void;
-    selectedAudioTrackIndex?: number;
+    /** The heard audio track's container id (NativeAudioTrack.formatId); auto sync listens to that track. */
+    selectedAudioFormatId?: string;
     audioTracksLoaded?: boolean;
 }
 
@@ -43,9 +44,8 @@ export function describeAutoSync(result: AutoSyncResult): string {
             if (Math.abs(result.delayMs) < 100) {return 'Subtitles already in sync';}
             return `Subtitles moved ${moved}`;
         }
-        case 'drift': return 'Couldn’t auto sync: this subtitle is for a different frame rate. Try another one.';
         case 'unsure': return 'Couldn’t auto sync: the dialogue isn’t clear enough here. Try Pick a line.';
-        case 'too-few-cues': return 'Couldn’t auto sync: not enough dialogue nearby. Try again during a conversation.';
+        case 'too-few-cues': return 'Couldn’t auto sync: this subtitle has too little dialogue.';
         case 'no-audio': return 'Couldn’t auto sync: this video’s audio can’t be read.';
         case 'failed': return 'Auto sync failed. Try again, or use Pick a line.';
     }
@@ -53,7 +53,7 @@ export function describeAutoSync(result: AutoSyncResult): string {
 
 export function useSubtitleAutoSync({
     videoPath, cues, isExternal, enabled, currentTimeRef, delayMs, ratio, setDelay, setRatio, showToast,
-    selectedAudioTrackIndex, audioTracksLoaded,
+    selectedAudioFormatId, audioTracksLoaded,
 }: Options) {
     const [running, setRunning] = useState(false);
     const runningRef = useRef(false);
@@ -63,8 +63,8 @@ export function useSubtitleAutoSync({
     const untouched = delayMs === 0 && ratio === 1;
     const untouchedRef = useRef(untouched);
     untouchedRef.current = untouched;
-    const audioTrackRef = useRef(selectedAudioTrackIndex);
-    audioTrackRef.current = selectedAudioTrackIndex;
+    const audioTrackRef = useRef(selectedAudioFormatId);
+    audioTrackRef.current = selectedAudioFormatId;
 
     const run = useCallback(async (manual: boolean): Promise<AutoSyncResult | null> => {
         if (runningRef.current || !enabled || cues.length === 0) {return null;}
@@ -72,8 +72,7 @@ export function useSubtitleAutoSync({
         setRunning(true);
         const analysed = cues;
         try {
-            const trackIndex = audioTrackRef.current ?? -1;
-            const result = await SubtitleAutoSync.compute(videoPath, analysed, currentTimeRef.current, trackIndex);
+            const result = await SubtitleAutoSync.compute(videoPath, analysed, currentTimeRef.current, audioTrackRef.current);
             if (cuesRef.current !== analysed) {return null;}   // subtitle changed meanwhile
             // An automatic answer yields to anything the user set while it ran.
             if (!manual && !untouchedRef.current) {return null;}

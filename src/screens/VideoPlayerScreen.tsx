@@ -514,7 +514,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         setDelay: settingsHook.setSubtitleDelay,
         setRatio: settingsHook.setSubtitleRatio,
         showToast: bookmarksHook.showToastWithMessage,
-        selectedAudioTrackIndex: tracksHook.selectedAudioTrackId,
+        selectedAudioFormatId: tracksHook.audioTracks.find(t => t.id === tracksHook.selectedAudioTrackId)?.formatId,
         audioTracksLoaded: tracksHook.audioTracks.length > 0 || player.state.duration > 0,
     });
 

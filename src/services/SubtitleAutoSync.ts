@@ -7,20 +7,16 @@
 import { NativeModules } from 'react-native';
 import { SubtitleCue } from '../types';
 
-/** Audio analysed per run. Minutes of evidence, not seconds, is what makes this robust. */
-export const WINDOW_S = 300;
-
-/** The window is chosen near where the viewer is, since an edit can shift sync mid-film. */
-const SEARCH_AROUND_S = 900;
-
 /**
- * How far the second window must be from the first. A frame-rate ratio is confirmed by two
- * windows agreeing on it; at a ratio 0.1% wrong they then disagree by >= 1.2 s.
+ * Audio is analysed as [CLIPS] clips of [CLIP_S] seconds, one in each equal part of the film:
+ * the true delay lines up in every clip and chance does not, so 8 minutes spread out beat one
+ * 5-minute window (scripts/subsync-bench.py). The clips decode in parallel.
  */
-const SECOND_WINDOW_GAP_S = 1200;
+export const CLIP_S = 60;
+const CLIPS = 8;
 
-/** Below this many speech cues in the window there is too little pattern to align. */
-const MIN_SPEECH_CUES = 25;
+/** A clip needs this many speech cues inside it to say anything. */
+const MIN_CLIP_CUES = 5;
 
 /** Longer cues are usually lyrics or captions held on screen, not a line being spoken. */
 const MAX_SPEECH_CUE_S = 12;
@@ -28,20 +24,17 @@ const MAX_SPEECH_CUE_S = 12;
 export type AutoSyncResult =
     /** A cue at subtitle time c is shown at c * ratio + delayMs / 1000. Ratio is 1 for a plain delay. */
     | { kind: 'synced'; delayMs: number; ratio: number }
-    | { kind: 'drift' }
     | { kind: 'unsure' }
     | { kind: 'too-few-cues' }
     | { kind: 'no-audio' }
     | { kind: 'failed' };
 
+/** Native's answer, only ever one safe to apply; null when unsure. */
 interface NativeAlignment {
     delayMs: number;
     ratio: number;
     peakZ: number;
     runnerUp: number;
-    confident: boolean;
-    drift: boolean;
-    source: 'energy' | 'speech';
 }
 
 /**
@@ -68,53 +61,33 @@ export function isSpeechCue(cue: SubtitleCue): boolean {
 }
 
 /**
- * The 5-minute stretch with the most speech cues, within [SEARCH_AROUND_S] of the viewer.
- * Returns its start in seconds, or null if nowhere has enough dialogue.
+ * Where to listen: the start of the [CLIP_S] stretch with the most speech cues in each of
+ * [CLIPS] equal parts of the dialogue, skipping parts with fewer than [MIN_CLIP_CUES]. Empty
+ * unless at least two clips qualify.
  */
-export function chooseWindow(speechCues: SubtitleCue[], positionS: number): number | null {
+export function chooseClips(speechCues: SubtitleCue[]): number[] {
     const cues = [...speechCues].sort((a, b) => a.startTime - b.startTime);
-    let best: { start: number; count: number } | null = null;
-    let hi = 0;
-    for (let lo = 0; lo < cues.length; lo++) {
-        const start = Math.max(0, cues[lo].startTime - 20);
-        if (Math.abs(start - positionS) > SEARCH_AROUND_S) {continue;}
-        hi = Math.max(hi, lo);
-        while (hi < cues.length && cues[hi].endTime <= start + WINDOW_S) {hi++;}
-        const count = hi - lo;
-        const closer = best !== null && Math.abs(start - positionS) < Math.abs(best.start - positionS);
-        if (best === null || count > best.count || (count === best.count && closer)) {
-            best = { start, count };
+    const span = cues.reduce((m, c) => Math.max(m, c.endTime), 0);
+    const clips: number[] = [];
+    for (let part = 0; part < CLIPS; part++) {
+        // Never overlapping the last clip: the same audio twice would count as twice the evidence.
+        const from = Math.max((span * part) / CLIPS, clips.length ? clips[clips.length - 1] + CLIP_S : 0);
+        const to = Math.max(from, (span * (part + 1)) / CLIPS - CLIP_S);
+        let best = -1;
+        let bestCount = 0;
+        for (let t = from; t <= to; t += 5) {
+            const count = cues.filter(c => c.startTime >= t && c.endTime <= t + CLIP_S).length;
+            if (count > bestCount) { best = t; bestCount = count; }
         }
+        if (bestCount >= MIN_CLIP_CUES) {clips.push(best);}
     }
-    return best !== null && best.count >= MIN_SPEECH_CUES ? best.start : null;
+    return clips.length >= 2 ? clips : [];
 }
 
-/**
- * The densest 5-minute stretch anywhere in the film at least [SECOND_WINDOW_GAP_S] from the
- * first window, for native to confirm a frame-rate ratio against. Null if there is none.
- */
-export function chooseSecondWindow(speechCues: SubtitleCue[], firstStartS: number): number | null {
-    const cues = [...speechCues].sort((a, b) => a.startTime - b.startTime);
-    let best: { start: number; count: number } | null = null;
-    let hi = 0;
-    for (let lo = 0; lo < cues.length; lo++) {
-        const start = Math.max(0, cues[lo].startTime - 20);
-        if (Math.abs(start - firstStartS) < SECOND_WINDOW_GAP_S) {continue;}
-        hi = Math.max(hi, lo);
-        while (hi < cues.length && cues[hi].endTime <= start + WINDOW_S) {hi++;}
-        if (best === null || hi - lo > best.count) {best = { start, count: hi - lo };}
-    }
-    return best !== null && best.count >= MIN_SPEECH_CUES ? best.start : null;
-}
-
-/** What to do with the native answer. Only a confident one is ever applied, ratio and all. */
+/** What to do with the native answer: native only answers when it is safe to apply, ratio and all. */
 export function interpret(alignment: NativeAlignment | null): AutoSyncResult {
     if (!alignment) {return { kind: 'unsure' };}
-    if (alignment.confident) {
-        return { kind: 'synced', delayMs: Math.round(alignment.delayMs / 10) * 10, ratio: alignment.ratio || 1 };
-    }
-    // A ratio fits but a second window could not confirm it: applying it could make things worse.
-    return { kind: alignment.drift ? 'drift' : 'unsure' };
+    return { kind: 'synced', delayMs: Math.round(alignment.delayMs / 10) * 10, ratio: alignment.ratio || 1 };
 }
 
 export class SubtitleAutoSync {
@@ -127,12 +100,11 @@ export class SubtitleAutoSync {
         videoPath: string,
         cues: SubtitleCue[],
         positionS: number,
-        audioTrackIndex: number = -1,
+        audioFormatId?: string,
     ): Promise<AutoSyncResult> {
         const speech = cues.filter(isSpeechCue);
-        const windowStart = chooseWindow(speech, positionS);
-        if (windowStart === null) {return { kind: 'too-few-cues' };}
-        const secondStart = chooseSecondWindow(speech, windowStart);
+        const clips = chooseClips(speech);
+        if (clips.length === 0) {return { kind: 'too-few-cues' };}
 
         const starts = speech.map(c => c.startTime);
         const ends = speech.map(c => c.endTime);
@@ -142,11 +114,12 @@ export class SubtitleAutoSync {
                 // The numbers behind the answer are logged natively (SubtitleSyncModule, "auto-sync").
                 const alignment: NativeAlignment | null = await NativeModules.SubtitleSyncModule.alignVideo(
                     videoPath,
-                    windowStart,
+                    clips,
+                    CLIP_S,
                     starts,
                     ends,
-                    Number.isInteger(audioTrackIndex) ? audioTrackIndex : -1,
-                    secondStart ?? -1,
+                    audioFormatId ?? null,
+                    positionS,
                 );
                 return interpret(alignment);
             } catch (error: any) {
