@@ -20,6 +20,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.glide.app.player.BackgroundWork
 import java.io.File
 import java.io.FileOutputStream
@@ -28,6 +29,36 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
     override fun getName(): String = "MediaStoreAudioModule"
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Debounced: a copy or a scan fires onChange once per file, often dozens in a burst. */
+    private val announceLibraryChange = Runnable {
+        if (reactContext.hasActiveReactInstance()) {
+            reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit("onAudioLibraryChanged", null)
+        }
+    }
+
+    /** A song added, deleted or re-tagged outside Glide: JS drops its song list on this. */
+    private val libraryObserver = object : ContentObserver(mainHandler) {
+        override fun onChange(selfChange: Boolean) {
+            mainHandler.removeCallbacks(announceLibraryChange)
+            mainHandler.postDelayed(announceLibraryChange, 1500L)
+        }
+    }
+
+    init {
+        reactContext.contentResolver.registerContentObserver(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, libraryObserver
+        )
+    }
+
+    override fun invalidate() {
+        reactContext.contentResolver.unregisterContentObserver(libraryObserver)
+        mainHandler.removeCallbacks(announceLibraryChange)
+        super.invalidate()
+    }
 
     data class ArtDetails(
         val uri: String?,

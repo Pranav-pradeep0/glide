@@ -13,7 +13,7 @@ jest.mock('react-native-mmkv', () => ({
     }),
 }));
 
-import { NativeModules, Platform } from 'react-native';
+import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
 
 Object.defineProperty(Platform, 'OS', {
     get: () => 'android',
@@ -646,6 +646,15 @@ describe('Audio Player Utilities and Store', () => {
                 expect(songs.length).toBe(folder.numberOfSongs);
             }
             expect(folderPathOf({ ...sampleSongs[0], path: 'song.mp3' })).toBe('/');
+        });
+
+        it('rescans after the library changes outside Glide', async () => {
+            await AudioMediaService.getSongs();
+            const getSongs = NativeModules.MediaStoreAudioModule.getSongs as jest.Mock<any>;
+            getSongs.mockClear();
+            DeviceEventEmitter.emit('onAudioLibraryChanged');
+            await AudioMediaService.getSongs();
+            expect(getSongs).toHaveBeenCalledTimes(1);
         });
     });
 });

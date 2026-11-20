@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
 import { AudioAlbum, AudioArtist, AudioFolder, AudioTrack } from '@/types';
 import { PermissionService } from './PermissionService';
 
@@ -259,3 +259,6 @@ class AudioMediaServiceClass {
 }
 
 export const AudioMediaService = new AudioMediaServiceClass();
+
+// A song added or removed outside Glide: the next read rescans instead of serving the old list.
+DeviceEventEmitter.addListener('onAudioLibraryChanged', () => AudioMediaService.invalidateCache());
