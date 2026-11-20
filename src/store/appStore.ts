@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { Appearance } from 'react-native';
-import { AppSettings, HapticPreset, HapticSettings, ShakeAction } from '../types';
+import { AppSettings, HapticPreset, HapticSettings, ShakeAction, ThemeMode } from '../types';
 import { storage } from '../storage/storage';
 import { setCrashReportsEnabled as setNativeCrashReports } from '../native/GlideNative';
 import { IS_TV } from '../utils/tv';
@@ -31,7 +30,8 @@ const DEFAULT_HAPTIC_SETTINGS: HapticSettings = {
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-    darkMode: false,
+    // TV starts dark (owner, 2026-10-23): a dim room, and TVs report light. Settings can change it.
+    darkMode: IS_TV ? 'dark' : 'system',
     hapticSettings: DEFAULT_HAPTIC_SETTINGS,
     subtitleFontSize: 20,
     subtitleColor: '#FFFFFF',
@@ -59,10 +59,13 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     crashReportsEnabled: true,
 };
 
-function migrateSettings(settings: AppSettings): AppSettings {
+export function migrateSettings(settings: AppSettings): AppSettings {
+    // Older builds stored dark mode as a boolean.
+    const darkMode = settings?.darkMode as ThemeMode | boolean | undefined;
     const merged = {
         ...DEFAULT_APP_SETTINGS,
         ...settings,
+        darkMode: typeof darkMode === 'boolean' ? (darkMode ? 'dark' : 'light') : darkMode ?? DEFAULT_APP_SETTINGS.darkMode,
         // Older builds stored a 1-255 `intensity`, which the presets replaced.
         hapticSettings: {
             enabled: settings?.hapticSettings?.enabled ?? DEFAULT_HAPTIC_SETTINGS.enabled,
@@ -86,27 +89,20 @@ function migrateSettings(settings: AppSettings): AppSettings {
 }
 
 function loadInitialSettings(): AppSettings {
-    // TV starts dark (owner, 2026-10-23): a dim room, and TVs report light. Settings can change it.
-    const systemDark = IS_TV || Appearance.getColorScheme() === 'dark';
     try {
         const saved = storage.loadSettings();
         if (saved) {
-            const migrated = migrateSettings(saved);
-            if (migrated.darkMode === undefined || migrated.darkMode === null) {
-                return { ...migrated, darkMode: systemDark };
-            }
-            return migrated;
+            return migrateSettings(saved);
         }
     } catch {
         // Fallback to defaults
     }
-    return { ...DEFAULT_APP_SETTINGS, darkMode: systemDark };
+    return DEFAULT_APP_SETTINGS;
 }
 
 interface AppStore {
     settings: AppSettings;
     updateSettings: (settings: Partial<AppSettings>) => void;
-    toggleDarkMode: () => void;
     toggleHaptics: () => void;
     setSubtitleFontSize: (size: number) => void;
     setSubtitleColor: (color: string) => void;
@@ -143,10 +139,6 @@ export const useAppStore = create<AppStore>((set) => ({
     updateSettings: (newSettings) =>
         set((state) => ({
             settings: { ...state.settings, ...newSettings },
-        })),
-    toggleDarkMode: () =>
-        set((state) => ({
-            settings: { ...state.settings, darkMode: !state.settings.darkMode },
         })),
     toggleHaptics: () =>
         set((state) => ({

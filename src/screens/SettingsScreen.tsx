@@ -30,13 +30,14 @@ import {
     ListGroup,
     ListRow,
     SectionLabel,
+    Segmented,
     Sheet,
     showDialog,
     showSnackbar,
     Touchable,
 } from '@/components/ui';
 import { metrics, playerTheme, type } from '@/theme/theme';
-import { AppSettings, ShakeAction } from '../types';
+import { AppSettings, ShakeAction, ThemeMode } from '../types';
 import pkg from '../../package.json';
 import { NATIVE_API_LEVEL } from '@/native/GlideNative';
 import { ACTIVE_RELEASE_HASH } from 'react-native-stallion';
@@ -59,6 +60,12 @@ const SUBTITLE_STYLES = [
     { key: 'outline', label: 'Outline' },
     { key: 'box', label: 'Box' },
 ] as const;
+
+const THEME_MODES: { key: ThemeMode; label: string }[] = [
+    { key: 'system', label: IS_TV ? 'Follow TV' : 'Follow phone' },
+    { key: 'light', label: 'Light' },
+    { key: 'dark', label: 'Dark' },
+];
 
 // ---------------------------------------------------------------------------
 // Rows the kit does not cover: a slider with its label, and a row of chips.
@@ -196,7 +203,6 @@ export default function SettingsScreen() {
 
     const settings = useAppStore((state) => state.settings);
     const updateSettings = useAppStore((state) => state.updateSettings);
-    const toggleDarkMode = useAppStore((state) => state.toggleDarkMode);
     const toggleHaptics = useAppStore((state) => state.toggleHaptics);
     const setSubtitleFontSize = useAppStore((state) => state.setSubtitleFontSize);
     const setSubtitleColor = useAppStore((state) => state.setSubtitleColor);
@@ -429,11 +435,13 @@ export default function SettingsScreen() {
 
                 <SectionLabel title="Display" />
                 <ListGroup>
-                    <ListRow
-                        icon="moon"
-                        title="Dark mode"
-                        toggle={{ value: settings.darkMode, onChange: toggleDarkMode }}
-                    />
+                    <ChipRow title="Theme">
+                        <Segmented
+                            options={THEME_MODES}
+                            value={settings.darkMode}
+                            onChange={mode => updateSettings({ darkMode: mode })}
+                        />
+                    </ChipRow>
                     {/* A TV has no screen brightness to set, nor a phone's picture-in-picture. */}
                     {!IS_TV && <ListRow
                         icon="sun"

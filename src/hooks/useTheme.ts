@@ -1,7 +1,10 @@
+import { useColorScheme } from 'react-native';
 import { useAppStore } from '../store/appStore';
 import { darkTheme, lightTheme, Theme } from '@/theme/theme';
 
 export function useTheme(): Theme {
-    const darkMode = useAppStore((state) => state.settings.darkMode);
-    return darkMode ? darkTheme : lightTheme;
+    const mode = useAppStore((state) => state.settings.darkMode);
+    const system = useColorScheme();
+    const dark = mode === 'system' ? system === 'dark' : mode === 'dark';
+    return dark ? darkTheme : lightTheme;
 }

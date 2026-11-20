@@ -81,8 +81,10 @@ export interface HapticSettings {
     strength: number;
 }
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export interface AppSettings {
-    darkMode: boolean;
+    darkMode: ThemeMode;
     hapticSettings: HapticSettings;
     subtitleFontSize: number;
     subtitleColor: string;
