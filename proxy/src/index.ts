@@ -4,7 +4,8 @@ const CHAT_MODEL = 'openai/gpt-oss-120b';
 
 const MAX_DIALOGUE_CHARS = 5000;
 const MAX_TITLE_CHARS = 200;
-const MAX_RECAP_BODY_BYTES = 8 * 1024;
+// Bytes, while the dialogue cap is UTF-16 units: 5000 Cyrillic or CJK chars are 10-15 KB of UTF-8.
+const MAX_RECAP_BODY_BYTES = 24 * 1024;
 const CHAT_TIMEOUT_MS = 15000;
 const LOOKUP_TIMEOUT_MS = 12000;
 const MAX_REPORT_BODY_BYTES = 4 * 1024;
