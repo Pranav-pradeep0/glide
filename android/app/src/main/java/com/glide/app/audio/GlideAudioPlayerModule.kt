@@ -200,6 +200,16 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         mainHandler.removeCallbacks(progressRunnable)
     }
 
+    /**
+     * Shuffle with the current song first. DefaultShuffleOrder puts it anywhere, so with
+     * repeat off every song shuffled before it never played -- about half the queue.
+     */
+    private fun startShuffleAt(p: ExoPlayer) {
+        if (p.mediaItemCount == 0) return
+        val order = currentFirstShuffle(p.mediaItemCount, p.currentMediaItemIndex)
+        p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order, System.nanoTime()))
+    }
+
     /** Queue indices in the order they play: the queue order, or the shuffle order. */
     private fun playOrder(p: ExoPlayer): List<Int> {
         val timeline = p.currentTimeline
@@ -412,6 +422,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
                         startIndex.coerceIn(0, (mediaItems.size - 1).coerceAtLeast(0)),
                         (startPositionSeconds * 1000).toLong()
                     )
+                    if (shuffle) startShuffleAt(p)
                     p.shuffleModeEnabled = shuffle
                     p.repeatMode = when (repeatMode) {
                         "one" -> Player.REPEAT_MODE_ONE
@@ -667,6 +678,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         mainHandler.post {
             try {
                 val p = player
+                if (p != null && enabled && !p.shuffleModeEnabled) startShuffleAt(p)
                 p?.shuffleModeEnabled = enabled
                 emitTrackChanged()
                 promise.resolve(true)
@@ -735,3 +747,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         }
     }
 }
+
+/** [current] first, then every other index of [count] in random order. */
+internal fun currentFirstShuffle(count: Int, current: Int): IntArray =
+    intArrayOf(current) + (0 until count).filter { it != current }.shuffled()
