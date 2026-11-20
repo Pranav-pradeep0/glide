@@ -54,6 +54,8 @@ class CreditsDetectorTest {
         assertEquals(6_400_000L, CreditsDetector.fromChapters(listOf("ED" to 6_400_000L), d))
         // An "Ending" chapter in the first half is a story chapter.
         assertNull(CreditsDetector.fromChapters(listOf("The Ending" to 1_000_000L, "Credited" to 6_500_000L), d))
+        // Story chapters in the second half that only contain a credits word.
+        assertNull(CreditsDetector.fromChapters(listOf("The Ending" to 6_000_000L, "Ed Returns" to 6_500_000L), d))
     }
 
     /**

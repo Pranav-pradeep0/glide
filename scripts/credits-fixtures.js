@@ -16,7 +16,7 @@ const OUT = path.join(__dirname, '..', '.credits-fixtures');
 const TAIL_S = 20 * 60;
 const HEAD_BYTES = 8_000_000;
 // Same words as CreditsDetector.CHAPTER_WORDS.
-const CREDITS = /\b(end ?credits|credits|ending|outro|ed)\b/i;
+const CREDITS = /^\s*(end ?credits|credits|ending|outro|ed)\s*$/i;
 
 const q = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
 

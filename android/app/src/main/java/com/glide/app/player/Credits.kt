@@ -50,8 +50,8 @@ object CreditsDetector {
     private const val BRIGHT = 70
     private const val EDGE = 30
 
-    // Same words as scripts/credits-fixtures.js.
-    private val CHAPTER = Regex("""\b(end ?credits|credits|ending|outro|ed)\b""", RegexOption.IGNORE_CASE)
+    // Same words as scripts/credits-fixtures.js. The whole title, so "The Ending" or "Ed Returns" don't count.
+    private val CHAPTER = Regex("""^\s*(end ?credits|credits|ending|outro|ed)\s*$""", RegexOption.IGNORE_CASE)
 
     /** The first credits chapter in the second half; titles and start times in ms. */
     fun fromChapters(chapters: List<Pair<String, Long>>, durationMs: Long): Long? =
