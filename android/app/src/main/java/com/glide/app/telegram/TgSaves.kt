@@ -146,7 +146,7 @@ object TgSaves {
                 }
                 // Returns when complete or cancelled; the player opening replaces it (code 200).
                 val r = try {
-                    Td.send(TdApi.DownloadFile(f.id, 1, 0, 0, true))
+                    Td.send(TdApi.DownloadFile(f.id, 1, 0, 0, true), timeoutSec = null)
                 } catch (e: Td.TdException) {
                     if (e.code == 200) continue else throw e
                 }

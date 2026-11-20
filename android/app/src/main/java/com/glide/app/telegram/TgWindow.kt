@@ -1,5 +1,6 @@
 package com.glide.app.telegram
 
+import java.io.IOException
 import java.io.InterruptedIOException
 
 /** What TDLib last said about a file's download (`updateFile`, or `downloadFile`'s answer). */
@@ -10,7 +11,7 @@ data class Progress(val path: String, val offset: Long, val prefix: Long, val ac
  * How much is readable comes only from TDLib's numbers, never the file's length on disk: a
  * partial file has holes (tdlib/td#3262).
  */
-class TgWindow(private val size: Long, private val td: Tdlib, private val slack: Long = SLACK) {
+class TgWindow(private val size: Long, private val td: Tdlib, private val slack: Long = SLACK, private val giveUpMs: Long = GIVE_UP_MS) {
     interface Tdlib {
         /** Bytes on disk from [pos] on (`getFileDownloadedPrefixSize`). */
         fun prefixAt(pos: Long): Long
@@ -45,12 +46,21 @@ class TgWindow(private val size: Long, private val td: Tdlib, private val slack:
     /**
      * Bytes readable on disk at [pos], blocking until TDLib has at least one; 0 at the end.
      * If no running download will reach [pos] soon, moves the download there (the latest
-     * `downloadFile` wins, so a seek needs no debounce).
+     * `downloadFile` wins, so a seek needs no debounce). Throws if TDLib goes [giveUpMs] without
+     * news (network lost), so the player shows an error instead of buffering forever.
      */
     fun await(pos: Long): Long {
         if (pos >= size) return 0
+        var heard = -1
+        var heardAt = System.nanoTime()
         while (true) {
             val seen = synchronized(lock) { seq }
+            if (seen != heard) {
+                heard = seen
+                heardAt = System.nanoTime()
+            } else if (System.nanoTime() - heardAt > giveUpMs * 1_000_000) {
+                throw IOException("no data from Telegram for $giveUpMs ms")
+            }
             val n = td.prefixAt(pos)
             if (n > 0) {
                 if (due(pos)) fetch(pos)
@@ -92,7 +102,7 @@ class TgWindow(private val size: Long, private val td: Tdlib, private val slack:
         /** A seek this close ahead of the download is cheaper to wait for than to restart. */
         const val SLACK = 1L shl 20
         const val MIN_SPAN = 8L shl 20
-        // ponytail: no give-up timeout; TDLib reconnects itself. Add one if step (d)'s network-cut case needs it.
+        const val GIVE_UP_MS = 30_000L
         private const val POLL_MS = 1000L
     }
 }

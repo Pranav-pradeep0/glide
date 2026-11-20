@@ -78,9 +78,10 @@ object Td {
 
     /**
      * [f]'s answer, waiting for it; never call on TDLib's thread. [inOrder] sees the answer on
-     * TDLib's thread, in order with updates.
+     * TDLib's thread, in order with updates. Gives up after [timeoutSec] (null: waits as long as it
+     * takes, for a whole film's download).
      */
-    fun <R : TdApi.Object> send(f: TdApi.Function<R>, inOrder: (R) -> Unit = {}): R {
+    fun <R : TdApi.Object> send(f: TdApi.Function<R>, timeoutSec: Long? = 30, inOrder: (R) -> Unit = {}): R {
         val latch = CountDownLatch(1)
         var result: TdApi.Object? = null
         if (f is TdApi.DownloadFile) dirs()
@@ -94,7 +95,7 @@ object Td {
                 latch.countDown()
             }
         }
-        latch.await()
+        if (timeoutSec == null) latch.await() else if (!latch.await(timeoutSec, TimeUnit.SECONDS)) throw TdException(-1, "timeout")
         val r = result
         if (r is TdApi.Error) throw TdException(r.code, r.message)
         @Suppress("UNCHECKED_CAST")

@@ -12,8 +12,8 @@ private const val MB = 1L shl 20
 private const val SIZE = 2000 * MB
 
 /** TDLib as the window sees it: ranges on disk, a download offset, updates on demand. */
-private class FakeTd : TgWindow.Tdlib {
-    val window = TgWindow(SIZE, this)
+private class FakeTd(giveUpMs: Long = TgWindow.GIVE_UP_MS) : TgWindow.Tdlib {
+    val window = TgWindow(SIZE, this, giveUpMs = giveUpMs)
     val ranges = mutableListOf<LongRange>()
     val requests = mutableListOf<Pair<Long, Long>>()
 
@@ -206,6 +206,17 @@ class TgWindowTest {
         } catch (_: InterruptedIOException) {
         } finally {
             Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun givesUpWhenTdlibGoesSilent() {
+        val td = FakeTd(giveUpMs = 50)
+        try {
+            td.window.await(0)
+            throw AssertionError("expected IOException")
+        } catch (e: java.io.IOException) {
+            assertTrue(e !is InterruptedIOException)
         }
     }
 }
