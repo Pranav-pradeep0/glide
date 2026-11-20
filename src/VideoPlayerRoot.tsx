@@ -66,7 +66,8 @@ export default function VideoPlayerRoot(extras: LaunchExtras) {
     const theme = useTheme();
     const navigationRef = useRef<NavigationContainerRef<any>>(null);
     useActivityBackButton(navigationRef, 'VideoPlayerActivity');
-    const openedUriRef = useRef<string | undefined>(videoUri);
+    // Each open bumps this; a slower, older resolve must not replace a newer one.
+    const requestSeqRef = useRef(0);
 
     const [ready, setReady] = useState(false);
     const [initialState, setInitialState] = useState<OpenRequest | null>(null);
@@ -78,8 +79,9 @@ export default function VideoPlayerRoot(extras: LaunchExtras) {
                 finishCurrentActivity();
                 return;
             }
-            openedUriRef.current = videoUri;
-            setInitialState(await resolveRoute({ ...extras, videoUri }));
+            const seq = ++requestSeqRef.current;
+            const request = await resolveRoute({ ...extras, videoUri });
+            if (seq === requestSeqRef.current) { setInitialState(request); }
             setReady(true);
         };
         prepare();
@@ -91,11 +93,13 @@ export default function VideoPlayerRoot(extras: LaunchExtras) {
     useEffect(() => {
         const sub = DeviceEventEmitter.addListener('onNewVideoUri', async (next: LaunchExtras) => {
             const newUri = next?.videoUri;
-            // Re-opening what is already playing would restart it from the top.
-            if (!newUri || newUri === openedUriRef.current) { return; }
-            openedUriRef.current = newUri;
-
+            if (!newUri) { return; }
+            const seq = ++requestSeqRef.current;
             const request = await resolveRoute({ ...next, videoUri: newUri });
+            if (seq !== requestSeqRef.current) { return; }
+            // Re-opening what is playing now (it may be a later list item) would restart it from the top.
+            const playing = (navigationRef.current?.getCurrentRoute()?.params as any)?.videoPath;
+            if (playing && request.params.videoPath === playing) { return; }
             if (navigationRef.current?.isReady()) {
                 navigationRef.current.reset({
                     index: 0,
