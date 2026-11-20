@@ -603,17 +603,19 @@ export default function VideoPlayerScreen({ route }: Props) {
         setIsGeneratingRecap,
         recapLoadingMessage,
         setRecapLoadingMessage,
+        cancelRecap,
     } = recap;
 
     // Like Continue watching: closing never starts playback; only Resume does.
     // Closing Recap any way (X, outside, Back, Resume) carries on playing.
     const playerPlay = player.play;
     const closeRecap = useCallback(() => {
+        cancelRecap();
         setRecapVisible(false);
         setIsGeneratingRecap(false);
         setRecapLoadingMessage(undefined);
         playerPlay();
-    }, [setRecapVisible, setIsGeneratingRecap, setRecapLoadingMessage, playerPlay]);
+    }, [cancelRecap, setRecapVisible, setIsGeneratingRecap, setRecapLoadingMessage, playerPlay]);
 
     const {
         resumeModalVisible,

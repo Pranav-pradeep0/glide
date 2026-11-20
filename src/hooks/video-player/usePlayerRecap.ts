@@ -121,6 +121,9 @@ export function usePlayerRecap({
         subtitleCues,
     ]);
 
+    const recapRunRef = useRef(0);
+    const cancelRecap = useCallback(() => { recapRunRef.current++; }, []);
+
     const handleRecapTrigger = useCallback(async () => {
         if (isNetworkStream) { return; }
 
@@ -147,6 +150,9 @@ export function usePlayerRecap({
         onDismissResumeModal();
         setRecapVisible(true);
         setIsGeneratingRecap(true);
+        // Closing Recap bumps the run, so a late result can't unpause or toast.
+        const run = ++recapRunRef.current;
+        const stale = () => !isMounted.current || recapRunRef.current !== run;
 
         const setFeedback = (msg: string) => {
             if (isMounted.current) {
@@ -164,7 +170,7 @@ export function usePlayerRecap({
                 cleanTitle || videoName
             );
 
-            if (!isMounted.current) { return; }
+            if (stale()) { return; }
 
             if (!dialogue) {
                 setRecapText(null);
@@ -179,7 +185,7 @@ export function usePlayerRecap({
             setFeedback('Generating your recap...');
             const summary = await RecapService.generateRecap(dialogue, cleanTitle || videoName);
 
-            if (!isMounted.current) { return; }
+            if (stale()) { return; }
 
             if (summary) {
                 setRecapText(summary);
@@ -193,7 +199,7 @@ export function usePlayerRecap({
             }
         } catch (error) {
             console.error('[usePlayerRecap] Recap error:', error);
-            if (isMounted.current) {
+            if (!stale()) {
                 setRecapText(null);
                 setRecapVisible(false);
                 setRecapLoadingMessage(undefined);
@@ -231,5 +237,6 @@ export function usePlayerRecap({
         isRecapEligible,
         recapChecked,
         handleRecapTrigger,
+        cancelRecap,
     };
 }
