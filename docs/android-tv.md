@@ -9,8 +9,8 @@ Started 2026-10-23 on branch `tv`; merged into `main` 2026-10-27, after 2.6.0.
   `com.glide.player`, not a separate app or repo.
 - **First pass is videos only.** Music, Now Playing, the mini player and haptics are hidden on TV.
 - **Navigation is a left side rail** (M3 navigation rail / Android TV pattern), not tabs across the top.
-- **No SMB / network shares in the first pass.** Local storage and USB only. SMB is the next big
-  piece once the basics work (see Later).
+- **SMB / network shares are in.** Local storage, USB and SMB shares (the Network page on the
+  rail).
 - **Testing:** the owner has an Android TV; first device test 2026-10-24.
 
 ## Where the code lives
@@ -48,7 +48,7 @@ Built by four parallel agents, each owning separate files:
 | Area | Files | What |
 |---|---|---|
 | Focus system | `ui/index.tsx`, `theme/**`, `VideoRow.tsx`, `FoldersScreen`, `AlbumVideosScreen`, `Skeleton.tsx` | Focus ring on every primitive, focusable library rows and cards, focus-follow scrolling, TV sizing and overscan margins, focus moving into sheets and dialogs |
-| Navigation and manifest | `src/navigation/**`, `MiniPlayer`, `AndroidManifest.xml`, banner in `res/` | Left side rail (Videos, Recents, Settings), music routes unreachable, Back behaviour, `LEANBACK_LAUNCHER`, banner, touchscreen and leanback marked not required |
+| Navigation and manifest | `src/navigation/**`, `MiniPlayer`, `AndroidManifest.xml`, banner in `res/` | Left side rail (Videos, Recents, Network, Telegram when available, Settings), music routes unreachable, Back behaviour, `LEANBACK_LAUNCHER`, banner, touchscreen and leanback marked not required |
 | Player remote | `VideoPlayerScreen`, `components/VideoPlayer/**`, `TrackSelector`, `FloatingSyncPanel`, `hooks/video-player/**`, player Kotlin | Native key bridge; OK to play/pause, Left/Right to seek, Up/Down to show controls; focus inside controls and panels; phone-only player features hidden |
 | Other screens | Settings, Recents, Onboarding, PlayerDetail, Search | Phone-only settings hidden, video-only Recents, onboarding usable with a remote, Play focused first, search with the TV keyboard |
 
@@ -68,8 +68,6 @@ Results, open issues and the device checklist: see **Status** below.
 
 ## Later
 
-- **SMB / network shares** (backlog F: "SMB/WebDAV (L)"): browsing, credentials, playback over
-  the network. The main reason people install a media player on a TV.
 - TMDB posters and a poster-first library.
 - Music on TV.
 - Android TV home screen channels / "Watch Next" integration.
@@ -133,7 +131,7 @@ Built:
   blur events of one burst grouped by type, so a bounce left a stale ring; native reports the
   focused view each frame (`onTvFocus`) and `Touchable`'s ring follows it.
 - **Shell:** `SideRail` (80 dp, opens to 240 dp on focus) on `tabBarPosition: 'left'`; Videos,
-  Recents, Settings; music routes and "Open with" for audio disabled on TV; Back → Videos → home.
+  Recents, Network, Telegram (when available), Settings; music routes and "Open with" for audio disabled on TV; Back → Videos → home.
 - **Screens:** Settings hides lyrics, brightness, PiP, gestures & haptics; Recents video-only;
   onboarding one slide at a time with Next/Skip; PlayerDetail focuses Play; Search 48 dp pads.
 - **Player:** native `TvRemoteModule` + `GlideBaseActivity.dispatchKeyEvent`; JS sets the mode

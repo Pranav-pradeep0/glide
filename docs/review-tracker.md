@@ -190,7 +190,7 @@ Media3 1.11.1 `DefaultShuffleOrder` was checked in the library source: there is 
 | TV-10 | TODO | CONFIRMED | L | src/components/LicencesSheet.tsx:35-50 (catch at 45) | Nothing focusable without Source row; error swallowed. | Licence Text `focusable={IS_TV}`; catch → `showSnackbar({ text: open.source })`. | S |
 | TV-11 | DONE | CONFIRMED | L | src/components/ui/index.tsx:833 | Drag handle drawn on TV. | `{!IS_TV && <View style={styles.handle} …/>}`. | S |
 | TV-12 | TODO | PARTIAL | L | android/.../player/TvRemoteModule.kt:50-65 | CAPTIONS, INFO unmapped; MEDIA_STOP handled by MediaSession. | Map KEYCODE_CAPTIONS → "captions" (open Subtitles panel), KEYCODE_INFO → "info" (show controls); handle in useTvRemote. | S |
-| TV-13 | TODO | CONFIRMED | L | docs/android-tv.md:11-12,51,135-136 vs RootNavigator.tsx:342-361 | Doc says rail Videos/Recents/Settings, "No SMB". | Update doc: rail = Videos, Recents, Network, Telegram (when available), Settings; SMB shipped. | S |
+| TV-13 | DONE | CONFIRMED | L | docs/android-tv.md:11-12,51,135-136 vs RootNavigator.tsx:342-361 | Doc says rail Videos/Recents/Settings, "No SMB". | Update doc: rail = Videos, Recents, Network, Telegram (when available), Settings; SMB shipped. | S |
 
 ## Visual design (DS)
 
