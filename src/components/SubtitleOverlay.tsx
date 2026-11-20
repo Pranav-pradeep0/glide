@@ -318,7 +318,7 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = React.memo(({
                                 ...textShadowStyle,
                             }}
                             animatedStyle={animatedTextStyle}
-                            maxLines={2}
+                            maxLines={4}
                         />
                     </Animated.View>
                 )}
