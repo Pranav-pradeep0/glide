@@ -20,10 +20,12 @@ interface VideoIndexState {
 }
 
 let inFlight: Promise<void> | null = null;
+// Asked again while a scan runs: that scan may predate a change, so load once more after it.
+let dirty = false;
 
 export const useVideoIndexStore = create<VideoIndexState>((set, get) => {
     const load = (forceRefresh: boolean) => {
-        if (inFlight) { return inFlight; }
+        if (inFlight) { dirty = true; return inFlight; }
         set({ isIndexing: true });
         inFlight = MediaService.getAllVideos(forceRefresh)
             .then(videos => {
@@ -35,6 +37,10 @@ export const useVideoIndexStore = create<VideoIndexState>((set, get) => {
             .finally(() => {
                 inFlight = null;
                 set({ isIndexing: false });
+                if (dirty) {
+                    dirty = false;
+                    load(false);
+                }
             });
         return inFlight;
     };
