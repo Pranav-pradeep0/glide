@@ -137,7 +137,7 @@ export default function AlbumVideosScreen() {
         <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
             <ListHeader
                 title={albumTitle}
-                onBack={() => navigation.goBack()}
+                onBack={IS_TV ? undefined : () => navigation.goBack()}
             >
                 <IconButton
                     icon="search"

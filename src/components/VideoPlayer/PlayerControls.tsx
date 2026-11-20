@@ -600,7 +600,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
             <Animated.View
                 style={[styles.topBar, { paddingTop: insets.top + metrics.space.xs, paddingLeft: metrics.space.xs + edge('left', 0, topBarBottom), paddingRight: metrics.space.xs + edge('right', 0, topBarBottom) }, othersStyle]}
             >
-                <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" onPlayer />
+                {!IS_TV && <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" onPlayer />}
                 <View style={styles.titleBlock}>
                     <Text maxFontSizeMultiplier={metrics.playerFontScale} numberOfLines={1} style={styles.title}>{title || 'Video'}</Text>
                     {!!subtitle && <Text maxFontSizeMultiplier={metrics.playerFontScale} numberOfLines={1} style={styles.subtitle}>{subtitle}</Text>}

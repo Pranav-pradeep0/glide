@@ -132,7 +132,7 @@ export default function SearchScreen() {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
                 <View style={[styles.bar, IS_TV && styles.barTv]}>
-                    <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
+                    {!IS_TV && <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />}
                 </View>
                 <PermissionGate kind="video" />
             </View>
@@ -143,7 +143,7 @@ export default function SearchScreen() {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
                 <View style={[styles.bar, IS_TV && styles.barTv]}>
-                    <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
+                    {!IS_TV && <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />}
                 </View>
                 {indexError ? (
                     <EmptyState text="Couldn't load your videos" action="Retry" onAction={initializeIndex} icon="alert-circle" />
@@ -157,7 +157,7 @@ export default function SearchScreen() {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
             <View style={[styles.bar, IS_TV && styles.barTv]}>
-                <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
+                {!IS_TV && <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />}
                 <View style={[styles.searchField, { backgroundColor: theme.colors.cardElevated }, fieldFocused && [styles.ring, { outlineColor: theme.colors.primary }]]}>
                     <Feather name="search" size={18} color={theme.colors.textSecondary} />
                     <TextInput
