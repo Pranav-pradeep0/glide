@@ -82,9 +82,10 @@ Glide differs, the reason is given.
   it survives leaving the app; one at a time, a queue after it. When complete, the file is
   **moved** (rename, same volume) from `cacheDir/tdlib` to
   `filesDir/telegram/<chatId>_<messageId>.<ext>` (Android may empty `cacheDir`; saves must not
-  vanish) and recorded in MMKV (`tg://chat/msg` → path, name, size). Playing a `tg://` URI that has
-  a save reads the file (`FileDataSource`), no network. Listed in a "Downloaded" section on
-  Telegram home (above the chats) and marked on its row in the chat; ⋯ → "Delete download".
+  vanish); a save is found by that file name. Unfinished saves are kept in SharedPreferences
+  (`telegram_saves`) and resume at the next start, before the start-up cache cleanup. Playing a
+  `tg://` URI that has a save reads the file (`FileDataSource`), no network. Listed in a
+  "Downloaded" section on Telegram home (above the chats) and marked on its row in the chat; ⋯ → "Delete download".
   Logging out deletes them. Any network: the user asked for it.
 - **Prefetch stays** (first + last 2 MB on ⋯): it took the MKV first frame from 7.8 s to 2.7 s.
 - **No Details metadata for `tg://`** (owner): reading it means downloading.

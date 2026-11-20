@@ -123,8 +123,12 @@ object Td {
                 Log.i(TAG, "auth: ${s.javaClass.simpleName}")
                 when (s) {
                     is TdApi.AuthorizationStateWaitTdlibParameters -> post(parameters())
-                    // Last run's streamed films; thumbnails and chat photos stay.
-                    is TdApi.AuthorizationStateReady -> post(optimize(0, FILMS))
+                    // Last run's streamed films; thumbnails and chat photos stay. Unfinished
+                    // saves restart first, so their bytes are kept.
+                    is TdApi.AuthorizationStateReady -> kotlin.concurrent.thread {
+                        runCatching { TgSaves.restore() }.onFailure { Log.w(TAG, "restore saves", it) }
+                        post(optimize(0, FILMS))
+                    }
                     // This client is finished; the next call starts a new one.
                     is TdApi.AuthorizationStateClosed -> synchronized(this) { client = null }
                     else -> {}

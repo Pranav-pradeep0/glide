@@ -16,6 +16,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import org.drinkless.tdlib.TdApi
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CopyOnWriteArraySet
@@ -47,6 +49,35 @@ object TgSaves {
 
     private fun dir() = Td.app.filesDir.resolve("telegram")
 
+    private fun prefs() = Td.app.getSharedPreferences("telegram_saves", Context.MODE_PRIVATE)
+
+    /** The queue on disk: the service isn't restarted, so a save Android killed resumes at [restore]. */
+    private fun persist() = prefs().edit().putString("queue", JSONArray(queue.map {
+        JSONObject().put("chatId", it.chatId).put("messageId", it.messageId).put("name", it.name)
+    }).toString()).apply()
+
+    /**
+     * Re-queues the saves the last run didn't finish, with their downloads under way before [Td]'s
+     * start-up cache cleanup, which would otherwise delete their bytes. Not on TDLib's thread.
+     */
+    fun restore() {
+        val pending = JSONArray(prefs().getString("queue", null) ?: return)
+        for (i in 0 until pending.length()) {
+            val o = pending.getJSONObject(i)
+            val chatId = o.getLong("chatId")
+            val messageId = o.getLong("messageId")
+            if (file(chatId, messageId) != null) continue
+            try {
+                val f = Td.file(chatId, messageId)
+                Td.saving += f.id
+                Td.post(TdApi.DownloadFile(f.id, 1, 0, 0, false))
+            } catch (e: Exception) {
+                Log.w(TAG, "restore tg://$chatId/$messageId", e)
+            }
+            save(chatId, messageId, o.getString("name"))
+        }
+    }
+
     /** The saved film of message [messageId] in [chatId], or null. */
     fun file(chatId: Long, messageId: Long): File? =
         dir().listFiles()?.firstOrNull { it.name.startsWith("${chatId}_$messageId.") }
@@ -62,6 +93,7 @@ object TgSaves {
         if (queue.any { it.uri == uri } || file(chatId, messageId) != null) return
         val item = Item(uri, chatId, messageId, name)
         queue += item
+        persist()
         changed()
         Td.app.startForegroundService(Intent(Td.app, TelegramSaveService::class.java))
         worker.execute { run(item) }
@@ -76,6 +108,7 @@ object TgSaves {
 
     private fun cancel(item: Item) {
         queue.remove(item)
+        persist()
         // Wakes the synchronous downloadFile in [run].
         if (item.fileId != 0) Td.post(TdApi.CancelDownloadFile(item.fileId, false))
     }
@@ -129,6 +162,7 @@ object TgSaves {
         } finally {
             Td.saving -= item.fileId
             queue.remove(item)
+            persist()
             changed()
         }
     }
