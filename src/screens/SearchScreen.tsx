@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
         gap: metrics.space.xs,
     },
     // TV overscan: clear of the screen edges.
-    barTv: { paddingHorizontal: 48 },
+    barTv: { paddingHorizontal: 48, paddingTop: metrics.space.sm + metrics.overscanY },
     searchField: {
         flex: 1,
         flexDirection: 'row',

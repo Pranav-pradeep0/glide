@@ -370,7 +370,7 @@ export default function SettingsScreen() {
                 />
             )}
             <ScrollView
-                contentContainerStyle={[styles.content, IS_TV && styles.contentTv, { paddingTop: insets.top + metrics.space.lg }]}
+                contentContainerStyle={[styles.content, IS_TV && styles.contentTv, { paddingTop: insets.top + metrics.space.lg + metrics.overscanY }]}
                 keyboardShouldPersistTaps="handled"
             >
                 <Text style={[type.title, { color: colors.text }]} accessibilityRole="header">Settings</Text>
@@ -819,7 +819,7 @@ function HomeFolders({ maxHeight }: { maxHeight: number }) {
 
 const styles = StyleSheet.create({
     flex: { flex: 1 },
-    content: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl },
+    content: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl + metrics.overscanY },
     // TV overscan: keep rows clear of the screen edges.
     contentTv: { paddingHorizontal: 48 },
     gap: { marginTop: metrics.space.sm },

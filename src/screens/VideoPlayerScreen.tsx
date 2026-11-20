@@ -72,6 +72,7 @@ import {
 } from '@/hooks/video-player';
 import type { PlayerLoadData } from '@/hooks/video-player/types';
 import { IS_TV } from '@/utils/tv';
+import { metrics } from '@/theme/theme';
 import { useSubtitleDisplay } from '@/hooks/useSubtitleDisplay';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 
@@ -781,9 +782,10 @@ export default function VideoPlayerScreen({ route }: Props) {
         const safeMargin = Math.max(topInset, 16);
 
         return {
-            top: safeMargin,
+            // TV overscan adds its margin top and bottom (0 on phones).
+            top: safeMargin + metrics.overscanY,
             // Portrait: the real gesture/nav bar inset. Landscape: the bar is at the side.
-            bottom: isLandscape ? 20 : Math.max(insets.bottom, 8),
+            bottom: (isLandscape ? 20 : Math.max(insets.bottom, 8)) + metrics.overscanY,
             // The real side insets: the camera cutout in landscape (reported even with the bars
             // hidden), and a side navigation bar. Each on its own side, so the far side is not
             // padded for a cutout it does not have.

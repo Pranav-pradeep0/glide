@@ -418,8 +418,8 @@ export function NetworkFolderScreen({ route, navigation }: NativeStackScreenProp
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    content: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl },
-    contentTv: { paddingHorizontal: 48, paddingTop: metrics.space.md },
+    content: { paddingHorizontal: metrics.gutter, paddingBottom: metrics.space.xxl + metrics.overscanY },
+    contentTv: { paddingHorizontal: 48, paddingTop: metrics.space.md + metrics.overscanY },
     form: { gap: metrics.space.md, paddingBottom: metrics.space.xl },
     intro: { marginTop: metrics.space.md },
     // Lined up with the row or card edges below them (listContentStyle pads the two differently).
