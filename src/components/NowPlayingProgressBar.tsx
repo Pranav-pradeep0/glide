@@ -59,6 +59,8 @@ export const NowPlayingProgressBar: React.FC<NowPlayingProgressBarProps> = React
                 minimumTrackTintColor={accentColor}
                 maximumTrackTintColor={colors.fillStrong}
                 thumbTintColor={accentColor}
+                accessibilityLabel="Seek"
+                accessibilityValue={{ text: `${formatDuration(currentPosition)} of ${formatDuration(effectiveDuration)}` }}
             />
             <View style={styles.timeRow}>
                 <Text style={[type.caption, styles.timeText, { color: colors.textSecondary }]}>
@@ -78,7 +80,7 @@ const styles = StyleSheet.create({
     },
     slider: {
         width: '100%',
-        height: 40,
+        height: 48,
     },
     timeRow: {
         flexDirection: 'row',
