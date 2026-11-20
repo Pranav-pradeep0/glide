@@ -19,9 +19,8 @@ import {
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
-    withTiming,
+    withSpring,
     cancelAnimation,
-    Easing,
 } from 'react-native-reanimated';
 
 import { useAppStore } from '../store/appStore';
@@ -30,11 +29,12 @@ import PlaybackIcon from '../components/onboarding/PlaybackIcon';
 import FeatureShowcaseIcon from '../components/onboarding/FeatureShowcaseIcon';
 import PrivacyIcon from '../components/onboarding/PrivacyIcon';
 import { IS_TV } from '../utils/tv';
-import { type } from '../theme/theme';
+import { motion, type } from '../theme/theme';
+import { Touchable } from '../components/ui';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const BTN_H = 52;
-const BTN_RADIUS = 16;
+const BTN_H = 48;
+const BTN_RADIUS = 24;
 const GAP = 10;
 const FOOTER_PAD = 28;
 const FOOTER_HEIGHT = 8 + 16 + BTN_H + 48;
@@ -281,10 +281,9 @@ interface MergingCTAProps {
     onNext: () => void;
     onSkip: () => void;
     primaryColor: string;
-    backgroundColor: string;
+    onPrimaryColor: string;
     textColor: string;
     borderColor: string;
-    dark: boolean;
 }
 
 const MergingCTA = React.memo<MergingCTAProps>(({
@@ -292,15 +291,14 @@ const MergingCTA = React.memo<MergingCTAProps>(({
     onNext,
     onSkip,
     primaryColor,
-    backgroundColor,
+    onPrimaryColor,
     textColor,
     borderColor,
-    dark,
 }) => {
     const [containerW, setContainerW] = useState(0);
     const containerWsv = useSharedValue(0);
 
-    const btnTextColor = dark ? backgroundColor : '#FFFFFF';
+    const btnTextColor = onPrimaryColor;
 
     const progress = useSharedValue(0);
 
@@ -310,7 +308,7 @@ const MergingCTA = React.memo<MergingCTAProps>(({
             progress.value = 0;
             return;
         }
-        progress.value = withTiming(1, { duration: 680, easing: Easing.linear });
+        progress.value = withSpring(1, motion.spatial);
     }, [isLastSlide]);
 
     const skipStyle = useAnimatedStyle(() => {
@@ -385,24 +383,23 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                             skipStyle,
                         ]}
                     >
-                        <Pressable
+                        <Touchable
                             onPress={onSkip}
                             accessibilityRole="button"
-                            style={({ pressed }) => [
+                            stateLayer
+                            style={[
                                 ctaStyles.btn,
                                 {
                                     borderColor,
                                     borderWidth: 1.5,
                                     backgroundColor: 'transparent',
                                 },
-                                pressed && ctaStyles.btnPressed,
                             ]}
-                            android_ripple={{ color: borderColor, borderless: false }}
                         >
                             <Text style={[ctaStyles.label, { color: textColor, opacity: 0.7 }]}>
                                 Skip
                             </Text>
-                        </Pressable>
+                        </Touchable>
                     </Animated.View>
 
                     <Animated.View
@@ -414,18 +411,14 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                             nextStyle,
                         ]}
                     >
-                        <Pressable
+                        <Touchable
                             onPress={onNext}
                             accessibilityRole="button"
-                            style={({ pressed }) => [
-                                ctaStyles.btn,
-                                { backgroundColor: primaryColor },
-                                pressed && ctaStyles.btnPressed,
-                            ]}
-                            android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+                            stateLayer
+                            style={[ctaStyles.btn, { backgroundColor: primaryColor }]}
                         >
                             <Text style={[ctaStyles.label, { color: btnTextColor }]}>Next</Text>
-                        </Pressable>
+                        </Touchable>
                     </Animated.View>
 
                     <Animated.View
@@ -437,14 +430,11 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                             pillStyle,
                         ]}
                     >
-                        <Pressable
+                        <Touchable
                             onPress={onNext}
                             accessibilityRole="button"
-                            style={({ pressed }) => [
-                                ctaStyles.pillInner,
-                                pressed && ctaStyles.btnPressed,
-                            ]}
-                            android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+                            stateLayer
+                            style={ctaStyles.pillInner}
                         >
                             <Animated.Text
                                 style={[ctaStyles.label, { color: btnTextColor }, labelStyle]}
@@ -452,7 +442,7 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                             >
                                 Get Started
                             </Animated.Text>
-                        </Pressable>
+                        </Touchable>
                     </Animated.View>
                 </>
             )}
@@ -462,10 +452,9 @@ const MergingCTA = React.memo<MergingCTAProps>(({
     (prev, next) =>
         prev.isLastSlide === next.isLastSlide &&
         prev.primaryColor === next.primaryColor &&
-        prev.backgroundColor === next.backgroundColor &&
+        prev.onPrimaryColor === next.onPrimaryColor &&
         prev.textColor === next.textColor &&
-        prev.borderColor === next.borderColor &&
-        prev.dark === next.dark,
+        prev.borderColor === next.borderColor,
 );
 MergingCTA.displayName = 'MergingCTA';
 
@@ -698,7 +687,7 @@ export default function OnboardingScreen() {
                         onNext={handleNext}
                         onSkip={handleSkip}
                         primaryColor={theme.colors.primary}
-                        onPrimaryColor={theme.dark ? theme.colors.background : '#FFFFFF'}
+                        onPrimaryColor={theme.colors.onPrimary}
                         textColor={theme.colors.text}
                         borderColor={theme.colors.border}
                     />
@@ -707,10 +696,9 @@ export default function OnboardingScreen() {
                     onNext={handleNext}
                     onSkip={handleSkip}
                     primaryColor={theme.colors.primary}
-                    backgroundColor={theme.colors.background}
+                    onPrimaryColor={theme.colors.onPrimary}
                     textColor={theme.colors.text}
                     borderColor={theme.colors.border}
-                    dark={theme.dark}
                 />}
             </View>
         </View>
@@ -732,7 +720,7 @@ const slideStyles = StyleSheet.create({
     titleWrap: { minHeight: 62, width: '100%', justifyContent: 'center', marginBottom: 2 },
     title: { ...type.title, textAlign: 'center' },
     taglineWrap: { minHeight: 40, width: '100%', justifyContent: 'center', marginBottom: 14 },
-    tagline: { fontSize: 15, fontStyle: 'italic', textAlign: 'center', lineHeight: 21 },
+    tagline: { ...type.body, textAlign: 'center' },
     bulletsContainer: { width: '100%', minHeight: 118, paddingLeft: 8, marginBottom: 12 },
     bulletsTv: { minHeight: 0 },
     bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
@@ -787,9 +775,6 @@ const ctaStyles = StyleSheet.create({
         width: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    btnPressed: {
-        opacity: 0.78,
     },
     tvRow: { flexDirection: 'row-reverse', justifyContent: 'center', gap: GAP * 2 },
     tvBtn: { width: 220, borderWidth: 3 },
