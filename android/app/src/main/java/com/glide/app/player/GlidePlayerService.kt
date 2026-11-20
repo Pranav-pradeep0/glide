@@ -180,8 +180,10 @@ class GlideMediaButtonReceiver : MediaButtonReceiver() {
     override fun shouldStartForegroundService(context: Context, intent: Intent): Boolean {
         if ((GlidePlayerHolder.audioPlayer?.mediaItemCount ?: 0) > 0) return true
         val saved = MusicPlayback.savedQueue(context) ?: return false
+        // Only the song it would resume: this runs on the main thread, and a whole queue is an ANR.
+        val id = saved.ids.getOrNull(saved.index) ?: saved.ids.lastOrNull() ?: return false
         // A revoked audio permission makes the lookup throw: nothing to resume either.
-        return runCatching { MediaStoreAudioModule.getSongsByIds(context, saved.ids).isNotEmpty() }.getOrDefault(false)
+        return runCatching { MediaStoreAudioModule.getSongsByIds(context, listOf(id)).isNotEmpty() }.getOrDefault(false)
     }
 }
 
