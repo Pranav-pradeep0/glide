@@ -301,6 +301,8 @@ interface AudioStoreState {
     playNext: (track: AudioTrack) => Promise<void>;
     addToQueue: (track: AudioTrack) => Promise<void>;
     removeFromQueue: (index: number) => Promise<void>;
+    /** Puts a track back at [index], e.g. Undo after removeFromQueue. */
+    insertInQueue: (index: number, track: AudioTrack) => Promise<void>;
     /** Positions in the order songs play: the queue order, or the shuffle order when shuffle is on. */
     moveQueueItem: (fromIndex: number, toIndex: number) => Promise<void>;
     setSleepTimer: (option: number | 'end_of_track' | 'off') => void;
@@ -525,6 +527,29 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
                 await audioModule.removeMediaItem(index);
             } catch (err) {
                 console.error('[AudioStore] removeFromQueue error:', err);
+            }
+        }
+        get()._persistState();
+    },
+
+    insertInQueue: async (index: number, track: AudioTrack) => {
+        const { queue, currentIndex } = get();
+        if (queue.length === 0) {
+            await get().playTrack(track);
+            return;
+        }
+        const at = Math.min(Math.max(index, 0), queue.length);
+        const nextQueue = [...queue];
+        nextQueue.splice(at, 0, track);
+        set({ queue: nextQueue, currentIndex: at <= currentIndex ? currentIndex + 1 : currentIndex });
+        persistQueue(nextQueue);
+
+        const audioModule = getAudioModule();
+        if (Platform.OS === 'android' && audioModule) {
+            try {
+                await audioModule.addMediaItem(at, track, false);
+            } catch (err) {
+                console.error('[AudioStore] insertInQueue error:', err);
             }
         }
         get()._persistState();

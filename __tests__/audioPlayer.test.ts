@@ -188,6 +188,16 @@ describe('Audio Player Utilities and Store', () => {
             expect(useAudioStore.getState().currentTrack?.id).toBe('103');
         });
 
+        it('puts a removed track back at its place on Undo', async () => {
+            await useAudioStore.getState().playQueue([dummyTrack1, dummyTrack2, dummyTrack3], 2);
+            await useAudioStore.getState().removeFromQueue(0);
+            await useAudioStore.getState().insertInQueue(0, dummyTrack1);
+            const state = useAudioStore.getState();
+            expect(state.queue.map(t => t.id)).toEqual(['101', '102', '103']);
+            expect(state.currentIndex).toBe(2);
+            expect(NativeModules.GlideAudioPlayerModule.addMediaItem).toHaveBeenCalledWith(0, dummyTrack1, false);
+        });
+
         it('persists and changes equalizer preset', async () => {
             expect(useAudioStore.getState().equalizerPreset).toBe('flat');
             await useAudioStore.getState().setEqualizerPreset('bass_boost');

@@ -13,12 +13,13 @@ import Animated, {
     type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { IconButton, Touchable } from '@/components/ui';
+import { IconButton, Touchable, showSnackbar } from '@/components/ui';
 import { useTheme } from '@/hooks/useTheme';
 import { metrics, type } from '@/theme/theme';
 import { formatDuration } from '@/utils/formatUtils';
 import { haptic } from '@/native/HapticModule';
 import { AudioTrack } from '@/types';
+import { useAudioStore } from '@/store/audioStore';
 
 export interface QueueItem {
     track: AudioTrack;
@@ -254,7 +255,14 @@ const QueueRow = React.memo(function QueueRowBase({
             </Touchable>
             <IconButton
                 icon="x"
-                onPress={() => onRemove(item.index)}
+                onPress={() => {
+                    onRemove(item.index);
+                    showSnackbar({
+                        text: 'Removed from queue',
+                        action: 'Undo',
+                        onAction: () => { useAudioStore.getState().insertInQueue(item.index, item.track); },
+                    });
+                }}
                 accessibilityLabel="Remove from queue"
                 iconSize={18}
                 color={colors.textTertiary}
