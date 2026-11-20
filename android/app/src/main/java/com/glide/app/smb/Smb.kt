@@ -35,9 +35,13 @@ object Smb {
     class LocalNetworkDenied : IOException("Allow nearby devices for Glide in its settings")
 
     private val logins = ConcurrentHashMap<String, Login>()
-    private val sessions = HashMap<String, Session>()
-    private val shares = HashMap<String, DiskShare>()
+    private val sessions = ConcurrentHashMap<String, Session>()
+    private val shares = ConcurrentHashMap<String, DiskShare>()
     private var client: SMBClient? = null
+
+    /** One lock per host, so a dead server's 15 s connect doesn't hold up the others. */
+    private val locks = ConcurrentHashMap<String, Any>()
+    private fun lock(host: String) = locks.getOrPut(host) { Any() }
 
     /** SmbDataSource's read-ahead threads. */
     val readers: ExecutorService = Executors.newCachedThreadPool { r -> Thread(r, "smb-read").apply { isDaemon = true } }
@@ -50,19 +54,20 @@ object Smb {
     }
 
     /** `host/share`, connected and signed in. */
-    @Synchronized
-    fun share(host: String, name: String): DiskShare {
+    fun share(host: String, name: String): DiskShare = synchronized(lock(host)) {
         shares["$host/$name"]?.takeIf { it.isConnected }?.let { return it }
         val session = sessions[host]?.takeIf { it.connection.isConnected } ?: connect(host).also { sessions[host] = it }
-        return (session.connectShare(name) as DiskShare).also { shares["$host/$name"] = it }
+        (session.connectShare(name) as DiskShare).also { shares["$host/$name"] = it }
     }
 
     private fun connect(host: String): Session = connect(host, logins[host] ?: throw IOException("No login for $host"))
 
-    @Synchronized
-    private fun connect(host: String, login: Login): Session {
+    // Its own lock, not [Smb]'s: [setLogins] holds that while it waits for each host's lock.
+    private val clientLock = Any()
+
+    private fun client(): SMBClient = synchronized(clientLock) {
         // Reads are sized by SmbDataSource; this only caps them, under the server's own maximum.
-        val c = client ?: SMBClient(
+        client ?: SMBClient(
             SmbConfig.builder()
                 .withSecurityProvider(SmbSecurity)
                 .withReadBufferSize(4 shl 20)
@@ -70,9 +75,12 @@ object Smb {
                 .withSoTimeout(30, TimeUnit.SECONDS)
                 .build()
         ).also { client = it }
+    }
+
+    private fun connect(host: String, login: Login): Session {
         val auth = if (login.user.isEmpty()) AuthenticationContext.guest()
             else AuthenticationContext(login.user, login.password.toCharArray(), login.domain)
-        val connection = c.connect(host)
+        val connection = client().connect(host)
         return try {
             connection.authenticate(auth)
         } catch (e: Exception) {
@@ -94,16 +102,19 @@ object Smb {
     }
 
     /** After a failure: the next [share] for [host] connects again. */
-    @Synchronized
     fun drop(host: String) {
-        sessions.remove(host)?.let { runCatching { it.connection.close(true) } }
-        shares.keys.removeAll { it.startsWith("$host/") }
+        synchronized(lock(host)) {
+            sessions.remove(host)?.let { runCatching { it.connection.close(true) } }
+            shares.keys.removeAll { it.startsWith("$host/") }
+        }
     }
 
     private fun closeAll() {
         sessions.keys.toList().forEach(::drop)
-        client?.close()
-        client = null
+        synchronized(clientLock) {
+            client?.close()
+            client = null
+        }
     }
 }
 
