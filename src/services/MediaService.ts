@@ -151,33 +151,12 @@ class MediaServiceClass {
      * Get videos belonging to a specific album/folder.
      */
     async getVideosByAlbum(albumTitle: string, forceRefresh = false, bucketId?: string): Promise<VideoFile[]> {
-        if (Platform.OS !== 'android' || !this.module) {
-            return [];
-        }
-
-        // Check only: a data call never prompts. The grant-access screen asks.
-        const hasPermission = (await PermissionService.check('video')) !== 'denied';
-        if (!hasPermission) {
-            return [];
-        }
-
         const filterFn = (v: VideoFile) => {
             if (bucketId && v.bucketId) {
                 return v.bucketId === bucketId;
             }
             return v.album === albumTitle || v.bucketId === albumTitle;
         };
-
-        if (!forceRefresh && this.libraryCache) {
-            return this.libraryCache.videos.filter(filterFn);
-        }
-
-        try {
-            const videos = await this.module.getVideos(bucketId || albumTitle);
-            return (videos || []) as VideoFile[];
-        } catch (error) {
-            console.warn('[MediaService] Failed to getVideos for bucket:', albumTitle, error);
-        }
 
         const library = await this.getLibrary(forceRefresh);
         return library.videos.filter(filterFn);

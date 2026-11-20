@@ -61,7 +61,6 @@ NativeModules.MediaStoreVideoModule = {
         videos: sampleVideos,
         folders: sampleFolders,
     }),
-    getVideos: jest.fn<any>().mockResolvedValue([sampleVideos[0]]),
     getThumbnailWithSize: jest.fn<any>().mockResolvedValue('file:///cache/video_thumbs/1_320x180.jpg'),
 };
 
