@@ -1,17 +1,18 @@
 // src/screens/PlayerDetailScreen.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ActivityIndicator,
     Image,
-    Animated,
     useWindowDimensions,
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Reanimated, {
+    Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming,
+} from 'react-native-reanimated';
 import Feather from '@react-native-vector-icons/feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
@@ -52,7 +53,15 @@ export default function PlayerDetailScreen() {
     // The sharp poster fades in over the small one once it has loaded.
     const imageOpacity = useSharedValue(0);
     const imageStyle = useAnimatedStyle(() => ({ opacity: imageOpacity.value }));
-    const scrollY = useRef(new Animated.Value(0)).current;
+    const scrollY = useSharedValue(0);
+    const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y; });
+    // Landscape gets the identity, not no style: Reanimated keeps the last values on the view.
+    const heroStyle = useAnimatedStyle(() => isLandscape ? { opacity: 1, transform: [{ translateY: 0 }] } : {
+        opacity: interpolate(scrollY.value, [0, portraitHeroHeight * 0.7], [1, 0], Extrapolation.CLAMP),
+        transform: [{
+            translateY: interpolate(scrollY.value, [0, portraitHeroHeight], [0, -portraitHeroHeight / 2], { extrapolateLeft: Extrapolation.CLAMP }),
+        }],
+    });
 
     // Helper to get high-resolution poster
     const getHighResPoster = useCallback((url: string) => {
@@ -133,16 +142,11 @@ export default function PlayerDetailScreen() {
 
             {/* Hero behind the content. In portrait it rises at half the scroll speed and fades, with
                 the fade pinned to its own bottom edge, so the picture's edge never slides across it. */}
-            <Animated.View style={[
+            <Reanimated.View style={[
                 styles.heroContainer,
                 { backgroundColor: colors.card },
-                isLandscape ? styles.heroLandscape : {
-                    height: portraitHeroHeight,
-                    opacity: scrollY.interpolate({ inputRange: [0, portraitHeroHeight * 0.7], outputRange: [1, 0], extrapolate: 'clamp' }),
-                    transform: [{
-                        translateY: scrollY.interpolate({ inputRange: [0, portraitHeroHeight], outputRange: [0, -portraitHeroHeight / 2], extrapolateLeft: 'clamp' }),
-                    }],
-                },
+                isLandscape ? styles.heroLandscape : { height: portraitHeroHeight },
+                heroStyle,
             ]}>
                 {poster ? (
                     <>
@@ -179,14 +183,14 @@ export default function PlayerDetailScreen() {
                         pointerEvents="none"
                     />
                 )}
-            </Animated.View>
+            </Reanimated.View>
 
-            <Animated.ScrollView
+            <Reanimated.ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
-                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+                onScroll={onScroll}
             >
                 {!isLandscape && <View style={{ height: portraitHeroHeight - FADE_HEIGHT / 2 }} />}
 
@@ -256,7 +260,7 @@ export default function PlayerDetailScreen() {
                         </View>
                     ))}
                 </View>
-            </Animated.ScrollView>
+            </Reanimated.ScrollView>
         </View>
     );
 }
