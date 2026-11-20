@@ -255,7 +255,10 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 if (videoUriOrPath.startsWith("content://")) {
                     val parsed = Uri.parse(videoUriOrPath)
                     contentUri = parsed
-                    videoId = try { ContentUris.parseId(parsed) } catch (_: Throwable) { null }
+                    // Only a MediaStore id names a video; another app's URI can end in any number,
+                    // which would show (and cache under) the wrong video's thumbnail.
+                    val isMediaStore = parsed.authority == MediaStore.AUTHORITY
+                    if (isMediaStore) videoId = try { ContentUris.parseId(parsed) } catch (_: Throwable) { null }
                     try {
                         val proj = arrayOf(
                             MediaStore.Video.Media._ID,
@@ -264,7 +267,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                         )
                         context.contentResolver.query(parsed, proj, null, null, null)?.use { c ->
                             if (c.moveToFirst()) {
-                                if (videoId == null) videoId = c.getLong(0)
+                                if (videoId == null && isMediaStore) videoId = c.getLong(0)
                                 dateModified = c.getLong(1)
                                 fileSize = c.getLong(2)
                             }
