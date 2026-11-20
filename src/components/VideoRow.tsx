@@ -436,8 +436,10 @@ export function EmptyState({
     const { colors } = useTheme();
     return (
         <View style={styles.empty}>
-            <Feather name={icon} size={48} color={colors.textTertiary} />
-            <Text style={[type.body, styles.emptyText, { color: colors.textSecondary }]}>{text}</Text>
+            <View style={[styles.emptyGlyph, { backgroundColor: colors.fill }]}>
+                <Feather name={icon} size={32} color={colors.textSecondary} />
+            </View>
+            <Text style={[type.row, styles.emptyText, { color: colors.text }]}>{text}</Text>
             {action && onAction && <Button label={action} variant="primary" onPress={onAction} preferFocus />}
         </View>
     );
@@ -561,5 +563,6 @@ const styles = StyleSheet.create({
         padding: metrics.space.xxl,
         gap: metrics.space.lg,
     },
+    emptyGlyph: { width: 72, height: 72, borderRadius: metrics.radius.pill, alignItems: 'center', justifyContent: 'center' },
     emptyText: { textAlign: 'center' },
 });
