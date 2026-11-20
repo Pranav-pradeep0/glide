@@ -289,7 +289,7 @@ export default function FoldersScreen() {
                     {videoAccess === 'denied'
                         ? <PermissionGate kind="video" />
                         : albums.length > 0
-                            ? <EmptyState icon="eye-off" text="All folders are hidden from Home" action="Choose folders" onAction={() => tabs.navigate('Settings')} />
+                            ? <EmptyState icon="eye-off" text="All folders are hidden from Home" action="Choose folders" onAction={() => tabs.navigate('Settings', { openFolders: true })} />
                             : <EmptyState text="No local videos found" action="Refresh" onAction={refetch} />}
                 </ScrollView>
             ) : <>

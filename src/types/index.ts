@@ -301,5 +301,6 @@ export type MainTabParamList = {
     /** TV only. */
     Telegram: undefined;
     Music: undefined;
-    Settings: undefined;
+    /** openFolders: open the "Folders on Home" sheet. */
+    Settings: { openFolders?: boolean } | undefined;
 };

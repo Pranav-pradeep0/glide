@@ -41,12 +41,12 @@ import { AppSettings, ShakeAction, ThemeMode } from '../types';
 import pkg from '../../package.json';
 import { NATIVE_API_LEVEL } from '@/native/GlideNative';
 import { ACTIVE_RELEASE_HASH } from 'react-native-stallion';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { TelegramService, useTelegramSaves } from '@/services/TelegramService';
 import { formatFileSize } from '@/utils/formatUtils';
 import { IS_TV } from '@/utils/tv';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '@/types';
+import { MainTabParamList, RootStackParamList } from '@/types';
 import { useAlbums } from '@/hooks/useMediaService';
 import { useHiddenFolders } from '@/storage/prefs';
 
@@ -228,6 +228,11 @@ export default function SettingsScreen() {
     const clearAllHistory = useVideoHistoryStore((state) => state.clearAllHistory);
     const [languageModalVisible, setLanguageModalVisible] = React.useState(false);
     const [foldersVisible, setFoldersVisible] = React.useState(false);
+    // Params are a new object on every navigate, so asking again reopens it.
+    const params = useRoute<RouteProp<MainTabParamList, 'Settings'>>().params;
+    React.useEffect(() => {
+        if (params?.openFolders) setFoldersVisible(true);
+    }, [params]);
     const [licencesVisible, setLicencesVisible] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const [shakeTestEnabled, setShakeTestEnabled] = React.useState(false);
