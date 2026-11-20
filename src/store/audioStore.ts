@@ -433,7 +433,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         const audioModule = getAudioModule();
         if (Platform.OS === 'android' && audioModule) {
             try {
-                await audioModule.addMediaItem(insertIndex, track);
+                await audioModule.addMediaItem(insertIndex, track, true);
             } catch (err) {
                 console.error('[AudioStore] playNext error:', err);
             }
@@ -455,7 +455,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         const audioModule = getAudioModule();
         if (Platform.OS === 'android' && audioModule) {
             try {
-                await audioModule.addMediaItem(insertIndex, track);
+                await audioModule.addMediaItem(insertIndex, track, false);
             } catch (err) {
                 console.error('[AudioStore] addToQueue error:', err);
             }

@@ -402,7 +402,7 @@ describe('Audio Player Utilities and Store', () => {
             expect(state.queue.length).toBe(3);
             expect(state.queue[1].id).toBe('102');
             expect(state.queue[2].id).toBe('103');
-            expect(NativeModules.GlideAudioPlayerModule.addMediaItem).toHaveBeenCalledWith(1, dummyTrack2);
+            expect(NativeModules.GlideAudioPlayerModule.addMediaItem).toHaveBeenCalledWith(1, dummyTrack2, true);
         });
 
         it('appends track to end of queue with addToQueue via addMediaItem', async () => {
@@ -413,7 +413,7 @@ describe('Audio Player Utilities and Store', () => {
             const state = useAudioStore.getState();
             expect(state.queue.length).toBe(3);
             expect(state.queue[2].id).toBe('103');
-            expect(NativeModules.GlideAudioPlayerModule.addMediaItem).toHaveBeenCalledWith(2, dummyTrack3);
+            expect(NativeModules.GlideAudioPlayerModule.addMediaItem).toHaveBeenCalledWith(2, dummyTrack3, false);
         });
 
         it('removes track from queue with removeFromQueue via removeMediaItem and updates indices', async () => {

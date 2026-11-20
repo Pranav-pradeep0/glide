@@ -454,13 +454,20 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         }
     }
 
+    /** [afterCurrent]: Play next. With shuffle on it must also play next, not at a random spot. */
     @ReactMethod
-    fun addMediaItem(index: Int, track: ReadableMap, promise: Promise) {
+    fun addMediaItem(index: Int, track: ReadableMap, afterCurrent: Boolean, promise: Promise) {
         mainHandler.post {
             try {
                 val p = ensurePlayer()
                 val targetIndex = index.coerceIn(0, p.mediaItemCount)
                 p.addMediaItem(targetIndex, buildMediaItem(track, targetIndex.toString()))
+                if (afterCurrent && p.shuffleModeEnabled) {
+                    val order = playOrder(p).toMutableList()
+                    order.remove(targetIndex)
+                    order.add(order.indexOf(p.currentMediaItemIndex) + 1, targetIndex)
+                    p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+                }
                 emitTrackChanged()
                 promise.resolve(true)
             } catch (e: Exception) {
