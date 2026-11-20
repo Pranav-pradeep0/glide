@@ -186,6 +186,10 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
                     if (now == null || !isInside(scope, now)) module?.get()?.focusWhenShown(starts[top] ?: top, FOCUS_TRIES)
                 } else if (old == null && now != null && mode != OFF) {
                     decor.restoreDefaultFocus()
+                } else if (old != null && now == null) {
+                    // Any screen: the focused view went away (a list re-rendered, a screen
+                    // left), leaving nothing focused, so the remote did nothing. Back to default.
+                    decor.restoreDefaultFocus()
                 }
                 if (!syncPosted) {
                     syncPosted = true
