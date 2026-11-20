@@ -266,7 +266,7 @@ function TabItem({ label, icon, focused, index, selected, onPress }: TabItemProp
             style={styles.tab}
         >
             <NavPill icon={icon} index={index} selected={selected} active={active} />
-            <Animated.Text style={[type.caption, styles.label, labelStyle]}>{label}</Animated.Text>
+            <Animated.Text style={[type.caption, styles.label, focused && { fontWeight: '600' }, labelStyle]}>{label}</Animated.Text>
         </Touchable>
     );
 }
