@@ -19,7 +19,7 @@ export const PlayerSubtitleOverlay: React.FC<PlayerSubtitleOverlayProps> = React
     const { height } = useWindowDimensions();
     const currentCue = useSubtitleCueStore((s) => s.currentCue);
     const setSubtitlePosition = useAppStore((s) => s.setSubtitlePosition);
-    const setSubtitleFontSize = useAppStore((s) => s.setSubtitleFontSize);
+    const updateSettings = useAppStore((s) => s.updateSettings);
 
     // Fine-grained selectors for subtitle appearance
     const subtitleFontFamily = useAppStore((s) => s.settings.subtitleFontFamily);
@@ -68,7 +68,7 @@ export const PlayerSubtitleOverlay: React.FC<PlayerSubtitleOverlayProps> = React
         setSubtitlePosition(orientation, yOffset / height);
     }, [height, isLandscape, setSubtitlePosition]);
 
-    const handleFontSizeChange = useCallback((size: number) => setSubtitleFontSize(Math.round(size)), [setSubtitleFontSize]);
+    const handleFontSizeChange = useCallback((size: number) => updateSettings({ subtitleFontSize: Math.round(size) }), [updateSettings]);
 
     return (
         <SubtitleOverlay

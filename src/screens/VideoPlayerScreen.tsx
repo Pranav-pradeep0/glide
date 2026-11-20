@@ -207,8 +207,6 @@ export default function VideoPlayerScreen({ route }: Props) {
     const shakeThreshold = useAppStore(state => state.settings.shakeThreshold);
     const shakeEnabled = useAppStore(state => state.settings.shakeEnabled ?? false);
     const shakeAction = useAppStore(state => state.settings.shakeAction ?? 'play_pause');
-    const setShakeEnabled = useAppStore(state => state.setShakeEnabled);
-    const setShakeAction = useAppStore(state => state.setShakeAction);
     const showSeekButtons = useAppStore(state => state.settings.showSeekButtons);
     const updateSettings = useAppStore(state => state.updateSettings);
 
@@ -1054,7 +1052,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         setEqualizerPreset('flat');
         setCustomEqualizerBands([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }, [setEqualizerPreset, setCustomEqualizerBands]);
-    const handleToggleShake = useCallback(() => setShakeEnabled(!shakeEnabled), [setShakeEnabled, shakeEnabled]);
+    const handleToggleShake = useCallback(() => updateSettings({ shakeEnabled: !shakeEnabled }), [updateSettings, shakeEnabled]);
     const handleResumeResume = useCallback(() => handleResumeModalAction('resume'), [handleResumeModalAction]);
     const handleResumeRestart = useCallback(() => handleResumeModalAction('restart'), [handleResumeModalAction]);
     const handleResumeRecap = useCallback(() => handleResumeModalAction('recap'), [handleResumeModalAction]);
@@ -1696,7 +1694,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     shakeEnabled={shakeEnabled}
                     onToggleShake={IS_TV ? undefined : handleToggleShake}
                     shakeAction={shakeAction}
-                    onSelectShakeAction={setShakeAction}
+                    onSelectShakeAction={action => updateSettings({ shakeAction: action })}
                     seekDuration={seekDuration}
                     videoEnhancement={settingsHook.settings.videoEnhancement}
                     onToggleVideoEnhancement={IS_TV ? undefined : settingsHook.toggleVideoEnhancement}

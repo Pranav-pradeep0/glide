@@ -55,7 +55,7 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
     const lines = useMemo(() => (lyrics ? withInstrumentalBreaks(lyrics) : []), [lyrics]);
     const isSynced = useMemo(() => isLyricsSynced(lines), [lines]);
     const onlineLyricsEnabled = useAppStore((s) => s.settings.onlineLyricsEnabled);
-    const setOnlineLyricsEnabled = useAppStore((s) => s.setOnlineLyricsEnabled);
+    const updateSettings = useAppStore((s) => s.updateSettings);
 
     const activeLyricIndex = useAudioStore((s) => activeLineIndex(lines, s.position, isSynced));
     const seekTo = useAudioStore((s) => s.seekTo);
@@ -185,7 +185,7 @@ export const NowPlayingLyrics: React.FC<NowPlayingLyricsProps> = React.memo(({
                             label="Turn on online lyrics"
                             icon="globe"
                             size="md"
-                            onPress={() => setOnlineLyricsEnabled(true)}
+                            onPress={() => updateSettings({ onlineLyricsEnabled: true })}
                         />
                     )}
                     <Button

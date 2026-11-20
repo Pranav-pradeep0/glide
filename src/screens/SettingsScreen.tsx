@@ -204,26 +204,8 @@ export default function SettingsScreen() {
     const settings = useAppStore((state) => state.settings);
     const updateSettings = useAppStore((state) => state.updateSettings);
     const toggleHaptics = useAppStore((state) => state.toggleHaptics);
-    const setSubtitleFontSize = useAppStore((state) => state.setSubtitleFontSize);
-    const setSubtitleColor = useAppStore((state) => state.setSubtitleColor);
     const setHapticStrength = useAppStore((state) => state.setHapticStrength);
-    const setBrightnessMode = useAppStore((state) => state.setBrightnessMode);
-    const setPipBrightnessMode = useAppStore((state) => state.setPipBrightnessMode);
-    const setSubtitleFontWeight = useAppStore((state) => state.setSubtitleFontWeight);
-    const setSubtitleFontFamily = useAppStore((state) => state.setSubtitleFontFamily);
-    const setSubtitleOutlineWidth = useAppStore((state) => state.setSubtitleOutlineWidth);
-    const setSubtitleBackgroundColor = useAppStore((state) => state.setSubtitleBackgroundColor);
-    const setSubtitleBackgroundOpacity = useAppStore((state) => state.setSubtitleBackgroundOpacity);
-    const setSubtitleEdgeStyle = useAppStore((state) => state.setSubtitleEdgeStyle);
     const resetSubtitleSettings = useAppStore((state) => state.resetSubtitleSettings);
-    const setShowSeekButtons = useAppStore((state) => state.setShowSeekButtons);
-    const setSeekDuration = useAppStore((state) => state.setSeekDuration);
-    const setAutoPlayNext = useAppStore((state) => state.setAutoPlayNext);
-    const setDefaultAudioLanguage = useAppStore((state) => state.setDefaultAudioLanguage);
-    const setShakeThreshold = useAppStore((state) => state.setShakeThreshold);
-    const setShakeEnabled = useAppStore((state) => state.setShakeEnabled);
-    const setShakeAction = useAppStore((state) => state.setShakeAction);
-    const setOnlineLyricsEnabled = useAppStore((state) => state.setOnlineLyricsEnabled);
     const setCrashReportsEnabled = useAppStore((state) => state.setCrashReportsEnabled);
     const clearAllHistory = useVideoHistoryStore((state) => state.clearAllHistory);
     const [languageModalVisible, setLanguageModalVisible] = React.useState(false);
@@ -238,6 +220,8 @@ export default function SettingsScreen() {
     const [shakeTestEnabled, setShakeTestEnabled] = React.useState(false);
 
     const fontSizeSV = useSharedValue(settings.subtitleFontSize);
+    // Stable, so the memoised slider below skips the screen's re-renders.
+    const setSubtitleFontSize = useCallback((subtitleFontSize: number) => updateSettings({ subtitleFontSize }), [updateSettings]);
     React.useEffect(() => {
         fontSizeSV.value = settings.subtitleFontSize;
     }, [settings.subtitleFontSize, fontSizeSV]);
@@ -334,7 +318,7 @@ export default function SettingsScreen() {
                 {
                     text: 'Reset',
                     style: 'destructive',
-                    onPress: () => setShakeThreshold(DEFAULT_APP_SETTINGS.shakeThreshold),
+                    onPress: () => updateSettings({ shakeThreshold: DEFAULT_APP_SETTINGS.shakeThreshold }),
                 },
             ]
         );
@@ -360,11 +344,9 @@ export default function SettingsScreen() {
 
     function selectSubtitleStyle(key: typeof SUBTITLE_STYLES[number]['key']) {
         if (key === 'box') {
-            setSubtitleBackgroundColor('#000000');
-            setSubtitleEdgeStyle('none');
+            updateSettings({ subtitleBackgroundColor: '#000000', subtitleEdgeStyle: 'none' });
         } else {
-            setSubtitleBackgroundColor('transparent');
-            setSubtitleEdgeStyle(key);
+            updateSettings({ subtitleBackgroundColor: 'transparent', subtitleEdgeStyle: key });
         }
     }
 
@@ -400,12 +382,12 @@ export default function SettingsScreen() {
                         icon="skip-forward"
                         title="Auto-play next"
                         caption="Next video in the folder"
-                        toggle={{ value: settings.autoPlayNext, onChange: setAutoPlayNext }}
+                        toggle={{ value: settings.autoPlayNext, onChange: autoPlayNext => updateSettings({ autoPlayNext }) }}
                     />
                     <ListRow
                         icon="fast-forward"
                         title="Seek buttons"
-                        toggle={{ value: settings.showSeekButtons, onChange: setShowSeekButtons }}
+                        toggle={{ value: settings.showSeekButtons, onChange: showSeekButtons => updateSettings({ showSeekButtons }) }}
                     />
                     <SliderRow
                         title="Seek by"
@@ -414,7 +396,7 @@ export default function SettingsScreen() {
                         maximumValue={60}
                         step={5}
                         value={settings.seekDuration}
-                        onValueChange={setSeekDuration}
+                        onValueChange={seekDuration => updateSettings({ seekDuration })}
                     />
                     <ListRow
                         icon="volume-2"
@@ -447,7 +429,7 @@ export default function SettingsScreen() {
                         caption="Otherwise each video keeps its own"
                         toggle={{
                             value: settings.brightnessMode === 'global',
-                            onChange: (val) => setBrightnessMode(val ? 'global' : 'video'),
+                            onChange: (val) => updateSettings({ brightnessMode: val ? 'global' : 'video' }),
                         }}
                     />}
                     {!IS_TV && <ListRow
@@ -455,7 +437,7 @@ export default function SettingsScreen() {
                         title="System brightness in picture-in-picture"
                         toggle={{
                             value: settings.pipBrightnessMode === 'system',
-                            onChange: (val) => setPipBrightnessMode(val ? 'system' : 'player'),
+                            onChange: (val) => updateSettings({ pipBrightnessMode: val ? 'system' : 'player' }),
                         }}
                     />}
                 </ListGroup>
@@ -473,7 +455,7 @@ export default function SettingsScreen() {
                         icon="smartphone"
                         title="Shake to control"
                         caption="Control playback by shaking device"
-                        toggle={{ value: settings.shakeEnabled, onChange: setShakeEnabled }}
+                        toggle={{ value: settings.shakeEnabled, onChange: shakeEnabled => updateSettings({ shakeEnabled }) }}
                     />
                     {settings.shakeEnabled && (
                         <ChipRow title="Shake action">
@@ -489,7 +471,7 @@ export default function SettingsScreen() {
                                         key={opt.key}
                                         label={opt.label}
                                         selected={settings.shakeAction === opt.key}
-                                        onPress={() => setShakeAction(opt.key as ShakeAction)}
+                                        onPress={() => updateSettings({ shakeAction: opt.key as ShakeAction })}
                                     />
                                 ))}
                             </View>
@@ -503,7 +485,7 @@ export default function SettingsScreen() {
                         maximumValue={4.0}
                         step={0.1}
                         value={settings.shakeThreshold}
-                        onValueChange={setShakeThreshold}
+                        onValueChange={shakeThreshold => updateSettings({ shakeThreshold })}
                     />
                     <ListRow
                         icon="smartphone"
@@ -570,7 +552,7 @@ export default function SettingsScreen() {
                                     key={opt.key}
                                     label={opt.label}
                                     selected={settings.subtitleFontFamily === opt.key}
-                                    onPress={() => setSubtitleFontFamily(opt.key)}
+                                    onPress={() => updateSettings({ subtitleFontFamily: opt.key })}
                                 />
                             ))}
                         </View>
@@ -583,7 +565,7 @@ export default function SettingsScreen() {
                         maximumValue={900}
                         step={100}
                         value={settings.subtitleFontWeight}
-                        onValueChange={setSubtitleFontWeight}
+                        onValueChange={subtitleFontWeight => updateSettings({ subtitleFontWeight })}
                     />
                     <ChipRow title="Color">
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.swatchRow}>
@@ -592,7 +574,7 @@ export default function SettingsScreen() {
                                 return (
                                     <Touchable
                                         key={color.value}
-                                        onPress={() => setSubtitleColor(color.value)}
+                                        onPress={() => updateSettings({ subtitleColor: color.value })}
                                         scaleTo={0.9}
                                         accessibilityRole="button"
                                         accessibilityLabel={color.name}
@@ -625,7 +607,7 @@ export default function SettingsScreen() {
                             maximumValue={6}
                             tvStep={0.5}
                             value={settings.subtitleOutlineWidth}
-                            onValueChange={setSubtitleOutlineWidth}
+                            onValueChange={subtitleOutlineWidth => updateSettings({ subtitleOutlineWidth })}
                         />
                     )}
                     {settings.subtitleBackgroundColor !== 'transparent' && (
@@ -636,7 +618,7 @@ export default function SettingsScreen() {
                             maximumValue={1}
                             tvStep={0.1}
                             value={settings.subtitleBackgroundOpacity}
-                            onValueChange={setSubtitleBackgroundOpacity}
+                            onValueChange={subtitleBackgroundOpacity => updateSettings({ subtitleBackgroundOpacity })}
                         />
                     )}
                     <ListRow
@@ -655,7 +637,7 @@ export default function SettingsScreen() {
                         icon="music"
                         title="Online lyrics"
                         caption="Fetch lyrics from LRCLIB when not found locally"
-                        toggle={{ value: settings.onlineLyricsEnabled, onChange: setOnlineLyricsEnabled }}
+                        toggle={{ value: settings.onlineLyricsEnabled, onChange: onlineLyricsEnabled => updateSettings({ onlineLyricsEnabled }) }}
                     />
                 </ListGroup>
                 </>}
@@ -742,7 +724,7 @@ export default function SettingsScreen() {
                                     caption={item.code !== 'auto' ? item.nativeName : undefined}
                                     selected={isSelected}
                                     onPress={() => {
-                                        setDefaultAudioLanguage(item.code === 'auto' ? null : item.name);
+                                        updateSettings({ defaultAudioLanguage: item.code === 'auto' ? null : item.name });
                                         closeLanguages();
                                     }}
                                 />

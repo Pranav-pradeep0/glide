@@ -200,7 +200,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
     const isLandscape = width > height;
     const subtitleFontSize = useAppStore((s) => s.settings.subtitleFontSize);
     const subtitlePosition = useAppStore((s) => s.settings.subtitlePositionLandscape);
-    const setSubtitleFontSize = useAppStore((s) => s.setSubtitleFontSize);
+    const updateSettings = useAppStore((s) => s.updateSettings);
     const setSubtitlePosition = useAppStore((s) => s.setSubtitlePosition);
 
     // ---- Memoized Values ----
@@ -577,7 +577,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                 max={40}
                 step={2}
                 format={(v) => `${Math.round(v)} px`}
-                onChange={setSubtitleFontSize}
+                onChange={size => updateSettings({ subtitleFontSize: size })}
                 accessibilityLabel="Subtitle size"
                 onPlayer
             />

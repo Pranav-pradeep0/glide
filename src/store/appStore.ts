@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AppSettings, HapticPreset, HapticSettings, ShakeAction, ThemeMode } from '../types';
+import { AppSettings, HapticPreset, HapticSettings, ThemeMode } from '../types';
 import { storage } from '../storage/storage';
 import { setCrashReportsEnabled as setNativeCrashReports } from '../native/GlideNative';
 import { IS_TV } from '../utils/tv';
@@ -104,33 +104,10 @@ interface AppStore {
     settings: AppSettings;
     updateSettings: (settings: Partial<AppSettings>) => void;
     toggleHaptics: () => void;
-    setSubtitleFontSize: (size: number) => void;
-    setSubtitleColor: (color: string) => void;
-    setSubtitleFontWeight: (weight: number) => void;
-    setSubtitleOutlineWidth: (width: number) => void;
-    setSubtitleBackgroundColor: (color: string) => void;
-    setSubtitleBackgroundOpacity: (opacity: number) => void;
-    setSubtitleEdgeStyle: (style: 'none' | 'outline' | 'dropShadow') => void;
-    setSubtitleFontFamily: (fontFamily: string) => void;
     setSubtitlePosition: (orientation: 'portrait' | 'landscape', offsetRatio: number) => void;
     resetSubtitleSettings: () => void;
     completeOnboarding: () => void;
     setHapticStrength: (strength: number) => void;
-
-    // Brightness settings
-    setBrightnessMode: (mode: 'global' | 'video') => void;
-    setPipBrightnessMode: (mode: 'system' | 'player') => void;
-
-    // Playback settings
-    setShowSeekButtons: (show: boolean) => void;
-    setSeekDuration: (duration: number) => void;
-
-    setAutoPlayNext: (enabled: boolean) => void;
-    setDefaultAudioLanguage: (language: string | null) => void;
-    setShakeThreshold: (threshold: number) => void;
-    setShakeEnabled: (enabled: boolean) => void;
-    setShakeAction: (action: ShakeAction) => void;
-    setOnlineLyricsEnabled: (enabled: boolean) => void;
     setCrashReportsEnabled: (enabled: boolean) => void;
 }
 
@@ -149,38 +126,6 @@ export const useAppStore = create<AppStore>((set) => ({
                     enabled: !state.settings.hapticSettings.enabled,
                 },
             },
-        })),
-    setSubtitleFontSize: (size) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleFontSize: size },
-        })),
-    setSubtitleColor: (color) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleColor: color },
-        })),
-    setSubtitleFontWeight: (weight) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleFontWeight: weight },
-        })),
-    setSubtitleOutlineWidth: (width) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleOutlineWidth: width },
-        })),
-    setSubtitleBackgroundColor: (color) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleBackgroundColor: color },
-        })),
-    setSubtitleBackgroundOpacity: (opacity) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleBackgroundOpacity: opacity },
-        })),
-    setSubtitleEdgeStyle: (style) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleEdgeStyle: style },
-        })),
-    setSubtitleFontFamily: (fontFamily) =>
-        set((state) => ({
-            settings: { ...state.settings, subtitleFontFamily: fontFamily },
         })),
     setSubtitlePosition: (orientation, offsetRatio) =>
         set((state) => {
@@ -220,50 +165,6 @@ export const useAppStore = create<AppStore>((set) => ({
                 ...state.settings,
                 hapticSettings: { ...state.settings.hapticSettings, strength },
             },
-        })),
-
-    // Brightness actions
-    setBrightnessMode: (mode) =>
-        set((state) => ({
-            settings: { ...state.settings, brightnessMode: mode },
-        })),
-    setPipBrightnessMode: (mode) =>
-        set((state) => ({
-            settings: { ...state.settings, pipBrightnessMode: mode },
-        })),
-
-    // Playback settings
-    setShowSeekButtons: (show) =>
-        set((state) => ({
-            settings: { ...state.settings, showSeekButtons: show },
-        })),
-    setSeekDuration: (duration) =>
-        set((state) => ({
-            settings: { ...state.settings, seekDuration: duration },
-        })),
-    setAutoPlayNext: (enabled) =>
-        set((state) => ({
-            settings: { ...state.settings, autoPlayNext: enabled },
-        })),
-    setDefaultAudioLanguage: (language) =>
-        set((state) => ({
-            settings: { ...state.settings, defaultAudioLanguage: language },
-        })),
-    setShakeThreshold: (threshold) =>
-        set((state) => ({
-            settings: { ...state.settings, shakeThreshold: threshold },
-        })),
-    setShakeEnabled: (enabled) =>
-        set((state) => ({
-            settings: { ...state.settings, shakeEnabled: enabled },
-        })),
-    setShakeAction: (action) =>
-        set((state) => ({
-            settings: { ...state.settings, shakeAction: action },
-        })),
-    setOnlineLyricsEnabled: (enabled) =>
-        set((state) => ({
-            settings: { ...state.settings, onlineLyricsEnabled: enabled },
         })),
     setCrashReportsEnabled: (enabled) => {
         // Native keeps its own copy: ACRA has to know before any JS runs.
