@@ -831,7 +831,7 @@ export function Sheet({ visible, onClose, title, onBack, children, onPlayer, max
                 >
                     <GestureDetector gesture={drag}>
                         <View style={styles.sheetGrip}>
-                            <View style={[styles.handle, { backgroundColor: colors.fillStrong }]} />
+                            {!IS_TV && <View style={[styles.handle, { backgroundColor: colors.fillStrong }]} />}
                             {/* No close button on a TV: Back closes, and focus starts on the content instead of on X. */}
                             {!!title && <SheetHeader title={title} onBack={onBack} onClose={IS_TV ? undefined : onClose} onPlayer={onPlayer} />}
                         </View>

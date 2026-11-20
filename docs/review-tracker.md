@@ -188,7 +188,7 @@ Media3 1.11.1 `DefaultShuffleOrder` was checked in the library source: there is 
 | TV-8 | — | REFUTED | — | UpNextCard.tsx:52,115-116; VideoPlayerScreen.tsx:1319 | Trap intended; Back and X release it. | None. | — |
 | TV-9 | DONE | CONFIRMED | L | src/components/VideoOptionsBottomSheet.tsx:191 | Share ungated on TV. | `{onShare && !IS_TV && …}`. | S |
 | TV-10 | TODO | CONFIRMED | L | src/components/LicencesSheet.tsx:35-50 (catch at 45) | Nothing focusable without Source row; error swallowed. | Licence Text `focusable={IS_TV}`; catch → `showSnackbar({ text: open.source })`. | S |
-| TV-11 | TODO | CONFIRMED | L | src/components/ui/index.tsx:833 | Drag handle drawn on TV. | `{!IS_TV && <View style={styles.handle} …/>}`. | S |
+| TV-11 | DONE | CONFIRMED | L | src/components/ui/index.tsx:833 | Drag handle drawn on TV. | `{!IS_TV && <View style={styles.handle} …/>}`. | S |
 | TV-12 | TODO | PARTIAL | L | android/.../player/TvRemoteModule.kt:50-65 | CAPTIONS, INFO unmapped; MEDIA_STOP handled by MediaSession. | Map KEYCODE_CAPTIONS → "captions" (open Subtitles panel), KEYCODE_INFO → "info" (show controls); handle in useTvRemote. | S |
 | TV-13 | TODO | CONFIRMED | L | docs/android-tv.md:11-12,51,135-136 vs RootNavigator.tsx:342-361 | Doc says rail Videos/Recents/Settings, "No SMB". | Update doc: rail = Videos, Recents, Network, Telegram (when available), Settings; SMB shipped. | S |
 
