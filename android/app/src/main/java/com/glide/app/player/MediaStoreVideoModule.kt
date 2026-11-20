@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.os.storage.StorageManager
 import android.provider.MediaStore
 import android.util.Log
@@ -116,11 +117,17 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
     }
 
     private val reconciling = AtomicBoolean(false)
+    @Volatile private var lastLegacyWalkAt = -LEGACY_WALK_INTERVAL_MS
+    /** Paths already handed to the scanner, so a file it will not index is not rescanned each walk. */
+    private val legacyScanned = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private val legacyResumeListener = object : LifecycleEventListener {
         override fun onHostResume() {
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastLegacyWalkAt < LEGACY_WALK_INTERVAL_MS) return
             if (!reconciling.compareAndSet(false, true)) return
-            BackgroundWork.submit {
+            lastLegacyWalkAt = now
+            BackgroundWork.submitLong {
                 try { reconcileLegacyIndex() } finally { reconciling.set(false) }
             }
         }
@@ -134,9 +141,9 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         reactContext.contentResolver.registerContentObserver(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, libraryObserver
         )
-        // Android 10 and below only (see reconcileLegacyIndex). Changes outside Glide happen
+        // Android 9 and below only (see reconcileLegacyIndex). Changes outside Glide happen
         // while it is away, so each return checks; added while resumed, this runs at once.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             reactContext.addLifecycleEventListener(legacyResumeListener)
         }
     }
@@ -185,6 +192,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         const val NAME = "MediaStoreVideoModule"
         const val EVENT_LIBRARY_CHANGED = "onVideoLibraryChanged"
         private const val LIBRARY_CHANGE_DEBOUNCE_MS = 1500L
+        private const val LEGACY_WALK_INTERVAL_MS = 10 * 60 * 1000L
         private const val TAG = "MediaStoreVideoModule"
         private const val DELETE_REQUEST_CODE = 42001
         private val thumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
@@ -381,6 +389,8 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
     private fun rescanVolumes() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            // Asked for by the user: walk everything again, including paths scanned before.
+            legacyScanned.clear()
             reconcileLegacyIndex()
             return
         }
@@ -403,10 +413,14 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
      * Scanning each file does work: a gone path drops its row, a new one is added, and the
      * observer then reloads every list. (Android 11+ keeps MediaStore in step by itself.)
      *
-     * ponytail: walks every folder on each resume (a stat per file, background lane). Fine for
-     * a phone or TV library; keep a last-walk time per volume if a huge USB drive makes it slow.
+     * Not on Android 10: scoped storage hides other apps' files from File.exists() and the walk,
+     * so every row would look gone and the whole library would be rescanned each time.
+     *
+     * ponytail: on resume, at most once per 10 minutes on the long lane; each path is scanned
+     * once per process. Keep a last-walk time per volume if a huge USB drive makes it slow.
      */
     private fun reconcileLegacyIndex() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return
         val indexed = HashSet<String>()
         val paths = ArrayList<String>()
         reactContext.contentResolver.query(
@@ -426,7 +440,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 .filter { it.isFile && !it.name.startsWith(".") && it.path !in indexed && isVideoName(it.name) }
                 .forEach { paths += it.path }
         }
-        scanAndWait(paths)
+        scanAndWait(paths.filter { legacyScanned.add(it) })
     }
 
     private fun isVideoName(name: String) = MimeTypeMap.getSingleton()

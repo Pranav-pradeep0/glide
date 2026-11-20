@@ -45,7 +45,12 @@ object BackgroundWork {
     fun submitLong(promise: Promise, block: () -> Unit) = long.execute(guarded(promise, block))
 
     /** Library work nobody awaits: a failure is logged, there is no Promise to settle. */
-    fun submit(block: () -> Unit) = quick.execute {
+    fun submit(block: () -> Unit) = quick.execute(logged(block))
+
+    /** Slow work nobody awaits, such as a whole-storage walk: off the lane screens wait on. */
+    fun submitLong(block: () -> Unit) = long.execute(logged(block))
+
+    private fun logged(block: () -> Unit) = Runnable {
         try { block() } catch (t: Throwable) { Log.e("BackgroundWork", "task failed", t) }
     }
 
