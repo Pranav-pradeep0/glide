@@ -6,16 +6,9 @@
  */
 
 import { useMemo } from 'react';
-import { NativeModules } from 'react-native';
 import { Gesture } from 'react-native-gesture-handler';
 import { SharedValue, runOnJS, useSharedValue } from 'react-native-reanimated';
 import { PLAYER_CONSTANTS } from './types';
-
-const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
-
-const applyBrightnessDefault = (value: number) => {
-    BrightnessModule?.setBrightness(value);
-};
 
 // ============================================================================
 // TYPES
@@ -32,7 +25,7 @@ interface UseBrightnessGestureOptions {
     brightnessStart: SharedValue<number>;
 
     onBrightnessChange: (value: number) => void;
-    onBrightnessApply?: (value: number, isFinal?: boolean) => void;
+    onBrightnessApply: (value: number, isFinal?: boolean) => void;
     onBrightnessWait?: () => void;
     onGestureStart: () => void;
     onGestureEnd: () => void;
@@ -63,7 +56,7 @@ export function useBrightnessGesture(options: UseBrightnessGestureOptions) {
 
     const isGestureActive = useSharedValue(false);
     const lastAppliedPercent = useSharedValue(-1);
-    const effectiveBrightnessApply = onBrightnessApply || applyBrightnessDefault;
+    const effectiveBrightnessApply = onBrightnessApply;
 
     const gesture = useMemo(() => {
         return Gesture.Pan()

@@ -12,6 +12,7 @@ import { AccessibilityInfo } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { VideoOrientationService } from '@/services/VideoOrientationService';
 import { haptic } from '@/native/HapticModule';
+import { usePlayerActivity } from '@/navigation/ExternalPlayerContext';
 import {
     UIState,
     PanelType,
@@ -57,6 +58,7 @@ export const anyPanelOpen = (s: UIState) =>
  */
 /** `startLocked`: the screen lock carried from the previous video by Next / autoplay. */
 export function usePlayerUI(orientationLocked: boolean, startLocked = false): UsePlayerUIReturn {
+    const playerActivity = usePlayerActivity();
     const [state, setState] = useState<UIState>(
         startLocked ? { ...initialUIState, locked: true, controlsVisible: false } : initialUIState,
     );
@@ -162,7 +164,7 @@ export function usePlayerUI(orientationLocked: boolean, startLocked = false): Us
     // ========================================================================
 
     const lock = useCallback(() => {
-        VideoOrientationService.disableAuto();
+        VideoOrientationService.disableAuto(playerActivity);
         haptic('toggleOn');
         AccessibilityInfo.announceForAccessibility('Screen locked');
         setState(prev => ({
@@ -172,10 +174,10 @@ export function usePlayerUI(orientationLocked: boolean, startLocked = false): Us
             controlsVisible: false,
             lockIconVisible: false,
         }));
-    }, []);
+    }, [playerActivity]);
 
     const unlock = useCallback(() => {
-        if (!orientationLockedRef.current) { VideoOrientationService.enableAuto(); }
+        if (!orientationLockedRef.current) { VideoOrientationService.enableAuto(playerActivity); }
         haptic('toggleOff');
         AccessibilityInfo.announceForAccessibility('Screen unlocked');
         if (lockIconTimerRef.current) {clearTimeout(lockIconTimerRef.current);}
@@ -186,7 +188,7 @@ export function usePlayerUI(orientationLocked: boolean, startLocked = false): Us
             controlsVisible: true,
         }));
         armAutoHide();
-    }, [armAutoHide]);
+    }, [armAutoHide, playerActivity]);
 
     /** A tap while locked (re)shows the unlock chip for 2 s; only the chip itself unlocks. */
     const showLockIconTemporarily = useCallback(() => {

@@ -21,7 +21,7 @@ import { nextDisplayMode } from '@/components/VideoPlayer/PlayerIcons';
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
 
 import { currentActivityName, finishCurrentActivity, setStopPoint, usePipModeListener } from '@/native/PipModule';
-import { ExternalPlayerContext } from '@/navigation/ExternalPlayerContext';
+import { ExternalPlayerContext, usePlayerActivity } from '@/navigation/ExternalPlayerContext';
 
 // Components
 import AnimatedVideoView from '@/components/VideoPlayer/AnimatedVideoView';
@@ -183,6 +183,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const isScreenFocused = useIsFocused();
     const inExternalPlayer = useContext(ExternalPlayerContext);
+    const playerActivity = usePlayerActivity();
     const { width, height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
 
@@ -294,16 +295,16 @@ export default function VideoPlayerScreen({ route }: Props) {
     const handleToggleOrientationLock = useCallback(() => {
         if (orientationLocked) {
             // Unlock -> Enable Auto
-            VideoOrientationService.enableAuto();
+            VideoOrientationService.enableAuto(playerActivity);
             setOrientationLocked(false);
         } else {
             // Lock -> Disable Auto (Locks to current)
-            VideoOrientationService.disableAuto();
+            VideoOrientationService.disableAuto(playerActivity);
             setOrientationLocked(true);
         }
         showControls();
         scheduleAutoHide();
-    }, [orientationLocked, scheduleAutoHide, showControls]);
+    }, [orientationLocked, playerActivity, scheduleAutoHide, showControls]);
 
     // ========================================================================
     // NIGHT MODE STATE
@@ -425,7 +426,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     });
 
     // PIP Mode State from native listener
-    const isInPipMode = usePipModeListener(inExternalPlayer ? 'VideoPlayerActivity' : 'MainActivity');
+    const isInPipMode = usePipModeListener(playerActivity);
     // Auto-enter eligibility only. Whether overlays are on screen no longer
     // matters: the native controller hides everything except the video surface
     // when PiP opens, so blocking PiP while the controls are up would just mean
@@ -444,14 +445,14 @@ export default function VideoPlayerScreen({ route }: Props) {
             if (pipBrightnessMode === 'system') {
                 // Determine if we need to switch to system brightness
                 // If brightness was modified, revert to system (-1)
-                BrightnessModule?.resetBrightness();
+                BrightnessModule?.resetBrightness(playerActivity);
             }
         } else {
             // Exiting PiP - restore player brightness if needed
             if (pipBrightnessMode === 'system' && brightnessRef.current !== undefined) {
                 // Convert 0-1 brightness to 0-1 float for setBrightness
                 // brightnessRef.current is already 0-1
-                BrightnessModule?.setBrightness(brightnessRef.current);
+                BrightnessModule?.setBrightness(brightnessRef.current, playerActivity);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -747,12 +748,12 @@ export default function VideoPlayerScreen({ route }: Props) {
         if (exitedRef.current) {return;}
         exitedRef.current = true;
 
-        BrightnessModule?.resetBrightness();
+        BrightnessModule?.resetBrightness(playerActivity);
         savePlaybackProgress(true);
         persistNow();
         player.stop();
-        if (!handingOver) { VideoOrientationService.release(); }
-    }, [savePlaybackProgress, persistNow, player]);
+        if (!handingOver) { VideoOrientationService.release(playerActivity); }
+    }, [savePlaybackProgress, persistNow, player, playerActivity]);
 
     const exitPlayerRef = useRef(exitPlayer);
     exitPlayerRef.current = exitPlayer;
@@ -1246,7 +1247,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             if (nextState === 'active' && wasBackgrounded && !isInPipMode) {
                 const brightnessToRestore = brightnessRef.current;
                 if (brightnessToRestore !== undefined) {
-                    BrightnessModule?.setBrightness(brightnessToRestore);
+                    BrightnessModule?.setBrightness(brightnessToRestore, playerActivity);
                 }
             }
 
@@ -1259,7 +1260,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             appStateRef.current = nextState;
         });
         return () => subscription.remove();
-    }, [forceSave, isInPipMode]);
+    }, [forceSave, isInPipMode, playerActivity]);
 
     // Increment view count on first play
     useEffect(() => {
@@ -1296,7 +1297,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     // lock carried from the previous video holds; the toggle handles changes after that.
     useEffect(() => {
         // Released in exitPlayer, which knows whether another player is taking over.
-        if (orientationLocked || ui.state.locked) { VideoOrientationService.disableAuto(); } else { VideoOrientationService.enableAuto(); }
+        if (orientationLocked || ui.state.locked) { VideoOrientationService.disableAuto(playerActivity); } else { VideoOrientationService.enableAuto(playerActivity); }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
     }, []);
 

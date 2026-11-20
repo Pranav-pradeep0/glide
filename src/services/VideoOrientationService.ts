@@ -13,8 +13,8 @@ export const VideoOrientationService = {
      * This OVERRIDES system auto-rotate settings.
      * The app will rotate even if system auto-rotate is OFF.
      */
-    enableAuto: () => {
-        VideoOrientation.enableAuto();
+    enableAuto: (activityName: string) => {
+        VideoOrientation.enableAuto(activityName);
     },
 
     /**
@@ -22,8 +22,8 @@ export const VideoOrientationService = {
      * Keeps the current orientation locked.
      * Use this when HUD is locked.
      */
-    disableAuto: () => {
-        VideoOrientation.disableAuto();
+    disableAuto: (activityName: string) => {
+        VideoOrientation.disableAuto(activityName);
     },
 
     /** Camera cutout rects in dp, window coordinates. */
@@ -38,7 +38,7 @@ export const VideoOrientationService = {
      * Release control and return to system default behavior.
      * Should be called when exiting the video player.
      */
-    release: () => {
-        VideoOrientation.release();
+    release: (activityName: string) => {
+        VideoOrientation.release(activityName);
     },
 };

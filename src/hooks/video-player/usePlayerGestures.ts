@@ -20,6 +20,7 @@ import {
 } from 'react-native-reanimated';
 import type { PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
 import { haptic } from '@/native/HapticModule';
+import { usePlayerActivity } from '@/navigation/ExternalPlayerContext';
 import { VideoOrientationService } from '@/services/VideoOrientationService';
 import { useAppStore } from '@/store/appStore';
 import { IS_TV } from '@/utils/tv';
@@ -105,6 +106,7 @@ import { useAudioController } from './useAudioController';
 // ...
 
 export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerGesturesReturn {
+    const playerActivity = usePlayerActivity();
     const {
         player,
         ui,
@@ -203,7 +205,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
 
     const setBrightnessNative = useCallback((val: number, isFinal: boolean = false) => {
         const brightness = Math.max(0, Math.min(1, val));
-        BrightnessModule?.setBrightness(brightness);
+        BrightnessModule?.setBrightness(brightness, playerActivity);
 
         // Notify JS callback for persistence
         if (onBrightnessChange) {
@@ -213,7 +215,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         if (isFinal && onBrightnessSave) {
             runOnJS(onBrightnessSave)(brightness);
         }
-    }, [onBrightnessChange, onBrightnessSave]);
+    }, [onBrightnessChange, onBrightnessSave, playerActivity]);
 
     // NOTE: setVolumeNative is removed in favor of audioController.applyVolume
 
@@ -225,7 +227,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
                     currentBrightness.value = initialBrightness;
                     if (onBrightnessChange) {onBrightnessChange(initialBrightness);}
 
-                    BrightnessModule?.setBrightness(initialBrightness);
+                    BrightnessModule?.setBrightness(initialBrightness, playerActivity);
                 } else if (BrightnessModule) {
                     const deviceBrightness = await BrightnessModule.getBrightness();
                     currentBrightness.value = Math.max(0, Math.min(1, typeof deviceBrightness === 'number' ? deviceBrightness : 0.5));
@@ -238,7 +240,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
             // Volume initialization is handled inside useAudioController now
         };
         init();
-    }, [currentBrightness, initialBrightness, onBrightnessChange]);
+    }, [currentBrightness, initialBrightness, onBrightnessChange, playerActivity]);
 
     // ========================================================================
     // ZOOM HELPERS

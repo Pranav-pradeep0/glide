@@ -7,9 +7,10 @@ import android.os.Build
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.facebook.react.bridge.*
+import com.glide.app.GlideBaseActivity
 
 /**
- * Orientation requests for the Activity in front.
+ * Orientation requests for the Activity hosting the calling player.
  *
  * On screens 600dp and wider, Android 16 ignores requestedOrientation for apps targeting
  * 36+, so on tablets and unfolded foldables these are no-ops and the window follows the
@@ -25,10 +26,11 @@ class VideoOrientationModule(reactContext: ReactApplicationContext) : ReactConte
      * On the UI thread: these methods arrive on the native-modules thread, and Activity
      * window state belongs to the main one.
      */
-    private fun request(orientation: (Activity) -> Int) {
-        val activity = reactApplicationContext.currentActivity ?: return
-        activity.runOnUiThread {
-            if (!activity.isFinishing) activity.requestedOrientation = orientation(activity)
+    private fun request(activityName: String, orientation: (Activity) -> Int) {
+        // The player's own Activity, not the current one: that may be the other React tree's.
+        UiThreadUtil.runOnUiThread {
+            val activity = GlideBaseActivity.byName(activityName) ?: return@runOnUiThread
+            activity.requestedOrientation = orientation(activity)
         }
     }
 
@@ -84,25 +86,19 @@ class VideoOrientationModule(reactContext: ReactApplicationContext) : ReactConte
         }
     }
 
-    @ReactMethod
-    fun lockToPortrait() = request { ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
-
-    @ReactMethod
-    fun lockToLandscape() = request { ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE }
-
     /**
      * FULL_SENSOR: all four orientations the device supports, following how it is held even
      * with system auto-rotate off, since this Activity enforces it.
      */
     @ReactMethod
-    fun enableAuto() = request { ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR }
+    fun enableAuto(activityName: String) = request(activityName) { ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR }
 
     /**
      * "Lock" means stop rotating: keep the current orientation's axis. Landscape stays
      * SENSOR_LANDSCAPE so a 180 degree flip still works.
      */
     @ReactMethod
-    fun disableAuto() = request { activity ->
+    fun disableAuto(activityName: String) = request(activityName) { activity ->
         if (activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         } else {
@@ -112,5 +108,5 @@ class VideoOrientationModule(reactContext: ReactApplicationContext) : ReactConte
 
     /** Back to UNSPECIFIED: the system decides, usually following its own setting. */
     @ReactMethod
-    fun release() = request { ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    fun release(activityName: String) = request(activityName) { ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
 }

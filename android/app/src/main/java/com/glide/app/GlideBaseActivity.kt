@@ -30,6 +30,7 @@ open class GlideBaseActivity : ReactActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         supportFragmentManager.fragmentFactory = RNScreensFragmentFactory()
         super.onCreate(savedInstanceState)
+        live[this] = Unit
         keepSystemGesturesWithBarsHidden()
         val isTv = (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
         if (isTv) TvRemoteModule.watch(window.decorView)
@@ -99,6 +100,7 @@ open class GlideBaseActivity : ReactActivity() {
     override fun onDestroy() {
         if (resumed === this) resumed = null
         if (pip === this) pip = null
+        live.remove(this)
         super.onDestroy()
     }
 
@@ -132,6 +134,17 @@ open class GlideBaseActivity : ReactActivity() {
         // Main thread only. Both are cleared by onDestroy at the latest, so neither leaks.
         private var resumed: GlideBaseActivity? = null
         private var pip: GlideBaseActivity? = null
+
+        // Main thread only. Weak, as a backstop to onDestroy.
+        private val live = java.util.WeakHashMap<GlideBaseActivity, Unit>()
+
+        /**
+         * The live Glide Activity with this simple class name, or null. Main thread only. Both
+         * React trees share one runtime, so a player's window calls name their own Activity:
+         * the current one may be the other tree's.
+         */
+        fun byName(activityName: String): GlideBaseActivity? =
+            live.keys.firstOrNull { it.javaClass.simpleName == activityName && !it.isFinishing }
 
         /** Whether this Activity (by simple class name) is the Glide window in PiP. */
         fun inPip(activityName: String): Boolean =

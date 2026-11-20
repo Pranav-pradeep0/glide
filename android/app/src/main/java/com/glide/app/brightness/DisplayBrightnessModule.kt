@@ -10,7 +10,9 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.module.annotations.ReactModule
+import com.glide.app.GlideBaseActivity
 
 /**
  * DisplayBrightnessModule manages window-level brightness for the video player.
@@ -37,13 +39,13 @@ class DisplayBrightnessModule(private val reactContext: ReactApplicationContext)
     override fun getName(): String = NAME
 
     @ReactMethod
-    fun setBrightness(brightness: Float) {
-        applyBrightness(brightness)
+    fun setBrightness(brightness: Float, activityName: String) {
+        applyBrightness(brightness, activityName)
     }
 
     @ReactMethod
-    fun resetBrightness() {
-        resetWindowBrightness()
+    fun resetBrightness(activityName: String) {
+        UiThreadUtil.runOnUiThread { GlideBaseActivity.byName(activityName)?.let(::resetWindowBrightness) }
     }
 
     @ReactMethod
@@ -81,12 +83,12 @@ class DisplayBrightnessModule(private val reactContext: ReactApplicationContext)
         }
     }
 
-    private fun applyBrightness(brightness: Float) {
+    /** The player's own window, not the current Activity's: that may be the other React tree's. */
+    private fun applyBrightness(brightness: Float, activityName: String) {
         val clamped = brightness.coerceIn(0.0f, 1.0f)
-        val activity = reactContext.currentActivity ?: return
-        activity.runOnUiThread {
+        UiThreadUtil.runOnUiThread {
             try {
-                val window = activity.window ?: return@runOnUiThread
+                val window = GlideBaseActivity.byName(activityName)?.window ?: return@runOnUiThread
                 val params = window.attributes
                 if (Build.VERSION.SDK_INT >= 35) {
                     params.desiredHdrHeadroom = 1.0f
@@ -99,8 +101,7 @@ class DisplayBrightnessModule(private val reactContext: ReactApplicationContext)
         }
     }
 
-    private fun resetWindowBrightness() {
-        val activity = reactContext.currentActivity ?: return
+    private fun resetWindowBrightness(activity: Activity) {
         activity.runOnUiThread {
             try {
                 val window = activity.window ?: return@runOnUiThread
@@ -119,6 +120,6 @@ class DisplayBrightnessModule(private val reactContext: ReactApplicationContext)
 
     override fun onHostDestroy() {
         Log.i(TAG, "onHostDestroy - resetting window brightness")
-        resetWindowBrightness()
+        reactContext.currentActivity?.let(::resetWindowBrightness)
     }
 }
