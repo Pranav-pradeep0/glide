@@ -44,19 +44,19 @@ const SDH_KEYWORDS = [
  */
 function calculateSDHScore(sub: any): number {
     let score = 0;
-    const releaseName = (sub.release_name || '').toLowerCase();
     const comment = (sub.comment || '').toLowerCase();
+    // Whole-word matching, so "hi" doesn't match "Chicago" nor "cc" "Accountant".
+    const tokens = (text: string) => ` ${text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join(' ')} `;
+    const releaseTokens = tokens(sub.release_name || '');
+    const commentTokens = tokens(comment);
 
-    // Check release name for SDH keywords (highest weight)
-    SDH_KEYWORDS.forEach(keyword => {
-        if (releaseName.includes(keyword)) {
+    // Set: "closed.caption" and "closed-caption" are the same words once tokenised
+    new Set(SDH_KEYWORDS.map(tokens)).forEach(k => {
+        // Release name has the highest weight
+        if (releaseTokens.includes(k)) {
             score += 10;
         }
-    });
-
-    // Check comment for SDH indicators
-    SDH_KEYWORDS.forEach(keyword => {
-        if (comment.includes(keyword)) {
+        if (commentTokens.includes(k)) {
             score += 5;
         }
     });

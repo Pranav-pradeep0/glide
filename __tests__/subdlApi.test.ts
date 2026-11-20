@@ -107,6 +107,23 @@ describe('subdlApi', () => {
         expect(result.subtitles[1].sdhScore).toBe(0);
     });
 
+    it('matches SDH keywords as whole words only', async () => {
+        (network.fetchWithTimeout as jest.Mock<any>).mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                subtitles: [
+                    { sd_id: 'a', release_name: 'Chicago.White.This.Accountant.1080p', comment: 'Synced by Chris' },
+                    { sd_id: 'b', release_name: 'Movie.HI.1080p', comment: 'closed caption' },
+                ],
+            }),
+        } as any);
+
+        const result = await searchAllSubtitles('Test.Movie.mkv', 'en', undefined, true);
+        const byId = Object.fromEntries(result.subtitles.map(s => [s.id, s.sdhScore]));
+        expect(byId.a).toBe(0);
+        expect(byId.b).toBe(15);
+    });
+
     it('keeps manual season, episode and year when retrying without the year', async () => {
         const fetchMock = network.fetchWithTimeout as jest.Mock<any>;
         fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) } as any);
