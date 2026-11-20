@@ -367,7 +367,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     const handleLoad = useCallback((data: PlayerLoadData) => {
         const durationSec = (data.duration ?? 0) / 1000;
 
-        if (durationSec <= 1) {
+        if (durationSec <= 1 && !data.isLive) {
             if (__DEV__) {console.log('[LOAD] ignored — junk duration=' + durationSec + 's');}
             return;
         }

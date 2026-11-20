@@ -1400,12 +1400,16 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         val p = player ?: return
         if (loadEmitted) return
         val duration = p.duration
-        if (duration == C.TIME_UNSET || duration <= 0) return
+        // A live stream (RTSP above all) may never learn its length; it loads anyway, as live.
+        val live = p.isCurrentMediaItemLive ||
+            (duration == C.TIME_UNSET && p.playbackState == Player.STATE_READY)
+        if (!live && (duration == C.TIME_UNSET || duration <= 0)) return
         // Both, or the load event ships a track list JS will never get a second chance at.
         if (!tracksKnown) return
         loadEmitted = true
         val info = Arguments.createMap()
-        info.putDouble("duration", duration.toDouble())
+        info.putDouble("duration", if (live) 0.0 else duration.toDouble())
+        info.putBoolean("isLive", live)
         val trackArray = Arguments.createArray()
         audioTracks.forEachIndexed { id, (mediaTrackGroup, index, isSelected) ->
             trackArray.pushMap(Arguments.createMap().apply {
@@ -1467,7 +1471,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         }
         Log.d(TAG, "load duration=${duration}ms audioTracks=${audioTracks.size}")
         emit(EVENT_LOAD, info)
-        findCredits(duration)
+        if (!live) findCredits(duration)
     }
 
     private fun findCredits(durationMs: Long) {

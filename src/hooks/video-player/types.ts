@@ -43,6 +43,8 @@ export const PLAYER_CONSTANTS = {
 
 export interface PlayerLoadData {
     duration: number;
+    /** A live stream: duration is 0, as it may have no known length. */
+    isLive?: boolean;
     videoSize?: { height: number; width: number };
     audioTracks?: Array<{ id: number; name: string; language?: string; isSelected?: boolean; formatId?: string }>;
     textTracks?: Array<{ id: number; name: string }>;
