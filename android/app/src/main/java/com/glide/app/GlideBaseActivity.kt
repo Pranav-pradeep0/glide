@@ -133,8 +133,9 @@ open class GlideBaseActivity : ReactActivity() {
         private var resumed: GlideBaseActivity? = null
         private var pip: GlideBaseActivity? = null
 
-        /** Whether a Glide window is in PiP, whichever Activity React is following. */
-        val inPip: Boolean get() = pip?.isInPictureInPictureMode == true
+        /** Whether this Activity (by simple class name) is the Glide window in PiP. */
+        fun inPip(activityName: String): Boolean =
+            pip?.let { it.isInPictureInPictureMode && it.javaClass.simpleName == activityName } == true
     }
 
     /** The TV remote in the video player; it leaves every key alone unless the player asked. */

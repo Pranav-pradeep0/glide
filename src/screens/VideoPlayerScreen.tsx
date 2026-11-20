@@ -425,7 +425,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     });
 
     // PIP Mode State from native listener
-    const isInPipMode = usePipModeListener();
+    const isInPipMode = usePipModeListener(inExternalPlayer ? 'VideoPlayerActivity' : 'MainActivity');
     // Auto-enter eligibility only. Whether overlays are on screen no longer
     // matters: the native controller hides everything except the video surface
     // when PiP opens, so blocking PiP while the controls are up would just mean

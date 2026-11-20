@@ -18,18 +18,19 @@ const PIP_MODE_CHANGED_EVENT = 'onPipModeChanged';
 
 interface PipModeEvent {
     isInPipMode: boolean;
+    activityName: string;
 }
 
 /**
- * Check if the app is currently in PIP mode
+ * Whether the named Activity ('MainActivity' or 'VideoPlayerActivity') is in PiP.
  */
-export async function isInPipMode(): Promise<boolean> {
+export async function isInPipMode(activityName: string): Promise<boolean> {
     if (Platform.OS !== 'android' || !NativePipModule) {
         return false;
     }
 
     try {
-        return await NativePipModule.isInPipMode();
+        return await NativePipModule.isInPipMode(activityName);
     } catch (error) {
         console.error('[PipModule] Failed to check PIP mode:', error);
         return false;
@@ -77,10 +78,11 @@ export function currentActivityName(): string | null | undefined {
 }
 
 /**
- * Hook to listen for PIP mode changes.
+ * Hook to listen for PIP mode changes of the named Activity. Both Activities share one JS
+ * runtime, so another one's PiP window must not count as this player's.
  * The native callback is authoritative, so there is nothing to poll.
  */
-export function usePipModeListener(): boolean {
+export function usePipModeListener(activityName: string): boolean {
     const [isInPip, setIsInPip] = useState(false);
 
     useEffect(() => {
@@ -93,12 +95,16 @@ export function usePipModeListener(): boolean {
         }>(NativePipModule);
         const subscription = eventEmitter.addListener(
             PIP_MODE_CHANGED_EVENT,
-            (event: PipModeEvent) => setIsInPip(event.isInPipMode)
+            (event: PipModeEvent) => {
+                if (event.activityName === activityName) {
+                    setIsInPip(event.isInPipMode);
+                }
+            }
         );
 
         let cancelled = false;
         const syncFromNative = () => {
-            isInPipMode().then((inPip) => {
+            isInPipMode(activityName).then((inPip) => {
                 if (!cancelled) {
                     setIsInPip(inPip);
                 }
@@ -117,7 +123,7 @@ export function usePipModeListener(): boolean {
             subscription.remove();
             appStateSubscription.remove();
         };
-    }, []);
+    }, [activityName]);
 
     return isInPip;
 }

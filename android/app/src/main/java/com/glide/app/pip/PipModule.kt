@@ -43,9 +43,10 @@ class PipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     fun removeListeners(count: Int) = Unit
 
     @ReactMethod
-    fun isInPipMode(promise: Promise) {
+    fun isInPipMode(activityName: String, promise: Promise) {
         // Not the current activity's mode: React follows the library while a window is open.
-        promise.resolve(GlideBaseActivity.inPip)
+        // Not app-wide either: a library player is not in PiP because an "Open with" one is.
+        promise.resolve(GlideBaseActivity.inPip(activityName))
     }
 
     @ReactMethod
@@ -100,9 +101,10 @@ class PipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
         reactApplicationContext.currentActivity?.javaClass?.simpleName
 
     /** Called from the host Activity's onPictureInPictureModeChanged. */
-    fun onPictureInPictureModeChanged(isInPipMode: Boolean) {
+    fun onPictureInPictureModeChanged(isInPipMode: Boolean, activityName: String) {
         val params = Arguments.createMap().apply {
             putBoolean("isInPipMode", isInPipMode)
+            putString("activityName", activityName)
         }
         sendEvent(PIP_MODE_CHANGED_EVENT, params)
     }

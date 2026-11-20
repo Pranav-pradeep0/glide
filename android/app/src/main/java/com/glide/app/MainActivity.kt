@@ -134,7 +134,7 @@ class MainActivity : GlideBaseActivity() {
       val reactContext = reactApplication?.reactHost?.currentReactContext
       val pipModule = reactContext?.getNativeModule(PipModule::class.java)
           ?: (reactContext?.getNativeModule(PipModule.NAME) as? PipModule)
-      pipModule?.onPictureInPictureModeChanged(isInPictureInPictureMode)
+      pipModule?.onPictureInPictureModeChanged(isInPictureInPictureMode, javaClass.simpleName)
     } catch (e: Exception) {
       android.util.Log.w("MainActivity", "Failed to notify PIP state change: ${e.message}")
     }
