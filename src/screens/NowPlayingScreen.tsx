@@ -465,9 +465,9 @@ export default function NowPlayingScreen() {
                                 ? [
                                       primaryColor,
                                       secondaryColor || `${primaryColor}66`,
-                                      dark ? '#121214' : colors.background,
+                                      dark ? colors.surface : colors.background,
                                   ]
-                                : [dark ? '#1c1c1f' : '#e6e6ea', colors.background]
+                                : [dark ? colors.cardElevated : colors.surfaceVariant, colors.background]
                         }
                         locations={primaryColor ? [0, 0.45, 0.9] : [0, 0.9]}
                         style={StyleSheet.absoluteFill}
