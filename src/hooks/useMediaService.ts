@@ -80,10 +80,12 @@ export function useAlbumVideos(albumTitle: string | null, bucketId?: string, sor
     const [hasMore, setHasMore] = useState(false);
 
     const cacheKey = bucketId || albumTitle;
+    // Asked again mid-load (the library changed): that load may predate it, so load once more.
+    const pendingRef = useRef(false);
 
     const fetchVideos = useCallback(async (refresh = false) => {
         if (!albumTitle && !bucketId) {return;}
-        if (loading) {return;}
+        if (loading) {pendingRef.current = true; return;}
 
         if (refresh) {
             setLoading(true);
@@ -101,6 +103,10 @@ export function useAlbumVideos(albumTitle: string | null, bucketId?: string, sor
         } finally {
             setLoading(false);
             setLoadingMore(false);
+            if (pendingRef.current) {
+                pendingRef.current = false;
+                fetchVideos(true);
+            }
         }
     }, [albumTitle, bucketId, cacheKey, loading]);
 
