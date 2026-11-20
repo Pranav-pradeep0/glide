@@ -56,16 +56,24 @@ interface LyricsTrackInfo {
 /**
  * Parses LRC format strings into an array of time-indexed lines.
  * Supports standard [mm:ss.xx], [mm:ss.xxx], and 1-digit fractions like [mm:ss.x].
- * Also supports multi-tag lines like [mm:ss.xx][mm:ss.yy].
+ * Also supports multi-tag lines like [mm:ss.xx][mm:ss.yy], ':' or ',' before the fraction,
+ * 3-digit minutes, and [offset:±ms] (positive shows lines sooner).
  */
 export function parseLrc(content: string): LyricLine[] {
     const lines = content.split(/\r?\n/);
     const result: LyricLine[] = [];
-    const timeTagRegex = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+    const timeTagRegex = /\[(\d{1,3}):(\d{2})(?:[.:,](\d{1,3}))?\]/g;
+    let offsetSeconds = 0;
 
     for (const rawLine of lines) {
         const line = rawLine.trim();
         if (!line) continue;
+
+        const offset = /^\[offset:\s*([+-]?\d+)\s*\]/i.exec(line);
+        if (offset) {
+            offsetSeconds = parseInt(offset[1], 10) / 1000;
+            continue;
+        }
 
         timeTagRegex.lastIndex = 0;
         const matches: number[] = [];
@@ -85,6 +93,11 @@ export function parseLrc(content: string): LyricLine[] {
                 result.push({ time, text });
             }
         }
+    }
+
+    // The tag can sit anywhere, so it is applied once every line is in.
+    if (offsetSeconds) {
+        for (const l of result) { l.time = Math.max(0, l.time - offsetSeconds); }
     }
 
     result.sort((a, b) => a.time - b.time);
@@ -211,7 +224,7 @@ export class LyricsServiceClass {
             }
         }
 
-        // 3. Embedded lyrics (ID3v2 USLT/SYLT, FLAC VORBIS_COMMENT, MP4 ©lyr)
+        // 3. Embedded lyrics (ID3v2 USLT, FLAC VORBIS_COMMENT, MP4 ©lyr)
         try {
             const embedded = await AudioMediaService.getEmbeddedLyrics(uri, path);
             if (embedded && embedded.trim().length > 0) {

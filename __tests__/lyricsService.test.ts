@@ -51,6 +51,14 @@ describe('LyricsService parser and sync tests', () => {
         expect(result[1].text).toBe('Second cue');
     });
 
+    it('parseLrc reads other fraction marks, long songs and the offset tag', () => {
+        const result = parseLrc('[00:10:50] A\n[00:20,5] B\n[100:00.00] C\n[offset:+500]');
+        expect(result.map((l) => l.text)).toEqual(['A', 'B', 'C']);
+        expect(result[0].time).toBeCloseTo(10);
+        expect(result[1].time).toBeCloseTo(20);
+        expect(result[2].time).toBeCloseTo(5999.5);
+    });
+
     it('isLyricsSynced correctly identifies unsynced vs synced lyrics', () => {
         expect(isLyricsSynced(null)).toBe(false);
         expect(isLyricsSynced([])).toBe(false);
