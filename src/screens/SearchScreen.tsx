@@ -59,6 +59,7 @@ export default function SearchScreen() {
     } = useVideoSearch();
     const videoAccess = usePermissionStore((s) => s.video.access);
     const initializeIndex = useVideoIndexStore((s) => s.initialize);
+    const indexError = useVideoIndexStore((s) => s.indexError);
 
     // The index is normally built at launch; opened before that (or with access granted
     // since), build it here rather than wait on "Preparing search" for ever.
@@ -139,7 +140,14 @@ export default function SearchScreen() {
     if (!isIndexReady) {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-                <Loader text="Preparing search" />
+                <View style={[styles.bar, IS_TV && styles.barTv]}>
+                    <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
+                </View>
+                {indexError ? (
+                    <EmptyState text="Couldn't load your videos" action="Retry" onAction={initializeIndex} icon="alert-circle" />
+                ) : (
+                    <Loader text="Preparing search" />
+                )}
             </View>
         );
     }

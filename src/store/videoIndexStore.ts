@@ -12,6 +12,8 @@ interface VideoIndexState {
     videos: VideoFile[];
     isIndexing: boolean;
     isIndexReady: boolean;
+    /** The last load failed: search offers Retry instead of waiting for ever. */
+    indexError: boolean;
     lastFullSyncAt: number | null;
 
     initialize: () => Promise<void>;
@@ -26,13 +28,14 @@ let dirty = false;
 export const useVideoIndexStore = create<VideoIndexState>((set, get) => {
     const load = (forceRefresh: boolean) => {
         if (inFlight) { dirty = true; return inFlight; }
-        set({ isIndexing: true });
+        set({ isIndexing: true, indexError: false });
         inFlight = MediaService.getAllVideos(forceRefresh)
             .then(videos => {
                 set({ videos, isIndexReady: true, lastFullSyncAt: Date.now() });
             })
             .catch(error => {
                 console.error('[VideoIndexStore] Index error:', error);
+                set({ indexError: true });
             })
             .finally(() => {
                 inFlight = null;
@@ -49,6 +52,7 @@ export const useVideoIndexStore = create<VideoIndexState>((set, get) => {
         videos: [],
         isIndexing: false,
         isIndexReady: false,
+        indexError: false,
         lastFullSyncAt: null,
 
         initialize: () => load(false),
