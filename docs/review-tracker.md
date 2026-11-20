@@ -214,7 +214,7 @@ computed with the WCAG formula.
 | DS-11 | DONE | CONFIRMED | M | src/components/VideoPlayer/PlayerControls.tsx:820-821 | Title type.row 15/20; subtitle literal 11.5/15 skips TV scaling. | 821 → `subtitle: { ...type.caption, color: colors.textSecondary }`. | S |
 | DS-12 | DONE | PARTIAL | L | src/navigation/RootNavigator.tsx:254-269,330,648 | Feather `home` for the route titled "Home"; selected already changes icon colour + label colour; weight stays 500. Phone only. | 269 → `[type.caption, styles.label, focused && { fontWeight: '600' }, labelStyle]`. Keep icon. | S |
 | DS-13 | DONE | CONFIRMED | L | src/components/ui/index.tsx:1018 | Snackbar hard-codes '#2A2A2E'. | `backgroundColor: colors.surfaceVariant` (player palette #26262A, 12.9:1). | S |
-| DS-14 | TODO | CONFIRMED | M (TV) | src/components/VideoRow.tsx:303-304 | `focusRing={false}` on TV Continue card; only 1.05 grow + faint tint. | Delete 303-304 so the default 3dp primary ring applies. Phones unaffected. | S |
+| DS-14 | DONE | CONFIRMED | M (TV) | src/components/VideoRow.tsx:303-304 | `focusRing={false}` on TV Continue card; only 1.05 grow + faint tint. | Delete 303-304 so the default 3dp primary ring applies. Phones unaffected. | S |
 
 ## Simpler code (CM)
 
