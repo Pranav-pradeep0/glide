@@ -72,6 +72,8 @@ export const motion = {
     press: { mass: 1, stiffness: 1400, damping: 67 },
     /** Panels, sheets, the seek bar growing. ≈320 ms. */
     spatial: { mass: 1, stiffness: 700, damping: 48 },
+    /** Shape changes meant to be seen, with a small visible overshoot (ζ≈0.8). */
+    expressive: { mass: 1, stiffness: 380, damping: 31 },
     fadeIn: 120,
     fadeOut: 280,
     pressScale: 0.97,

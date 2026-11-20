@@ -7,11 +7,11 @@ import {
     ActivityIndicator,
     Image,
     Animated,
-    Easing,
     useWindowDimensions,
 } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Feather from '@react-native-vector-icons/feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
@@ -21,7 +21,7 @@ import { OMDBResult } from '../services/OMDBService';
 import { RootStackParamList } from '../types';
 import { ImdbIcon, RottenTomatoesIcon } from '../components/VideoPlayer/PlayerIcons';
 import { Button, Gradient, IconButton } from '@/components/ui';
-import { metrics, type } from '@/theme/theme';
+import { metrics, motion, type } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
 
 type DetailRouteProp = RouteProp<RootStackParamList, 'PlayerDetail'>;
@@ -50,7 +50,8 @@ export default function PlayerDetailScreen() {
     const [detailsLoading, setDetailsLoading] = useState(true);
 
     // The sharp poster fades in over the small one once it has loaded.
-    const imageOpacity = useRef(new Animated.Value(0)).current;
+    const imageOpacity = useSharedValue(0);
+    const imageStyle = useAnimatedStyle(() => ({ opacity: imageOpacity.value }));
     const scrollY = useRef(new Animated.Value(0)).current;
 
     // Helper to get high-resolution poster
@@ -146,17 +147,12 @@ export default function PlayerDetailScreen() {
                 {poster ? (
                     <>
                         <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                        <Animated.Image
+                        <Reanimated.Image
                             source={{ uri: getHighResPoster(poster) }}
-                            style={[StyleSheet.absoluteFill, { opacity: imageOpacity }]}
+                            style={[StyleSheet.absoluteFill, imageStyle]}
                             resizeMode="cover"
                             onLoad={() => {
-                                Animated.timing(imageOpacity, {
-                                    toValue: 1,
-                                    duration: 600,
-                                    useNativeDriver: true,
-                                    easing: Easing.out(Easing.quad),
-                                }).start();
+                                imageOpacity.value = withTiming(1, { duration: motion.fadeOut });
                             }}
                         />
                     </>
