@@ -8,7 +8,7 @@ import { RootStackParamList, VideoFile, VideoSort } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useAlbumVideos } from '@/hooks/useMediaService';
 import { usePermissionStore } from '@/store/permissionStore';
-import { PermissionGate } from '@/components/PermissionGate';
+import { PartialAccessBanner, PermissionGate } from '@/components/PermissionGate';
 import { formatFileSize } from '@/utils/formatUtils';
 import { NavigationService } from '@/services/NavigationService';
 import { VideoOptionsBottomSheet } from '@/components/VideoOptionsBottomSheet';
@@ -145,6 +145,7 @@ export default function AlbumVideosScreen() {
                 />
             </ListHeader>
 
+            <PartialAccessBanner />
             {videoAccess === 'denied' ? (
                 <PermissionGate kind="video" />
             ) : videos.length === 0 ? (
