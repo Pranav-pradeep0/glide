@@ -402,13 +402,6 @@ export default function SettingsScreen() {
                         caption="Next video in the folder"
                         toggle={{ value: settings.autoPlayNext, onChange: setAutoPlayNext }}
                     />
-                    {/* TV is videos only for now, so music settings stay on phones. */}
-                    {!IS_TV && <ListRow
-                        icon="music"
-                        title="Online lyrics"
-                        caption="Fetch lyrics from LRCLIB when not found locally"
-                        toggle={{ value: settings.onlineLyricsEnabled, onChange: setOnlineLyricsEnabled }}
-                    />}
                     <ListRow
                         icon="fast-forward"
                         title="Seek buttons"
@@ -654,6 +647,31 @@ export default function SettingsScreen() {
                     />
                 </ListGroup>
 
+                {/* TV is videos only for now, so music settings stay on phones. */}
+                {!IS_TV && <>
+                <SectionLabel title="Music" />
+                <ListGroup>
+                    <ListRow
+                        icon="music"
+                        title="Online lyrics"
+                        caption="Fetch lyrics from LRCLIB when not found locally"
+                        toggle={{ value: settings.onlineLyricsEnabled, onChange: setOnlineLyricsEnabled }}
+                    />
+                </ListGroup>
+                </>}
+
+                <SectionLabel title="Storage" />
+                <ListGroup>
+                    <ListRow icon="trash-2" title="Clear subtitle cache" destructive onPress={handleClearCache} />
+                    {telegramBytes !== null && (
+                        <ListRow icon="trash-2" title="Clear Telegram cache" value={formatFileSize(telegramBytes)} destructive onPress={handleClearTelegram} />
+                    )}
+                    {telegramSaves.length > 0 && (
+                        <ListRow icon="trash-2" title="Delete downloaded films" value={formatFileSize(savedBytes)} destructive onPress={handleDeleteSaves} />
+                    )}
+                    <ListRow icon="trash-2" title="Clear watch history" destructive onPress={handleClearHistory} />
+                </ListGroup>
+
                 <SectionLabel title="About" />
                 <ListGroup>
                     {/* In debug builds, seven taps open the Haptics Lab, a dev screen. */}
@@ -682,18 +700,6 @@ export default function SettingsScreen() {
                         chevron
                         onPress={() => setLicencesVisible(true)}
                     />
-                </ListGroup>
-
-                <SectionLabel title="Storage" />
-                <ListGroup>
-                    <ListRow icon="trash-2" title="Clear subtitle cache" destructive onPress={handleClearCache} />
-                    {telegramBytes !== null && (
-                        <ListRow icon="trash-2" title="Clear Telegram cache" value={formatFileSize(telegramBytes)} destructive onPress={handleClearTelegram} />
-                    )}
-                    {telegramSaves.length > 0 && (
-                        <ListRow icon="trash-2" title="Delete downloaded films" value={formatFileSize(savedBytes)} destructive onPress={handleDeleteSaves} />
-                    )}
-                    <ListRow icon="trash-2" title="Clear watch history" destructive onPress={handleClearHistory} />
                 </ListGroup>
             </ScrollView>
 
