@@ -100,6 +100,13 @@ Dialogue: 0,0:00:01.00,0:00:02.50,Default,,0,0,0,,{\\b1}Bold{\\b0} and {\\i1}Ita
             expect(cues[0].text).toBe('<b>Bold</b> and <i>Italic</i>');
         });
 
+        it('turns \\h into a space and drops vector drawing text', () => {
+            const ass = `[Events]
+Dialogue: 0,0:00:01.00,0:00:02.50,Default,,0,0,0,,{\\pos(10,10)}Hi\\hthere{\\p1}m 0 0 l 10 0 10 10{\\p0} end`;
+            const cues = SubtitleParser.parseASS(ass);
+            expect(cues[0].text).toBe('Hi there end');
+        });
+
         it('skips lines before [Events] section', () => {
             const ass = `[Script Info]
 Title: Test

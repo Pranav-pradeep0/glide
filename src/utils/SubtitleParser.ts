@@ -109,7 +109,7 @@ export class SubtitleParser {
                     parseFloat(endParts[2]);
 
                 const text = SubtitleHtmlParser.normalizeSubtitleText(
-                    SubtitleParser.convertAssOverrides(parts.slice(9).join(','))
+                    SubtitleParser.convertAssOverrides(parts.slice(9).join(',')).replace(/\\h/g, ' ')
                 );
                 const soundEffect = SubtitleParser.extractSoundEffect(text);
 
@@ -193,6 +193,8 @@ export class SubtitleParser {
         let bold = false;
         let italic = false;
         let underline = false;
+        // Between {\p1} and {\p0} the text is vector drawing commands, not words
+        let drawing = false;
 
         const closeUntil = (target: { bold?: boolean; italic?: boolean; underline?: boolean }) => {
             if (target.bold === false && bold) {
@@ -222,8 +224,10 @@ export class SubtitleParser {
         let match: RegExpExecArray | null;
 
         while ((match = overrideRegex.exec(text)) !== null) {
-            result += text.substring(lastIndex, match.index);
+            if (!drawing) { result += text.substring(lastIndex, match.index); }
             const block = match[0];
+            const drawMode = block.match(/\\p(\d+)/);
+            if (drawMode) { drawing = drawMode[1] !== '0'; }
             const commands = block.match(/\\[ibu][01]/gi) || [];
 
             commands.forEach(command => {
@@ -245,7 +249,7 @@ export class SubtitleParser {
             lastIndex = overrideRegex.lastIndex;
         }
 
-        result += text.substring(lastIndex);
+        if (!drawing) { result += text.substring(lastIndex); }
         closeUntil({ bold: false, italic: false, underline: false });
 
         return result;
