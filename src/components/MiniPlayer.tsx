@@ -177,6 +177,9 @@ export function MiniPlayer() {
                         style={styles.content}
                         accessibilityRole="button"
                         accessibilityLabel={`Now playing: ${currentTrack.title} by ${currentTrack.artist}`}
+                        // The swipe-down stop, for TalkBack.
+                        accessibilityActions={DISMISS_ACTIONS}
+                        onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'dismiss') handleDismiss(); }}
                     >
                         {/* Artwork */}
                         <View
@@ -232,6 +235,7 @@ export function MiniPlayer() {
 }
 
 const noop = () => {};
+const DISMISS_ACTIONS = [{ name: 'dismiss', label: 'Stop playback' }];
 
 function BufferingRing({ color }: { color: string }) {
     return <ActivityIndicator pointerEvents="none" style={StyleSheet.absoluteFill} size={metrics.touch - 8} color={color} />;
