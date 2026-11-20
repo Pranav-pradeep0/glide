@@ -359,12 +359,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: metrics.space.sm,
         borderRadius: metrics.radius.md,
     },
-    rowCover: { width: 88, height: 56 },
+    rowCover: { width: 96, height: 54 },
     rowInfo: { flex: 1, gap: 2 },
     gridCell: { flex: 1, paddingHorizontal: GRID_HALF_GAP, paddingBottom: metrics.space.lg },
     // The radius only shapes the focus ring and tint.
     gridCard: { flex: 1, borderRadius: metrics.radius.sm },
-    gridCover: { width: '100%', aspectRatio: 16 / 10 },
+    gridCover: { width: '100%', aspectRatio: 16 / 9 },
     gridInfo: { paddingTop: metrics.space.sm, paddingLeft: 2, gap: 2 },
 
     tiles: { flexDirection: 'row', paddingHorizontal: metrics.gutter, gap: metrics.space.sm },
