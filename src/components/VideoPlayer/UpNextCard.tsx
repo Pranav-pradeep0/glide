@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Image, StyleSheet, Text, View, type HostInstance } from 'react-native';
+import { AccessibilityInfo, Image, StyleSheet, Text, View, type HostInstance } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut, useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { Feather } from '@react-native-vector-icons/feather';
@@ -50,6 +50,12 @@ export function UpNextCard({ name, path, endsAt, inCredits, onPlay, onDismiss, b
     // TV: the remote goes to Play next while the card shows; Back (the screen's) dismisses it.
     const cardRef = useRef<HostInstance>(null);
     useTvFocusScope(cardRef, !!onPlay);
+
+    // TalkBack hears the card and its countdown; a view appearing alone says nothing.
+    useEffect(() => {
+        const secs = endsAt === null ? 0 : Math.round(Math.max(0, endsAt - Date.now()) / 1000);
+        AccessibilityInfo.announceForAccessibility(secs > 0 ? `Up next: ${title} in ${secs}s` : `Up next: ${title}`);
+    }, [title, endsAt]);
 
     const left = useSharedValue(0);
     useEffect(() => {
