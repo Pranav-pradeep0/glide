@@ -42,7 +42,7 @@ const KEY = 'servers';
 
 export const SMB_AVAILABLE = !!native;
 
-/** Android 17's local network permission is off (native `Smb.gate`): offer the app's settings. */
+/** Android 17's local network permission is off (native `Smb.LocalNetworkDenied`): offer the app's settings. */
 export const isLocalNetworkDenied = (e: unknown) => (e as { code?: string } | null)?.code === 'local-network';
 
 export type SmbLogin = { host: string; user: string; password: string; domain: string };
