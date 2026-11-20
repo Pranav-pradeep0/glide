@@ -17,6 +17,7 @@ import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.mssmb2.SMBApiException
 import com.hierynomus.smbj.share.File
+import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.EnumSet
 import java.util.concurrent.ExecutionException
@@ -74,7 +75,7 @@ class SmbDataSource(private val chunk: Int = CHUNK, private val depth: Int = DEP
         while (inFlight.size < depth && next < end) {
             val at = next
             val n = minOf(chunk.toLong(), end - at).toInt()
-            inFlight.addLast(Smb.readers.submit<ByteArray> { readFully(f, at, n) })
+            inFlight.addLast(Smb.readers.submit<ByteArray> { readFully(at, n, f::read) })
             next += n
         }
     }
@@ -142,13 +143,17 @@ class SmbDataSource(private val chunk: Int = CHUNK, private val depth: Int = DEP
         const val DEPTH = 8
         private val EMPTY = ByteArray(0)
 
-        /** [n] bytes at [at], or fewer at the end of the file. A server may answer a read short. */
-        private fun readFully(f: File, at: Long, n: Int): ByteArray {
+        /**
+         * [n] bytes at [at]. A server may answer a read short, so this loops. [n] never runs past
+         * the size seen at open, so an early end means the file shrank: fail rather than hand back
+         * a short chunk that would shift every later byte.
+         */
+        internal fun readFully(at: Long, n: Int, read: (ByteArray, Long, Int, Int) -> Int): ByteArray {
             val buf = ByteArray(n)
             var got = 0
             while (got < n) {
-                val r = f.read(buf, at + got, got, n - got)
-                if (r <= 0) return buf.copyOf(got)
+                val r = read(buf, at + got, got, n - got)
+                if (r <= 0) throw IOException("File ended at ${at + got}, expected ${at + n}")
                 got += r
             }
             return buf
