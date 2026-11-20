@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
     },
     titleBlock: { flex: 1, marginHorizontal: metrics.space.xs },
     title: { ...type.row, color: colors.text },
-    subtitle: { fontSize: 11.5, lineHeight: 15, color: colors.textSecondary },
+    subtitle: { ...type.caption, color: colors.textSecondary },
     speedChip: {
         height: 28,
         minWidth: 40,
