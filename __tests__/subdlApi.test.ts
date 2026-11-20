@@ -107,6 +107,21 @@ describe('subdlApi', () => {
         expect(result.subtitles[1].sdhScore).toBe(0);
     });
 
+    it('keeps manual season, episode and year when retrying without the year', async () => {
+        const fetchMock = network.fetchWithTimeout as jest.Mock<any>;
+        fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) } as any);
+
+        await searchAllSubtitles('Some.Show.mkv', 'en', undefined, false, undefined, 2, 5, 2019);
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const retry = new URLSearchParams(String(fetchMock.mock.calls[1][0]).split('?')[1]);
+        expect(retry.get('type')).toBe('tv');
+        expect(retry.get('season_number')).toBe('2');
+        expect(retry.get('episode_number')).toBe('5');
+        expect(retry.get('comment')).toBe('1');
+        expect(retry.get('year')).toBeNull();
+    });
+
     it('rejects on a network failure instead of reporting no results', async () => {
         (network.fetchWithTimeout as jest.Mock<any>).mockRejectedValueOnce(new Error('Network failure'));
         await expect(searchAllSubtitles('Test.Movie.mkv')).rejects.toThrow('Network failure');

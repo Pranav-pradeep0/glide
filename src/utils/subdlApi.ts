@@ -261,13 +261,14 @@ async function executeSubtitleSearch(
     const effectiveSeason = manualSeason !== undefined ? manualSeason : parsed.season;
     const effectiveEpisode = manualEpisode !== undefined ? manualEpisode : parsed.episode;
     const effectiveYear = manualYear !== undefined ? manualYear : parsed.year;
+    const isTVShow = parsed.isTVShow || manualSeason !== undefined || manualEpisode !== undefined;
     const params = buildSearchParams({
         videoName,
         language,
         imdbId,
         prioritizeSDH,
         filmName: parsed.title || videoName,
-        isTVShow: parsed.isTVShow || manualSeason !== undefined || manualEpisode !== undefined,
+        isTVShow,
         year: effectiveYear,
         season: effectiveSeason,
         episode: effectiveEpisode,
@@ -281,17 +282,18 @@ async function executeSubtitleSearch(
     if (!data.subtitles || data.subtitles.length === 0) {
         if (__DEV__) {console.log(`${LOG_PREFIX} No subtitles found`);}
 
-        if (parsed.year && !imdbId) {
+        if (effectiveYear && !imdbId) {
             if (__DEV__) {console.log(`${LOG_PREFIX} Retrying without year...`);}
             const fallbackParams = buildSearchParams({
                 videoName,
                 language,
                 prioritizeSDH,
                 filmName: parsed.title || videoName,
-                isTVShow: parsed.isTVShow,
-                season: parsed.season,
-                episode: parsed.episode,
+                isTVShow,
+                season: effectiveSeason,
+                episode: effectiveEpisode,
                 fullSeason: parsed.fullSeason,
+                includeComments: true,
             });
             const fallbackData = await fetchSubtitlesJson(fallbackParams, signal, true);
             if (fallbackData.subtitles?.length) {

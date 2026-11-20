@@ -144,7 +144,7 @@ Media3 1.11.1 `DefaultShuffleOrder` was checked in the library source: there is 
 | SB-6 | DONE | CONFIRMED | wrong-behaviour (spoiler) | src/services/RecapService.ts:107-108; usePlayerRecap.ts:98,162; VideoPlayerScreen.tsx:540; types.ts:290 | Raw cue times vs video time; cue shows at `c*ratio + delay`; ~150s leak at 1h with 25/23.976. | Pass delayMs + ratio; filter `cue.startTime*ratio + delay/1000 <= resumePosition` (and for `earliest`). | S |
 | SB-7 | TODO | CONFIRMED | wrong-behaviour | src/services/SubtitleSelectionService.ts:9-12,46-57; SubtitleCueStore.ts:188-192 | SDH +20 > language +10; `includes('cc')` substring. "Français SDH" beats English. | Language +30; `/\b(sdh|cc|hoh)\b/i`. | S |
 | SB-8 | TODO | CONFIRMED | wrong-behaviour | android/.../player/SubtitleZip.kt:26-31 | `minByOrNull { rank }` first .srt; season packs (subdlApi.ts:481 `full_season`) give E01. | Pass season/episode to `read`; prefer entry matching `S\d+E0*N` or `\bNxNN\b`. | M |
-| SB-9 | TODO | CONFIRMED | wrong-behaviour | src/utils/subdlApi.ts:284-295 | Retry uses parsed season/episode/isTVShow, drops manual overrides and includeComments. | Reuse `effectiveSeason/effectiveEpisode`, same isTVShow expression, `includeComments: true`. | S |
+| SB-9 | DONE | CONFIRMED | wrong-behaviour | src/utils/subdlApi.ts:284-295 | Retry uses parsed season/episode/isTVShow, drops manual overrides and includeComments. | Reuse `effectiveSeason/effectiveEpisode`, same isTVShow expression, `includeComments: true`. | S |
 | SB-10 | TODO | CONFIRMED | minor | src/utils/subdlApi.ts:26-40,51-62 | `includes('hi')` matches Chicago/This/White; `'cc'` matches Accountant. | Tokenise `[^a-z0-9]+`, compare whole tokens. | S |
 | SB-11 | DONE | CONFIRMED | minor | android/.../player/Credits.kt:54 | `\b(…|ending|outro|ed)\b` IGNORE_CASE matches "The Ending", "Ed Returns" (2nd half only). | `^\s*(end ?credits|credits|ending|outro|ed)\s*$`. Update scripts/credits-fixtures.js words in step. | S |
 | SB-12 | TODO | CONFIRMED | minor | android/.../player/EmbeddedSubtitles.kt:86,315,338 | Inner `\n\n` (ASS `\N\N`) splits the SRT block; tail dropped. | `toSrtText`: `.replace(Regex("\n\\s*\n"), "\n")`. | S |
@@ -159,7 +159,7 @@ Media3 1.11.1 `DefaultShuffleOrder` was checked in the library source: there is 
 | SB-21 | TODO | CONFIRMED | minor | src/utils/SubtitleParser.ts:232-260; SubtitleHtmlParser.tsx:221-222 | `\h` literal; `{\p1}` stripped but drawing text `m 0 0 l …` stays. | `\h` → space; drop text between `{\p[1-9]}` and `{\p0}` (or drop cue). | S |
 | SB-22 | — | REFUTED | – | android/.../player/MatroskaSkipper.kt | vint length, unknown sizes, Cues offsets, BlockGroup, lacing, multi-track, >2GB offsets, fallback all correct. Caveat: exception after audio fed rethrows → SB-13. | None. | – |
 | SB-N1 | — | NOTE | – | RecapService.ts:168; proxy/src/index.ts:119 | Both sides measure `.length` (UTF-16 units); keep it that way when fixing SB-4 — don't switch only one side to bytes. | Constraint on SB-4/SB-5 fix. | – |
-| SB-N2 | TODO | CONFIRMED | minor | src/utils/subdlApi.ts:284 | Year retry gated on `parsed.year`, not `effectiveYear`; manual year ignored. | Use `effectiveYear`. Fix together with SB-9. | S |
+| SB-N2 | DONE | CONFIRMED | minor | src/utils/subdlApi.ts:284 | Year retry gated on `parsed.year`, not `effectiveYear`; manual year ignored. | Use `effectiveYear`. Fix together with SB-9. | S |
 
 ## UX and Android TV (UX, TV)
 
