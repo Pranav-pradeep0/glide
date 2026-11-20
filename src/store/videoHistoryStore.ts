@@ -91,9 +91,13 @@ function findMovedVideo(entry: VideoHistoryEntry, library: VideoFile[]): VideoFi
     const byUri = entry.contentUri ? library.find(v => v.uri === entry.contentUri) : undefined;
     if (byUri) {return byUri;}
     const name = entry.videoPath.split('/').pop()?.toLowerCase();
-    const same = library.filter(v => v.name.toLowerCase() === name);
+    // Same name and length: a different film that happens to share a name isn't a move.
+    const same = library.filter(v => v.name.toLowerCase() === name && Math.abs(entry.duration - v.duration) < 2);
     return same.length === 1 ? same[0] : null;
 }
+
+/** `/storage/XXXX-XXXX` for a file on an SD card or USB drive, else null. */
+const removableRoot = (path: string) => path.match(/^\/storage\/[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}(?=\/)/)?.[0] ?? null;
 
 /**
  * Local entries whose file is gone: where each moved to, and which are nowhere. Only
@@ -111,7 +115,9 @@ export async function findMissingHistory(
     for (const entry of entries) {
         const path = entry.videoPath.replace('file://', '');
         if (!isLocalPath(entry.videoPath) || listed.has(path) || await exists(path)) {continue;}
-        const moved = findMovedVideo(entry, library);
+        // A card that's out takes every file on it away; matching then would move history for good.
+        const root = removableRoot(path);
+        const moved = root && !(await exists(root)) ? null : findMovedVideo(entry, library);
         if (moved) {
             moves.push([entry.videoPath, moved]);
         } else {

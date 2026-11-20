@@ -46,6 +46,22 @@ describe('history for moved files', () => {
         expect([...missing]).toEqual([OLD]);
     });
 
+    it('does not match a same-named file of a different length', async () => {
+        const other = { ...video(NEW, 'content://m/9'), duration: 5400 };
+        const { moves } = await findMissingHistory([entry(OLD)], [other], nothingOnDisk);
+        expect(moves).toEqual([]);
+    });
+
+    it('does not relink files on an SD card that is out', async () => {
+        const onCard = "/storage/1A2B-3C4D/Movies/It's A Medical Miracle.mkv";
+        const { moves, missing } = await findMissingHistory([entry(onCard)], [video(NEW, 'content://m/9')], nothingOnDisk);
+        expect(moves).toEqual([]);
+        expect([...missing]).toEqual([onCard]);
+        // Card in, file really gone from it: a move again.
+        const cardIn = await findMissingHistory([entry(onCard)], [video(NEW, 'content://m/9')], async p => p === '/storage/1A2B-3C4D');
+        expect(cardIn.moves).toHaveLength(1);
+    });
+
     it('leaves alone files that are listed, on disk, or not local', async () => {
         const onDisk = '/storage/emulated/0/.hidden/clip.mp4';
         const { moves, missing } = await findMissingHistory(
