@@ -1,6 +1,7 @@
 // src/utils/storage.ts
 
 import { createMMKV } from 'react-native-mmkv';
+import { keepCorrupt } from './keepCorrupt';
 import { AppSettings } from '../types';
 
 const SETTINGS_KEY = '@glide_app:settings';
@@ -24,8 +25,14 @@ export const storage = {
             return data ? JSON.parse(data) : null;
         } catch (error) {
             console.error('Error loading settings:', error);
+            storage.keepCorruptSettings();
             return null;
         }
+    },
+
+    /** Saved settings that couldn't be read go to `.corrupt` before defaults overwrite them. */
+    keepCorruptSettings(): void {
+        keepCorrupt(mmkvStorage, SETTINGS_KEY);
     },
 
     clearSettings(): void {

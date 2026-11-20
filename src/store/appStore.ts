@@ -96,6 +96,7 @@ function loadInitialSettings(): AppSettings {
         }
     } catch {
         // Fallback to defaults
+        storage.keepCorruptSettings();
     }
     return DEFAULT_APP_SETTINGS;
 }

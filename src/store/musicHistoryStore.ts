@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createMMKV } from 'react-native-mmkv';
+import { keepCorrupt } from '../storage/keepCorrupt';
 
 const mmkv = createMMKV({ id: 'glide_music_history_v1' });
 const HISTORY_KEY = '@glide_music_history';
@@ -17,6 +18,7 @@ function loadHistory(): MusicHistoryEntry[] {
         const parsed = raw ? JSON.parse(raw) : [];
         return Array.isArray(parsed) ? parsed : [];
     } catch {
+        keepCorrupt(mmkv, HISTORY_KEY);
         return [];
     }
 }

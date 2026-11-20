@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createMMKV } from 'react-native-mmkv';
+import { keepCorrupt } from '../storage/keepCorrupt';
 import { VideoHistoryEntry, VideoBookmark, VideoFile } from '../types';
 
 const mmkv = createMMKV({ id: 'video_history_v1' });
@@ -152,6 +153,7 @@ try {
     }
 } catch (error) {
     console.error('[VideoHistoryStore] Sync init error:', error);
+    keepCorrupt(mmkv, HISTORY_KEY);
 }
 
 /**

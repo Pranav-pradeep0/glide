@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createMMKV } from 'react-native-mmkv';
+import { keepCorrupt } from '../storage/keepCorrupt';
 
 const mmkv = createMMKV({ id: 'glide_audio_favorites_v1' });
 const FAVORITES_KEY = '@glide_audio_favorites';
@@ -14,7 +15,7 @@ function loadInitialFavorites(): string[] {
             }
         }
     } catch {
-        // ignore
+        keepCorrupt(mmkv, FAVORITES_KEY);
     }
     return [];
 }

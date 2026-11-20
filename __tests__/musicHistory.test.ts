@@ -33,4 +33,14 @@ describe('music history', () => {
         expect(ids()[0]).toBe('59');
         expect(ids()).not.toContain('9');
     });
+
+    it('keeps a copy of history that will not parse before it is overwritten', () => {
+        mockMMKVStore.set('@glide_music_history', '[{"id":"a"');
+        jest.isolateModules(() => {
+            const { useMusicHistoryStore: fresh } = require('../src/store/musicHistoryStore');
+            expect(fresh.getState().entries).toEqual([]);
+            fresh.getState().recordPlay('b');
+        });
+        expect(mockMMKVStore.get('@glide_music_history.corrupt')).toBe('[{"id":"a"');
+    });
 });
