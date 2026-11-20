@@ -137,6 +137,12 @@ class TelegramModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     @ReactMethod
+    fun resendCode(promise: Promise) = td(promise) {
+        Td.send(TdApi.ResendAuthenticationCode(TdApi.ResendCodeReasonUserRequest()))
+        promise.resolve(null)
+    }
+
+    @ReactMethod
     fun password(password: String, promise: Promise) = td(promise) {
         Td.send(TdApi.CheckAuthenticationPassword(password))
         promise.resolve(null)

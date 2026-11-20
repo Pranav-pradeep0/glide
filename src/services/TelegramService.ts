@@ -67,6 +67,7 @@ const native = NativeModules.GlideTelegram as
           start(): Promise<TgAuth>;
           phoneNumber(n: string): Promise<null>;
           code(c: string): Promise<null>;
+          resendCode(): Promise<null>;
           password(p: string): Promise<null>;
           requestQr(): Promise<null>;
           logOut(): Promise<null>;
@@ -124,6 +125,7 @@ export const TelegramService = {
 
     phoneNumber: (n: string) => native!.phoneNumber(n),
     code: (c: string) => native!.code(c),
+    resendCode: () => native!.resendCode(),
     password: (p: string) => native!.password(p),
     requestQr: () => native!.requestQr(),
     /** Signs out and wipes (saved films too); also the way back from the QR code to the phone number. */

@@ -198,7 +198,11 @@ function SignIn({ auth }: { auth: TgAuth }) {
                 ? `Telegram sent a code to your Telegram app on another device (${auth.phone}).`
                 : `Telegram sent a code to ${auth.phone}.`;
             prompt = field({ label: 'Code', keyboardType: 'number-pad', placeholder: '•••••', autoComplete: 'sms-otp', centered: true });
-            actions = <>{next}{other('Use a different number', () => startOver(true))}</>;
+            actions = <>
+                {next}
+                {other('Resend code', () => run(TelegramService.resendCode))}
+                {other('Use a different number', () => startOver(true))}
+            </>;
             break;
         case 'password':
             title = 'Enter your password';
