@@ -118,9 +118,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
     useEffect(() => {
         const now = Date.now();
-        lastSyncPosition.value = currentTimeRef.current;
+        // Re-anchor at the live (extrapolated) playhead, not the last 250 ms tick, or it jumps back.
+        lastSyncPosition.value = currentTimeShared.value;
         lastSyncTimestamp.value = now;
-        currentTimeShared.value = currentTimeRef.current;
         playbackRateShared.value = options.playbackRate ?? 1.0;
     }, [options.playbackRate, playbackRateShared, currentTimeShared, lastSyncPosition,
         lastSyncTimestamp]);
