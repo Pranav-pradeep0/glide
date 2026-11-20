@@ -1,14 +1,17 @@
 // src/services/SubtitlePickerService.ts
-import { Platform } from 'react-native';
+import { NativeModules } from 'react-native';
 import * as RNFS from '@dr.pogodin/react-native-fs';
 import { pick, isErrorWithCode } from '@react-native-documents/picker';
 import { SubtitleParser } from '../utils/SubtitleParser';
 import { SubtitleCue } from '../types';
 import { SUBTITLE_EXTENSIONS } from '../utils/constants';
 import { SmbService } from './SmbService';
-import { fetchWithTimeout } from '../utils/network';
 
 const LOG_PREFIX = '[SubtitlePicker]';
+
+/** Read natively so non-UTF-8 files (older SRTs) decode right (SubtitleText.kt). */
+const readSubtitleText = (uri: string): Promise<string> =>
+    NativeModules.MediaStoreVideoModule.readSubtitleText(uri);
 
 interface PickedSubtitle {
     name: string;
@@ -46,19 +49,7 @@ export class SubtitlePickerService {
                 throw new Error(`Unsupported subtitle format: ${ext}. Please select .srt, .vtt, or .ass file.`);
             }
 
-            let content: string;
-            // content:// URIs on Android are read through a cache copy, deleted once read
-            if (Platform.OS === 'android' && file.uri.startsWith('content://')) {
-                const cachePath = `${RNFS.CachesDirectoryPath}/picked_subtitle_${Date.now()}${ext}`;
-                try {
-                    await RNFS.copyFile(file.uri, cachePath);
-                    content = await RNFS.readFile(cachePath, 'utf8');
-                } finally {
-                    RNFS.unlink(cachePath).catch(() => {});
-                }
-            } else {
-                content = await RNFS.readFile(file.uri.replace('file://', ''), 'utf8');
-            }
+            const content = await readSubtitleText(file.uri);
             if (__DEV__) {console.log(`${LOG_PREFIX} Read file: ${content.length} chars`);}
 
             // Parse subtitle
@@ -153,7 +144,7 @@ export class SubtitlePickerService {
 
             const fileName = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
 
-            return SubtitlePickerService.parse(fileName, await RNFS.readFile(cleanPath, 'utf8'));
+            return SubtitlePickerService.parse(fileName, await readSubtitleText(cleanPath));
         } catch (error) {
             console.error(`${LOG_PREFIX} Error loading subtitle:`, error);
             return null;
@@ -167,16 +158,8 @@ export class SubtitlePickerService {
     static async loadFromUri(uri: string, name?: string): Promise<PickedSubtitle | null> {
         const fileName = name || decodeURIComponent(uri.split('?')[0].split('/').pop() || 'Subtitle');
         try {
-            if (/^https?:\/\//i.test(uri)) {
-                const response = await fetchWithTimeout(uri, {}, 15000);
-                if (!response.ok) {
-                    console.error(`${LOG_PREFIX} HTTP ${response.status} for subtitle`);
-                    return null;
-                }
-                return SubtitlePickerService.parse(fileName, await response.text());
-            }
-            if (uri.startsWith('content://')) {
-                return SubtitlePickerService.parse(fileName, await RNFS.readFile(uri, 'utf8'));
+            if (/^https?:\/\//i.test(uri) || uri.startsWith('content://')) {
+                return SubtitlePickerService.parse(fileName, await readSubtitleText(uri));
             }
             const loaded = await SubtitlePickerService.loadFromPath(uri);
             return loaded && { ...loaded, name: fileName };

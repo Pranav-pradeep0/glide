@@ -14,6 +14,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.glide.app.player.BackgroundWork
+import com.glide.app.player.SubtitleText
 import com.hierynomus.mserref.NtStatus
 import com.hierynomus.mssmb2.SMBApiException
 
@@ -74,7 +75,7 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
         }
     }
 
-    /** A small text file (a sidecar subtitle) as UTF-8, read the way playback reads; over [TEXT_CAP] is refused. */
+    /** A small text file (a sidecar subtitle) as text ([SubtitleText] picks the encoding), read the way playback reads; over [TEXT_CAP] is refused. */
     @OptIn(UnstableApi::class)
     @ReactMethod
     fun readText(uri: String, promise: Promise) = BackgroundWork.submit(promise) {
@@ -93,7 +94,7 @@ class SmbModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(c
                 if (n == C.RESULT_END_OF_INPUT) break
                 out.write(buf, 0, n)
             }
-            promise.resolve(out.toString(Charsets.UTF_8.name()))
+            promise.resolve(SubtitleText.decode(out.toByteArray()))
         } catch (e: Exception) {
             Log.w(TAG, "readText $uri", e)
             fail(promise, e, u.host.orEmpty())

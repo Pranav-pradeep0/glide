@@ -1,9 +1,7 @@
 package com.glide.app.player
 
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
-import java.io.InputStream
 import java.util.zip.ZipFile
 
 /**
@@ -18,9 +16,9 @@ object SubtitleZip {
     /** In preference order. */
     private val EXTENSIONS = listOf(".srt", ".vtt", ".ass", ".ssa")
     const val MAX_ENTRIES = 1_000
-    const val MAX_SUBTITLE_BYTES = 10 * 1024 * 1024
+    const val MAX_SUBTITLE_BYTES = SubtitleText.MAX_BYTES
 
-    /** The best subtitle in the archive as UTF-8 text, or null when it holds none. */
+    /** The best subtitle in the archive as text ([SubtitleText] picks the encoding), or null when it holds none. */
     fun read(zipFile: File): String? = ZipFile(zipFile).use { zip ->
         if (zip.size() > MAX_ENTRIES) throw IOException("Subtitle zip has ${zip.size()} entries")
         val entry = zip.entries().asSequence()
@@ -30,22 +28,9 @@ object SubtitleZip {
             .minByOrNull { it.second }
             ?.first
             ?: return null
-        zip.getInputStream(entry).use(::readCapped).toString(Charsets.UTF_8)
+        SubtitleText.decode(zip.getInputStream(entry).use(SubtitleText::readCapped))
     }
 
     private fun rank(name: String): Int? =
         EXTENSIONS.indexOfFirst { name.lowercase().endsWith(it) }.takeIf { it >= 0 }
-
-    /** The declared size can lie, so the cap counts the bytes actually inflated. */
-    private fun readCapped(input: InputStream): ByteArray {
-        val out = ByteArrayOutputStream()
-        val buffer = ByteArray(8 * 1024)
-        while (true) {
-            val n = input.read(buffer)
-            if (n < 0) break
-            if (out.size() + n > MAX_SUBTITLE_BYTES) throw IOException("Subtitle is over ${MAX_SUBTITLE_BYTES / 1024 / 1024} MB")
-            out.write(buffer, 0, n)
-        }
-        return out.toByteArray()
-    }
 }

@@ -157,6 +157,30 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         var firstVideoPath: String
     )
 
+    /** A subtitle file (a path, content:// or http(s) link) as text; [SubtitleText] picks the encoding. */
+    @ReactMethod
+    fun readSubtitleText(uri: String, promise: Promise) {
+        BackgroundWork.submit(promise) {
+            val u = Uri.parse(uri)
+            val input = when (u.scheme?.lowercase()) {
+                "content" -> reactContext.contentResolver.openInputStream(u)
+                    ?: throw java.io.IOException("Cannot open $uri")
+                "http", "https" -> {
+                    val response = com.facebook.react.modules.network.OkHttpClientProvider.getOkHttpClient()
+                        .newBuilder().callTimeout(15, TimeUnit.SECONDS).build()
+                        .newCall(okhttp3.Request.Builder().url(uri).build()).execute()
+                    if (!response.isSuccessful) {
+                        response.close()
+                        throw java.io.IOException("HTTP ${response.code} for subtitle")
+                    }
+                    response.body!!.byteStream()
+                }
+                else -> File(uri.removePrefix("file://")).inputStream()
+            }
+            promise.resolve(SubtitleText.decode(input.use(SubtitleText::readCapped)))
+        }
+    }
+
     companion object {
         const val NAME = "MediaStoreVideoModule"
         const val EVENT_LIBRARY_CHANGED = "onVideoLibraryChanged"
