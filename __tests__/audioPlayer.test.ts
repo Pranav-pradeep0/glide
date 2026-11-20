@@ -629,6 +629,19 @@ describe('Audio Player Utilities and Store', () => {
             expect(songs[1].trackNumber).toBe(2);
         });
 
+        it('puts unnumbered tracks after numbered ones and sorts numbers naturally', async () => {
+            const album = (id: string, title: string, trackNumber: number) =>
+                ({ ...sampleSongs[0], id, title, trackNumber, albumId: 'alb-x' });
+            (NativeModules.MediaStoreAudioModule.getSongs as jest.Mock<any>).mockResolvedValue([
+                album('a', 'Track 10', 0),
+                album('b', 'Zed', 2),
+                album('c', 'Track 2', 0),
+                album('d', 'Alpha', 1),
+            ]);
+            const songs = await AudioMediaService.getSongsByAlbum('alb-x');
+            expect(songs.map((s) => s.id)).toEqual(['d', 'b', 'c', 'a']);
+        });
+
         it('groups songs into folders by directory path', () => {
             const folders = AudioMediaService.groupFolders(sampleSongs);
             expect(folders.length).toBe(2);

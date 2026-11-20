@@ -9,6 +9,17 @@ export function folderPathOf(song: AudioTrack): string {
     return lastSlash > 0 ? rawPath.substring(0, lastSlash) : '/';
 }
 
+// Any script, case and accents ignored, and "Track 2" before "Track 10". MediaStore's
+// COLLATE NOCASE only folds ASCII, so songs are sorted here.
+const byName = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true }).compare;
+
+/** Album order: numbered tracks first, unnumbered (0) after them, then by title. */
+function byTrack(a: AudioTrack, b: AudioTrack): number {
+    const ta = a.trackNumber > 0 ? a.trackNumber : Infinity;
+    const tb = b.trackNumber > 0 ? b.trackNumber : Infinity;
+    return ta !== tb ? ta - tb : byName(a.title, b.title);
+}
+
 class AudioMediaServiceClass {
     private songsCache: AudioTrack[] | null = null;
     /** The scan currently running, shared by everyone who asks while it is in flight. */
@@ -60,6 +71,7 @@ class AudioMediaServiceClass {
         const scan: Promise<AudioTrack[]> = Promise.resolve()
             .then(() => this.module.getSongs() as Promise<AudioTrack[]>)
             .then((songs) => {
+                songs.sort((a, b) => byName(a.title, b.title));
                 if (this.inflightSongs === scan) {
                     this.songsCache = songs;
                 }
@@ -109,7 +121,7 @@ class AudioMediaServiceClass {
         }
 
         const albums = Array.from(map.values());
-        albums.sort((a, b) => a.album.localeCompare(b.album, undefined, { sensitivity: 'base' }));
+        albums.sort((a, b) => byName(a.album, b.album));
         return albums;
     }
 
@@ -141,7 +153,7 @@ class AudioMediaServiceClass {
             e.artist.numberOfAlbums = Math.max(1, e.albumIds.size);
             return e.artist;
         });
-        artists.sort((a, b) => a.artist.localeCompare(b.artist, undefined, { sensitivity: 'base' }));
+        artists.sort((a, b) => byName(a.artist, b.artist));
         return artists;
     }
 
@@ -175,12 +187,7 @@ class AudioMediaServiceClass {
         const songs = await this.getSongs();
         return songs
             .filter((s) => s.albumId === albumId || s.album === albumId)
-            .sort((a, b) => {
-                if (a.trackNumber !== b.trackNumber && a.trackNumber > 0 && b.trackNumber > 0) {
-                    return a.trackNumber - b.trackNumber;
-                }
-                return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
-            });
+            .sort(byTrack);
     }
 
     async getSongsByArtist(artistIdOrName: string): Promise<AudioTrack[]> {
@@ -190,9 +197,9 @@ class AudioMediaServiceClass {
             .sort((a, b) => {
                 const yearDiff = (b.year ?? 0) - (a.year ?? 0);
                 if (yearDiff !== 0) return yearDiff;
-                const albumDiff = a.album.localeCompare(b.album, undefined, { sensitivity: 'base' });
+                const albumDiff = byName(a.album, b.album);
                 if (albumDiff !== 0) return albumDiff;
-                return (a.trackNumber ?? 0) - (b.trackNumber ?? 0);
+                return byTrack(a, b);
             });
     }
 
@@ -218,7 +225,7 @@ class AudioMediaServiceClass {
         }
 
         const folders = Array.from(map.values()).map((e) => e.folder);
-        folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        folders.sort((a, b) => byName(a.name, b.name));
         return folders;
     }
 
