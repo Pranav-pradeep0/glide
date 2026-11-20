@@ -96,3 +96,15 @@ describe('one entry per file', () => {
         expect(all[0].viewCount).toBe(2);
     });
 });
+
+// A content:// URI's last segment is an id (msf:1234), not the file name the entry was saved by.
+describe('content:// resume', () => {
+    it('finds the entry by name when the URI changed', () => {
+        useVideoHistoryStore.setState({ history: new Map() });
+        useVideoHistoryStore.getState().updatePlaybackPosition('content://dl/document/msf:1', 'Film.mkv', 300, 6000);
+        const store = useVideoHistoryStore.getState();
+        expect(store.getVideoHistory('content://dl/document/msf:2', 'Film.mkv')?.lastPausedPosition).toBe(300);
+        store.clearVideoHistory('content://dl/document/msf:2', 'Film.mkv');
+        expect(useVideoHistoryStore.getState().getAllHistory()).toHaveLength(0);
+    });
+});

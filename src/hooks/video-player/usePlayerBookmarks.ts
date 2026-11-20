@@ -31,7 +31,7 @@ export function usePlayerBookmarks(options: UsePlayerBookmarksOptions): UsePlaye
     } = options;
 
     const bookmarks = useVideoHistoryStore(
-        useShallow((state) => state.getVideoHistory(videoPath)?.bookmarks || [])
+        useShallow((state) => state.getVideoHistory(videoPath, videoName)?.bookmarks || [])
     );
 
     const storeAddBookmark = useVideoHistoryStore(state => state.addBookmark);
@@ -46,21 +46,21 @@ export function usePlayerBookmarks(options: UsePlayerBookmarksOptions): UsePlaye
         const bookmarkTime = currentTimeRef.current;
         storeAddBookmark(videoPath, videoName, bookmarkTime);
 
-        const added = useVideoHistoryStore.getState().getVideoHistory(videoPath)?.bookmarks
+        const added = useVideoHistoryStore.getState().getVideoHistory(videoPath, videoName)?.bookmarks
             .find(b => b.timestamp === bookmarkTime);
         showSnackbar({
             text: `Bookmark added at ${formatTime(bookmarkTime)}`,
             tone: 'confirm',
             ...(added && {
                 action: 'Undo',
-                onAction: () => storeRemoveBookmark(videoPath, added.id),
+                onAction: () => storeRemoveBookmark(videoPath, added.id, videoName),
             }),
         });
     }, [videoPath, videoName, duration, currentTimeRef, storeAddBookmark, storeRemoveBookmark]);
 
     const deleteBookmark = useCallback((bookmarkId: string) => {
         const removed = bookmarks.find(b => b.id === bookmarkId);
-        storeRemoveBookmark(videoPath, bookmarkId);
+        storeRemoveBookmark(videoPath, bookmarkId, videoName);
         showSnackbar({
             text: 'Bookmark deleted',
             action: removed ? 'Undo' : undefined,

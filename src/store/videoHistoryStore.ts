@@ -22,7 +22,8 @@ interface VideoHistoryState {
     history: Map<string, VideoHistoryEntry>;
 
     // Actions
-    getVideoHistory: (videoPath: string) => VideoHistoryEntry | null;
+    /** videoName: a content:// URI's last segment is an id, not the name the entry was saved by. */
+    getVideoHistory: (videoPath: string, videoName?: string) => VideoHistoryEntry | null;
     getAllHistory: () => VideoHistoryEntry[];
     /** `link`: an app link's headers and secure flag, sent again when Recents reopens it. */
     incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number, link?: Pick<VideoHistoryEntry, 'headers' | 'secureUri'>) => void;
@@ -31,8 +32,8 @@ interface VideoHistoryState {
     setWatchedPosition: (videoPath: string, videoName: string, position: number, duration: number) => void;
     setStopFrame: (videoPath: string, videoName: string, stopFrameMs: number | undefined) => void;
     addBookmark: (videoPath: string, videoName: string, timestamp: number, label?: string) => void;
-    removeBookmark: (videoPath: string, bookmarkId: string) => void;
-    clearVideoHistory: (videoPath: string) => void;
+    removeBookmark: (videoPath: string, bookmarkId: string, videoName?: string) => void;
+    clearVideoHistory: (videoPath: string, videoName?: string) => void;
     clearAllHistory: () => void;
     /** Point entries at where their file moved; see findMovedVideo. */
     relinkMoved: (moves: [string, VideoFile][]) => void;
@@ -192,8 +193,8 @@ function findHistoryEntry(
 export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
     history: initialHistory,
 
-    getVideoHistory: (videoPath: string) => {
-        const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
+    getVideoHistory: (videoPath: string, videoName?: string) => {
+        const videoId = generateVideoId(videoName || videoPath.split('/').pop() || videoPath);
         return findHistoryEntry(get().history, videoPath, videoId)?.entry ?? null;
     },
 
@@ -395,11 +396,11 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         get().persistNow();
     },
 
-    removeBookmark: (videoPath: string, bookmarkId: string) => {
+    removeBookmark: (videoPath: string, bookmarkId: string, videoName?: string) => {
         set((state) => {
             const newHistory = new Map(state.history);
 
-            const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
+            const videoId = generateVideoId(videoName || videoPath.split('/').pop() || videoPath);
             const match = findHistoryEntry(newHistory, videoPath, videoId);
             const existingKey = match?.key;
             const existing = match?.entry;
@@ -418,11 +419,11 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         get().persistNow();
     },
 
-    clearVideoHistory: (videoPath: string) => {
+    clearVideoHistory: (videoPath: string, videoName?: string) => {
         set((state) => {
             const newHistory = new Map(state.history);
 
-            const videoId = generateVideoId(videoPath.split('/').pop() || videoPath);
+            const videoId = generateVideoId(videoName || videoPath.split('/').pop() || videoPath);
             const match = findHistoryEntry(newHistory, videoPath, videoId);
             if (match) {
                 newHistory.delete(match.key);

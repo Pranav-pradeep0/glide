@@ -331,7 +331,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const getResumeState = useCallback(() => {
         // Another app's stream: that app keeps the resume point and sends it as startPosition.
-        const history = inExternalPlayer && NavigationService.isNetworkStream(videoPath) ? null : getVideoHistory(videoPath);
+        const history = inExternalPlayer && NavigationService.isNetworkStream(videoPath) ? null : getVideoHistory(videoPath, videoName);
         if (history) {
             return {
                 resumePosition: getResumablePosition(
@@ -350,7 +350,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             };
         }
         return { resumePosition: null };
-    }, [videoPath, getVideoHistory, inExternalPlayer]);
+    }, [videoPath, videoName, getVideoHistory, inExternalPlayer]);
 
     // Get initial state once
     const {
