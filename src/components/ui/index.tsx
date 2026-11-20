@@ -1015,7 +1015,7 @@ export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffse
                 <Pressable
                     onPress={hide}
                     onLayout={e => { snackWidth.value = Math.max(1, e.nativeEvent.layout.width); }}
-                    style={[styles.snack, { backgroundColor: '#2A2A2E' }]}
+                    style={[styles.snack, { backgroundColor: colors.surfaceVariant }]}
                     accessibilityLiveRegion="polite"
                     accessibilityHint="Dismisses the message"
                 >
