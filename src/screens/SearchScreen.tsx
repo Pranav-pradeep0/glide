@@ -47,6 +47,7 @@ export default function SearchScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [selectedVideo, setSelectedVideo] = useState<VideoFile | null>(null);
     const [optionsVisible, setOptionsVisible] = useState(false);
+    const [fieldFocused, setFieldFocused] = useState(false);
 
     const {
         query,
@@ -69,9 +70,10 @@ export default function SearchScreen() {
         }
     }, [isIndexReady, videoAccess, initializeIndex]);
 
-    // Focus the field once the index is ready, after the screen transition.
+    // Focus the field once the index is ready, after the screen transition. Not on TV: the
+    // on-screen keyboard would cover the results.
     useEffect(() => {
-        if (isIndexReady && inputRef.current) {
+        if (!IS_TV && isIndexReady && inputRef.current) {
             const timer = setTimeout(() => inputRef.current?.focus(), 300);
             return () => clearTimeout(timer);
         }
@@ -156,11 +158,13 @@ export default function SearchScreen() {
         <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
             <View style={[styles.bar, IS_TV && styles.barTv]}>
                 <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
-                <View style={[styles.searchField, { backgroundColor: theme.colors.cardElevated }]}>
+                <View style={[styles.searchField, { backgroundColor: theme.colors.cardElevated }, fieldFocused && [styles.ring, { outlineColor: theme.colors.primary }]]}>
                     <Feather name="search" size={18} color={theme.colors.textSecondary} />
                     <TextInput
                         ref={inputRef}
-                        autoFocus
+                        autoFocus={!IS_TV}
+                        onFocus={IS_TV ? () => setFieldFocused(true) : undefined}
+                        onBlur={IS_TV ? () => setFieldFocused(false) : undefined}
                         style={[type.body, styles.searchInput, { color: theme.colors.text }]}
                         placeholder="Search all videos"
                         placeholderTextColor={theme.colors.textTertiary}
@@ -254,4 +258,6 @@ const styles = StyleSheet.create({
         gap: metrics.space.sm,
     },
     searchInput: { flex: 1, padding: 0 },
+    // TV: the focus ring the shared buttons draw.
+    ring: { outlineWidth: metrics.focus.ring, outlineOffset: 2 },
 });

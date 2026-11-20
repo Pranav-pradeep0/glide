@@ -217,6 +217,7 @@ export default function SettingsScreen() {
     }, [params]);
     const [licencesVisible, setLicencesVisible] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');
+    const [searchFocused, setSearchFocused] = React.useState(false);
     const [shakeTestEnabled, setShakeTestEnabled] = React.useState(false);
 
     const fontSizeSV = useSharedValue(settings.subtitleFontSize);
@@ -686,9 +687,11 @@ export default function SettingsScreen() {
             </ScrollView>
 
             <Sheet visible={languageModalVisible} onClose={closeLanguages} title="Audio language" maxHeight={0.8}>
-                <View style={[styles.search, { backgroundColor: colors.fill }]}>
+                <View style={[styles.search, { backgroundColor: colors.fill }, searchFocused && [styles.ring, { outlineColor: colors.primary }]]}>
                     <Feather name="search" size={16} color={colors.textSecondary} />
                     <TextInput
+                        onFocus={IS_TV ? () => setSearchFocused(true) : undefined}
+                        onBlur={IS_TV ? () => setSearchFocused(false) : undefined}
                         style={[type.row, styles.searchInput, { color: colors.text }]}
                         placeholder="Search languages"
                         placeholderTextColor={colors.textTertiary}
@@ -871,6 +874,8 @@ const styles = StyleSheet.create({
         marginBottom: metrics.space.sm,
     },
     searchInput: { flex: 1, paddingVertical: 0, fontWeight: '400' },
+    // TV: the focus ring the shared buttons draw.
+    ring: { outlineWidth: metrics.focus.ring, outlineOffset: 2 },
     languageGap: { height: 2 },
     foldersEmpty: { textAlign: 'center', paddingVertical: metrics.space.xxl },
     sheetList: { paddingTop: metrics.space.xs, paddingBottom: metrics.space.sm },
