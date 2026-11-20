@@ -1405,7 +1405,9 @@ export default function VideoPlayerScreen({ route }: Props) {
             return;
         }
         if (e.action !== 'down' || e.repeat > 0) { return; }
-        if (e.key === 'center') {
+        if (e.key === 'center' && skipEarly && !controlsShown) {
+            player.commitSeek(skips[skipIndex].end);
+        } else if (e.key === 'center') {
             handleTogglePlayPause();
             tvFocus(playButtonRef);
         } else if (e.key === 'up') {
