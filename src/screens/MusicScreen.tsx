@@ -119,6 +119,7 @@ export default function MusicScreen() {
     const audioAccess = usePermissionStore((s) => s.audio.access);
     const [activeTab, setActiveTab] = useState<LibraryTab>('tracks');
     const [loading, setLoading] = useState(true);
+    const [failed, setFailed] = useState(false);
 
     // Search and Sort
     const [searchQuery, setSearchQuery] = useState('');
@@ -166,8 +167,10 @@ export default function MusicScreen() {
             setAlbums(albumsList);
             setArtists(artistsList);
             setFolders(AudioMediaService.groupFolders(songsList));
+            setFailed(false);
         } catch (error) {
             console.error('[MusicScreen] Failed to load library:', error);
+            setFailed(true);
         } finally {
             setLoading(false);
         }
@@ -424,6 +427,8 @@ export default function MusicScreen() {
                 action="Clear search"
                 onAction={() => setSearchQuery('')}
             />
+        ) : failed ? (
+            <EmptyState icon="alert-circle" text="Couldn't load music" action="Retry" onAction={() => loadData(true)} />
         ) : (
             <EmptyState icon={icon} text={`No ${things} found`} action="Refresh" onAction={() => loadData(true)} />
         );

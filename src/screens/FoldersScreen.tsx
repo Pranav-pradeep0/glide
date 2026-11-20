@@ -195,7 +195,7 @@ export default function FoldersScreen() {
     const navigation = useNavigation<NavigationProp>();
     const tabs = useNavigation<TabNavigationProp<MainTabParamList>>();
 
-    const { albums, loading, refetch } = useAlbums();
+    const { albums, loading, error, refetch } = useAlbums();
     const videoAccess = usePermissionStore((s) => s.video.access);
 
     // Cards on a TV: bigger targets, and the D-pad moves across as well as down.
@@ -290,7 +290,9 @@ export default function FoldersScreen() {
                         ? <PermissionGate kind="video" />
                         : albums.length > 0
                             ? <EmptyState icon="eye-off" text="All folders are hidden from Home" action="Choose folders" onAction={() => tabs.navigate('Settings', { openFolders: true })} />
-                            : <EmptyState text="No local videos found" action="Refresh" onAction={refetch} />}
+                            : error
+                                ? <EmptyState icon="alert-circle" text="Couldn't load videos" action="Retry" onAction={refetch} />
+                                : <EmptyState text="No local videos found" action="Refresh" onAction={refetch} />}
                 </ScrollView>
             ) : <>
                 <Touchable
