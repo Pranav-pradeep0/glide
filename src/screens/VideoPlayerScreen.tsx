@@ -1412,9 +1412,11 @@ export default function VideoPlayerScreen({ route }: Props) {
         } else if (e.key === 'center') {
             handleTogglePlayPause();
             tvFocus(playButtonRef);
-        } else if (e.key === 'up') {
+        } else if (e.key === 'up' || e.key === 'info') {
             showControls();
             tvFocus(playButtonRef);
+        } else if (e.key === 'captions') {
+            handleToggleSubtitle();
         } else if (e.key === 'down') {
             showControls();
             tvFocus(seekBarRef);

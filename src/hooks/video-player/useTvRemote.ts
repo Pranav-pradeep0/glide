@@ -21,7 +21,7 @@ const { TvRemoteModule } = NativeModules;
  * - hidden: controls hidden; the D-pad is the player's (OK, arrows), nothing moves focus.
  * - focus: controls up; the D-pad moves focus within the screen, Left / Right scrub on the seek bar.
  *
- * Fast forward, rewind, next and previous are the player's in both; play / pause stays the
+ * Fast forward, rewind, next, previous, captions and info are the player's in both; play / pause stays the
  * media session's, and arrives here unconsumed.
  */
 type TvKeyMode = 'off' | 'hidden' | 'focus';
@@ -29,7 +29,7 @@ const MODES: Record<TvKeyMode, number> = { off: 0, hidden: 1, focus: 2 };
 
 type TvKey =
     | 'up' | 'down' | 'left' | 'right' | 'center'
-    | 'fastForward' | 'rewind' | 'next' | 'previous' | 'playPause';
+    | 'fastForward' | 'rewind' | 'next' | 'previous' | 'playPause' | 'captions' | 'info';
 
 export interface TvKeyEvent {
     key: TvKey;

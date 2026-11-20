@@ -62,8 +62,12 @@ class TvRemoteModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE to "playPause",
             KeyEvent.KEYCODE_MEDIA_PLAY to "playPause",
             KeyEvent.KEYCODE_MEDIA_PAUSE to "playPause",
+            KeyEvent.KEYCODE_CAPTIONS to "captions",
+            KeyEvent.KEYCODE_INFO to "info",
         )
         private val ALWAYS_OURS = setOf(
+            KeyEvent.KEYCODE_CAPTIONS,
+            KeyEvent.KEYCODE_INFO,
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
             KeyEvent.KEYCODE_MEDIA_REWIND,
             KeyEvent.KEYCODE_MEDIA_NEXT,
