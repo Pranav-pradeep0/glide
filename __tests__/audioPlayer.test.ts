@@ -380,6 +380,9 @@ describe('Audio Player Utilities and Store', () => {
 
             const persistedQueue = mockMMKVStore.get('@glide_audio_queue_ids');
             expect(persistedQueue).toBe('[]');
+            // Saved now, not after the debounce: startup falls back to this track.
+            const playback = JSON.parse(mockMMKVStore.get('@glide_audio_playback_state')!);
+            expect(playback.currentTrack).toBeNull();
         });
 
         it('saves and updates queueSource when queue is played', async () => {

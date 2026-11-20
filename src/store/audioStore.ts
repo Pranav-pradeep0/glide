@@ -773,6 +773,10 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         });
         persistCurrentTrack(null);
         persistQueue([], true);
+        // Now, not after the debounce: startup falls back to the saved track, so a kill in
+        // that window brought the cleared song back.
+        get()._persistState();
+        flushPendingWrites();
         const audioModule = getAudioModule();
         if (Platform.OS === 'android' && audioModule) {
             try {
@@ -781,7 +785,6 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
                 // ignore
             }
         }
-        get()._persistState();
     },
 
     hydrateQueue: () => hydratePersistedQueue(),
