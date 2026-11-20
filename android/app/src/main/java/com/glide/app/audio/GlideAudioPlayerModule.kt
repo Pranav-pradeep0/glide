@@ -210,6 +210,14 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order, System.nanoTime()))
     }
 
+    /**
+     * Runs [block] on the main thread after any queue still building. Posted straight away,
+     * an edit landed before the pending setMediaItems, which then wiped it.
+     */
+    private fun afterQueue(block: () -> Unit) {
+        queueExecutor.execute { mainHandler.post(block) }
+    }
+
     /** Queue indices in the order they play: the queue order, or the shuffle order. */
     private fun playOrder(p: ExoPlayer): List<Int> {
         val timeline = p.currentTimeline
@@ -457,7 +465,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
     /** [afterCurrent]: Play next. With shuffle on it must also play next, not at a random spot. */
     @ReactMethod
     fun addMediaItem(index: Int, track: ReadableMap, afterCurrent: Boolean, promise: Promise) {
-        mainHandler.post {
+        afterQueue {
             try {
                 val p = ensurePlayer()
                 val targetIndex = index.coerceIn(0, p.mediaItemCount)
@@ -478,7 +486,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
 
     @ReactMethod
     fun removeMediaItem(index: Int, promise: Promise) {
-        mainHandler.post {
+        afterQueue {
             try {
                 val p = player
                 if (p != null && index >= 0 && index < p.mediaItemCount) {
@@ -494,7 +502,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
 
     @ReactMethod
     fun moveMediaItem(fromIndex: Int, toIndex: Int, promise: Promise) {
-        mainHandler.post {
+        afterQueue {
             try {
                 val p = player
                 if (p != null && fromIndex >= 0 && fromIndex < p.mediaItemCount && toIndex >= 0 && toIndex < p.mediaItemCount) {
@@ -516,7 +524,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
      */
     @ReactMethod
     fun moveInShuffleOrder(index: Int, toPosition: Int, promise: Promise) {
-        mainHandler.post {
+        afterQueue {
             try {
                 val p = player
                 if (p != null && p.shuffleModeEnabled && index in 0 until p.mediaItemCount && toPosition in 0 until p.mediaItemCount) {
@@ -622,7 +630,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
 
     @ReactMethod
     fun skipToNext(promise: Promise) {
-        mainHandler.post {
+        afterQueue {
             try {
                 player?.seekToNext()
                 promise.resolve(true)
@@ -634,7 +642,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
 
     @ReactMethod
     fun skipToPrevious(promise: Promise) {
-        mainHandler.post {
+        afterQueue {
             try {
                 player?.seekToPrevious()
                 promise.resolve(true)
@@ -646,7 +654,7 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
 
     @ReactMethod
     fun skipToIndex(index: Int, promise: Promise) {
-        mainHandler.post {
+        afterQueue {
             try {
                 MusicPlayback.resetErrors()
                 val p = player
