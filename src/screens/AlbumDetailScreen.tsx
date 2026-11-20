@@ -191,7 +191,7 @@ export default function AlbumDetailScreen() {
                     ListHeaderComponent={
                         <View style={styles.heroHeader}>
                             {/* Large Cover */}
-                            <View style={[styles.coverFrame, { backgroundColor: colors.surfaceVariant, shadowColor: colors.shadow }]}>
+                            <View style={[styles.coverFrame, { backgroundColor: colors.surfaceVariant }]}>
                                 {artworkUri ? (
                                     <Image source={{ uri: artworkUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
                                 ) : (
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: metrics.space.sm,
-        elevation: 6,
+        elevation: 0,
     },
     albumTitle: {
         textAlign: 'center',

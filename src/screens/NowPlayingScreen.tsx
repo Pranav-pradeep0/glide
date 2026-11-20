@@ -771,7 +771,6 @@ export default function NowPlayingScreen() {
                                 width: artSize,
                                 height: artSize,
                                 backgroundColor: colors.surfaceVariant,
-                                shadowColor: colors.shadow,
                             },
                             coverStyle,
                         ]}
@@ -858,7 +857,7 @@ const styles = StyleSheet.create({
         left: 0,
         top: 0,
         overflow: 'hidden',
-        elevation: 8,
+        elevation: 0,
     },
     artPlaceholder: {
         flex: 1,
@@ -897,7 +896,7 @@ const styles = StyleSheet.create({
         borderRadius: 34,
         alignItems: 'center',
         justifyContent: 'center',
-        elevation: 4,
+        elevation: 0,
     },
     repeatBadge: {
         position: 'absolute',

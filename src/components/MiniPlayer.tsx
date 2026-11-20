@@ -168,7 +168,7 @@ export function MiniPlayer() {
             <View
                 ref={barRef}
                 collapsable={false}
-                style={[styles.wrapper, { backgroundColor: cardColor, borderColor: colors.border, shadowColor: colors.shadow }]}
+                style={[styles.wrapper, { backgroundColor: cardColor, borderColor: colors.border }]}
             >
                 <GestureDetector gesture={panGesture}>
                     <Touchable
@@ -264,7 +264,7 @@ export function MiniPlayerReplica() {
         <View
             pointerEvents="none"
             importantForAccessibility="no-hide-descendants"
-            style={[styles.wrapper, { backgroundColor: cardColor, borderColor: colors.border, shadowColor: colors.shadow }]}
+            style={[styles.wrapper, { backgroundColor: cardColor, borderColor: colors.border }]}
         >
             <View style={styles.content}>
                 <View style={styles.artContainer} />
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
         borderRadius: MINI_CARD_RADIUS,
         borderWidth: StyleSheet.hairlineWidth,
         overflow: 'hidden',
-        elevation: 6,
+        elevation: 0,
     },
     progressTrack: {
         position: 'absolute',
