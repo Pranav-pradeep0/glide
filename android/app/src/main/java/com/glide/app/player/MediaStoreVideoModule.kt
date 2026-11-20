@@ -44,6 +44,8 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
 
     private var deletePromise: Promise? = null
     private var pendingDeleteUris: List<Uri>? = null
+    /** Plain files in the same delete, removed only once the user approves the MediaStore ones. */
+    private var pendingRawFiles: List<Uri> = emptyList()
 
     init {
         reactContext.addActivityEventListener(object : BaseActivityEventListener() {
@@ -56,8 +58,10 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 if (requestCode == DELETE_REQUEST_CODE) {
                     val p = deletePromise
                     val urisToRetry = pendingDeleteUris
+                    val rawFiles = pendingRawFiles
                     deletePromise = null
                     pendingDeleteUris = null
+                    pendingRawFiles = emptyList()
                     if (p != null) {
                         if (resultCode == Activity.RESULT_OK) {
                             if (urisToRetry != null && Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
@@ -83,7 +87,12 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                                     p.reject("E_DELETE_FAILED", e.message, e)
                                 }
                             } else {
-                                p.resolve(true)
+                                val failed = deleteRawFiles(rawFiles)
+                                if (failed != null) {
+                                    p.reject("E_DELETE_FAILED", "Could not delete file: $failed")
+                                } else {
+                                    p.resolve(true)
+                                }
                             }
                         } else {
                             // The user said no: an answer, not a failure.
@@ -649,6 +658,15 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    /** Deletes plain files; the name of the first one that won't go, or null. */
+    private fun deleteRawFiles(uris: List<Uri>): String? {
+        for (uri in uris) {
+            val file = File(uri.path ?: "")
+            if (file.exists() && !file.delete()) return file.name
+        }
+        return null
+    }
+
     @ReactMethod
     fun deleteVideos(uriStrings: ReadableArray, promise: Promise) {
         if (deletePromise != null) {
@@ -686,14 +704,6 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            for (fileUri in fileUris) {
-                val file = File(fileUri.path ?: "")
-                if (file.exists() && !file.delete()) {
-                    promise.reject("E_DELETE_FAILED", "Could not delete file: ${file.name}")
-                    return
-                }
-            }
-
             if (contentUris.isNotEmpty()) {
                 val activity = reactContext.currentActivity
                 if (activity == null) {
@@ -703,6 +713,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 try {
                     val pendingIntent = MediaStore.createDeleteRequest(contentResolver, contentUris)
                     pendingDeleteUris = null
+                    pendingRawFiles = fileUris
                     deletePromise = promise
                     activity.startIntentSenderForResult(
                         pendingIntent.intentSender,
@@ -715,10 +726,16 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 } catch (e: Exception) {
                     deletePromise = null
                     pendingDeleteUris = null
+                    pendingRawFiles = emptyList()
                     promise.reject("E_DELETE_REQUEST_FAILED", e.message, e)
                 }
             } else {
-                promise.resolve(true)
+                val failed = deleteRawFiles(fileUris)
+                if (failed != null) {
+                    promise.reject("E_DELETE_FAILED", "Could not delete file: $failed")
+                } else {
+                    promise.resolve(true)
+                }
             }
         } else {
             val allUris = ArrayList<Uri>().apply {
