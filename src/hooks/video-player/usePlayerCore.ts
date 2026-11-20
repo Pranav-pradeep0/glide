@@ -76,6 +76,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
     // Resume position (cleared after first use)
     const resumePosRef = useRef<number | null>(getResumePosition?.() ?? null);
+    // "Start over" chosen before load: native already opened at the resume offset.
+    const restartOnLoadRef = useRef(false);
 
     // Buffering debounce
     const bufferingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -282,6 +284,8 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     /** clearResumePosition — prevents handleLoad from restoring the saved position. */
     const clearResumePosition = useCallback(() => {
         resumePosRef.current = null;
+        // Before load commitSeek(0) is refused and native is already at the resume offset.
+        if (durationRef.current <= 0) {restartOnLoadRef.current = true;}
         if (__DEV__) {console.log('[SEEK] clearResumePosition');}
     }, []);
 
@@ -402,6 +406,15 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         const resumeTime = resumePosRef.current;
         if (resumeTime !== null) {
             resumePosRef.current = null;
+        }
+        if (restartOnLoadRef.current) {
+            restartOnLoadRef.current = false;
+            videoRef.current?.seek(0);
+            currentTimeRef.current = 0;
+            currentTimeShared.value = 0;
+            lastSyncPosition.value = 0;
+            lastSyncTimestamp.value = Date.now();
+            return;
         }
         const validResumeTime = getResumablePosition(resumeTime, durationSec);
         if (validResumeTime !== null) {
