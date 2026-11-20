@@ -30,7 +30,8 @@ import { VideoHUD } from '@/components/VideoPlayer/VideoHUD';
 import { PlayerControls } from '@/components/VideoPlayer/PlayerControls';
 import { LockButton } from '@/components/VideoPlayer/LockButton';
 import { HapticMarkButtons } from '@/components/VideoPlayer/HapticMarkButtons';
-import { SnackbarHost, showDialog, showSnackbar } from '@/components/ui';
+import { SnackbarHost, showSnackbar } from '@/components/ui';
+import { confirmUnsave } from '@/components/VideoOptionsBottomSheet';
 import { PlayerErrorCard } from '@/components/VideoPlayer/PlayerErrorCard';
 import { UpNextCard, UP_NEXT_COUNTDOWN_MS } from '@/components/VideoPlayer/UpNextCard';
 import { SkipChapterButton } from '@/components/VideoPlayer/SkipChapterButton';
@@ -1011,15 +1012,7 @@ export default function VideoPlayerScreen({ route }: Props) {
             TelegramService.save(videoPath, { name: displayTitle.title, duration: player.state.duration }).catch(() => {});
             return;
         }
-        const saved = tgSave.state === 'saved';
-        showDialog(
-            saved ? 'Delete download' : 'Cancel download',
-            saved ? 'The downloaded copy is deleted from this device. The film stays in Telegram.' : 'The download stops.',
-            [
-                { text: 'Keep', style: 'cancel' },
-                { text: saved ? 'Delete' : 'Stop', style: 'destructive', onPress: () => { TelegramService.unsave(videoPath).catch(() => {}); } },
-            ],
-        );
+        confirmUnsave(videoPath, tgSave.state === 'saved');
     }, [tgSave, videoPath, displayTitle.title, player.state.duration]);
 
     const handleAddBookmark = useCallback(() => {

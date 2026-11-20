@@ -6,7 +6,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { VideoFile, VideoHistoryEntry } from '@/types';
 import { formatDuration, formatFileSize } from '@/utils/formatUtils';
 import { useThumbnail } from '@/hooks/useThumbnails';
-import { ListGroup, ListRow, Sheet } from '@/components/ui';
+import { ListGroup, ListRow, Sheet, showDialog } from '@/components/ui';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { getResumablePosition, isFinished } from '@/utils/playbackResume';
 import { metrics, type } from '@/theme/theme';
@@ -29,6 +29,19 @@ interface ExtendedMeta {
     audio?: string;
     subtitles?: string;
     loading: boolean;
+}
+
+
+/** Delete or cancel a Telegram download, asking first. Shared with the player's download button. */
+export function confirmUnsave(path: string, saved: boolean) {
+    showDialog(
+        saved ? 'Delete download' : 'Cancel download',
+        saved ? 'The downloaded copy is deleted from this device. The film stays in Telegram.' : 'The download stops.',
+        [
+            { text: 'Keep', style: 'cancel' },
+            { text: saved ? 'Delete' : 'Stop', style: 'destructive', onPress: () => { TelegramService.unsave(path).catch(() => {}); } },
+        ],
+    );
 }
 
 export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
@@ -184,7 +197,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
                             icon={saved.state === 'saved' ? 'trash-2' : 'x-circle'}
                             title={saved.state === 'saved' ? 'Delete download' : 'Cancel download'}
                             destructive={saved.state === 'saved'}
-                            onPress={() => handleAction(() => { TelegramService.unsave(path).catch(() => {}); })}
+                            onPress={() => handleAction(() => confirmUnsave(path, saved.state === 'saved'))}
                         />
                         : <ListRow icon="download" title="Download" onPress={() => handleAction(() => { TelegramService.save(path, { name, duration }).catch(() => {}); })} />
                     )}
