@@ -82,7 +82,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
 
     companion object {
         private const val TAG = "MediaStoreAudioModule"
-        private val artExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        private val artExecutor = BackgroundWork.lane(2, "glide-art")
         private val songCache = java.util.concurrent.ConcurrentHashMap<String, SongRecord>()
 
         private val SONG_PROJECTION = arrayOf(
@@ -462,7 +462,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
                     putString("onPrimaryColor", details.onPrimaryColor)
                 }
                 promise.resolve(map)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 promise.resolve(Arguments.createMap())
             }
         }
@@ -489,7 +489,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
                     if (extension.isNullOrEmpty()) null
                     else MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 null
             }
             promise.resolve(type)
@@ -502,7 +502,7 @@ class MediaStoreAudioModule(private val reactContext: ReactApplicationContext) :
             try {
                 val lyrics = EmbeddedLyricsReader.extractLyrics(reactContext, songUriStr, filePath)
                 promise.resolve(lyrics)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 promise.resolve(null)
             }
         }

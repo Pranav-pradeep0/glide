@@ -29,7 +29,7 @@ import java.util.concurrent.Executors
  */
 object BackgroundWork {
 
-    private fun lane(threads: Int, name: String): ExecutorService =
+    internal fun lane(threads: Int, name: String): ExecutorService =
         Executors.newFixedThreadPool(threads) { runnable ->
             Thread({
                 Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)

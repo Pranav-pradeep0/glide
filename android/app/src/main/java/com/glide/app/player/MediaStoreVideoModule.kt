@@ -195,7 +195,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
         private const val LEGACY_WALK_INTERVAL_MS = 10 * 60 * 1000L
         private const val TAG = "MediaStoreVideoModule"
         private const val DELETE_REQUEST_CODE = 42001
-        private val thumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
+        private val thumbExecutor = BackgroundWork.lane(4, "glide-thumbs")
 
         private val VIDEO_PROJECTION = arrayOf(
             MediaStore.Video.Media._ID,
@@ -609,7 +609,7 @@ class MediaStoreVideoModule(private val reactContext: ReactApplicationContext) :
                 val targetH = if (height > 0) height else 512
                 val thumbUri = loadThumbnailSync(reactContext, videoUriOrPath, targetW, targetH)
                 promise.resolve(thumbUri)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 promise.resolve(null)
             }
         }
