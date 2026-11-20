@@ -47,6 +47,8 @@ import { haptic } from '@/native/HapticModule';
 import { QueueList, type QueueItem } from '@/components/QueueList';
 
 const SLEEP_MINUTES = [15, 30, 45, 60];
+/** Play button size, dp. */
+const PLAY_FAB = 68;
 
 const SleepTimerContent = React.memo(({ onClose }: { onClose: () => void }) => {
     const sleepTimerMode = useAudioStore((s) => s.sleepTimerMode);
@@ -111,6 +113,12 @@ export default function NowPlayingScreen() {
     const currentIndex = useAudioStore((s) => s.currentIndex);
     const isPlaying = useAudioStore((s) => s.isPlaying);
     const isBuffering = useAudioStore((s) => s.isBuffering);
+    // Play button: a circle while paused, a rounded square while playing.
+    const playRadius = useSharedValue(isPlaying ? metrics.radius.card : PLAY_FAB / 2);
+    useEffect(() => {
+        playRadius.value = withSpring(isPlaying ? metrics.radius.card : PLAY_FAB / 2, motion.expressive);
+    }, [isPlaying, playRadius]);
+    const playFabShape = useAnimatedStyle(() => ({ borderRadius: playRadius.value }));
     const shuffle = useAudioStore((s) => s.shuffle);
     const repeatMode = useAudioStore((s) => s.repeatMode);
     const equalizerPreset = useAudioStore((s) => s.equalizerPreset);
@@ -606,7 +614,7 @@ export default function NowPlayingScreen() {
                             {/* Play/Pause FAB with real spinner when buffering */}
                             <Touchable
                                 onPress={togglePlayPause}
-                                style={[styles.playFab, { backgroundColor: accentFill }]}
+                                style={[styles.playFab, { backgroundColor: accentFill }, playFabShape]}
                                 accessibilityRole="button"
                                 accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
                                 scaleTo={0.94}
@@ -891,9 +899,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: metrics.space.xs,
     },
     playFab: {
-        width: 68,
-        height: 68,
-        borderRadius: 34,
+        width: PLAY_FAB,
+        height: PLAY_FAB,
         alignItems: 'center',
         justifyContent: 'center',
         elevation: 0,
