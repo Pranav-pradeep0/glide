@@ -38,4 +38,13 @@ describe('RecapService.getDialogueForRecap', () => {
             'The storm is here.', 'It is.', 'Anna: Run!',
         ].join('\n'));
     });
+
+    it('stays within the proxy cap with scene breaks', async () => {
+        // 99-char cues, each its own scene: 50 fill the cap exactly unless blank lines count.
+        const text = (i: number) => `${'word '.repeat(19)}w${String(i).padStart(3, '0')}`;
+        const cues = Array.from({ length: 200 }, (_, i) => cue(i * 12, text(i)));
+        const dialogue = await RecapService.getDialogueForRecap('v.mkv', [], cues, 2400);
+        expect(dialogue).toContain('\n\n');
+        expect(dialogue!.length).toBeLessThanOrEqual(5000);
+    });
 });

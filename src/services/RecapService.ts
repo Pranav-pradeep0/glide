@@ -119,11 +119,13 @@ export class RecapService {
             const turns = this.cleanCue(cue.text);
             if (turns.length === 0) { continue; }
 
-            const size = turns.join('\n').length + 1;
+            // A long silence usually means a cut; a blank line tells the model a new scene began.
+            // Its newline counts toward the proxy's cap too.
+            const sceneBreak = nextStart - cue.endTime > this.SCENE_GAP_SECONDS && lines.length > 0;
+            const size = turns.join('\n').length + 1 + (sceneBreak ? 1 : 0);
             if (chars + size > this.MAX_DIALOGUE_CHARS) { break; }
 
-            // A long silence usually means a cut; a blank line tells the model a new scene began.
-            if (nextStart - cue.endTime > this.SCENE_GAP_SECONDS && lines.length > 0) {
+            if (sceneBreak) {
                 lines.push('');
             }
             nextStart = cue.startTime;
