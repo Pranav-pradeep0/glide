@@ -22,7 +22,7 @@ import {
 } from './PlayerIcons';
 import { Button, Gradient, IconButton, Touchable } from '@/components/ui';
 import { haptic } from '@/native/HapticModule';
-import { metrics, motion, playerTheme, type } from '@/theme/theme';
+import { metrics, motion, playerTheme, TV_SCALE, type } from '@/theme/theme';
 import { HUD_PILL } from '@/theme/colors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
 import { crossesMark, nearestMark } from '@/utils/seekMarks';
@@ -863,7 +863,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         // The ring's centre sits slightly below the box's middle.
         marginTop: 2,
-        fontSize: 10.5,
+        fontSize: 10.5 * TV_SCALE,
         fontWeight: '700',
         letterSpacing: -0.3,
         color: colors.text,
