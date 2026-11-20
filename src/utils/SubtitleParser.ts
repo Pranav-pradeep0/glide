@@ -1,7 +1,21 @@
 import { SubtitleCue } from '../types';
 import { SubtitleHtmlParser } from './SubtitleHtmlParser';
 
+// [h:]mm:ss[,.]ms -- hours optional (VTT), 1-3 digit fraction, comma or dot (both seen in SRT).
+const TIME = String.raw`(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})`;
+const TIME_RANGE = new RegExp(TIME + String.raw`\s*-->\s*` + TIME);
+
+const toSeconds = (h: string | undefined, m: string, s: string, frac: string) =>
+    parseInt(h ?? '0', 10) * 3600 + parseInt(m, 10) * 60 + parseInt(s, 10)
+    + parseInt(frac.padEnd(3, '0'), 10) / 1000;
+
 export class SubtitleParser {
+    /** `start --> end` on one line, in seconds, or null. */
+    static parseTimeRange(line: string): [number, number] | null {
+        const m = line.match(TIME_RANGE);
+        return m ? [toSeconds(m[1], m[2], m[3], m[4]), toSeconds(m[5], m[6], m[7], m[8])] : null;
+    }
+
     // Parse SRT format
     static parseSRT(content: string): SubtitleCue[] {
         const cues: SubtitleCue[] = [];
@@ -9,28 +23,14 @@ export class SubtitleParser {
 
         blocks.forEach((block) => {
             const lines = block.trim().split('\n');
-            if (lines.length < 3) { return; }
+            // The index line is optional in the wild; find the timing line instead.
+            const at = lines.findIndex(l => l.includes('-->'));
+            const times = at >= 0 ? SubtitleParser.parseTimeRange(lines[at]) : null;
+            if (!times || at + 1 >= lines.length) { return; }
 
-            const index = parseInt(lines[0], 10);
-            const timeMatch = lines[1].match(
-                /(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/
-            );
-
-            if (!timeMatch) { return; }
-
-            const startTime =
-                parseInt(timeMatch[1], 10) * 3600 +
-                parseInt(timeMatch[2], 10) * 60 +
-                parseInt(timeMatch[3], 10) +
-                parseInt(timeMatch[4], 10) / 1000;
-
-            const endTime =
-                parseInt(timeMatch[5], 10) * 3600 +
-                parseInt(timeMatch[6], 10) * 60 +
-                parseInt(timeMatch[7], 10) +
-                parseInt(timeMatch[8], 10) / 1000;
-
-            const text = SubtitleHtmlParser.normalizeSubtitleText(lines.slice(2).join('\n'));
+            const index = at > 0 ? parseInt(lines[0], 10) : cues.length + 1;
+            const [startTime, endTime] = times;
+            const text = SubtitleHtmlParser.normalizeSubtitleText(lines.slice(at + 1).join('\n'));
             const soundEffect = SubtitleParser.extractSoundEffect(text);
 
             cues.push({ index, startTime, endTime, text, soundEffect });
@@ -55,22 +55,10 @@ export class SubtitleParser {
             const line = lines[i].trim();
 
             if (line.includes('-->')) {
-                const timeMatch = line.match(
-                    /(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})\.(\d{3})/
-                );
+                const times = SubtitleParser.parseTimeRange(line);
 
-                if (timeMatch) {
-                    const startTime =
-                        parseInt(timeMatch[1], 10) * 3600 +
-                        parseInt(timeMatch[2], 10) * 60 +
-                        parseInt(timeMatch[3], 10) +
-                        parseInt(timeMatch[4], 10) / 1000;
-
-                    const endTime =
-                        parseInt(timeMatch[5], 10) * 3600 +
-                        parseInt(timeMatch[6], 10) * 60 +
-                        parseInt(timeMatch[7], 10) +
-                        parseInt(timeMatch[8], 10) / 1000;
+                if (times) {
+                    const [startTime, endTime] = times;
 
                     let text = '';
                     i++;

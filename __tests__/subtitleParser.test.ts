@@ -47,6 +47,22 @@ Goodbye`;
         it('returns empty array for empty input', () => {
             expect(SubtitleParser.parseSRT('')).toEqual([]);
         });
+
+        it('accepts no index line, 1-digit hours, dot and short fractions', () => {
+            const srt = `0:00:01.5 --> 0:00:02.25\nNo index\n\n2\n01:00:00,05 --> 01:00:01,000\nShort ms`;
+            const cues = SubtitleParser.parseSRT(srt);
+            expect(cues).toHaveLength(2);
+            expect(cues[0]).toMatchObject({ index: 1, startTime: 1.5, endTime: 2.25, text: 'No index' });
+            expect(cues[1]).toMatchObject({ index: 2, startTime: 3600.05, endTime: 3601 });
+        });
+    });
+
+    describe('parseTimeRange', () => {
+        it('reads VTT times without hours', () => {
+            expect(SubtitleParser.parseTimeRange('00:01.000 --> 00:04.000')).toEqual([1, 4]);
+            expect(SubtitleParser.parseVTT('WEBVTT\n\n00:01.000 --> 00:04.000\nHi')[0])
+                .toMatchObject({ startTime: 1, endTime: 4, text: 'Hi' });
+        });
     });
 
     describe('parseVTT', () => {
