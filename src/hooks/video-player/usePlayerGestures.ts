@@ -21,6 +21,7 @@ import {
 import type { PlayerResizeMode } from '@/components/VideoPlayer/GlidePlayer';
 import { haptic } from '@/native/HapticModule';
 import { VideoOrientationService } from '@/services/VideoOrientationService';
+import { useAppStore } from '@/store/appStore';
 import { IS_TV } from '@/utils/tv';
 
 const { DisplayBrightnessModule: BrightnessModule } = NativeModules;
@@ -344,9 +345,9 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
     const { durationShared } = player;
     const { showRipple } = hud;
     const { hideControls } = ui;
+    const step = useAppStore(state => state.settings.seekDuration);
 
     const runSeek = useCallback((side: 'left' | 'right', taps: number, tapAt: number, x: number, y: number) => {
-        const step = PLAYER_CONSTANTS.DOUBLE_TAP_SEEK_SECONDS;
         const prev = seekRunRef.current;
         const continuing = !!prev && prev.side === side && tapAt - prev.lastAt < PLAYER_CONSTANTS.RIPPLE_DURATION_MS;
         const run = prev && continuing
@@ -369,7 +370,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
             hideControls();
         }
         showRipple(side, run.seconds, x, y);
-    }, [commitSeek, currentTimeRef, durationShared, showRipple, hideControls]);
+    }, [step, commitSeek, currentTimeRef, durationShared, showRipple, hideControls]);
 
     // Double-tap zones: outer 40% each side seeks, the middle 20% plays/pauses.
     const zoneAt = useCallback((x: number) => (

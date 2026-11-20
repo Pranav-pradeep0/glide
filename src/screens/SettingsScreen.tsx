@@ -403,17 +403,15 @@ export default function SettingsScreen() {
                         title="Seek buttons"
                         toggle={{ value: settings.showSeekButtons, onChange: setShowSeekButtons }}
                     />
-                    {settings.showSeekButtons && (
-                        <SliderRow
-                            title="Seek by"
-                            valueText={`${settings.seekDuration} s`}
-                            minimumValue={5}
-                            maximumValue={60}
-                            step={5}
-                            value={settings.seekDuration}
-                            onValueChange={setSeekDuration}
-                        />
-                    )}
+                    <SliderRow
+                        title="Seek by"
+                        valueText={`${settings.seekDuration} s`}
+                        minimumValue={5}
+                        maximumValue={60}
+                        step={5}
+                        value={settings.seekDuration}
+                        onValueChange={setSeekDuration}
+                    />
                     <ListRow
                         icon="volume-2"
                         title="Volume leveler"

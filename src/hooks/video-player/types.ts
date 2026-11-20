@@ -33,7 +33,6 @@ export const PLAYER_CONSTANTS = {
     SPEED_SENSITIVITY: 0.010,
     ZOOM_MIN: 1,
     ZOOM_MAX: 3,
-    DOUBLE_TAP_SEEK_SECONDS: 10,
     /** Top/bottom strips left to the notification shade and home gesture. */
     SYSTEM_EDGE_DP: 48,
 } as const;
