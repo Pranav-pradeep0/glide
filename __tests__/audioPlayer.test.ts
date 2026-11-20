@@ -338,6 +338,25 @@ describe('Audio Player Utilities and Store', () => {
             expect(useAudioStore.getState().currentTrack?.id).toBe(dummyTrack1.id);
         });
 
+        it('takes over a queue native started on its own, so edits hit the right song', async () => {
+            NativeModules.MediaStoreAudioModule.getSongs.mockReturnValue(
+                Promise.resolve([dummyTrack1, dummyTrack2])
+            );
+            AudioMediaService.invalidateCache();
+            NativeModules.GlideAudioPlayerModule.getQueueIds = jest.fn<any>()
+                .mockReturnValue(Promise.resolve([dummyTrack2.id, dummyTrack1.id]));
+            useAudioStore.setState({ queue: [dummyTrack1], currentIndex: 0, currentTrack: dummyTrack1 });
+
+            useAudioStore.getState()._setTrackChanged({ currentIndex: 0, trackId: dummyTrack2.id });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            delete NativeModules.GlideAudioPlayerModule.getQueueIds;
+
+            const state = useAudioStore.getState();
+            expect(state.queue.map((t) => t.id)).toEqual([dummyTrack2.id, dummyTrack1.id]);
+            expect(state.currentTrack?.id).toBe(dummyTrack2.id);
+            expect(state.currentIndex).toBe(0);
+        });
+
         it('passes equalizer bands and settings to native setQueue', async () => {
             await useAudioStore.getState().setEqualizerPreset('rock');
             await useAudioStore.getState().playQueue([dummyTrack1], 0);

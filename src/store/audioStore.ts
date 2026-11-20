@@ -177,6 +177,33 @@ function resolveQueueIndex(queue: AudioTrack[], nativeIndex: number, trackId?: s
 }
 
 /**
+ * Native plays a queue JS never set (started from Android Auto): take it over, so the queue
+ * screen shows it and index-based remove/move hit the song they name.
+ *
+ * ponytail: gives up when a queued id is not in the library (positions would no longer line
+ * up); build those tracks from native's metadata if Auto ever queues such items.
+ */
+async function adoptNativeQueue(trackId: string, nativeIndex: number) {
+    const before = useAudioStore.getState().queue;
+    const ids: string[] | undefined = await getAudioModule()?.getQueueIds?.();
+    if (!ids?.length) { return; }
+    const byId = new Map((await AudioMediaService.getSongs()).map((s) => [String(s.id), s]));
+    const queue = ids.map((id) => byId.get(String(id)));
+    if (queue.some((t) => !t)) { return; }
+    // A queue set from JS meanwhile wins.
+    if (useAudioStore.getState().queue !== before) { return; }
+    const tracks = queue as AudioTrack[];
+    const index = resolveQueueIndex(tracks, nativeIndex, trackId);
+    useAudioStore.setState((prev) => ({
+        queue: tracks,
+        currentIndex: index >= 0 ? index : prev.currentIndex,
+        currentTrack: index >= 0 ? tracks[index] : prev.currentTrack,
+    }));
+    persistQueue(tracks);
+    useAudioStore.getState()._persistState();
+}
+
+/**
  * Debounced writes, keyed by what they write, so a background transition can run whatever
  * is still waiting: Android may kill the process right after, and a 1 s debounce would
  * otherwise lose the last queue edit or position.
@@ -804,6 +831,9 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
         // two queues can disagree, and indexing would show the wrong song. The id is what is
         // actually playing; the index only breaks ties when a song is queued twice.
         const nextIndex = resolveQueueIndex(queue, data.currentIndex, data.trackId);
+        if (nextIndex < 0 && data.trackId) {
+            adoptNativeQueue(data.trackId, data.currentIndex).catch(() => {});
+        }
         let nextTrack: AudioTrack | null = null;
         if (nextIndex >= 0 && nextIndex < queue.length) {
             nextTrack = queue[nextIndex];

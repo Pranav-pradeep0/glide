@@ -717,6 +717,16 @@ class GlideAudioPlayerModule(private val reactContext: ReactApplicationContext) 
         }
     }
 
+    /** The player's queue as ids, after any queue still building: for adopting one JS did not set. */
+    @ReactMethod
+    fun getQueueIds(promise: Promise) {
+        afterQueue {
+            val ids = Arguments.createArray()
+            player?.let { p -> for (i in 0 until p.mediaItemCount) ids.pushString(p.getMediaItemAt(i).mediaId) }
+            promise.resolve(ids)
+        }
+    }
+
     @ReactMethod
     fun getCurrentState(promise: Promise) {
         mainHandler.post {
