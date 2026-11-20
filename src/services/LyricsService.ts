@@ -9,8 +9,9 @@ import { AudioMediaService } from './AudioMediaService';
 const lyricsMMKV = createMMKV({ id: 'glide_lyrics_cache_v1' });
 
 // Only lyrics with no copy on the device are stored: LRCLIB downloads (bounded, oldest
-// dropped first) and files the user picked (kept). A companion .lrc or embedded tag is
-// read from the track itself each time.
+// dropped first) and files the user picked (kept). Embedded tags are read from the track
+// itself each time. Sidecar .lrc files are not looked up: other apps' files are unreadable
+// on Android 11+.
 const FETCHED_ORDER_KEY = 'fetched_order';
 const FETCHED_LIMIT = 500;
 const MEMORY_LIMIT = 100;
@@ -210,26 +211,7 @@ export class LyricsServiceClass {
             }
         }
 
-        // 3. Companion .lrc file beside audio file
-        if (path) {
-            try {
-                const lrcPath = path.replace(/\.[^/.]+$/, '.lrc');
-                const exists = await RNFS.exists(lrcPath);
-                if (exists) {
-                    const rawContent = await RNFS.readFile(lrcPath, 'utf8');
-                    const parsed = parseLrc(rawContent);
-                    const finalResult = parsed.length > 0 ? parsed : parsePlainLyrics(rawContent);
-                    if (finalResult.length > 0) {
-                        this.remember(cacheKey, finalResult);
-                        return finalResult;
-                    }
-                }
-            } catch {
-                // Ignore filesystem errors
-            }
-        }
-
-        // 4. Embedded lyrics (ID3v2 USLT/SYLT, FLAC VORBIS_COMMENT, MP4 ©lyr)
+        // 3. Embedded lyrics (ID3v2 USLT/SYLT, FLAC VORBIS_COMMENT, MP4 ©lyr)
         try {
             const embedded = await AudioMediaService.getEmbeddedLyrics(uri, path);
             if (embedded && embedded.trim().length > 0) {
@@ -244,7 +226,7 @@ export class LyricsServiceClass {
             // Ignore native metadata errors
         }
 
-        // 5. LRCLIB online provider
+        // 4. LRCLIB online provider
         const onlineLyricsEnabled = useAppStore.getState().settings.onlineLyricsEnabled;
         let lookupFailed = false;
         if (onlineLyricsEnabled && title && artist && artist !== '<unknown>' && !artist.startsWith('Unknown')) {
