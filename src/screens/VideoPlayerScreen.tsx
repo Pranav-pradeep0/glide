@@ -1315,13 +1315,15 @@ export default function VideoPlayerScreen({ route }: Props) {
             // TV: Up next holds the remote's focus, and the controls go before the video does.
             if (IS_TV && upNextShown) { setUpNext(null); return true; }
             if (IS_TV && ui.state.controlsVisible && !ui.state.locked) { hideControls(); return true; }
+            // Locked: Back (and the edge swipe) must not leave the video; show how to unlock.
+            if (ui.state.locked) { ui.showLockIconTemporarily(); return true; }
             handleGoBack();
             return true;
         });
         return () => backHandler.remove();
     }, [
         handleGoBack, isInPipMode, isExternalOpen, syncPanelType, closeAllPanels, ui.state, recapVisible,
-        closeRecap, resumeModalVisible, closeResumeModal, upNextShown, hideControls,
+        closeRecap, resumeModalVisible, closeResumeModal, upNextShown, hideControls, ui.showLockIconTemporarily,
     ]);
 
     // Navigation beforeRemove
