@@ -41,7 +41,8 @@ export function useAlbumArt(albumId?: string | null, songUri?: string | null): s
         }
 
         request.then((uri) => {
-            artCache.set(albumId, uri);
+            // Misses aren't cached: a failed or not-yet-scanned lookup gets another try next time.
+            if (uri) {artCache.set(albumId, uri);}
             pendingRequests.delete(albumId);
             if (isMounted) {
                 setArtworkUri(uri);
@@ -97,8 +98,8 @@ export function useAlbumPalette(albumId?: string | null, songUri?: string | null
         }
 
         request.then((res) => {
-            paletteCache.set(albumId, res);
             if (res.artworkUri) {
+                paletteCache.set(albumId, res);
                 artCache.set(albumId, res.artworkUri);
             }
             pendingPaletteRequests.delete(albumId);
