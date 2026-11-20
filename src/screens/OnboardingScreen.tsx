@@ -376,6 +376,8 @@ const MergingCTA = React.memo<MergingCTAProps>(({
             {containerW > 0 && (
                 <>
                     <Animated.View
+                        pointerEvents={isLastSlide ? 'none' : 'auto'}
+                        importantForAccessibility={isLastSlide ? 'no-hide-descendants' : 'auto'}
                         style={[
                             ctaStyles.btnWrapper,
                             { width: btnW, borderRadius: BTN_RADIUS },
@@ -384,6 +386,7 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                     >
                         <Pressable
                             onPress={onSkip}
+                            accessibilityRole="button"
                             style={({ pressed }) => [
                                 ctaStyles.btn,
                                 {
@@ -395,13 +398,15 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                             ]}
                             android_ripple={{ color: borderColor, borderless: false }}
                         >
-                            <Text style={[ctaStyles.label, { color: textColor, opacity: 0.55 }]}>
+                            <Text style={[ctaStyles.label, { color: textColor, opacity: 0.7 }]}>
                                 Skip
                             </Text>
                         </Pressable>
                     </Animated.View>
 
                     <Animated.View
+                        pointerEvents={isLastSlide ? 'none' : 'auto'}
+                        importantForAccessibility={isLastSlide ? 'no-hide-descendants' : 'auto'}
                         style={[
                             ctaStyles.btnWrapper,
                             { width: btnW, borderRadius: BTN_RADIUS },
@@ -410,6 +415,7 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                     >
                         <Pressable
                             onPress={onNext}
+                            accessibilityRole="button"
                             style={({ pressed }) => [
                                 ctaStyles.btn,
                                 { backgroundColor: primaryColor },
@@ -423,6 +429,7 @@ const MergingCTA = React.memo<MergingCTAProps>(({
 
                     <Animated.View
                         pointerEvents={isLastSlide ? 'auto' : 'none'}
+                        importantForAccessibility={isLastSlide ? 'auto' : 'no-hide-descendants'}
                         style={[
                             ctaStyles.pill,
                             { backgroundColor: primaryColor, height: BTN_H },
@@ -431,6 +438,7 @@ const MergingCTA = React.memo<MergingCTAProps>(({
                     >
                         <Pressable
                             onPress={onNext}
+                            accessibilityRole="button"
                             style={({ pressed }) => [
                                 ctaStyles.pillInner,
                                 pressed && ctaStyles.btnPressed,
