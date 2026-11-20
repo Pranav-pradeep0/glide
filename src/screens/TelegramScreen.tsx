@@ -47,6 +47,8 @@ export default function TelegramScreen() {
     const navigation = useNavigation<Nav>();
     const [auth, setAuth] = useState<TgAuth>({ state: 'starting' });
     const [error, setError] = useState('');
+    // Bumped by Retry: on TV this page never remounts, so the effect is the only way back.
+    const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
         if (!TELEGRAM_AVAILABLE) { return; }
@@ -55,7 +57,7 @@ export default function TelegramScreen() {
         // An event can overtake the first answer; it's the newer state then.
         first.then(a => { if (!heard) { setAuth(a); } }, e => setError(errorText(e)));
         return stop;
-    }, []);
+    }, [attempt]);
 
     const logOut = () => showDialog('Sign out of Telegram?', 'Videos downloaded from Telegram are deleted from this device.', [
         { text: 'Cancel', style: 'cancel' },
@@ -72,7 +74,7 @@ export default function TelegramScreen() {
             {!TELEGRAM_AVAILABLE ? (
                 <EmptyState icon="send" text="Update Glide to watch videos from Telegram." />
             ) : error ? (
-                <EmptyState icon="wifi-off" text={error} />
+                <EmptyState icon="wifi-off" text={error} action="Retry" onAction={() => { setError(''); setAttempt(n => n + 1); }} />
             ) : auth.state === 'starting' || auth.state === 'loggingOut' ? (
                 <Loader />
             ) : (
