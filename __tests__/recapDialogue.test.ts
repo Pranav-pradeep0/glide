@@ -18,6 +18,15 @@ describe('RecapService.cleanCue', () => {
     });
 });
 
+describe('RecapService.toCueTime', () => {
+    it('maps video time back to cue time through delay and ratio', () => {
+        expect(RecapService.toCueTime(3600)).toBe(3600);
+        expect(RecapService.toCueTime(3602, 2000)).toBe(3600);
+        // 25 vs 23.976 fps retiming: about 150 s apart after an hour.
+        expect(RecapService.toCueTime(3600, 0, 25 / 23.976)).toBeCloseTo(3452.5, 1);
+    });
+});
+
 describe('RecapService.getDialogueForRecap', () => {
     it('reaches back past a quiet stretch and marks the scene change', async () => {
         const cues = [

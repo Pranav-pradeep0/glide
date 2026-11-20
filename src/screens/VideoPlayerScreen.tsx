@@ -538,6 +538,8 @@ export default function VideoPlayerScreen({ route }: Props) {
         subtitleTracks: tracksHook.subtitleTracks,
         subtitleTracksReady: tracksHook.subtitleTracksReady,
         subtitleCues: tracksHook.subtitleCues,
+        subtitleDelayMs: settingsHook.settings.subtitleDelay,
+        subtitleRatio: settingsHook.settings.subtitleRatio,
         onPause: player.pause,
         onDismissResumeModal: handleDismissResumeModal,
         onPlay: player.play,

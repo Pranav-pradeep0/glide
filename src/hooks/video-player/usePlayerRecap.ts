@@ -15,6 +15,9 @@ interface UsePlayerRecapOptions {
     subtitleTracks: SubtitleTrack[];
     subtitleTracksReady: boolean;
     subtitleCues: SubtitleCue[];
+    /** Subtitle offset (ms) and retiming ratio, so "up to here" means the cues seen so far. */
+    subtitleDelayMs: number;
+    subtitleRatio: number;
     onPause: () => void;
     onDismissResumeModal: () => void;
     /** A recap that could not be made closes and the video carries on. */
@@ -33,11 +36,14 @@ export function usePlayerRecap({
     subtitleTracks,
     subtitleTracksReady,
     subtitleCues,
+    subtitleDelayMs,
+    subtitleRatio,
     onPause,
     onDismissResumeModal,
     onPlay,
     showToast,
 }: UsePlayerRecapOptions) {
+    const cuePosition = RecapService.toCueTime(resumePosition, subtitleDelayMs, subtitleRatio);
     const [recapVisible, setRecapVisible] = useState(false);
     const [recapText, setRecapText] = useState<string | null>(null);
     const [isGeneratingRecap, setIsGeneratingRecap] = useState(false);
@@ -96,7 +102,7 @@ export function usePlayerRecap({
                 videoPath,
                 subtitleTracks,
                 subtitleCuesRef.current,
-                resumePosition
+                cuePosition
             );
 
             if (isActive) {
@@ -113,6 +119,7 @@ export function usePlayerRecap({
     }, [
         videoPath,
         resumePosition,
+        cuePosition,
         isNetworkStream,
         subtitleTracksReady,
         imdbId,
@@ -166,7 +173,7 @@ export function usePlayerRecap({
                 videoPath,
                 subtitleTracks,
                 subtitleCuesRef.current,
-                resumePosition,
+                cuePosition,
                 cleanTitle || videoName
             );
 
@@ -215,6 +222,7 @@ export function usePlayerRecap({
         isNetworkStream,
         recapText,
         resumePosition,
+        cuePosition,
         isRecapEligible,
         onPause,
         onDismissResumeModal,

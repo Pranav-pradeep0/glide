@@ -16,6 +16,14 @@ export class RecapService {
     private static readonly MAX_DIALOGUE_CHARS = 5000;
 
     /**
+     * A cue at c shows at c * ratio + delay, so the last cue seen by video time t is at
+     * (t - delay) / ratio. Raw cue times leaked minutes of spoilers at 25 vs 23.976 fps.
+     */
+    static toCueTime(videoTime: number, delayMs = 0, ratio = 1): number {
+        return (videoTime - delayMs / 1000) / (ratio > 0 ? ratio : 1);
+    }
+
+    /**
      * High-level entry point to get dialogue for recap.
      * Checks existing cues first, then uses SubtitleCueStore to find/extract the best track.
      */
