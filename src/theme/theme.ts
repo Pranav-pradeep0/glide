@@ -53,6 +53,8 @@ export const type = forTv({
     body: { fontSize: 14, lineHeight: 20 },
     /** Meta lines under a row title. */
     caption: { fontSize: 12, lineHeight: 16 },
+    /** Badges and tiny overlay tags. */
+    micro: { fontSize: 11, lineHeight: 14, fontWeight: '500' },
     /** Buttons, chips, group labels. */
     label: { fontSize: 13.5, lineHeight: 18, fontWeight: '500' },
     /** Gesture readouts on video ("+0:45"). */

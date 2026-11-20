@@ -11,7 +11,7 @@ import Feather from '@react-native-vector-icons/feather';
 import { useTheme } from '@/hooks/useTheme';
 import { useThumbnail } from '@/hooks/useThumbnails';
 import { playerColors } from '@/theme/colors';
-import { metrics, type, TV_SCALE } from '@/theme/theme';
+import { metrics, type } from '@/theme/theme';
 import { IS_TV } from '@/utils/tv';
 import { formatDuration } from '@/utils/formatUtils';
 import { FilenameParser } from '@/utils/FilenameParser';
@@ -498,9 +498,9 @@ const styles = StyleSheet.create({
         borderRadius: metrics.radius.pill,
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
     },
-    sourceText: { color: playerColors.text, fontSize: 10.5, lineHeight: 14, fontWeight: '500' },
+    sourceText: { ...type.micro, color: playerColors.text },
     heroSource: { top: 16, left: 16, paddingHorizontal: 9, paddingVertical: 4 },
-    badgeText: { color: playerColors.text, fontSize: 10.5, lineHeight: 14, fontWeight: '500', fontVariant: ['tabular-nums'] },
+    badgeText: { ...type.micro, color: playerColors.text, fontVariant: ['tabular-nums'] },
     info: { flex: 1, gap: 3 },
     listCell: { paddingBottom: 2 },
     gridCell: { flex: 1, paddingHorizontal: GRID_HALF_GAP, paddingBottom: metrics.space.lg },
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     heroBody: { flexDirection: 'row', alignItems: 'flex-end', padding: metrics.space.lg, gap: metrics.space.md },
     heroText: { flex: 1, gap: 4 },
     heroMeta: { color: 'rgba(255, 255, 255, 0.75)', ...type.label, fontVariant: ['tabular-nums'] },
-    heroTitle: { color: playerColors.text, fontSize: 24, fontWeight: '800', letterSpacing: -0.4, lineHeight: 28 },
+    heroTitle: { ...type.display, color: playerColors.text },
     heroTrack: { marginTop: 8, borderRadius: 2 },
     heroPlay: {
         width: 52,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
         gap: metrics.space.sm,
     },
     appBar: { paddingTop: metrics.space.xs + metrics.overscanY },
-    appBarTitle: { fontSize: 18 * TV_SCALE, lineHeight: 24 * TV_SCALE, fontWeight: '600' },
+    appBarTitle: type.section,
     back: { marginLeft: -12 },
     headerText: { flex: 1 },
     // Holds the IconButton height even when empty, so a header doesn't jump as its buttons come and go.

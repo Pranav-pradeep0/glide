@@ -1212,7 +1212,7 @@ const styles = StyleSheet.create({
     rowTitle: { fontWeight: '400', flexShrink: 1 },
     rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: metrics.space.sm },
     badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: metrics.radius.pill },
-    badgeText: { fontSize: 10, lineHeight: 14, fontWeight: '600', letterSpacing: 0.5 },
+    badgeText: { ...type.micro, letterSpacing: 0.5 },
     /** Long values ("English - EAC3 6ch") truncate instead of squeezing the title. */
     rowValue: { maxWidth: '50%', flexShrink: IS_TV ? 1 : undefined, textAlign: 'right' },
 

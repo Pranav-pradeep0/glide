@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         paddingVertical: 0,
-        fontSize: 14,
+        ...type.body,
     },
     // The 48 dp box overhangs the 42 dp bar; pull it into the padding so the glyph stays put.
     searchClearBtn: { marginRight: -metrics.space.md },

@@ -30,6 +30,7 @@ import PlaybackIcon from '../components/onboarding/PlaybackIcon';
 import FeatureShowcaseIcon from '../components/onboarding/FeatureShowcaseIcon';
 import PrivacyIcon from '../components/onboarding/PrivacyIcon';
 import { IS_TV } from '../utils/tv';
+import { type } from '../theme/theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BTN_H = 52;
@@ -729,14 +730,14 @@ const slideStyles = StyleSheet.create({
     },
     iconPlaceholder: { width: ICON_FRAME_W, height: ICON_FRAME_H },
     titleWrap: { minHeight: 62, width: '100%', justifyContent: 'center', marginBottom: 2 },
-    title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', letterSpacing: 0.3, lineHeight: 34 },
+    title: { ...type.title, textAlign: 'center' },
     taglineWrap: { minHeight: 40, width: '100%', justifyContent: 'center', marginBottom: 14 },
     tagline: { fontSize: 15, fontStyle: 'italic', textAlign: 'center', lineHeight: 21 },
     bulletsContainer: { width: '100%', minHeight: 118, paddingLeft: 8, marginBottom: 12 },
     bulletsTv: { minHeight: 0 },
     bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
     bulletDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 12, marginTop: 8 },
-    bulletText: { fontSize: 14, lineHeight: 20 },
+    bulletText: type.body,
 });
 
 const paginationStyles = StyleSheet.create({
