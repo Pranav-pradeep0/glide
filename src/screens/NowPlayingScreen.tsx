@@ -562,7 +562,7 @@ export default function NowPlayingScreen() {
                             <View style={styles.titleRow}>
                                 <View style={styles.titleTextWrap}>
                                     <Text
-                                        style={[type.heading, { color: colors.text, textAlign: 'center' }]}
+                                        style={[type.display, { color: colors.text, textAlign: 'center' }]}
                                         numberOfLines={2}
                                     >
                                         {currentTrack.title}

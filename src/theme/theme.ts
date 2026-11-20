@@ -42,6 +42,8 @@ const forTv = <T extends Record<string, TextStyle>>(styles: T): T => (IS_TV
 export const type = forTv({
     /** Screen titles. */
     title: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5 },
+    /** Hero titles: the Now Playing track title. */
+    display: { fontSize: 24, lineHeight: 30, fontWeight: '700', letterSpacing: -0.3 },
     /** Section headers in a list ("Continue watching"). */
     section: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
     /** Sheet, panel and app-bar titles. */
