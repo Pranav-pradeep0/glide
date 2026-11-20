@@ -43,8 +43,9 @@ export class SubtitleSelectionService {
             const lang = (track.language || '').toLowerCase();
 
             // Check title for SDH keywords
+            // Whole words: 'cc' inside "Accented" or "Soccer" is not closed captions.
             for (const keyword of SDH_NAME_KEYWORDS) {
-                if (title.includes(keyword)) {
+                if (new RegExp(`\\b${keyword.replace('.', '\\.')}\\b`).test(title)) {
                     score += 20;
                     reasons.push(`Title contains '${keyword}'`);
                     break;
@@ -52,8 +53,9 @@ export class SubtitleSelectionService {
             }
 
             // Language preference
+            // Outweighs SDH (+20): "Français SDH" must not beat plain English.
             if (lang === preferredLang || lang.startsWith(preferredLang)) {
-                score += 10;
+                score += 30;
                 reasons.push('Matches preferred language');
             }
 
