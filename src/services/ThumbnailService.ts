@@ -16,6 +16,10 @@ const THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/thumbnails2`;
 const AT_TIME_DIR = `${THUMBNAIL_DIR}/at`;
 const MAX_CONCURRENT_WORKERS = 4;
 const MAX_MEMO_ENTRIES = 2000;
+/** Native's MediaStore thumbnails (MediaStoreVideoModule), keyed by the file's modified date. */
+const NATIVE_THUMBNAIL_DIR = `${RNFS.CachesDirectoryPath}/video_thumbs2`;
+/** A file's thumbnail is keyed by its modified date, so an edited or deleted video leaves its old one behind. */
+const MAX_THUMBNAIL_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface PendingRequest {
     resolve: (path: string | null) => void;
@@ -67,6 +71,16 @@ class ThumbnailServiceClass {
         } catch (error) {
             console.warn('[ThumbnailService] Stop-frame sweep failed:', error);
         }
+        const cutoff = Date.now() - MAX_THUMBNAIL_AGE_MS;
+        for (const dir of [THUMBNAIL_DIR, NATIVE_THUMBNAIL_DIR]) {
+            try {
+                const old = (await RNFS.readDir(dir))
+                    .filter(file => file.isFile() && file.mtime && file.mtime.getTime() < cutoff);
+                await Promise.all(old.map(file => RNFS.unlink(file.path)));
+            } catch {
+                // Missing folder or a file already gone: next launch tries again
+            }
+        }
     }
 
     private fileName(videoPath: string, timeMs: number): string {
@@ -89,6 +103,7 @@ class ThumbnailServiceClass {
         const memo = `${videoPath}::${timeMs}`;
         const known = this.resolved.get(memo);
         if (known) {
+            this.remember(memo, known);
             return known;
         }
 
@@ -168,10 +183,14 @@ class ThumbnailServiceClass {
         }
     }
 
-    /** Bounded: a long scroll through a large library would otherwise grow this forever. */
+    /**
+     * Bounded: a long scroll through a large library would otherwise grow this forever. Least
+     * recently used goes first: a Map keeps insertion order, and each use re-inserts its key.
+     */
     private remember(key: string, value: string) {
+        this.resolved.delete(key);
         if (this.resolved.size >= MAX_MEMO_ENTRIES) {
-            this.resolved.clear();
+            this.resolved.delete(this.resolved.keys().next().value!);
         }
         this.resolved.set(key, value);
     }
