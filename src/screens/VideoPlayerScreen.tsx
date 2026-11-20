@@ -476,7 +476,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const tracksHook = usePlayerTracks({
         videoPath,
         currentTimeRef: player.currentTimeRef,
-        findHapticCues: playMode === 'with-haptics',
+        findHapticCues: !IS_TV && playMode === 'with-haptics',
         videoName,
         imdbId,
         initialAudioTrackId: initialAudioTrackId,
@@ -1493,7 +1493,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                         audioEqualizer={settingsHook.audioEqualizer}
                         volumeLeveler={settingsHook.settings.volumeLeveler}
                         audioDelay={settingsHook.settings.audioDelay}
-                        haptics={playMode === 'with-haptics' && hapticsEnabled}
+                        haptics={!IS_TV && playMode === 'with-haptics' && hapticsEnabled}
                         hapticCues={hapticCues}
                         hapticPreset={hapticPreset}
                         hapticStrength={hapticStrength}

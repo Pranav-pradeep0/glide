@@ -97,7 +97,7 @@ Highest value per effort first. IDs link to the tables below.
 | PL-11 | DONE | PARTIAL | minor | usePlayerGestures.ts:349; SettingsScreen.tsx:407-417,481-482 | Double-tap fixed 10s may be deliberate. Real gap: shake chips use settings.seekDuration, which is hidden unless seek buttons are on. | Owner decided: double-tap uses `settings.seekDuration` (usePlayerGestures.ts:349); always show the "Seek by" slider in Settings. | S |
 | PL-12 | DONE | PARTIAL | minor | usePlayerRecap.ts:165-200; VideoPlayerScreen.tsx:611-616 | closeRecap already plays; bug only: user pauses after closing, then a late failure's onPlay() unpauses + stale toast. | `recapRunRef` counter bumped in closeRecap; bail after each await if changed. | S |
 | PL-13 | DONE | CONFIRMED | minor | src/components/VideoPlayer/PlayerErrorCard.tsx:29; UpNextCard.tsx:108,116 | accessibilityRole="alert" doesn't announce on Android; countdown not announced. | `accessibilityLiveRegion="assertive"` on error card; Up next mount → `AccessibilityInfo.announceForAccessibility("Up next: {title} in Ns")`. | S |
-| PL-14 | TODO | CONFIRMED | minor | VideoPlayerScreen.tsx:474,1486; PlayerDetailScreen.tsx:115 | haptics prop / findHapticCues ungated (entry already gated → unreachable on TV). | Prefix both with `!IS_TV &&`. | S |
+| PL-14 | DONE | CONFIRMED | minor | VideoPlayerScreen.tsx:474,1486; PlayerDetailScreen.tsx:115 | haptics prop / findHapticCues ungated (entry already gated → unreachable on TV). | Prefix both with `!IS_TV &&`. | S |
 
 ## Library, music and storage (LB)
 
