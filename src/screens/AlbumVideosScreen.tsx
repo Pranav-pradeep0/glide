@@ -33,13 +33,38 @@ const SORT_OPTIONS: { key: VideoSort; label: string }[] = [
     { key: 'size', label: 'Largest' },
 ];
 
+/** One video; it reads its own history, so a position save re-renders only its row. */
+const AlbumItem = React.memo(function AlbumItem({ item, grid, onPress, onMore, preferFocus }: {
+    item: VideoFile;
+    grid: boolean;
+    onPress: (video: VideoFile) => void;
+    onMore: (video: VideoFile) => void;
+    preferFocus: boolean;
+}) {
+    const position = useVideoHistoryStore(s => s.getVideoHistory(item.path)?.lastPausedPosition);
+    const duration = useVideoHistoryStore(s => s.getVideoHistory(item.path)?.duration);
+    const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
+    return (
+        <Item
+            item={item}
+            path={item.path}
+            name={item.name}
+            meta={joinMeta(timeLabel(item.duration, position), item.size > 0 && formatFileSize(item.size))}
+            duration={item.duration}
+            progress={progressOf(duration, position)}
+            onPress={onPress}
+            onMore={onMore}
+            preferFocus={preferFocus}
+        />
+    );
+});
+
 export default function AlbumVideosScreen() {
     const theme = useTheme();
     const navigation = useNavigation<NavigationProp>();
     const route = useRoute<AlbumVideosRouteProp>();
     const insets = useSafeAreaInsets();
     const clearHistoryForPath = useVideoHistoryStore(state => state.clearVideoHistory);
-    const history = useVideoHistoryStore(state => state.history);
     const { albumTitle, bucketId } = route.params;
     // Per folder, as a series and a camera folder want different orders. Unpicked: episode
     // order for a series, newest first otherwise (useAlbumVideos).
@@ -90,38 +115,19 @@ export default function AlbumVideosScreen() {
         });
     };
 
-    const getHistoryEntry = useCallback((file: VideoFile) => {
-        let entry = history.get(file.path);
-        if (!entry && !file.path.startsWith('file://')) {
-            entry = history.get(`file://${file.path}`);
-        }
-        if (!entry && file.path.startsWith('file://')) {
-            entry = history.get(file.path.replace('file://', ''));
-        }
-        return entry ?? null;
-    }, [history]);
-
     const grid = viewMode === 'grid';
 
-    const renderItem = useCallback(({ item, index }: { item: VideoFile; index: number }) => {
-        const entry = getHistoryEntry(item);
-        const Item: VideoItemComponent = grid ? VideoCard : VideoRow;
-        return (
-            <VideoItemCell grid={grid}>
-                <Item
-                    item={item}
-                    path={item.path}
-                    name={item.name}
-                    meta={joinMeta(timeLabel(item.duration, entry?.lastPausedPosition), item.size > 0 && formatFileSize(item.size))}
-                    duration={item.duration}
-                    progress={progressOf(entry?.duration, entry?.lastPausedPosition)}
-                    onPress={handleVideoPress}
-                    onMore={handleOpenOptions}
-                    preferFocus={index === 0}
-                />
-            </VideoItemCell>
-        );
-    }, [grid, handleVideoPress, handleOpenOptions, getHistoryEntry]);
+    const renderItem = useCallback(({ item, index }: { item: VideoFile; index: number }) => (
+        <VideoItemCell grid={grid}>
+            <AlbumItem
+                item={item}
+                grid={grid}
+                onPress={handleVideoPress}
+                onMore={handleOpenOptions}
+                preferFocus={index === 0}
+            />
+        </VideoItemCell>
+    ), [grid, handleVideoPress, handleOpenOptions]);
 
     if (videoAccess === 'unknown' || (loading && videos.length === 0 && videoAccess !== 'denied')) {
         return <Loader fullScreen />;
@@ -154,7 +160,6 @@ export default function AlbumVideosScreen() {
                 <FlashList
                     data={videos}
                     renderItem={renderItem}
-                    extraData={history}
                     keyExtractor={(item: VideoFile) => item.path}
                     numColumns={grid ? metrics.grid.columns : 1}
                     key={viewMode}
