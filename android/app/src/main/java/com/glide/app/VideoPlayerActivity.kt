@@ -40,6 +40,8 @@ class VideoPlayerActivity : GlideBaseActivity() {
   private var startPositionMs: Long = 0
   // The last stop point JS reported; survives a recreate so the reopened player resumes there.
   private var stopPositionMs: Long = -1
+  // The video that stop point belongs to: with a video_list, maybe not the one it opened.
+  private var stopUri: String? = null
   /** Set by the player view: background play keeps this alive when it leaves the screen. */
   var playInBackground = false
 
@@ -138,6 +140,7 @@ class VideoPlayerActivity : GlideBaseActivity() {
   fun setStopPoint(uri: String?, positionMs: Long, durationMs: Long) {
     if (positionMs < 0 || durationMs <= 0) return
     stopPositionMs = positionMs
+    stopUri = uri
     val atEnd = positionMs >= durationMs - 1000
     // The data is the video it stopped in: with a video_list, maybe not the one it opened.
     setResult(RESULT_OK, Intent(RESULT_ACTION, uri?.let(Uri::parse))
@@ -150,7 +153,10 @@ class VideoPlayerActivity : GlideBaseActivity() {
 
   override fun onSaveInstanceState(outState: Bundle) {
     super.onSaveInstanceState(outState)
-    if (stopPositionMs >= 0) outState.putLong("stopPositionMs", stopPositionMs)
+    if (stopPositionMs >= 0) {
+      outState.putLong("stopPositionMs", stopPositionMs)
+      outState.putString("stopUri", stopUri)
+    }
   }
 
   /**
@@ -179,8 +185,11 @@ class VideoPlayerActivity : GlideBaseActivity() {
     // Validate before the React root mounts. VideoPlayerRoot renders an indefinite
     // spinner when it receives no videoUri, so handing it nothing is not an option.
     externalVideoUri = resolveExternalVideoUri()
-    // Recreated after process death: carry on from where it got to, not the caller's start.
-    startPositionMs = savedInstanceState?.getLong("stopPositionMs", -1)?.takeIf { it >= 0 }
+    // Recreated after process death: carry on from where it got to, not the caller's start --
+    // but only in the video it opened; a later video_list item's position doesn't fit this one.
+    startPositionMs = savedInstanceState
+        ?.takeIf { it.getString("stopUri") == externalVideoUri }
+        ?.getLong("stopPositionMs", -1)?.takeIf { it >= 0 }
         ?: resolveStartPositionMs()
 
     super.onCreate(savedInstanceState)
@@ -265,6 +274,7 @@ class VideoPlayerActivity : GlideBaseActivity() {
     if (uri != null) {
       externalVideoUri = uri
       stopPositionMs = -1
+      stopUri = null
       try {
         val reactApplication = application as? com.facebook.react.ReactApplication
         val reactContext = reactApplication?.reactHost?.currentReactContext
