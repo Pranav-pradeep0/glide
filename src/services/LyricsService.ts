@@ -120,6 +120,12 @@ export function parsePlainLyrics(content: string): LyricLine[] {
     return result;
 }
 
+/** Synced lines if [raw] has time tags, else its plain lines. */
+function toLines(raw: string): LyricLine[] {
+    const synced = parseLrc(raw);
+    return synced.length > 0 ? synced : parsePlainLyrics(raw);
+}
+
 /**
  * Returns true if lyrics contain valid timestamps (> 0).
  */
@@ -212,8 +218,7 @@ export class LyricsServiceClass {
             try {
                 const storedLrc = lyricsMMKV.getString(`lyrics_${trackId}`);
                 if (storedLrc) {
-                    const parsed = parseLrc(storedLrc);
-                    const finalLines = parsed.length > 0 ? parsed : parsePlainLyrics(storedLrc);
+                    const finalLines = toLines(storedLrc);
                     if (finalLines.length > 0) {
                         this.remember(cacheKey, finalLines);
                         return finalLines;
@@ -228,8 +233,7 @@ export class LyricsServiceClass {
         try {
             const embedded = await AudioMediaService.getEmbeddedLyrics(uri, path);
             if (embedded && embedded.trim().length > 0) {
-                const parsed = parseLrc(embedded);
-                const finalResult = parsed.length > 0 ? parsed : parsePlainLyrics(embedded);
+                const finalResult = toLines(embedded);
                 if (finalResult.length > 0) {
                     this.remember(cacheKey, finalResult);
                     return finalResult;
@@ -246,8 +250,7 @@ export class LyricsServiceClass {
             try {
                 const fetched = await this.fetchFromLrclib(title, artist, album, duration);
                 if (fetched) {
-                    const parsed = parseLrc(fetched);
-                    const finalResult = parsed.length > 0 ? parsed : parsePlainLyrics(fetched);
+                    const finalResult = toLines(fetched);
                     if (finalResult.length > 0) {
                         if (trackId) {
                             try { storeFetched(trackId, fetched); } catch { /* ignore */ }
@@ -392,8 +395,7 @@ export class LyricsServiceClass {
             }
 
             const rawContent = await RNFS.readFile(targetPath, 'utf8');
-            const parsed = parseLrc(rawContent);
-            const finalResult = parsed.length > 0 ? parsed : parsePlainLyrics(rawContent);
+            const finalResult = toLines(rawContent);
 
             if (finalResult.length > 0) {
                 if (trackId) {
