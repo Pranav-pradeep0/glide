@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { carriedSubtitle, matchCarriedTrack } from '../src/hooks/video-player/types';
+import { carriedSubtitle, matchCarriedTrack, resolveSavedAudio } from '../src/hooks/video-player/types';
 
 // Next / Previous carry a track choice into another file, where ids and indexes differ.
 
@@ -44,5 +44,20 @@ describe('carriedSubtitle', () => {
 
     it('carries an embedded track by language, title and position', () => {
         expect(carriedSubtitle(tracks, 3)).toEqual({ language: 'eng', title: 'English', ordinal: 0 });
+    });
+});
+
+// History saved the player's id, which follows the decoders: an FFmpeg-decoded E-AC-3 lists after AAC.
+describe('resolveSavedAudio', () => {
+    const tracks = [
+        { id: 0, name: 'AAC', language: 'hin', formatId: '2' },
+        { id: 1, name: 'E-AC-3', language: 'eng', formatId: '1' },
+    ];
+
+    it('finds the saved track by its own id in the file, then language, then the id', () => {
+        expect(resolveSavedAudio(tracks, { id: 0, formatId: '1', language: 'eng' })).toBe(1);
+        expect(resolveSavedAudio(tracks, { id: 0, language: 'eng' })).toBe(1);
+        expect(resolveSavedAudio(tracks, { id: 1 })).toBe(1);
+        expect(resolveSavedAudio(tracks, { id: 5 })).toBeUndefined();
     });
 });

@@ -27,7 +27,7 @@ interface VideoHistoryState {
     getAllHistory: () => VideoHistoryEntry[];
     /** `link`: an app link's headers and secure flag, sent again when Recents reopens it. */
     incrementViewCount: (videoPath: string, videoName: string, contentUri?: string, fileSize?: number, link?: Pick<VideoHistoryEntry, 'headers' | 'secureUri'>) => void;
-    updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrackId?: number, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, subtitleRatio?: number, brightness?: number, fileSize?: number, volumeLeveler?: boolean, videoEnhancement?: number) => void;
+    updatePlaybackPosition: (videoPath: string, videoName: string, position: number, duration: number, audioTrack?: { id: number; formatId?: string; language?: string }, subtitleTrackIndex?: number, audioDelay?: number, subtitleDelay?: number, subtitleRatio?: number, brightness?: number, fileSize?: number, volumeLeveler?: boolean, videoEnhancement?: number) => void;
     /** Play from start / mark (un)watched: the position only, leaving when it was watched alone. */
     setWatchedPosition: (videoPath: string, videoName: string, position: number, duration: number) => void;
     setStopFrame: (videoPath: string, videoName: string, stopFrameMs: number | undefined) => void;
@@ -252,8 +252,13 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
         debouncedPersist();
     },
 
-    updatePlaybackPosition: (videoPath, videoName, position, duration, audioTrackId, subtitleTrackIndex, audioDelay, subtitleDelay, subtitleRatio, brightness, fileSize, volumeLeveler, videoEnhancement) => {
+    updatePlaybackPosition: (videoPath, videoName, position, duration, audioTrack, subtitleTrackIndex, audioDelay, subtitleDelay, subtitleRatio, brightness, fileSize, volumeLeveler, videoEnhancement) => {
         const videoId = generateVideoId(videoName, fileSize);
+        const audio = {
+            selectedAudioTrackId: audioTrack?.id,
+            selectedAudioFormatId: audioTrack?.formatId,
+            selectedAudioLanguage: audioTrack?.language,
+        };
 
         set((state) => {
             const newHistory = new Map(state.history);
@@ -268,7 +273,7 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                     lastPausedPosition: position,
                     duration: duration,
                     lastWatchedTime: Date.now(),
-                    selectedAudioTrackId: audioTrackId,
+                    ...audio,
                     selectedSubtitleTrackId: subtitleTrackIndex,
                     audioDelay: audioDelay,
                     subtitleDelay: subtitleDelay,
@@ -294,7 +299,7 @@ export const useVideoHistoryStore = create<VideoHistoryState>((set, get) => ({
                     duration: duration,
                     viewCount: 0,
                     bookmarks: [],
-                    selectedAudioTrackId: audioTrackId,
+                    ...audio,
                     selectedSubtitleTrackId: subtitleTrackIndex,
                     audioDelay: audioDelay,
                     subtitleDelay: subtitleDelay,

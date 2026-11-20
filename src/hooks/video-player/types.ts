@@ -126,6 +126,22 @@ export function carriedAudio(tracks: NativeAudioTrack[], selectedId?: number): C
     return ordinal < 0 ? undefined : { language: tracks[ordinal].language, title: tracks[ordinal].name, ordinal };
 }
 
+export type SavedAudioTrack = Pick<NativeAudioTrack, 'id' | 'formatId' | 'language'>;
+
+/**
+ * History's audio choice in this run's list. The id is the player's order, which follows the
+ * decoders (FFmpeg or passthrough), so the file's own track id goes first, then the language.
+ */
+export function resolveSavedAudio(tracks: NativeAudioTrack[], saved: SavedAudioTrack): number | undefined {
+    const language = knownLanguage(saved.language);
+    const sameLanguage = language ? tracks.filter(t => knownLanguage(t.language) === language) : [];
+    return (
+        (saved.formatId ? tracks.find(t => t.formatId === saved.formatId) : undefined)
+        ?? sameLanguage.find(t => t.id === saved.id) ?? sameLanguage[0]
+        ?? tracks.find(t => t.id === saved.id)
+    )?.id;
+}
+
 /** null when subtitles are off; undefined for a choice that cannot carry (an external file). */
 export function carriedSubtitle(
     tracks: SubtitleTrack[],
@@ -418,6 +434,8 @@ export interface UsePlayerTracksReturn {
     // Audio
     audioTracks: NativeAudioTrack[];
     selectedAudioTrackId: number | undefined;
+    /** The selection as history saves it. */
+    savedAudioTrack: SavedAudioTrack | undefined;
     selectAudioTrack: (trackId: number | null) => void;
 
     // Subtitles

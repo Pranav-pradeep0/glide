@@ -272,6 +272,9 @@ export interface VideoHistoryEntry {
     stopFrameMs?: number;
     fileSize?: number;
     selectedAudioTrackId?: number;
+    /** The chosen audio track's own id in the file, and its language: the id above is the player's order. */
+    selectedAudioFormatId?: string;
+    selectedAudioLanguage?: string;
     selectedSubtitleTrackId?: number; // Index of the subtitle track
     audioDelay?: number;
     subtitleDelay?: number;

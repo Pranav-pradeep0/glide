@@ -14,6 +14,7 @@ import {
     ExternalSubtitle,
     UsePlayerTracksReturn,
     matchCarriedTrack,
+    resolveSavedAudio,
 } from './types';
 import { findMatchingAudioTrack } from '@/utils/languages';
 import { SubtitleCueStore } from '@/services/SubtitleCueStore';
@@ -69,6 +70,9 @@ interface UsePlayerTracksOptions {
     videoName?: string;
     imdbId?: string;
     initialAudioTrackId?: number;
+    /** History's audio track, as the file names it; resolved against the list when it loads. */
+    initialAudioFormatId?: string;
+    initialAudioLanguage?: string;
     initialSubtitleTrackIndex?: number;
 
     subtitleDelay?: number; // in milliseconds
@@ -98,7 +102,7 @@ interface UsePlayerTracksOptions {
  * - SDH cues for haptic feedback
  */
 export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTracksReturn {
-    const { videoPath, currentTimeRef, findHapticCues, videoName, imdbId, initialAudioTrackId, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage, carriedAudioTrack, carriedSubtitleTrack, openerSubtitles } = options;
+    const { videoPath, currentTimeRef, findHapticCues, videoName, imdbId, initialAudioTrackId, initialAudioFormatId, initialAudioLanguage, initialSubtitleTrackIndex, subtitleDelay = 0, defaultAudioLanguage, carriedAudioTrack, carriedSubtitleTrack, openerSubtitles } = options;
 
     // ========================================================================
     // STATE
@@ -210,16 +214,26 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
      * Set audio tracks from player onLoad event.
      * Called by parent component when native player reports available tracks.
      */
+    const historyAudioResolvedRef = useRef(false);
     const setAudioTracksFromNative = useCallback((tracks: NativeAudioTrack[]) => {
         setAudioTracks(tracks);
+        const fromHistory = initialAudioTrackId === undefined ? undefined : resolveSavedAudio(tracks, {
+            id: initialAudioTrackId, formatId: initialAudioFormatId, language: initialAudioLanguage,
+        });
+        // History's id was taken as is until the list came; point it at the same track now, once.
+        if (!carriedAudioTrack && fromHistory !== undefined && !historyAudioResolvedRef.current) {
+            historyAudioResolvedRef.current = true;
+            setSelectedAudioTrackId(fromHistory);
+            return;
+        }
         // Select first track by default if not already selected AND no initial selection was provided
         // (If initialAudioTrackId was provided, selectedAudioTrackId is already set to it)
         if (selectedAudioTrackId === undefined && tracks.length > 0) {
             if (carriedAudioTrack) {
                 const carried = tracks[matchCarriedTrack(tracks.map(t => ({ ...t, title: t.name })), carriedAudioTrack)];
-                const fromHistory = tracks.find(t => t.id === initialAudioTrackId);
-                if (carried || fromHistory) {
-                    setSelectedAudioTrackId((carried ?? fromHistory)!.id);
+                const chosen = carried?.id ?? fromHistory;
+                if (chosen !== undefined) {
+                    setSelectedAudioTrackId(chosen);
                     return;
                 }
             }
@@ -245,7 +259,13 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
             // Fallback to first track
             setSelectedAudioTrackId(tracks[0].id);
         }
-    }, [selectedAudioTrackId, defaultAudioLanguage, carriedAudioTrack, initialAudioTrackId]);
+    }, [selectedAudioTrackId, defaultAudioLanguage, carriedAudioTrack, initialAudioTrackId, initialAudioFormatId, initialAudioLanguage]);
+
+    const savedAudioTrack = useMemo(() => {
+        if (selectedAudioTrackId === undefined) {return undefined;}
+        const track = audioTracks.find(t => t.id === selectedAudioTrackId);
+        return { id: selectedAudioTrackId, formatId: track?.formatId, language: track?.language };
+    }, [audioTracks, selectedAudioTrackId]);
 
     const selectAudioTrack = useCallback((trackId: number | null) => {
         setSelectedAudioTrackId(trackId === null ? undefined : trackId);
@@ -480,6 +500,7 @@ export function usePlayerTracks(options: UsePlayerTracksOptions): UsePlayerTrack
         // Audio
         audioTracks,
         selectedAudioTrackId,
+        savedAudioTrack,
         selectAudioTrack,
 
         // Subtitles
