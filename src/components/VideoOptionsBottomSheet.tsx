@@ -10,6 +10,7 @@ import { ListGroup, ListRow, Sheet, showDialog } from '@/components/ui';
 import { useVideoHistoryStore } from '@/store/videoHistoryStore';
 import { getResumablePosition, isFinished } from '@/utils/playbackResume';
 import { metrics, type } from '@/theme/theme';
+import { IS_TV } from '@/utils/tv';
 import { isTelegram, TelegramService, useTelegramSaves } from '@/services/TelegramService';
 
 interface VideoOptionsProps {
@@ -201,7 +202,7 @@ export const VideoOptionsBottomSheet: React.FC<VideoOptionsProps> = ({
                         />
                         : <ListRow icon="download" title="Download" onPress={() => handleAction(() => { TelegramService.save(path, { name, duration }).catch(() => {}); })} />
                     )}
-                    {onShare && <ListRow icon="share-2" title="Share" onPress={() => handleAction(onShare)} />}
+                    {onShare && !IS_TV && <ListRow icon="share-2" title="Share" onPress={() => handleAction(onShare)} />}
                     {onClearHistory && (
                         <ListRow icon="x-circle" title="Remove from Recents" onPress={() => handleAction(onClearHistory)} />
                     )}
