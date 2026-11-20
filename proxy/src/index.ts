@@ -216,8 +216,12 @@ async function handleReport(request: Request, env: Env): Promise<Response> {
     }
     const title = typeof parsed.title === 'string' ? parsed.title.slice(0, MAX_TITLE_CHARS) : '';
     const reportedAt = new Date().toISOString();
+    // Keyed by the recap's hash: reports of the same recap, repeated or from many viewers,
+    // share one key instead of each costing a new KV entry.
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(recap));
+    const hash = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
     await env.REPORTS.put(
-        `${reportedAt}-${crypto.randomUUID()}`,
+        hash,
         JSON.stringify({ reportedAt, title, recap, model: CHAT_MODEL }),
         { expirationTtl: REPORT_TTL_SECONDS },
     );
