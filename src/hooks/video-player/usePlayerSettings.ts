@@ -23,6 +23,8 @@ interface UsePlayerSettingsOptions {
     initialVolumeLeveler?: boolean;
     /** This video's colour enhancement strength from history (unset: off); a carried one wins. */
     initialVideoEnhancement?: number;
+    /** This video's display mode from history (unset: Fit); a carried one wins. */
+    initialResizeMode?: PlayerResizeMode;
     /** The previous video's settings, when Next / Previous / autoplay opened this one. */
     carried?: PlayerSettings;
 }
@@ -86,6 +88,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
         initialSubtitleRatio = 1,
         initialVolumeLeveler = false,
         initialVideoEnhancement,
+        initialResizeMode,
         carried,
     } = options;
 
@@ -96,6 +99,7 @@ export function usePlayerSettings(options: UsePlayerSettingsOptions = {}): UsePl
             videoEnhancement: true,
             videoEnhancementStrength: initialVideoEnhancement,
         }),
+        ...(!carried && initialResizeMode && { resizeMode: initialResizeMode }),
         audioDelay: initialAudioDelay,
         subtitleDelay: initialSubtitleDelay,
         subtitleRatio: initialSubtitleRatio,

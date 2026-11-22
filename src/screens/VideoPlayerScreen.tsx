@@ -288,7 +288,57 @@ export default function VideoPlayerScreen({ route }: Props) {
     const [openedFromPlayback, setOpenedFromPlayback] = React.useState(false);
     const panelBack = useRef<(() => void) | null>(null);
     const [syncPanelType, setSyncPanelType] = React.useState<'audio' | 'subtitle' | null>(null);
-    const [basePlaybackRate, setBasePlaybackRate] = React.useState(carry?.playbackRate ?? 1.0);
+    // ========================================================================
+    // HISTORY HELPERS
+    // ========================================================================
+
+    const getResumeState = useCallback(() => {
+        // Another app's stream: that app keeps the resume point and sends it as startPosition.
+        const history = inExternalPlayer && NavigationService.isNetworkStream(videoPath) ? null : getVideoHistory(videoPath, videoName);
+        if (history) {
+            return {
+                resumePosition: getResumablePosition(
+                    history.lastPausedPosition,
+                    history.duration
+                ),
+                audioTrackId: history.selectedAudioTrackId,
+                audioFormatId: history.selectedAudioFormatId,
+                audioLanguage: history.selectedAudioLanguage,
+                subtitleTrackIndex: history.selectedSubtitleTrackId,
+                audioDelay: history.audioDelay,
+                subtitleDelay: history.subtitleDelay,
+                subtitleRatio: history.subtitleRatio,
+                brightness: history.brightness,
+                volumeLeveler: history.volumeLeveler,
+                videoEnhancement: history.videoEnhancement,
+                resizeMode: history.resizeMode,
+                playbackRate: history.playbackRate,
+                duration: history.duration,
+            };
+        }
+        return { resumePosition: null };
+    }, [videoPath, videoName, getVideoHistory, inExternalPlayer]);
+
+    // Get initial state once
+    const {
+        resumePosition,
+        audioTrackId: initialAudioTrackId,
+        audioFormatId: initialAudioFormatId,
+        audioLanguage: initialAudioLanguage,
+        subtitleTrackIndex: initialSubtitleTrackIndex,
+        audioDelay: initialAudioDelay,
+        subtitleDelay: initialSubtitleDelay,
+        subtitleRatio: initialSubtitleRatio,
+        brightness: initialVideoBrightness,
+        volumeLeveler: initialVolumeLeveler,
+        videoEnhancement: initialVideoEnhancement,
+        resizeMode: initialResizeMode,
+        playbackRate: initialPlaybackRate,
+        duration: savedDuration,
+    } = useMemo(() => getResumeState(), [getResumeState]);
+
+    // Next / Previous keep the speed you are watching at; otherwise this video's own.
+    const [basePlaybackRate, setBasePlaybackRate] = React.useState(carry?.playbackRate ?? initialPlaybackRate ?? 1.0);
     const [temporaryHoldRate, setTemporaryHoldRate] = React.useState<number | null>(null);
 
     const handleToggleOrientationLock = useCallback(() => {
@@ -325,51 +375,6 @@ export default function VideoPlayerScreen({ route }: Props) {
         () => temporaryHoldRate ?? basePlaybackRate,
         [temporaryHoldRate, basePlaybackRate]
     );
-
-    // ========================================================================
-    // HISTORY HELPERS
-    // ========================================================================
-
-    const getResumeState = useCallback(() => {
-        // Another app's stream: that app keeps the resume point and sends it as startPosition.
-        const history = inExternalPlayer && NavigationService.isNetworkStream(videoPath) ? null : getVideoHistory(videoPath, videoName);
-        if (history) {
-            return {
-                resumePosition: getResumablePosition(
-                    history.lastPausedPosition,
-                    history.duration
-                ),
-                audioTrackId: history.selectedAudioTrackId,
-                audioFormatId: history.selectedAudioFormatId,
-                audioLanguage: history.selectedAudioLanguage,
-                subtitleTrackIndex: history.selectedSubtitleTrackId,
-                audioDelay: history.audioDelay,
-                subtitleDelay: history.subtitleDelay,
-                subtitleRatio: history.subtitleRatio,
-                brightness: history.brightness,
-                volumeLeveler: history.volumeLeveler,
-                videoEnhancement: history.videoEnhancement,
-                duration: history.duration,
-            };
-        }
-        return { resumePosition: null };
-    }, [videoPath, videoName, getVideoHistory, inExternalPlayer]);
-
-    // Get initial state once
-    const {
-        resumePosition,
-        audioTrackId: initialAudioTrackId,
-        audioFormatId: initialAudioFormatId,
-        audioLanguage: initialAudioLanguage,
-        subtitleTrackIndex: initialSubtitleTrackIndex,
-        audioDelay: initialAudioDelay,
-        subtitleDelay: initialSubtitleDelay,
-        subtitleRatio: initialSubtitleRatio,
-        brightness: initialVideoBrightness,
-        volumeLeveler: initialVolumeLeveler,
-        videoEnhancement: initialVideoEnhancement,
-        duration: savedDuration,
-    } = useMemo(() => getResumeState(), [getResumeState]);
 
     // Determine initial brightness based on mode
     const startBrightness = useMemo(() => {
@@ -408,8 +413,15 @@ export default function VideoPlayerScreen({ route }: Props) {
         initialSubtitleRatio,
         initialVolumeLeveler: initialVolumeLeveler ?? volumeLevelerDefault,
         initialVideoEnhancement,
+        initialResizeMode,
         carried: carry?.settings,
     });
+
+    // Display mode and speed, saved for this video only where they differ from the defaults.
+    const savedView = useMemo(() => ({
+        resizeMode: settingsHook.settings.resizeMode === 'contain' ? undefined : settingsHook.settings.resizeMode,
+        playbackRate: basePlaybackRate === 1 ? undefined : basePlaybackRate,
+    }), [settingsHook.settings.resizeMode, basePlaybackRate]);
 
     // Core player hook
     const player = usePlayerCore({
@@ -596,6 +608,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     undefined,
                     settingsHook.settings.volumeLeveler === volumeLevelerDefault ? undefined : settingsHook.settings.volumeLeveler,
                     settingsHook.settings.videoEnhancement ? settingsHook.settings.videoEnhancementStrength : undefined,
+                    savedView,
                 );
                 persistNow();
             }
@@ -691,6 +704,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                 // This video's own choice only where it differs from Settings' default.
                 settingsHook.settings.volumeLeveler === volumeLevelerDefault ? undefined : settingsHook.settings.volumeLeveler,
                 settingsHook.settings.videoEnhancement ? settingsHook.settings.videoEnhancementStrength : undefined,
+                savedView,
             );
             // Recents shows the frame you stopped at; a finished video goes back to the
             // usual one rather than the end credits.
@@ -715,6 +729,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         settingsHook.settings.volumeLeveler,
         settingsHook.settings.videoEnhancement,
         settingsHook.settings.videoEnhancementStrength,
+        savedView,
         volumeLevelerDefault,
         brightnessMode,
         creditsAt,

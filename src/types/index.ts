@@ -1,5 +1,6 @@
 // src/types/index.ts
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { PlayerResizeMode } from '../components/VideoPlayer/GlidePlayer';
 
 
 /**
@@ -287,6 +288,10 @@ export interface VideoHistoryEntry {
     volumeLeveler?: boolean;
     /** Colour enhancement's strength for this video; unset means off. */
     videoEnhancement?: number;
+    /** Display mode for this video; unset means Fit. */
+    resizeMode?: PlayerResizeMode;
+    /** Playback speed for this video; unset means 1x. */
+    playbackRate?: number;
     /** An app link's request headers, sent again on replay. */
     headers?: Record<string, string>;
     /** secure_uri: never show the link. */
