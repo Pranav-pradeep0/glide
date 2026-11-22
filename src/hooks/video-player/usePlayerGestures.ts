@@ -48,6 +48,8 @@ interface UsePlayerGesturesOptions {
 
     // Optional callbacks
     onSeekUpdate?: (time: number, show: boolean) => void;
+    /** A swipe-seek on a file without an index: it only plays through. */
+    onSeekRefused: () => void;
     onBrightnessChange?: (value: number) => void;
     onBrightnessSave?: (value: number) => void;
     initialBrightness?: number;
@@ -114,6 +116,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         basePlaybackRate = 1.0,
         onTemporarySpeedChange,
         onSeekUpdate,
+        onSeekRefused,
         initialBrightness,
         carriedVolume,
         onBrightnessChange,
@@ -412,6 +415,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         currentTimeShared: player.currentTimeShared,
         durationShared: player.durationShared,
         isLockedShared: ui.isLockedShared,
+        seekableShared: player.seekableShared,
         seekStartTime,
         seekOffset,
         gestureActive,
@@ -420,6 +424,7 @@ export function usePlayerGestures(options: UsePlayerGesturesOptions): UsePlayerG
         onSeekUpdate: handleSeekUpdate, // This is now throttled
         onSeekComplete: handleSeekComplete,
         onLockTap: handleLockTap,
+        onUnseekable: onSeekRefused,
         backEdges,
     });
 

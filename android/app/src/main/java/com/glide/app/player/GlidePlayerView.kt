@@ -874,6 +874,11 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             Log.w(TAG, "seek dropped position=${positionMs}ms - duration unknown")
             return
         }
+        // No index (a Matroska file without Cues): media3 would restart it from the start.
+        if (!p.isCurrentMediaItemSeekable) {
+            Log.w(TAG, "seek dropped position=${positionMs}ms - not seekable")
+            return
+        }
         // stopPlayer() leaves the player idle. Seeking one is the revive path, and the media
         // has to be prepared again before a position means anything.
         if (p.playbackState == Player.STATE_IDLE) {
@@ -1410,6 +1415,7 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
         val info = Arguments.createMap()
         info.putDouble("duration", if (live) 0.0 else duration.toDouble())
         info.putBoolean("isLive", live)
+        info.putBoolean("seekable", p.isCurrentMediaItemSeekable)
         val trackArray = Arguments.createArray()
         audioTracks.forEachIndexed { id, (mediaTrackGroup, index, isSelected) ->
             trackArray.pushMap(Arguments.createMap().apply {

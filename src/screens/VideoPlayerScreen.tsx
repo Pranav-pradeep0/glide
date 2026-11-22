@@ -130,6 +130,8 @@ type Props = {
 const SKIP_PROMPT_SECONDS = 8;
 /** The seek bar stays up this long after a remote seek, so taps in a row read as one. */
 const TV_SEEK_LINGER_MS = 800;
+/** A file without an index (a Matroska file without Cues) only plays through. */
+const UNSEEKABLE_MESSAGE = "Can't seek in this video: the file has no index";
 
 // ============================================================================
 // COMPONENT
@@ -402,6 +404,7 @@ export default function VideoPlayerScreen({ route }: Props) {
      */
     const tracksRef = useRef<UsePlayerTracksReturn | null>(null);
     const showToastRef = useRef<(message: string) => void>(() => { });
+    const handleSeekRefused = useCallback(() => showToastRef.current(UNSEEKABLE_MESSAGE), []);
     // Leaves like Back does, so an "Open with" video closes its Activity instead of going black.
     const handleGoBackRef = useRef<() => void>(() => { });
 
@@ -433,6 +436,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         onProgressSave: () => savePlaybackRef.current(),
         onAudioTracksLoaded: (tracks) => tracksRef.current?.setAudioTracksFromNative(tracks),
         onSubtitleTracksLoaded: (tracks) => tracksRef.current?.setSubtitleTracksFromPlayer(tracks),
+        onSeekRefused: handleSeekRefused,
         initialPaused: false,
         playbackRate: effectivePlaybackRate,
     });
@@ -475,6 +479,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         player,
         ui,
         hud,
+        onSeekRefused: handleSeekRefused,
         basePlaybackRate,
         onTemporarySpeedChange: setTemporaryHoldRate,
         initialBrightness: startBrightness,
@@ -1384,6 +1389,10 @@ export default function VideoPlayerScreen({ route }: Props) {
     const tvSeekStep = (direction: 1 | -1, repeat: number) => {
         const duration = player.state.duration;
         if (duration <= 0) { return; }
+        if (!player.seekableShared.value) {
+            if (repeat === 0) { handleSeekRefused(); }
+            return;
+        }
         const { swipeSeekStart, seekTime, swipeSeeking } = gestures.sharedValues;
         let seek = tvSeekRef.current;
         if (!seek) {
@@ -1622,6 +1631,8 @@ export default function VideoPlayerScreen({ route }: Props) {
                     durationSeconds={player.state.duration}
                     seekPreviewTime={gestures.sharedValues.seekTime}
                     isScrubbingShared={player.isScrubbingShared}
+                    seekable={player.seekableShared}
+                    onSeekRefused={handleSeekRefused}
                     swipeSeeking={gestures.sharedValues.swipeSeeking}
                     swipeSeekStart={gestures.sharedValues.swipeSeekStart}
                     screenReaderEnabled={ui.screenReaderEnabled}

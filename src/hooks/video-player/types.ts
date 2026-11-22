@@ -45,6 +45,8 @@ export interface PlayerLoadData {
     duration: number;
     /** A live stream: duration is 0, as it may have no known length. */
     isLive?: boolean;
+    /** False for a file without an index (a Matroska file without Cues): it only plays through. */
+    seekable?: boolean;
     videoSize?: { height: number; width: number };
     audioTracks?: Array<{ id: number; name: string; language?: string; isSelected?: boolean; formatId?: string }>;
     textTracks?: Array<{ id: number; name: string }>;
@@ -356,6 +358,8 @@ export interface UsePlayerCoreReturn {
     currentTimeShared: SharedValue<number>;
     durationShared: SharedValue<number>;
     isScrubbingShared: SharedValue<boolean>;
+    /** False once a file without an index loads: every seek is refused. */
+    seekableShared: SharedValue<boolean>;
 
     // Actions
     play: () => void;

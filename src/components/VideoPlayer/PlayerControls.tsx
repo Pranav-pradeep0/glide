@@ -156,6 +156,9 @@ interface SeekBarProps {
     currentTime: SharedValue<number>;
     duration: SharedValue<number>;
     isScrubbing: SharedValue<boolean>;
+    /** False for a file without an index: dimmed, and a drag only says why. */
+    seekable: SharedValue<boolean>;
+    onSeekRefused: () => void;
     seekPreviewTime: SharedValue<number>;
     /** 0 → 1 while the user drags this bar or swipe-seeks on the video. */
     grow: SharedValue<number>;
@@ -179,7 +182,7 @@ interface SeekBarProps {
 }
 
 const SeekBar: React.FC<SeekBarProps> = ({
-    currentTime, duration, isScrubbing, seekPreviewTime, grow, dragging, swipeSeeking, swipeSeekStart,
+    currentTime, duration, isScrubbing, seekable, onSeekRefused, seekPreviewTime, grow, dragging, swipeSeeking, swipeSeekStart,
     screenReader, onStepBackward, onStepForward,
     bookmarks, chapters, durationSeconds, buffering, onSeekStart, onSeek, onSeekComplete, focusRef,
 }) => {
@@ -247,8 +250,8 @@ const SeekBar: React.FC<SeekBarProps> = ({
         };
     });
     const readinessStyle = useAnimatedStyle(() => ({
-        // Dimmed, not hidden, until a duration exists: the bar can't seek yet.
-        opacity: withTiming(duration.value > 0 ? 1 : 0.35, { duration: motion.fadeIn }),
+        // Dimmed, not hidden, until a duration exists or for a file it can't seek in.
+        opacity: withTiming(duration.value > 0 && seekable.value ? 1 : 0.35, { duration: motion.fadeIn }),
     }));
 
     const delta = useDerivedValue(() => seekPreviewTime.value - scrubStart.value);
@@ -289,6 +292,10 @@ const SeekBar: React.FC<SeekBarProps> = ({
         .onBegin((e) => {
             'worklet';
             if (trackWidth.value <= 0 || duration.value <= 0) {return;}
+            if (!seekable.value) {
+                runOnJS(onSeekRefused)();
+                return;
+            }
             dragging.value = true;
             isScrubbing.value = true;
             scrubStart.value = currentTime.value;
@@ -456,6 +463,9 @@ interface PlayerControlsProps {
     durationSeconds?: number;
     seekPreviewTime: SharedValue<number>;
     isScrubbingShared: SharedValue<boolean>;
+    seekable: SharedValue<boolean>;
+    /** A seek-bar drag on a file without an index. */
+    onSeekRefused: () => void;
     /** Horizontal swipe-seek on the video: shows this bar in its scrubbing state. */
     swipeSeeking: SharedValue<boolean>;
     swipeSeekStart: SharedValue<number>;
@@ -532,7 +542,7 @@ export const PlayerControls: FC<PlayerControlsProps> = (props) => {
 const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     showControls, title, subtitle, onBack, onOpenSubtitles, onOpenAudio, onAddBookmark, download, onDownload, onOpenPlayback, playbackRate,
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
-    seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
+    seekPreviewTime, isScrubbingShared, seekable, onSeekRefused, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
     onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, chapters = NO_CHAPTERS, buffering = false, isLandscape, insets, cutouts,
     onOpenBookmarks, onOpenChapters, onOpenPlaylist, onPrevious, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
@@ -709,6 +719,8 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                     currentTime={currentTime}
                     duration={duration}
                     isScrubbing={isScrubbingShared}
+                    seekable={seekable}
+                    onSeekRefused={onSeekRefused}
                     seekPreviewTime={seekPreviewTime}
                     grow={grow}
                     dragging={dragging}

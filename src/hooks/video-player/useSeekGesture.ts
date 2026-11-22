@@ -22,6 +22,8 @@ interface UseSeekGestureOptions {
     currentTimeShared: SharedValue<number>;
     durationShared: SharedValue<number>;
     isLockedShared: SharedValue<boolean>;
+    /** False for a file without an index: the swipe starts no scrub, and says why. */
+    seekableShared: SharedValue<boolean>;
 
     // Gesture state
     seekStartTime: SharedValue<number>;
@@ -36,6 +38,7 @@ interface UseSeekGestureOptions {
     onSeekUpdate: (time: number) => void;
     onSeekComplete: (time: number) => void;
     onLockTap: () => void;
+    onUnseekable: () => void;
 
     /** The system Back gesture's left/right edge strips in dp: a swipe starting there is Back. */
     backEdges: { left: number; right: number };
@@ -61,6 +64,7 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
         currentTimeShared,
         durationShared,
         isLockedShared,
+        seekableShared,
         seekStartTime,
         seekOffset,
         gestureActive,
@@ -69,6 +73,7 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
         onSeekUpdate,
         onSeekComplete,
         onLockTap,
+        onUnseekable,
         backEdges,
     } = options;
     const lastSeekJsDispatchAt = useSharedValue(0);
@@ -90,6 +95,10 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
                 // Don't allow seeking when locked
                 if (isLockedShared.value) {
                     runOnJS(onLockTap)();
+                    return;
+                }
+                if (!seekableShared.value) {
+                    runOnJS(onUnseekable)();
                     return;
                 }
 
@@ -171,6 +180,7 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
         currentTimeShared,
         durationShared,
         isLockedShared,
+        seekableShared,
         seekStartTime,
         seekOffset,
         gestureActive,
@@ -180,6 +190,7 @@ export function useSeekGesture(options: UseSeekGestureOptions) {
         onSeekUpdate,
         onSeekComplete,
         onLockTap,
+        onUnseekable,
         backEdges,
     ]);
 

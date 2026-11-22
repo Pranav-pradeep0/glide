@@ -44,6 +44,8 @@ interface UsePlayerCoreOptions {
     videoPath: string;
     onAudioTracksLoaded?: (tracks: Array<{ id: number; name: string }>) => void;
     onSubtitleTracksLoaded?: (tracks: any[]) => void;
+    /** A seek refused because the file has no index. */
+    onSeekRefused?: () => void;
     onPlaybackPositionRestore?: (position: number) => void;
     getResumePosition?: () => number | null;
     sleepTimer?: number | null;
@@ -110,6 +112,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
     const currentTimeShared = useSharedValue(0);
     const durationShared = useSharedValue(0);
     const isScrubbingShared = useSharedValue(false);
+    const seekableShared = useSharedValue(true);
 
     const isPlayingShared = useSharedValue(false);
     const lastSyncTimestamp = useSharedValue(0);
@@ -182,6 +185,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
      * Updates UI refs immediately; throttles native seeks.
      */
     const previewSeek = useCallback((timeInSeconds: number) => {
+        if (!seekableShared.value) {return;}
         const clamped = Math.max(0, Math.min(state.duration || 0, timeInSeconds));
 
         currentTimeRef.current = clamped;
@@ -208,7 +212,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
                 applySeekToNative(clamped, true);
             }, wait);
         }
-    }, [state.duration, currentTimeShared, lastSyncPosition, lastSyncTimestamp, applySeekToNative]);
+    }, [state.duration, currentTimeShared, lastSyncPosition, lastSyncTimestamp, applySeekToNative, seekableShared]);
 
 
     /**
@@ -229,7 +233,9 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         }
 
         const duration = state.duration || 0;
-        if (!state.isVideoLoaded || duration <= 0) {
+        const unseekable = state.isVideoLoaded && !seekableShared.value;
+        if (unseekable) {optsRef.current.onSeekRefused?.();}
+        if (!state.isVideoLoaded || duration <= 0 || unseekable) {
             // Refusing the seek must still end the gesture. The touch is over either way,
             // and leaving these set latches the scrubber in its active state at the
             // touched position: `isScrubbing` also suppresses playing/paused handling and
@@ -272,7 +278,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         isScrubbingShared.value = false;
         return true;
     }, [state.duration, state.isVideoLoaded, state.playerStopped, applySeekToNative,
-        currentTimeShared, lastSyncPosition, lastSyncTimestamp, isScrubbingShared]);
+        currentTimeShared, lastSyncPosition, lastSyncTimestamp, isScrubbingShared, seekableShared]);
 
     /** setIsSeeking — marks scrub start/end for UI feedback. */
     const setIsSeeking = useCallback((seeking: boolean) => {
@@ -386,6 +392,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
         durationShared.value = durationSec;
         durationRef.current = durationSec;
+        seekableShared.value = data.seekable !== false;
 
         const { onAudioTracksLoaded, onSubtitleTracksLoaded } = optsRef.current;
 
@@ -431,7 +438,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             lastSyncPosition.value = validResumeTime;
             lastSyncTimestamp.value = Date.now();
         }
-    }, [durationShared, currentTimeShared, lastSyncPosition, lastSyncTimestamp]);
+    }, [durationShared, seekableShared, currentTimeShared, lastSyncPosition, lastSyncTimestamp]);
 
     /**
      * handleProgress — Player position update during playback.
@@ -682,6 +689,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         currentTimeShared,
         durationShared,
         isScrubbingShared,
+        seekableShared,
         play,
         pause,
         stop,
@@ -704,7 +712,7 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         handleSeek,
     }), [
         videoRef, currentTimeRef, state,
-        currentTimeShared, durationShared, isScrubbingShared,
+        currentTimeShared, durationShared, isScrubbingShared, seekableShared,
         play, pause, stop, togglePlayPause,
         previewSeek, commitSeek, setIsSeeking, clearResumePosition,
         handleLoad, handleProgress, handleEnd, handleError, clearError,
