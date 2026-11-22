@@ -38,6 +38,7 @@ import Animated, {
     makeMutable,
     runOnJS,
     useAnimatedStyle,
+    useDerivedValue,
     useSharedValue,
     withSpring,
     withTiming,
@@ -950,6 +951,10 @@ export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffse
     const shown = useSharedValue(0);
     const swipe = useSharedValue(0);
     const snackWidth = useSharedValue(1);
+    // Moves with what it clears (the player's controls fading in and out), not in one jump.
+    const lift = useDerivedValue(() => withTiming(bottomOffset, {
+        duration: bottomOffset > 0 ? motion.fadeIn : motion.fadeOut,
+    }), [bottomOffset]);
 
     // Unmount once faded: an invisible snackbar still catches taps.
     const hide = useCallback(() => {
@@ -1002,7 +1007,7 @@ export function SnackbarHost({ bottomOffset = 0, aboveBottomBar }: { bottomOffse
 
     const style = useAnimatedStyle(() => ({
         opacity: shown.value * (1 - Math.min(1, Math.abs(swipe.value) / snackWidth.value)),
-        bottom: Math.max(insets.bottom, aboveBottomBar ? bottomBarHeight.value : 0) + bottomOffset + metrics.space.lg,
+        bottom: Math.max(insets.bottom, aboveBottomBar ? bottomBarHeight.value : 0) + lift.value + metrics.space.lg,
         transform: [{ translateY: (1 - shown.value) * 24 }, { translateX: swipe.value }],
     }));
 
