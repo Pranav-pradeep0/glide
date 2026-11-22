@@ -631,10 +631,13 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
         // ponytail: a fixed 8 decoders, one per clip (measured: 15-20% faster than 4 on an
         // 8-core phone); each runs its own extractor, decoder and YAMNet.
         val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(poolSize, at.size).coerceAtLeast(1))
+        // One clip that fails to decode is skipped; the rest still align.
         fun decode(starts: List<Double>) = starts.map { start ->
             val cached = track?.takeIf { coveredBy(it, start, clipS) }?.let { speech }
             pool.submit<SubtitleAligner.Clip?> { decodeClip(videoPath, start, clipS, audioTrackIndex, cached, preferFfmpeg) }
-        }.mapNotNull { it.get() }
+        }.mapNotNull { f ->
+            runCatching { f.get() }.onFailure { android.util.Log.w(NAME, "auto-sync: clip skipped: ${it.cause ?: it}") }.getOrNull()
+        }
         // Every other clip first, spread across the film. When those already agree this
         // strongly, the rest have never changed the answer (scripts/subsync-bench.py: identical
         // results for any threshold from 12 up; 10 got mid-film edits wrong), so they are skipped.
@@ -649,7 +652,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                 result = null
             }
         } finally {
-            pool.shutdown()
+            pool.shutdownNow()
         }
         val decodedMs = android.os.SystemClock.elapsedRealtime() - t0
         if (clips.isEmpty()) throw NoAudio()
