@@ -26,6 +26,7 @@ const initialUIState: UIState = {
     lockIconVisible: false,
     quickSettingsOpen: false,
     bookmarkPanelOpen: false,
+    chapterPanelOpen: false,
     playlistOpen: false,
     audioSelectorOpen: false,
     subtitleSelectorOpen: false,
@@ -34,6 +35,7 @@ const initialUIState: UIState = {
 const panelStateKeys: Record<PanelType, keyof UIState> = {
     quickSettings: 'quickSettingsOpen',
     bookmarkPanel: 'bookmarkPanelOpen',
+    chapterPanel: 'chapterPanelOpen',
     playlist: 'playlistOpen',
     audioSelector: 'audioSelectorOpen',
     subtitleSelector: 'subtitleSelectorOpen',
@@ -42,13 +44,14 @@ const panelStateKeys: Record<PanelType, keyof UIState> = {
 const closedPanels = {
     quickSettingsOpen: false,
     bookmarkPanelOpen: false,
+    chapterPanelOpen: false,
     playlistOpen: false,
     audioSelectorOpen: false,
     subtitleSelectorOpen: false,
 };
 
 export const anyPanelOpen = (s: UIState) =>
-    s.quickSettingsOpen || s.bookmarkPanelOpen || s.playlistOpen || s.audioSelectorOpen || s.subtitleSelectorOpen;
+    s.quickSettingsOpen || s.bookmarkPanelOpen || s.chapterPanelOpen || s.playlistOpen || s.audioSelectorOpen || s.subtitleSelectorOpen;
 
 /**
  * Hook for managing video player UI visibility states.

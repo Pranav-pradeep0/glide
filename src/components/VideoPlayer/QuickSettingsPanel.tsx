@@ -62,6 +62,8 @@ interface QuickSettingsPanelProps {
     onOpenAudio: () => void;
     onOpenSubtitle: () => void;
     onOpenBookmarkPanel?: () => void; // Optional for streams
+    /** Only when the file has chapters. */
+    onOpenChapterPanel?: () => void;
     onAddBookmark?: () => void;
     resizeMode: PlayerResizeMode;
     onSetResizeMode: (mode: PlayerResizeMode) => void;
@@ -235,6 +237,9 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
                 )}
                 {props.onOpenBookmarkPanel && (
                     <ListRow icon="bookmark" title="Bookmarks" chevron onPress={props.onOpenBookmarkPanel} onPlayer />
+                )}
+                {props.onOpenChapterPanel && (
+                    <ListRow icon="align-left" title="Chapters" chevron onPress={props.onOpenChapterPanel} onPlayer />
                 )}
                 {props.onAddBookmark && (
                     <ListRow icon="plus-circle" title="Add bookmark here" onPress={props.onAddBookmark} onPlayer />

@@ -244,6 +244,7 @@ export type HUDAction =
 export type PanelType =
     | 'quickSettings'
     | 'bookmarkPanel'
+    | 'chapterPanel'
     | 'playlist'
     | 'audioSelector'
     | 'subtitleSelector';
@@ -255,6 +256,7 @@ export interface UIState {
     // Panel states - only one should be true at a time
     quickSettingsOpen: boolean;
     bookmarkPanelOpen: boolean;
+    chapterPanelOpen: boolean;
     playlistOpen: boolean;
     audioSelectorOpen: boolean;
     subtitleSelectorOpen: boolean;

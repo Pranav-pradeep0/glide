@@ -39,6 +39,7 @@ import { findSkips, skipIndexAt } from '@/utils/skipChapters';
 import { isEnhancementError } from '@/utils/playerErrors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
 import { BookmarkPanel } from '@/components/VideoPlayer/BookmarkPanel';
+import { ChapterPanel } from '@/components/VideoPlayer/ChapterPanel';
 import { QuickSettingsPanel } from '@/components/VideoPlayer/QuickSettingsPanel';
 import { PlaylistPanel } from '@/components/VideoPlayer/PlaylistPanel';
 import { PlayerSubtitleOverlay } from '@/components/VideoPlayer/PlayerSubtitleOverlay';
@@ -1006,7 +1007,7 @@ export default function VideoPlayerScreen({ route }: Props) {
 
     const handleQSClose = useCallback(() => closePanel('quickSettings'), [closePanel]);
     // openPanel closes the Playback panel; these remember where to go back to.
-    const openFromPlayback = useCallback((panel: 'playlist' | 'audioSelector' | 'subtitleSelector' | 'bookmarkPanel') => {
+    const openFromPlayback = useCallback((panel: 'playlist' | 'audioSelector' | 'subtitleSelector' | 'bookmarkPanel' | 'chapterPanel') => {
         setOpenedFromPlayback(true);
         openPanel(panel);
     }, [openPanel]);
@@ -1014,6 +1015,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const handleQSOpenAudio = useCallback(() => openFromPlayback('audioSelector'), [openFromPlayback]);
     const handleQSOpenSubtitle = useCallback(() => openFromPlayback('subtitleSelector'), [openFromPlayback]);
     const handleQSOpenBookmarkPanel = useCallback(() => openFromPlayback('bookmarkPanel'), [openFromPlayback]);
+    const handleQSOpenChapterPanel = useCallback(() => openFromPlayback('chapterPanel'), [openFromPlayback]);
 
     // ========================================================================
     // MEMOIZED CONTROL HANDLERS (Optimization)
@@ -1046,6 +1048,10 @@ export default function VideoPlayerScreen({ route }: Props) {
         setOpenedFromPlayback(false);
         openPanel('bookmarkPanel');
     }, [openPanel]);
+    const handleToggleChapterPanel = useCallback(() => {
+        setOpenedFromPlayback(false);
+        openPanel('chapterPanel');
+    }, [openPanel]);
     const handleTogglePlaylist = useCallback(() => {
         setOpenedFromPlayback(false);
         openPanel('playlist');
@@ -1059,6 +1065,7 @@ export default function VideoPlayerScreen({ route }: Props) {
     const handleAudioSelectorClose = useCallback(() => closePanel('audioSelector'), [closePanel]);
     const handleSubtitleSelectorClose = useCallback(() => closePanel('subtitleSelector'), [closePanel]);
     const handleBookmarkPanelClose = useCallback(() => closePanel('bookmarkPanel'), [closePanel]);
+    const handleChapterPanelClose = useCallback(() => closePanel('chapterPanel'), [closePanel]);
     const handleSyncPanelClose = useCallback(() => setSyncPanelType(null), []);
     const handleOpenSyncPanel = useCallback((type: 'audio' | 'subtitle') => {
         setSyncPanelType(type);
@@ -1628,6 +1635,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     insets={effectiveInsets}
                     cutouts={cutoutRects}
                     onOpenBookmarks={isNetworkStream ? undefined : handleToggleBookmarkPanel}
+                    onOpenChapters={chapters.length > 0 ? handleToggleChapterPanel : undefined}
                     onOpenPlaylist={isNetworkStream && !externalVideos ? undefined : handleTogglePlaylist}
                     onPrevious={hasPrevious ? handlePrevious : undefined}
                     onNext={hasNext ? handleNext : undefined}
@@ -1708,6 +1716,7 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onOpenAudio={handleQSOpenAudio}
                     onOpenSubtitle={handleQSOpenSubtitle}
                     onOpenBookmarkPanel={isNetworkStream ? undefined : handleQSOpenBookmarkPanel}
+                    onOpenChapterPanel={chapters.length > 0 ? handleQSOpenChapterPanel : undefined}
                     onAddBookmark={isNetworkStream ? undefined : bookmarksHook.addBookmark}
                     resizeMode={settingsHook.settings.resizeMode}
                     onSetResizeMode={settingsHook.setResizeMode}
@@ -1805,6 +1814,20 @@ export default function VideoPlayerScreen({ route }: Props) {
                     onSelectBookmark={bookmarksHook.jumpToBookmark}
                     onDeleteBookmark={bookmarksHook.deleteBookmark}
                     onAddBookmark={bookmarksHook.addBookmark}
+                    formatTime={formatTime}
+                />
+            )}
+
+            {/* Chapter panel */}
+            {!pipPresentationActive && chapters.length > 0 && (
+                <ChapterPanel
+                    visible={ui.state.chapterPanelOpen}
+                    chapters={chapters}
+                    currentTime={player.currentTimeShared}
+                    thumbnailPath={isNetworkStream ? undefined : videoPath}
+                    onClose={handleChapterPanelClose}
+                    onBack={openedFromPlayback ? handleBackToPlayback : undefined}
+                    onSeek={bookmarksHook.jumpToBookmark}
                     formatTime={formatTime}
                 />
             )}

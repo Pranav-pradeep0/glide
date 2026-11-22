@@ -26,6 +26,7 @@ import { metrics, motion, playerTheme, TV_SCALE, type } from '@/theme/theme';
 import { HUD_PILL } from '@/theme/colors';
 import { cutoutInset, type CutoutRect } from '@/utils/cutoutInset';
 import { crossesMark, nearestMark } from '@/utils/seekMarks';
+import { chapterIndexAt, type Chapter } from '@/utils/chapters';
 import { IS_TV } from '@/utils/tv';
 
 const { colors } = playerTheme;
@@ -35,8 +36,6 @@ const BOTTOM_SCRIM = ['rgba(0,0,0,0)', 'rgba(0,0,0,0.72)'];
 const BUBBLE_WIDTH = 96;
 /** Room for a chapter name under the time. */
 const CHAPTER_BUBBLE_WIDTH = 168;
-
-interface SeekChapter { title: string; start: number }
 
 /** "1:02:03" / "02:03"; -1 is the "no duration yet" sentinel. */
 const formatClock = (val: number) => {
@@ -169,7 +168,7 @@ interface SeekBarProps {
     onStepForward: () => void;
     bookmarks: number[];
     /** By start, in seconds: a gap in the track at each, and the name while scrubbing. */
-    chapters: SeekChapter[];
+    chapters: Chapter[];
     durationSeconds: number;
     buffering: boolean;
     onSeekStart: () => void;
@@ -278,9 +277,8 @@ const SeekBar: React.FC<SeekBarProps> = ({
 
     const chapterAt = (t: number) => {
         'worklet';
-        let title = '';
-        for (let i = 0; i < chapters.length && chapters[i].start <= t; i++) {title = chapters[i].title;}
-        return title;
+        const i = chapterIndexAt(chapters, t);
+        return i < 0 ? '' : chapters[i].title;
     };
 
     const pan = Gesture.Pan()
@@ -463,13 +461,15 @@ interface PlayerControlsProps {
     onSeek: (val: number) => void;
     onSeekComplete: (val: number) => void;
     bookmarks?: number[];
-    chapters?: SeekChapter[];
+    chapters?: Chapter[];
     buffering?: boolean;
     isLandscape: boolean;
     insets: EdgeInsets;
     /** Camera cutout rects; null until measured (or on an APK before API 9). */
     cutouts: CutoutRect[] | null;
     onOpenBookmarks?: () => void;
+    /** Only when the file has chapters. */
+    onOpenChapters?: () => void;
     onOpenPlaylist?: () => void;
     onPrevious?: () => void;
     onNext?: () => void;
@@ -498,7 +498,7 @@ interface PlayerControlsProps {
 }
 
 const NO_BOOKMARKS: number[] = [];
-const NO_CHAPTERS: SeekChapter[] = [];
+const NO_CHAPTERS: Chapter[] = [];
 const SEEK_ACTIONS = [{ name: 'increment' }, { name: 'decrement' }];
 
 type Handler = (...args: unknown[]) => unknown;
@@ -531,7 +531,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
     paused, onTogglePlayPause, currentTime, duration, currentTimeSeconds = 0, durationSeconds = 0,
     seekPreviewTime, isScrubbingShared, swipeSeeking, swipeSeekStart, screenReaderEnabled = false,
     onSeekStart, onSeek, onSeekComplete, bookmarks = NO_BOOKMARKS, chapters = NO_CHAPTERS, buffering = false, isLandscape, insets, cutouts,
-    onOpenBookmarks, onOpenPlaylist, onPrevious, onNext, onJumpBackward, onJumpForward,
+    onOpenBookmarks, onOpenChapters, onOpenPlaylist, onPrevious, onNext, onJumpBackward, onJumpForward,
     onLockScreen, nightModeActive = false, onToggleNightMode, muted = false, onToggleMute, orientationLocked, onToggleOrientationLock, onToggleResizeMode, resizeMode, onEnterPip,
     showSeekButtons = false, seekDuration = 10, videoEnhancement = false, onToggleVideoEnhancement,
     playRef, seekBarRef,
@@ -756,6 +756,9 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                         <GlyphButton onPress={onOpenBookmarks} label="Bookmarks">
                             {c => <BookmarkListIcon size={22} color={c} />}
                         </GlyphButton>
+                    )}
+                    {onOpenChapters && isLandscape && (
+                        <IconButton icon="align-left" onPress={onOpenChapters} accessibilityLabel="Chapters" onPlayer />
                     )}
                     <View style={styles.flex} />
                     {onToggleOrientationLock && (
