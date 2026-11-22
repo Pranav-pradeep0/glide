@@ -182,11 +182,13 @@ dependencies {
     //
     // Measured: a release APK built without this shipped zero libffmpegJNI.so.
     //
-    // Built by the private glide-ffmpeg-decoder repo. Consuming it as a local file means
-    // a machine without the file fails the build loudly, which is the right failure —
-    // replace with its GitHub Packages coordinate (plan section 4.3) so a fresh clone can
-    // build at all.
+    // Built by the private glide-ffmpeg-decoder repo with its .sha256 and .properties
+    // (BUILD_INFO: Media3 version, FFmpeg commit); CI checks both. A local file means a
+    // machine without it fails the build loudly, which is the right failure.
     implementation files("libs/lib-decoder-ffmpeg-release.aar")
+    // dav1d AV1 decoder from the same repo. EXTENSION_RENDERER_MODE_ON loads it by reflection
+    // after the platform decoders, so it only plays AV1 on phones without an AV1 decoder.
+    implementation files("libs/lib-decoder-av1-release.aar")
     // TDLib for Telegram, built by the private glide-tdlib repo (docs/telegram.md).
     implementation files("libs/glide-tdlib-release.aar")
 

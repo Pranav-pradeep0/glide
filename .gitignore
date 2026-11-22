@@ -52,13 +52,14 @@ glide-exit-info.txt
 
 # Vendored AARs stay out of the repo -- tracker 12.3 is removing the ones that remain.
 android/app/libs/*.aar
-# ...with one exception, deliberately. The Media3 FFmpeg decoder is now mandatory: with
-# LibVLC gone it is the only thing that decodes AC-3, E-AC-3, DTS and TrueHD, and this
-# device has none of them in hardware. Without it a release build plays those tracks
-# silently with no error. It is ignored everywhere else and unresolvable from a clone, so
-# CI could not build a release at all. Committed until the GitHub Packages coordinate from
-# glide-ffmpeg-decoder exists (plan section 4.3), which is the real fix.
+# ...except these, deliberately. The Media3 FFmpeg decoder is mandatory: with LibVLC gone
+# it is the only thing that decodes AC-3, E-AC-3, DTS, TrueHD, MP2 and ALAC, and this
+# device has none of the first four in hardware. Without it a release build plays those
+# tracks silently with no error. Both decoder AARs come from glide-ffmpeg-decoder's CI with
+# a .sha256 and a .properties (BUILD_INFO) that Glide's CI checks.
 !android/app/libs/lib-decoder-ffmpeg-release.aar
+# dav1d AV1 decoder, same repo and checks: AV1 on phones without an AV1 decoder.
+!android/app/libs/lib-decoder-av1-release.aar
 # TDLib for Telegram (docs/telegram.md), from the private glide-tdlib CI: same reason.
 !android/app/libs/glide-tdlib-release.aar
 

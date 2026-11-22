@@ -18,11 +18,23 @@ const pkg = require('../package.json');
 const texts = {
     'Apache-2.0': read('licences/Apache-2.0.txt'),
     'LGPL-2.1': read('licences/LGPL-2.1.txt'),
+    'BSD-2-Clause-dav1d': read('licences/BSD-2-Clause-dav1d.txt'),
     // Starts with the font's copyright line; the OFL asks for both to ship with the font.
     'OFL-1.1': read('android/app/src/main/res/raw/ofl_atkinson_hyperlegible_next.txt'),
 };
 
 const media3 = read('android/app/build.gradle').match(/androidx\.media3:media3-exoplayer:([\d.]+)/)[1];
+
+// BUILD_INFO of the decoder AARs, from glide-ffmpeg-decoder's CI: the exact FFmpeg commit and
+// decoders credited below come from the build itself, so the notice cannot drift from the AAR.
+const buildInfo = (file) => Object.fromEntries(
+    read(`android/app/libs/${file}`).split('\n').map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
+);
+const ffmpeg = buildInfo('lib-decoder-ffmpeg.properties');
+const av1 = buildInfo('lib-decoder-av1.properties');
+const FORMATS = { ac3: 'AC-3', eac3: 'E-AC-3', dca: 'DTS', truehd: 'TrueHD', mp3: 'MP2', alac: 'ALAC' };
+const formats = ffmpeg.ENABLED_DECODERS.split(' ').map((d) => FORMATS[d]).filter(Boolean);
+const formatList = `${formats.slice(0, -1).join(', ')} and ${formats[formats.length - 1]}`;
 
 // Native libraries: not in package.json, so listed here.
 const entries = [
@@ -31,10 +43,25 @@ const entries = [
         license: 'LGPL-2.1-or-later',
         text: 'LGPL-2.1',
         notice:
-            'Copyright (c) the FFmpeg developers. Glide uses FFmpeg 6.0 (commit b37bf81a7a97), unmodified, to decode ' +
-            'AC-3, E-AC-3, DTS and TrueHD audio. It ships as separate libraries (libavcodec.so, ' +
-            'libavutil.so, libswresample.so) that you may replace with your own build.',
-        source: 'https://github.com/FFmpeg/FFmpeg/tree/b37bf81a7a9782438e4fe06a249329e279694494',
+            `Copyright (c) the FFmpeg developers. Glide uses FFmpeg ${ffmpeg.FFMPEG_TAG.replace(/^n/, '')} ` +
+            `(commit ${ffmpeg.FFMPEG_COMMIT.slice(0, 12)}), unmodified, to decode ${formatList} audio. It ships as ` +
+            'separate libraries (libavcodec.so, libavutil.so, libswresample.so) that you may replace with your ' +
+            `own build. Configured with: ${ffmpeg.FFMPEG_CONFIGURE}`,
+        source: `https://github.com/FFmpeg/FFmpeg/tree/${ffmpeg.FFMPEG_COMMIT}`,
+    },
+    {
+        name: `dav1d ${av1.DAV1D_TAG}`,
+        license: 'BSD-2-Clause',
+        text: 'BSD-2-Clause-dav1d',
+        notice: 'Copyright VideoLAN and dav1d authors. Decodes AV1 video on phones without an AV1 decoder.',
+        source: `https://code.videolan.org/videolan/dav1d/-/tree/${av1.DAV1D_COMMIT}`,
+    },
+    {
+        name: `cpu_features ${av1.CPU_FEATURES_TAG.replace(/^v/, '')}`,
+        license: 'Apache-2.0',
+        text: 'Apache-2.0',
+        notice: 'Copyright Google LLC. Used by the AV1 decoder.',
+        source: 'https://github.com/google/cpu_features',
     },
     {
         name: 'Atkinson Hyperlegible Next',
