@@ -282,7 +282,7 @@ Status: `TODO`
 
 | Step | Status | What |
 |---|---|---|
-| RC-1 | TODO | `npm i -D -E babel-plugin-react-compiler@1.0.0` |
+| RC-1 | DONE | `npm i -D -E babel-plugin-react-compiler@1.0.0` |
 | RC-2 | TODO | Phase 1: compile everything except the player (see the config below). Then `npx react-native start --reset-cache` and build a release APK. |
 | RC-3 | TODO | Lint: `eslint-plugin-react-hooks` 7.1.1 already ships through `@react-native/eslint-config`. Turn on its compiler rules (`recommended`) as `warn` in `.eslintrc.js`. Baseline: 51 files flagged. |
 | RC-4 | TODO | Device test, phone and TV: MiniPlayer drag-to-dismiss; Now Playing morph, queue drag, lyrics follow; every sheet (open, close, swipe, Back); Settings; Home folder filter; tab switches; Onboarding pager; TV focus rings on Home, Settings, sheets and dialogs; the Back key. In React DevTools, compiled components show "Memo ✨". |
