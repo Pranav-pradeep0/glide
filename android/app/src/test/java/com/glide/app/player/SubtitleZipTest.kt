@@ -34,6 +34,22 @@ class SubtitleZipTest {
     }
 
     @Test
+    fun seasonPackGivesTheEpisodeAsked() {
+        val pack = zipOf(
+            "Show.S02E01.srt" to "one -->".toByteArray(),
+            "Show.S02E05.1080p.srt" to "five -->".toByteArray(),
+            "Show.S02E15.srt" to "fifteen -->".toByteArray(),
+            "Show.2x07.vtt" to "seven -->".toByteArray(),
+        )
+        assertEquals("five -->", SubtitleZip.read(pack, 2, 5))
+        assertEquals("seven -->", SubtitleZip.read(pack, 2, 7))
+        assertEquals("fifteen -->", SubtitleZip.read(pack, -1, 15))
+        // No file for that episode: the usual pick.
+        assertEquals("one -->", SubtitleZip.read(pack, 2, 9))
+        assertEquals("one -->", SubtitleZip.read(pack))
+    }
+
+    @Test
     fun nullWhenNoSubtitle() {
         assertNull(SubtitleZip.read(zipOf("readme.txt" to "x".toByteArray())))
     }

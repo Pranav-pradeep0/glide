@@ -216,11 +216,14 @@ function processSubtitleResults(
 
 /**
  * Download a subtitle from SubDL and parse it (SRT, VTT or ASS/SSA, detected from the content).
- * Null when the download fails or the file has no readable cues.
+ * Null when the download fails or the file has no readable cues. For a show, season and episode
+ * pick that episode's file out of a season pack.
  */
 export async function downloadSubtitle(
     downloadUrl: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    season?: number,
+    episode?: number,
 ): Promise<SubtitleCue[] | null> {
     const fullUrl = subtitleDownloadUrl(downloadUrl);
     if (!fullUrl) {
@@ -229,8 +232,8 @@ export async function downloadSubtitle(
     }
     return createCoalescedRequest(
         inFlightSubtitleDownloads,
-        fullUrl,
-        (sharedSignal) => executeSubtitleDownload(fullUrl, sharedSignal),
+        `${fullUrl}#${season}x${episode}`,
+        (sharedSignal) => executeSubtitleDownload(fullUrl, sharedSignal, season ?? -1, episode ?? -1),
         signal
     );
 }
@@ -312,7 +315,9 @@ async function executeSubtitleSearch(
 
 async function executeSubtitleDownload(
     fullUrl: string,
-    signal?: AbortSignal
+    signal: AbortSignal | undefined,
+    season: number,
+    episode: number,
 ): Promise<SubtitleCue[] | null> {
     const timestamp = Date.now();
     const zipPath = `${RNFS.CachesDirectoryPath}/subtitle_${timestamp}.zip`;
@@ -374,7 +379,7 @@ async function executeSubtitleDownload(
         if (__DEV__) {console.log(`${LOG_PREFIX} Downloaded ZIP (${downloadResult.bytesWritten} bytes)`);}
 
         // Picked and read natively, capped, without extracting anything (SubtitleZip.kt).
-        const subtitleContent: string | null = await NativeModules.SubtitleSyncModule.readSubtitleFromZip(zipPath);
+        const subtitleContent: string | null = await NativeModules.SubtitleSyncModule.readSubtitleFromZip(zipPath, season, episode);
         if (!subtitleContent) {
             console.error(`${LOG_PREFIX} No subtitle file found in ZIP`);
             return null;

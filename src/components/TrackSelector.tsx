@@ -442,7 +442,10 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                 setNotice(null);
                 downloadAbortRef.current?.abort();
                 downloadAbortRef.current = new AbortController();
-                const cues = await downloadSubtitle(subtitle.downloadUrl, downloadAbortRef.current.signal);
+                const cues = await downloadSubtitle(
+                    subtitle.downloadUrl, downloadAbortRef.current.signal,
+                    parseInt(manualSeason, 10) || undefined, parseInt(manualEpisode, 10) || undefined,
+                );
                 if (!cues) {
                     setNotice('That subtitle came through empty or unreadable. Try another one.');
                     return;
@@ -463,7 +466,7 @@ export const TrackSelector: React.FC<TrackSelectorProps> = React.memo((props) =>
                 setDownloadingId((prev) => (prev === currentId ? null : prev));
             }
         },
-        [onLoadExternalCues, onClose],
+        [onLoadExternalCues, onClose, manualSeason, manualEpisode],
     );
 
     const handleLanguageChange = useCallback((langCode: string) => {

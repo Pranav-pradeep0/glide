@@ -18,13 +18,21 @@ object SubtitleZip {
     const val MAX_ENTRIES = 1_000
     const val MAX_SUBTITLE_BYTES = SubtitleText.MAX_BYTES
 
-    /** The best subtitle in the archive as text ([SubtitleText] picks the encoding), or null when it holds none. */
-    fun read(zipFile: File): String? = ZipFile(zipFile).use { zip ->
+    /**
+     * The best subtitle in the archive as text ([SubtitleText] picks the encoding), or null when
+     * it holds none. A season pack holds one file per episode: given [episode] (and [season] when
+     * known, -1 otherwise), a file named for it (S01E05, 1x05) wins over the format order.
+     */
+    fun read(zipFile: File, season: Int = -1, episode: Int = -1): String? = ZipFile(zipFile).use { zip ->
         if (zip.size() > MAX_ENTRIES) throw IOException("Subtitle zip has ${zip.size()} entries")
+        val named = episode.takeIf { it >= 0 }?.let {
+            val s = if (season >= 0) "0*$season" else """\d+"""
+            Regex("""(?i)(s$s[ ._-]?e0*$it(?!\d)|(?<!\d)${s}x0*$it(?!\d))""")
+        }
         val entry = zip.entries().asSequence()
             // macOS archives carry "__MACOSX/._name.srt" resource forks, which aren't text.
             .filter { !it.isDirectory && !it.name.startsWith("__MACOSX/") }
-            .mapNotNull { e -> rank(e.name)?.let { e to it } }
+            .mapNotNull { e -> rank(e.name)?.let { e to it + if (named?.containsMatchIn(e.name) == false) EXTENSIONS.size else 0 } }
             .minByOrNull { it.second }
             ?.first
             ?: return null

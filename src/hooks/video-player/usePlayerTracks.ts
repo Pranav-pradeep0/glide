@@ -23,6 +23,7 @@ import { SubtitleSelectionService } from '@/services/SubtitleSelectionService';
 import { SubtitlePickerService } from '@/services/SubtitlePickerService';
 import { searchSDHSubtitles, downloadSubtitle } from '@/utils/subdlApi';
 import { isAbortError } from '@/utils/network';
+import { FilenameParser } from '@/utils/FilenameParser';
 
 /** A cue that can carry a sound tag ([explosion], (footsteps), ♪); native reads the tags (HapticMeaning). */
 const hasSoundTag = (text: string) => /[[(♪♫]/.test(text);
@@ -54,7 +55,9 @@ async function findSDHCues(videoPath: string, videoName: string, imdbId: string 
     stopIfAborted();
     const { subtitles } = await searchSDHSubtitles(videoName, 'en', imdbId, signal);
     const best = subtitles.find(s => s.hearingImpaired || (s.sdhScore ?? 0) > 5);
-    return best ? downloadSubtitle(best.downloadUrl, signal) : null;
+    if (!best) { return null; }
+    const { season, episode } = FilenameParser.parse(videoName);
+    return downloadSubtitle(best.downloadUrl, signal, season, episode);
 }
 
 // ============================================================================

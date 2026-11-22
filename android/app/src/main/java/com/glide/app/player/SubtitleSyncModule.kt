@@ -669,11 +669,14 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
         return result
     }
 
-    /** The subtitle inside a downloaded SubDL zip, as text; null when it holds none. See [SubtitleZip]. */
+    /**
+     * The subtitle inside a downloaded SubDL zip, as text; null when it holds none. Season and
+     * episode (-1 when unknown) pick the right file out of a season pack. See [SubtitleZip].
+     */
     @ReactMethod
-    fun readSubtitleFromZip(zipPath: String, promise: Promise) {
+    fun readSubtitleFromZip(zipPath: String, season: Double, episode: Double, promise: Promise) {
         BackgroundWork.submit(promise) {
-            promise.resolve(SubtitleZip.read(File(zipPath)))
+            promise.resolve(SubtitleZip.read(File(zipPath), season.toInt(), episode.toInt()))
         }
     }
 
