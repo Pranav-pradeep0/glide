@@ -69,3 +69,6 @@ stallion/secret-keys/
 # generated haptics test clips (node scripts/haptics-fixtures.js)
 .haptics-fixtures/
 .credits-fixtures/
+
+# Python bytecode: subsync-bench.py's worker processes re-import it on every run.
+__pycache__/
