@@ -620,7 +620,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     /** [alignVideo]'s work, also run by the debug AutoSyncBenchActivity. Logs one "auto-sync:" line. */
     internal fun align(
         videoPath: String, at: List<Double>, clipS: Double, s: DoubleArray, e: DoubleArray,
-        audioFormatId: String?, positionS: Double, poolSize: Int = 8, preferFfmpeg: Boolean = false,
+        audioFormatId: String?, positionS: Double, poolSize: Int = 4, preferFfmpeg: Boolean = false,
         earlyZ: Double = EARLY_STOP_Z,
     ): SubtitleAligner.Result? {
         val t0 = android.os.SystemClock.elapsedRealtime()
@@ -628,9 +628,9 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
         val audioTrackIndex = audioFormatId?.let { audioTrackIds(videoPath).indexOf(it) } ?: -1
         val track = cachedSpeech(videoPath, audioTrackIndex)
         val speech = track?.let { t -> FloatArray(t.sounds.size) { t.sounds[it][SPEECH] } }
-        // ponytail: a fixed 8 decoders, one per clip (measured: 15-20% faster than 4 on an
-        // 8-core phone); each runs its own extractor, decoder and YAMNet.
-        val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(poolSize, at.size).coerceAtLeast(1))
+        // ponytail: 4 decoders at background priority, each with its own extractor, decoder and
+        // YAMNet; 8 measured no faster on the phone, and 4 leaves cores for playback.
+        val pool = BackgroundWork.lane(minOf(poolSize, at.size).coerceAtLeast(1), "glide-sync-decode")
         // One clip that fails to decode is skipped; the rest still align.
         fun decode(starts: List<Double>) = starts.map { start ->
             val cached = track?.takeIf { coveredBy(it, start, clipS) }?.let { speech }
