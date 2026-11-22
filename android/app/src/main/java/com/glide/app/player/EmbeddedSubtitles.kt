@@ -83,7 +83,8 @@ object EmbeddedSubtitles {
             cues.forEachIndexed { i, cue ->
                 append(i + 1).append('\n')
                 append(srtTime(cue.startUs)).append(" --> ").append(srtTime(cue.endUs)).append('\n')
-                append(cue.text).append("\n\n")
+                // A blank line ends an SRT block; one inside a cue (ASS \N\N) would cut its tail.
+                append(cue.text.replace(Regex("\n\\s*\n"), "\n")).append("\n\n")
             }
         }
     }
