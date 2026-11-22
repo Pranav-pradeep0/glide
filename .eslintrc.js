@@ -6,6 +6,22 @@ module.exports = {
   rules: {
     '@typescript-eslint/no-unused-vars': 'warn',
     'react-hooks/exhaustive-deps': 'warn',
+    // React Compiler rules (eslint-plugin-react-hooks 7 `recommended`), as warnings: each marks
+    // code the compiler skips or may get wrong.
+    'react-hooks/static-components': 'warn',
+    'react-hooks/use-memo': 'warn',
+    'react-hooks/preserve-manual-memoization': 'warn',
+    'react-hooks/incompatible-library': 'warn',
+    'react-hooks/immutability': 'warn',
+    'react-hooks/globals': 'warn',
+    'react-hooks/refs': 'warn',
+    'react-hooks/set-state-in-effect': 'warn',
+    'react-hooks/error-boundaries': 'warn',
+    'react-hooks/purity': 'warn',
+    'react-hooks/set-state-in-render': 'warn',
+    'react-hooks/unsupported-syntax': 'warn',
+    'react-hooks/config': 'warn',
+    'react-hooks/gating': 'warn',
   },
   // PC-side dev scripts run under Node, not the app's JS engine.
   overrides: [{ files: ['scripts/**/*.js'], env: { node: true, es2020: true } }],

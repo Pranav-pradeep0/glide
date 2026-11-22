@@ -284,7 +284,7 @@ Status: `TODO`
 |---|---|---|
 | RC-1 | DONE | `npm i -D -E babel-plugin-react-compiler@1.0.0` |
 | RC-2 | DONE | Phase 1: compile everything except the player (see the config below). Then `npx react-native start --reset-cache` and build a release APK. |
-| RC-3 | TODO | Lint: `eslint-plugin-react-hooks` 7.1.1 already ships through `@react-native/eslint-config`. Turn on its compiler rules (`recommended`) as `warn` in `.eslintrc.js`. Baseline: 51 files flagged. |
+| RC-3 | DONE | Lint: `eslint-plugin-react-hooks` 7.1.1 already ships through `@react-native/eslint-config`. Turn on its compiler rules (`recommended`) as `warn` in `.eslintrc.js`. Baseline: 44 files flagged (was 51 when planned). |
 | RC-4 | TODO | Device test, phone and TV: MiniPlayer drag-to-dismiss; Now Playing morph, queue drag, lyrics follow; every sheet (open, close, swipe, Back); Settings; Home folder filter; tab switches; Onboarding pager; TV focus rings on Home, Settings, sheets and dialogs; the Back key. In React DevTools, compiled components show "Memo ✨". |
 | RC-5 | TODO | Phase 2, after one release: delete `sources` and re-test the player (seek, speed, zoom, volume and brightness gestures, double-tap, QuickSettings, track selector, PiP, TV remote seek, resume, Up next). |
 | RC-6 | TODO (optional) | Let the compiler cover more, best gain first: `.value` → `get()/set()` in the gesture hooks; rewrite the 17 `try/finally` and `??=` sites; move render-time `ref.current =` into effects or `useEffectEvent`; remove the 6 eslint-disable sites, which unblocks VideoPlayerScreen. |
