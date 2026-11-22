@@ -7,7 +7,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.glide.app.player.SubtitleSyncModule
+import com.glide.app.player.AudioDecode
 import java.io.DataInputStream
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
@@ -135,7 +135,7 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
             pieces += p
             pieces.sortBy { it.fromMs }
             Log.w(TAG, "listen piece from=$from until=${p.untilMs}")
-            val sink = object : SubtitleSyncModule.PcmSink {
+            val sink = object : AudioDecode.PcmSink {
                 var jumped = false
                 override val done get() = cancelled || jumped || p.listener.analysedMs >= p.untilMs
 
@@ -153,7 +153,7 @@ class HapticAnalysis private constructor(context: Context, private val uri: Stri
                     }
                 }
             }
-            val error = runCatching { SubtitleSyncModule.decodeAudio(context, uri, sink, (from - PREROLL_MS).coerceAtLeast(0) * 1000L) }.exceptionOrNull()
+            val error = runCatching { AudioDecode.decodeAudio(context, uri, sink, (from - PREROLL_MS).coerceAtLeast(0) * 1000L) }.exceptionOrNull()
             if (cancelled) break
             if (sink.jumped || p.listener.analysedMs >= p.untilMs) {
                 p.untilMs = p.doneMs

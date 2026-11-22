@@ -29,9 +29,6 @@ by the function or variable name in the Evidence column.
 Status values: `TODO` · `DOING` · `DONE <sha>` · `ASK` (owner decides) · `WONTFIX: why` ·
 `—` (refuted, rejected or note only: nothing to do).
 
-**Hold until the owner commits the MatroskaSkipper work** (`SubtitleSyncModule.kt` and
-`EmbeddedSubtitles.kt` have uncommitted edits): SB-12, SB-13, CM-10, CM-N2.
-
 ## Owner decisions (made 2026-11-19)
 
 | ID | Decision |
@@ -232,7 +229,7 @@ were clean on 2026-11-19.
 | CM-7 | DONE | MARGINAL (fix 3, keep 2) | L | S | MediaStoreVideoModule.kt:166; MediaStoreAudioModule.kt:54; SubtitleSyncModule.kt:552; Credits.kt:136 (keep); HapticAnalysis.kt:36 (keep) | Thumb/art/sync-decoder pools run at foreground priority during playback; `catch (e: Exception)` lets OOM Error leave the Promise unsettled. | Make `BackgroundWork.lane` internal; use `lane(n,"…")` for thumb(4), art(2), sync decoders; catch Throwable in thumb/art blocks. | Scrub during auto-sync; scroll large library. |
 | CM-8 | — | REJECT (for now) | L | M | src/components/VideoPlayer/GlidePlayer.tsx:33,116-134; android/gradle.properties:37 | Works via interop; commands by name deliberate (d91e20f); setNativeProps fine for idempotent volume. | Revisit when interop is deprecated (with KeyboardInset ui/index.tsx:725). | — |
 | CM-9 | — | REJECT | L | M | src/store/videoHistoryStore.ts:124-147,452-458 | ≤500 entries, debounced, 20s cadence; per-key would cost N parses at startup. | — | — |
-| CM-10 | TODO | MARGINAL | L | S | android/.../player/SubtitleSyncModule.kt:60-117,283-520; haptic/HapticAnalysis.kt:138,156 | Shared decoder lives in a 759-line ReactModule companion. | After uncommitted SubtitleSyncModule edits land: move decodeAudio, PcmSink, PcmDecoder, MediaCodecPcm, FfmpegPcm into `player/AudioDecode.kt` (`internal object AudioDecode`); update 2 haptic imports. | JVM tests, auto-sync, haptics-lab listen. |
+| CM-10 | DONE | MARGINAL | L | S | android/.../player/SubtitleSyncModule.kt:60-117,283-520; haptic/HapticAnalysis.kt:138,156 | Shared decoder lives in a 759-line ReactModule companion. | After uncommitted SubtitleSyncModule edits land: move decodeAudio, PcmSink, PcmDecoder, MediaCodecPcm, FfmpegPcm into `player/AudioDecode.kt` (`internal object AudioDecode`); update 2 haptic imports. | JVM tests, auto-sync, haptics-lab listen. |
 | CM-11 | DONE | MARGINAL | L | S | src/screens/PlayerDetailScreen.tsx:9,53-54,135-195 | Already useNativeDriver; consistency only. | useSharedValue + useAnimatedScrollHandler + interpolate(CLAMP) + withTiming poster fade. Pair with DS-7. | Hero parallax/fade phone + TV. |
 | CM-12 | DONE | MARGINAL | L | S | src/services/LyricsService.ts:197-262 | `RNFS.exists` (:216) redundant; parse-or-plain repeated 4×. | `toLines(raw)` helper; drop exists; keep source order. | Track with and without sidecar .lrc. |
 | CM-13 | — | KEEP | — | — | src/hooks/useSubtitleDisplay.ts:64-95 | 250ms playing/500ms paused, extrapolated; linear scan deliberate. | If ever needed: setTimeout to next cue boundary. | — |

@@ -33,7 +33,7 @@ object HapticHarness {
     /** Pearson correlation of bed and LFE level, 100 ms windows (Phase 4 exit). */
     const val MIN_LFE_CORRELATION = 0.5
 
-    /** Interleaved 16-bit PCM, as decoders hand it to `SubtitleSyncModule.PcmSink`. */
+    /** Interleaved 16-bit PCM, as decoders hand it to `AudioDecode.PcmSink`. */
     class Clip(val name: String, val rate: Int, val channels: Int, val pcm: ShortArray) {
         val durationMs get() = (pcm.size / channels * 1000L / rate).toInt()
     }

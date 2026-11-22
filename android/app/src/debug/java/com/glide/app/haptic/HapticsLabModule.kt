@@ -32,7 +32,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.glide.app.player.AudioDelayProcessor
 import com.glide.app.player.BackgroundWork
-import com.glide.app.player.SubtitleSyncModule
+import com.glide.app.player.AudioDecode
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.LockSupport
@@ -222,7 +222,7 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
      */
     @ReactMethod
     fun runDecode(path: String, promise: Promise) = BackgroundWork.submitLong(promise) {
-        val sink = object : SubtitleSyncModule.PcmSink {
+        val sink = object : AudioDecode.PcmSink {
             override val done = false
             var mediaUs = 0L
             var format = ""
@@ -258,7 +258,7 @@ class HapticsLabModule(context: ReactApplicationContext) : ReactContextBaseJavaM
         val cpu0 = android.os.Process.getElapsedCpuTime()
         // A file the extractor gives up on part way is a result too: how far it got.
         val using = try {
-            SubtitleSyncModule.decodeAudio(reactApplicationContext, path, sink)
+            AudioDecode.decodeAudio(reactApplicationContext, path, sink)
         } catch (e: Exception) {
             "failed at ${sink.lastPtsUs / 1_000_000} s: $e"
         }
