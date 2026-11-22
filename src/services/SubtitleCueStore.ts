@@ -1,6 +1,5 @@
 // src/services/SubtitleCueStore.ts
 
-import * as RNFS from '@dr.pogodin/react-native-fs';
 import { SubtitleExtractor, SubtitleTrack } from '../utils/SubtitleExtractor';
 import { SubtitleParser } from '../utils/SubtitleParser';
 import { SubtitleSelectionService } from './SubtitleSelectionService';
@@ -129,23 +128,10 @@ export class SubtitleCueStore {
         const extractionPromise = (async () => {
             if (__DEV__) {console.log(`${LOG_PREFIX} Cache MISS for ${key}, extracting...`);}
             try {
-                const path = await SubtitleExtractor.extractSubtitle(videoPath, trackIndex, 'srt');
-                if (!path) {return [];}
-
-                const content = await SubtitleExtractor.readSubtitleFile(path);
+                const content = await SubtitleExtractor.extractSubtitle(videoPath, trackIndex, 'srt');
                 if (!content) {return [];}
 
                 const cues = SubtitleParser.parse(content, 'srt');
-
-                // OPTIMIZATION: Delete the temporary file immediately after parsing.
-                // We have the cues in memory now, so the file is no longer needed.
-                try {
-                    await RNFS.unlink(path);
-                    if (__DEV__) {console.log(`${LOG_PREFIX} Deleted temp file after parsing:`, path);}
-                } catch (e) {
-                    // Non-fatal error
-                    console.warn(`${LOG_PREFIX} Failed to delete temp file:`, path, e);
-                }
 
                 if (cues && cues.length > 0) {
                     this.cache.set(key, cues);

@@ -813,10 +813,9 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     }
 
     /**
-     * Writes embedded text subtitle track [ordinal] to an SRT file in the cache and resolves
-     * its path, or null when the track has no text cues (bitmap, unsupported, empty) or the
-     * video is a network stream (this reads the whole file). Replaces ffmpeg-kit's extraction;
-     * the file name matches what SubtitleExtractor.cleanupSubtitleFiles sweeps.
+     * Resolves embedded text subtitle track [ordinal] as SRT text, or null when the track has no
+     * text cues (bitmap, unsupported, empty) or the video is a network stream (this reads the
+     * whole file).
      */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     @ReactMethod
@@ -829,13 +828,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                     else EmbeddedSubtitles.extractSrt(reactApplicationContext, uri, ordinal)
                 // Warn, not info: release builds strip Log.i, and this is how a device's time is checked.
                 android.util.Log.w(NAME, "extract-subtitle: track=$ordinal chars=${srt?.length} took=${android.os.SystemClock.elapsedRealtime() - t0}ms")
-                if (srt == null) {
-                    promise.resolve(null)
-                    return@submitLong
-                }
-                val file = File(reactApplicationContext.cacheDir, "subtitle_${System.nanoTime()}.srt")
-                file.writeText(srt)
-                promise.resolve(file.absolutePath)
+                promise.resolve(srt)
             } catch (t: Throwable) {
                 promise.reject("E_EXTRACT_SUBTITLE", t.message ?: "Subtitle extraction failed", t)
             }

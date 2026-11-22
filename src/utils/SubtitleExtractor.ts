@@ -1,6 +1,5 @@
 // utils/SubtitleExtractor.ts
 
-import * as RNFS from '@dr.pogodin/react-native-fs';
 import { Platform, NativeModules } from 'react-native';
 
 const LOG_PREFIX = '[SubtitleExtractor]';
@@ -56,7 +55,7 @@ export class SubtitleExtractor {
     }
 
     /**
-     * Extract an embedded text subtitle track to an SRT file in the cache, returning its path.
+     * An embedded text subtitle track as SRT text.
      * `subtitleIndex` is the track's ordinal among the file's subtitle tracks, as
      * getSubtitleTracks and the player both number them. Null for bitmap or empty tracks.
      */
@@ -72,51 +71,6 @@ export class SubtitleExtractor {
             return await NativeModules.SubtitleSyncModule.extractSubtitle(videoPath, subtitleIndex);
         } catch (error) {
             console.error(`${LOG_PREFIX} [extractSubtitle] failed`, error);
-            return null;
-        }
-    }
-
-    /**
-     * Read subtitle file content
-     */
-    static async readSubtitleFile(filePath: string): Promise<string | null> {
-        const startTime = Date.now();
-        if (__DEV__) {
-            console.log(`${LOG_PREFIX} [readSubtitleFile] START`, {
-                filePath: filePath.substring(0, 60) + '...',
-                timestamp: new Date().toISOString(),
-            });
-        }
-
-        try {
-            const exists = await RNFS.exists(filePath);
-            if (!exists) {
-                console.error(`${LOG_PREFIX} [readSubtitleFile] File does not exist`, {
-                    filePath,
-                });
-                return null;
-            }
-
-            const fileInfo = await RNFS.stat(filePath);
-            if (__DEV__) {
-                console.log(`${LOG_PREFIX} [readSubtitleFile] Reading file`, {
-                    size: fileInfo.size,
-                    sizeKB: (fileInfo.size / 1024).toFixed(2),
-                });
-            }
-
-            const content = await RNFS.readFile(filePath, 'utf8');
-
-            if (__DEV__) {
-                console.log(`${LOG_PREFIX} [readSubtitleFile] ✓ SUCCESS`, {
-                    sizeKB: (content.length / 1024).toFixed(2),
-                    durationMs: Date.now() - startTime,
-                });
-            }
-
-            return content;
-        } catch (error) {
-            console.error(`${LOG_PREFIX} [readSubtitleFile] FATAL ERROR`, error);
             return null;
         }
     }

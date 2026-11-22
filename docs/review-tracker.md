@@ -237,7 +237,7 @@ were clean on 2026-11-19.
 | CM-12 | DONE | MARGINAL | L | S | src/services/LyricsService.ts:197-262 | `RNFS.exists` (:216) redundant; parse-or-plain repeated 4×. | `toLines(raw)` helper; drop exists; keep source order. | Track with and without sidecar .lrc. |
 | CM-13 | — | KEEP | — | — | src/hooks/useSubtitleDisplay.ts:64-95 | 250ms playing/500ms paused, extrapolated; linear scan deliberate. | If ever needed: setTimeout to next cue boundary. | — |
 | CM-N1 | DONE | WORTH IT | H | S | src/utils/SubtitleParser.ts:16,59 | Same as SB-1/SB-2 (node-verified `00:01.000 --> 00:04.000` fails). | One shared time parser `(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{3})`; jest cases per variant. | Merged into SB-1/SB-2. |
-| CM-N2 | TODO | WORTH IT | M | S | android/.../player/SubtitleSyncModule.kt:734-754; src/services/SubtitleCueStore.ts:132-148 | Embedded extract writes temp SRT → JS readSubtitleFile → unlink (ffmpeg-kit leftover); doc mentions a nonexistent cleanupSubtitleFiles. | Resolve the SRT string directly; delete readSubtitleFile; fix comment. After the uncommitted edits land. | Embedded subtitle pick on MKV + MP4. |
+| CM-N2 | DONE | WORTH IT | M | S | android/.../player/SubtitleSyncModule.kt:734-754; src/services/SubtitleCueStore.ts:132-148 | Embedded extract writes temp SRT → JS readSubtitleFile → unlink (ffmpeg-kit leftover); doc mentions a nonexistent cleanupSubtitleFiles. | Resolve the SRT string directly; delete readSubtitleFile; fix comment. After the uncommitted edits land. | Embedded subtitle pick on MKV + MP4. |
 | CM-N3 | — | — | M | S | MediaService.getVideosByAlbum | Album refresh leaves libraryCache stale. | Fixed by CM-5. | — |
 
 ## React Compiler (RC)
