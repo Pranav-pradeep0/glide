@@ -260,25 +260,28 @@ const SeekBar: React.FC<SeekBarProps> = ({
             if (on && !was) {scrubStart.value = swipeSeekStart.value;}
         });
 
-    // "12:04 of 45:00", only computed while a screen reader is on (re-renders every second).
-    const [a11yValue, setA11yValue] = useState('');
-    useAnimatedReaction(
-        () => (screenReader && duration.value > 0
-            ? `${formatClock(isScrubbing.value ? seekPreviewTime.value : currentTime.value)} of ${formatClock(duration.value)}`
-            : ''),
-        (next, prev) => {
-            if (next !== prev) {runOnJS(setA11yValue)(next);}
-        }, [screenReader]);
-
-    const toTime = (x: number) => {
-        'worklet';
-        return Math.max(0, Math.min(1, x / trackWidth.value)) * duration.value;
-    };
-
     const chapterAt = (t: number) => {
         'worklet';
         const i = chapterIndexAt(chapters, t);
         return i < 0 ? '' : chapters[i].title;
+    };
+
+    // "12:04 of 45:00, Chapter", only computed while a screen reader is on (re-renders every second).
+    const [a11yValue, setA11yValue] = useState('');
+    useAnimatedReaction(
+        () => {
+            if (!screenReader || duration.value <= 0) {return '';}
+            const t = isScrubbing.value ? seekPreviewTime.value : currentTime.value;
+            const name = chapterAt(t);
+            return `${formatClock(t)} of ${formatClock(duration.value)}${name ? `, ${name}` : ''}`;
+        },
+        (next, prev) => {
+            if (next !== prev) {runOnJS(setA11yValue)(next);}
+        }, [screenReader, chapters]);
+
+    const toTime = (x: number) => {
+        'worklet';
+        return Math.max(0, Math.min(1, x / trackWidth.value)) * duration.value;
     };
 
     const pan = Gesture.Pan()
