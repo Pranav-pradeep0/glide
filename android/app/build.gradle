@@ -205,6 +205,9 @@ dependencies {
     // the part of the engine migration the plan calls the risk peak -- can be checked on
     // the JVM with no device and no Robolectric.
     testImplementation 'junit:junit:4.13.2'
+    // MatroskaSkipperTest runs EmbeddedSubtitles.extractSrt both ways: Media3's extractor and
+    // subtitle parsers need real SparseArray, Html and Bundle.
+    testImplementation 'org.robolectric:robolectric:4.18'
 
     // Hermes, always. `hermesEnabled` has never been false here, and the JSC fallback it
     // guarded pulled a floating `org.webkit:android-jsc:+` version into the build.

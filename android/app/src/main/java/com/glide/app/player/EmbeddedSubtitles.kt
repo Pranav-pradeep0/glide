@@ -3,6 +3,7 @@ package com.glide.app.player
 import android.content.Context
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.text.Spanned
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
@@ -22,10 +23,12 @@ import androidx.media3.extractor.ExtractorOutput
 import androidx.media3.extractor.PositionHolder
 import androidx.media3.extractor.SeekMap
 import androidx.media3.extractor.TrackOutput
+import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.text.CueDecoder
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import java.io.EOFException
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.Locale
 
 /**
@@ -61,11 +64,13 @@ object EmbeddedSubtitles {
 
     /**
      * The whole track as SRT text, or null if it has no text cues (bitmap, unsupported or
-     * empty). Reads the entire file, as ffmpeg did; callers cache the result.
+     * empty). A local Matroska file is read with [MatroskaSkipper], which reads only this
+     * track's blocks; anything else is read whole. Callers cache the result. [skipping] is
+     * false only in the test that holds the two to the same output.
      */
-    fun extractSrt(context: Context, uri: Uri, ordinal: Int): String? {
-        val output = Collector(wantedOrdinal = ordinal)
-        read(context, uri, output) { false }
+    fun extractSrt(context: Context, uri: Uri, ordinal: Int, skipping: Boolean = true): String? {
+        val output = (if (skipping) readSkipping(context, uri, ordinal) else null)
+            ?: Collector(wantedOrdinal = ordinal).also { read(context, uri, it) { false } }
         val cues = output.cues.sortedBy { it.startUs }
         if (cues.isEmpty()) return null
         // A cue the format left open-ended runs until the next one starts.
@@ -80,6 +85,43 @@ object EmbeddedSubtitles {
                 append(srtTime(cue.startUs)).append(" --> ").append(srtTime(cue.endUs)).append('\n')
                 append(cue.text).append("\n\n")
             }
+        }
+    }
+
+    /**
+     * Track [ordinal]'s cues read through a [MatroskaSkipper], which seeks past every other
+     * track's blocks; null when [uri] isn't a local Matroska/WebM file or the skipper can't
+     * follow it, for the caller to read the whole file instead.
+     */
+    private fun readSkipping(context: Context, uri: Uri, ordinal: Int): Collector? {
+        return try {
+            val output = Collector(wantedOrdinal = ordinal)
+            // Format.id is the Matroska TrackNumber.
+            skipping(context, uri, keep = { number ->
+                check(output.tracksEnded) { "clusters before tracks" }
+                output.formats.getOrNull(ordinal)?.id == number.toString()
+            }) { read(context, uri, output, matroska = it) { false } } ?: return null
+            output.takeIf { it.tracksEnded }
+        } catch (e: Exception) {
+            android.util.Log.w("EmbeddedSubtitles", "skipping reader failed, reading the whole file: $e")
+            null
+        }
+    }
+
+    /**
+     * [block] run with a [MatroskaSkipper] over [uri]; null without running it when [uri] isn't
+     * a local Matroska/WebM file. The skipper's exceptions are the caller's.
+     */
+    internal fun <T> skipping(
+        context: Context, uri: Uri, startUs: Long? = null, keep: (Long) -> Boolean, block: (MatroskaSkipper) -> T,
+    ): T? {
+        if (isNetwork(uri)) return null
+        val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return null
+        ParcelFileDescriptor.AutoCloseInputStream(pfd).channel.use { channel ->
+            val magic = ByteBuffer.allocate(4)
+            channel.read(magic, 0)
+            if (magic.getInt(0) != 0x1A45DFA3) return null
+            return block(MatroskaSkipper(channel, startUs, keep))
         }
     }
 
@@ -125,6 +167,7 @@ object EmbeddedSubtitles {
         uri: Uri,
         output: ExtractorOutput,
         seekTo: () -> androidx.media3.extractor.SeekPoint? = { null },
+        matroska: MatroskaSkipper? = null,
         done: () -> Boolean,
     ) {
         val extractors = DefaultExtractorsFactory()
@@ -134,13 +177,19 @@ object EmbeddedSubtitles {
         val dataSource = DefaultDataSource(context, /* allowCrossProtocolRedirects = */ false)
 
         fun open(position: Long): DefaultExtractorInput {
+            if (matroska != null) {
+                // The skipper's stream has no SeekHead or Cues, so the extractor never seeks it.
+                if (position != 0L) throw java.io.IOException("seek in a skipped Matroska stream")
+                return DefaultExtractorInput(matroska, 0, C.LENGTH_UNSET.toLong())
+            }
             val length = dataSource.open(DataSpec.Builder().setUri(uri).setPosition(position).build())
             return DefaultExtractorInput(
                 dataSource, position, if (length == C.LENGTH_UNSET.toLong()) C.LENGTH_UNSET.toLong() else position + length
             )
         }
 
-        val extractor: Extractor = extractors.firstOrNull { candidate ->
+        val extractor: Extractor = if (matroska != null) extractors.first { it is MatroskaExtractor }
+        else extractors.firstOrNull { candidate ->
             try {
                 candidate.sniff(open(0))
             } catch (_: EOFException) {

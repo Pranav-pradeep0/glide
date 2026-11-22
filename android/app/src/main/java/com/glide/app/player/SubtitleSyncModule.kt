@@ -64,19 +64,31 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
             startUs: Long = 0L,
             targetTrackIndex: Int = -1,
         ): String {
-            val audio = AudioCollector(sink, startUs, targetTrackIndex)
+            val uri = EmbeddedSubtitles.toUri(videoPath)
+            var audio = AudioCollector(sink, startUs, targetTrackIndex)
             try {
-                EmbeddedSubtitles.read(
-                    context,
-                    EmbeddedSubtitles.toUri(videoPath),
-                    audio,
-                    seekTo = audio::seekRequest,
-                ) { sink.done || audio.noDecoder }
+                // A local MKV is served with only the chosen track's blocks from the cluster
+                // before startUs, the video seeked past instead of read.
+                val skipped = try {
+                    EmbeddedSubtitles.skipping(context, uri, startUs, keep = { audio.keeps(it) }) { skipper ->
+                        EmbeddedSubtitles.read(context, uri, audio, matroska = skipper) { sink.done || audio.noDecoder }
+                    } != null
+                } catch (e: Exception) {
+                    if (audio.fed) throw e
+                    android.util.Log.w(NAME, "skipping reader failed, reading the whole file: $e")
+                    audio.decoder?.release()
+                    audio = AudioCollector(sink, startUs, targetTrackIndex)
+                    false
+                }
+                if (!skipped) {
+                    EmbeddedSubtitles.read(context, uri, audio, seekTo = audio::seekRequest) { sink.done || audio.noDecoder }
+                }
                 if (!sink.done) audio.decoder?.finish()
+                return "tracks=${audio.trackMimes} targetTrack=$targetTrackIndex chosen=${audio.chosen} " +
+                    "using=${audio.description} skipped=$skipped"
             } finally {
                 audio.decoder?.release()
             }
-            return "tracks=${audio.trackMimes} targetTrack=$targetTrackIndex chosen=${audio.chosen} using=${audio.description}"
         }
     }
 
@@ -284,6 +296,12 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
         var description = "none"
             private set
         val trackMimes get() = formats.map { it?.sampleMimeType }
+        /** A sample has gone to the decoder: a retry from scratch would feed the sink twice. */
+        var fed = false
+            private set
+
+        /** Whether Matroska TrackNumber [number] is the chosen track (Format.id is the TrackNumber). */
+        fun keeps(number: Long) = formats.getOrNull(chosen)?.id == number.toString()
 
         override fun track(id: Int, type: Int): androidx.media3.extractor.TrackOutput {
             if (type != androidx.media3.common.C.TRACK_TYPE_AUDIO) return androidx.media3.extractor.DiscardingTrackOutput()
@@ -375,7 +393,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
             override fun sampleMetadata(timeUs: Long, flags: Int, size: Int, offset: Int, cryptoData: androidx.media3.extractor.TrackOutput.CryptoData?) {
                 val end = length - offset
                 val start = end - size
-                if (index == chosen && start >= 0 && !window.done) decoder?.feed(buffer, start, size, timeUs)
+                if (index == chosen && start >= 0 && !window.done) decoder?.let { fed = true; it.feed(buffer, start, size, timeUs) }
                 System.arraycopy(buffer, end, buffer, 0, length - end)
                 length -= end
             }
@@ -716,9 +734,12 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     fun extractSubtitle(videoPath: String, ordinal: Int, promise: Promise) {
         BackgroundWork.submitLong(promise) {
             try {
+                val t0 = android.os.SystemClock.elapsedRealtime()
                 val uri = EmbeddedSubtitles.toUri(videoPath)
                 val srt = if (EmbeddedSubtitles.isNetwork(uri)) null
                     else EmbeddedSubtitles.extractSrt(reactApplicationContext, uri, ordinal)
+                // Warn, not info: release builds strip Log.i, and this is how a device's time is checked.
+                android.util.Log.w(NAME, "extract-subtitle: track=$ordinal chars=${srt?.length} took=${android.os.SystemClock.elapsedRealtime() - t0}ms")
                 if (srt == null) {
                     promise.resolve(null)
                     return@submitLong
