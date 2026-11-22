@@ -1,8 +1,11 @@
-Glide 3.2: choose your Home folders.
-- Choose which folders show on Home, in Settings
-- Grid or list, sort and each video's colour enhancement are remembered
-- Continue watching no longer looks see-through; closing it or Recap keeps playing
-- After a break, Continue watching shows on return, not after Play
-- Renamed folders and copied videos appear without a refresh (Android 10 and older, TV)
-- Music can be paused while loading
-- A Telegram chat's newest film shows when it's the last message
+Glide 3.2: faster subtitle sync and loading, chapter lists and more formats.
+- Subtitles: right episode, 4 lines, fixed accents
+- AV1 and more audio formats play
+- Chapters list: jump to any chapter
+- Videos reopen at your display mode, speed and colour
+- Player: resume, lock, Open with fixes
+- Library finds new files reliably
+- Choose which folders show on Home
+- Light, dark or follow your phone
+- Music: shuffle, queue, lyrics, Android Auto fixes
+- TV, TalkBack, Telegram, design fixes
