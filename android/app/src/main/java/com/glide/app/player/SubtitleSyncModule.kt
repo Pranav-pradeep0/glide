@@ -36,6 +36,10 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
 
     companion object {
         const val NAME = "SubtitleSyncModule"
+        private const val CLIP_CACHE_VERSION = 1
+        /** The 4-clip peak z that ends a run early; see [align]. */
+        private const val EARLY_STOP_Z = 13.0
+        private const val CLIP_CACHE_FILES = 300
 
         /** YAMNet's Speech score among a sound window's [HapticSounds.KEPT] scores. */
         private val SPEECH = HapticSounds.KEPT.indexOf(HapticSounds.SPEECH)
@@ -63,9 +67,10 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
             sink: PcmSink,
             startUs: Long = 0L,
             targetTrackIndex: Int = -1,
+            preferFfmpeg: Boolean = false,
         ): String {
             val uri = EmbeddedSubtitles.toUri(videoPath)
-            var audio = AudioCollector(sink, startUs, targetTrackIndex)
+            var audio = AudioCollector(sink, startUs, targetTrackIndex, preferFfmpeg)
             try {
                 // A local MKV is served with only the chosen track's blocks from the cluster
                 // before startUs, the video seeked past instead of read.
@@ -77,7 +82,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                     if (audio.fed) throw e
                     android.util.Log.w(NAME, "skipping reader failed, reading the whole file: $e")
                     audio.decoder?.release()
-                    audio = AudioCollector(sink, startUs, targetTrackIndex)
+                    audio = AudioCollector(sink, startUs, targetTrackIndex, preferFfmpeg)
                     false
                 }
                 if (!skipped) {
@@ -209,8 +214,10 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     @Volatile private var lastDecode = ""
 
     private fun decodeClip(
-        videoPath: String, startS: Double, clipS: Double, trackIndex: Int, cachedSpeech: FloatArray?,
+        videoPath: String, startS: Double, clipS: Double, trackIndex: Int, cachedSpeech: FloatArray?, preferFfmpeg: Boolean,
     ): SubtitleAligner.Clip? {
+        val cache = clipCacheFile(videoPath, trackIndex, startS, clipS)
+        readClip(cache)?.let { lastDecode = "cached"; return it }
         val startUs = (startS * 1_000_000).toLong().coerceAtLeast(0L)
         val endUs = startUs + (clipS * 1_000_000).toLong()
         val meter = WindowMeter(startUs, endUs)
@@ -231,14 +238,50 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                 }
             }
             val t0 = android.os.SystemClock.elapsedRealtime()
-            val using = decodeAudio(reactApplicationContext, videoPath, sink, (startUs - marginUs).coerceAtLeast(0L), trackIndex)
+            val using = decodeAudio(reactApplicationContext, videoPath, sink, (startUs - marginUs).coerceAtLeast(0L), trackIndex, preferFfmpeg)
             lastDecode = "$using took=${android.os.SystemClock.elapsedRealtime() - t0}ms"
             val levels = meter.result(startS) ?: return null
             val scores = cachedSpeech ?: recognizer?.let { r -> FloatArray(r.windows.size) { r.windows[it][SPEECH] } }
             val speech = scores?.let { SubtitleAligner.scoreFrames(it, levels.actualStartS, levels.levels.size) }
-            return SubtitleAligner.Clip(levels.actualStartS, levels.levels, speech)
+            // Without Speech scores (YAMNet unavailable) it is not what a later run would make.
+            return SubtitleAligner.Clip(levels.actualStartS, levels.levels, speech).also { if (speech != null) writeClip(cache, it) }
         } finally {
             yamnet?.second?.close()
+        }
+    }
+
+    /**
+     * Where a clip's analysis is kept: per file (path, size, mtime), audio track, start and
+     * length, so syncing the same film again decodes nothing it has already heard. In
+     * cacheDir, which Android clears when storage runs low; [writeClip] keeps it under
+     * [CLIP_CACHE_FILES] files (~50 KB each) anyway. Bump [CLIP_CACHE_VERSION] whenever the
+     * loudness meter or YAMNet scoring changes.
+     */
+    private fun clipCacheFile(videoPath: String, trackIndex: Int, startS: Double, clipS: Double): File {
+        val fp = HapticPerformer.fingerprint(reactApplicationContext, videoPath)
+        val key = java.security.MessageDigest.getInstance("SHA-1")
+            .digest("$CLIP_CACHE_VERSION|${fp.path}|${fp.size}|${fp.mtimeMs}|$trackIndex|$startS|$clipS".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return File(File(reactApplicationContext.cacheDir, "autosync"), key)
+    }
+
+    private fun readClip(file: File): SubtitleAligner.Clip? = runCatching {
+        DataInputStream(file.inputStream().buffered()).use { input ->
+            fun floats() = FloatArray(input.readInt()) { input.readFloat() }
+            SubtitleAligner.Clip(input.readDouble(), floats(), floats())
+        }
+    }.getOrNull()
+
+    private fun writeClip(file: File, clip: SubtitleAligner.Clip) {
+        runCatching {
+            val dir = file.parentFile!!.apply { mkdirs() }
+            dir.listFiles()?.sortedBy { it.lastModified() }?.dropLast(CLIP_CACHE_FILES - 1)?.forEach { it.delete() }
+            val tmp = File(dir, "${file.name}.tmp")
+            java.io.DataOutputStream(tmp.outputStream().buffered()).use { out ->
+                out.writeDouble(clip.startS)
+                for (a in listOf(clip.energy, clip.speech!!)) { out.writeInt(a.size); a.forEach(out::writeFloat) }
+            }
+            tmp.renameTo(file)
         }
     }
 
@@ -283,6 +326,7 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
         private val window: PcmSink,
         private val startUs: Long,
         private val targetTrackIndex: Int = -1,
+        private val preferFfmpeg: Boolean = false,
     ) : androidx.media3.extractor.ExtractorOutput {
         private val formats = ArrayList<androidx.media3.common.Format?>()
         private var seekMap: androidx.media3.extractor.SeekMap? = null
@@ -325,7 +369,9 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
             for (i in order) {
                 val format = formats[i] ?: continue
                 val mediaFormat = androidx.media3.common.util.MediaFormatUtil.createMediaFormatFromFormat(format)
-                val name = try { codecs.findDecoderForFormat(mediaFormat) } catch (_: Exception) { null }
+                val name = if (preferFfmpeg && ffmpeg && androidx.media3.decoder.ffmpeg.FfmpegLibrary.supportsFormat(format.sampleMimeType ?: "")) null
+                    else inProcessDecoder(codecs, format.sampleMimeType)
+                        ?: try { codecs.findDecoderForFormat(mediaFormat) } catch (_: Exception) { null }
                 // A decoder can be listed for a format and still refuse to configure it
                 // (E-AC-3 JOC, AC-4 on some devices). Fall through to FFmpeg, then the next
                 // track, rather than failing the whole alignment.
@@ -352,6 +398,15 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
             }
             noDecoder = true
         }
+
+        /**
+         * Android 17's in-process platform decoders (c2.android.inproc.aac/opus.decoder, also
+         * coming through Mainline updates) skip the per-buffer IPC to the media.swcodec process;
+         * Google measures ~40% less decode time. Picked by name: they are not the default yet.
+         */
+        private fun inProcessDecoder(codecs: MediaCodecList, mime: String?): String? = codecs.codecInfos.firstOrNull { info ->
+            !info.isEncoder && ".inproc." in info.name && info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
+        }?.name
 
         /** Once the header and seek map are in, jump straight to the window instead of decoding up to it. */
         fun seekRequest(): androidx.media3.extractor.SeekPoint? {
@@ -540,35 +595,10 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
     ) {
         BackgroundWork.submitLong(promise) {
             try {
-                val t0 = android.os.SystemClock.elapsedRealtime()
-                // The heard track, by its container id: the player's track list is in renderer order.
-                val audioTrackIndex = audioFormatId?.let { audioTrackIds(videoPath).indexOf(it) } ?: -1
-                val s = DoubleArray(starts.size()) { starts.getDouble(it) }
-                val e = DoubleArray(ends.size()) { ends.getDouble(it) }
-                val at = List(clipStarts.size()) { clipStarts.getDouble(it) }
-                val track = cachedSpeech(videoPath, audioTrackIndex)
-                val speech = track?.let { t -> FloatArray(t.sounds.size) { t.sounds[it][SPEECH] } }
-                // ponytail: a fixed 4 decoders; each runs its own extractor, decoder and YAMNet.
-                val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(4, at.size).coerceAtLeast(1))
-                val clips = try {
-                    at.map { start ->
-                        val cached = track?.takeIf { coveredBy(it, start, clipS) }?.let { speech }
-                        pool.submit<SubtitleAligner.Clip?> { decodeClip(videoPath, start, clipS, audioTrackIndex, cached) }
-                    }.mapNotNull { it.get() }
-                } finally {
-                    pool.shutdown()
-                }
-                val decodedMs = android.os.SystemClock.elapsedRealtime() - t0
-                if (clips.isEmpty()) return@submitLong promise.reject("E_NO_AUDIO", "No decodable audio in this video")
-
-                val result = SubtitleAligner.align(clips, s, e, positionS)
-                // Warn, not info: release builds strip Log.i, and this one line per run is how a
-                // device's timing and answer are checked.
-                android.util.Log.w(
-                    NAME, "auto-sync: clips=${clips.size}/${at.size} at=${clips.map { it.startS.toInt() }} " +
-                        "speech=${clips.count { it.speech != null }} cached=${track != null} cues=${s.size} " +
-                        "position=${positionS.toInt()}s track=$audioFormatId->$audioTrackIndex decoded=${decodedMs}ms " +
-                        "total=${android.os.SystemClock.elapsedRealtime() - t0}ms $result last clip: $lastDecode"
+                val result = align(
+                    videoPath, List(clipStarts.size()) { clipStarts.getDouble(it) }, clipS,
+                    DoubleArray(starts.size()) { starts.getDouble(it) }, DoubleArray(ends.size()) { ends.getDouble(it) },
+                    audioFormatId, positionS,
                 )
                 if (result == null) return@submitLong promise.resolve(null)
                 promise.resolve(Arguments.createMap().apply {
@@ -577,10 +607,63 @@ class SubtitleSyncModule(context: ReactApplicationContext) : ReactContextBaseJav
                     putDouble("peakZ", result.peakZ)
                     putDouble("runnerUp", result.runnerUp)
                 })
+            } catch (_: NoAudio) {
+                promise.reject("E_NO_AUDIO", "No decodable audio in this video")
             } catch (t: Throwable) {
                 promise.reject("E_ALIGN", t.message ?: "Alignment error", t)
             }
         }
+    }
+
+    class NoAudio : Exception()
+
+    /** [alignVideo]'s work, also run by the debug AutoSyncBenchActivity. Logs one "auto-sync:" line. */
+    internal fun align(
+        videoPath: String, at: List<Double>, clipS: Double, s: DoubleArray, e: DoubleArray,
+        audioFormatId: String?, positionS: Double, poolSize: Int = 8, preferFfmpeg: Boolean = false,
+        earlyZ: Double = EARLY_STOP_Z,
+    ): SubtitleAligner.Result? {
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        // The heard track, by its container id: the player's track list is in renderer order.
+        val audioTrackIndex = audioFormatId?.let { audioTrackIds(videoPath).indexOf(it) } ?: -1
+        val track = cachedSpeech(videoPath, audioTrackIndex)
+        val speech = track?.let { t -> FloatArray(t.sounds.size) { t.sounds[it][SPEECH] } }
+        // ponytail: a fixed 8 decoders, one per clip (measured: 15-20% faster than 4 on an
+        // 8-core phone); each runs its own extractor, decoder and YAMNet.
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(poolSize, at.size).coerceAtLeast(1))
+        fun decode(starts: List<Double>) = starts.map { start ->
+            val cached = track?.takeIf { coveredBy(it, start, clipS) }?.let { speech }
+            pool.submit<SubtitleAligner.Clip?> { decodeClip(videoPath, start, clipS, audioTrackIndex, cached, preferFfmpeg) }
+        }.mapNotNull { it.get() }
+        // Every other clip first, spread across the film. When those already agree this
+        // strongly, the rest have never changed the answer (scripts/subsync-bench.py: identical
+        // results for any threshold from 12 up; 10 got mid-film edits wrong), so they are skipped.
+        val first = at.filterIndexed { i, _ -> i % 2 == 0 }
+        var clips: List<SubtitleAligner.Clip>
+        var result: SubtitleAligner.Result?
+        try {
+            clips = decode(first)
+            result = if (first.size < at.size && clips.size >= 2) SubtitleAligner.align(clips, s, e, positionS) else null
+            if (result == null || result.peakZ < earlyZ) {
+                clips = (clips + decode(at - first.toSet())).sortedBy { it.startS }
+                result = null
+            }
+        } finally {
+            pool.shutdown()
+        }
+        val decodedMs = android.os.SystemClock.elapsedRealtime() - t0
+        if (clips.isEmpty()) throw NoAudio()
+
+        if (result == null) result = SubtitleAligner.align(clips, s, e, positionS)
+        // Warn, not info: release builds strip Log.i, and this one line per run is how a
+        // device's timing and answer are checked.
+        android.util.Log.w(
+            NAME, "auto-sync: clips=${clips.size}/${at.size} at=${clips.map { it.startS.toInt() }} " +
+                "speech=${clips.count { it.speech != null }} cached=${track != null} cues=${s.size} " +
+                "position=${positionS.toInt()}s track=$audioFormatId->$audioTrackIndex decoded=${decodedMs}ms " +
+                "total=${android.os.SystemClock.elapsedRealtime() - t0}ms $result last clip: $lastDecode"
+        )
+        return result
     }
 
     /** The subtitle inside a downloaded SubDL zip, as text; null when it holds none. See [SubtitleZip]. */

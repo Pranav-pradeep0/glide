@@ -155,10 +155,11 @@ def at(c, p):
     return float(c[max(0, p - 3):p + 4].max())
 
 
-def align(sigs, starts, ends, pos):
-    """SubtitleAligner.align: (ratio, delay) to apply, or None."""
+def align(sigs, starts, ends, pos, half=False):
+    """SubtitleAligner.align: (ratio, delay, peak z) to apply, or None. [half]: every other clip only."""
     clips = choose_clips(starts, ends)
-    if not clips:
+    if half: clips = clips[::2]
+    if len(clips) < 2:
         return None
     n = round(CLIP_S / F)
     i0s = [int(round(t / F)) for t in clips]
@@ -191,7 +192,12 @@ def align(sigs, starts, ends, pos):
     near = sorted((i for i in keep if cur[q][i] is not None), key=lambda i: abs(centre(i) - pos))[:2]
     if not any(at(cur[q][i], p) >= SUPPORT_Z for i in near): return None
     if q != 1.0 and not all(tight(cur[q][i], p) for i in keep if cur[q][i] is not None): return None
-    return q, d
+    return q, d, z
+
+
+def both(sigs, starts, ends, pos):
+    """The 8-clip answer and the 4-clip one, for the early-stop table."""
+    return align(sigs, starts, ends, pos), align(sigs, starts, ends, pos, half=True)
 
 
 def tight(c, p):
@@ -205,12 +211,12 @@ def run(job):
     energy = levels(name)
     sigs = [(energy, True)] + ([] if ENERGY_ONLY else [(yamnet_speech(name, len(energy)), False)])
     S, E = speech_cues(name); dur = len(energy) * F
-    rows = [('shift', d, dur, align(sigs, S - d, E - d, dur / 2)) for d in DELAYS]  # subtitle d s early: fix is +d
-    rows += [(tag, q, dur, align(sigs, S / q, E / q, dur / 2)) for tag, q in DRIFTS.items()]  # media = subtitle * q
-    rows += [('unrelated', None, dur, align(sigs, o[0], o[1], dur / 2)) for o in others]
+    rows = [('shift', d, dur, *both(sigs, S - d, E - d, dur / 2)) for d in DELAYS]  # subtitle d s early: fix is +d
+    rows += [(tag, q, dur, *both(sigs, S / q, E / q, dur / 2)) for tag, q in DRIFTS.items()]  # media = subtitle * q
+    rows += [('unrelated', None, dur, *both(sigs, o[0], o[1], dur / 2)) for o in others]
     for d2 in EDITS:
         sh = np.where(S < dur / 2, 0.0, d2)
-        rows += [('edit', (d2, f), dur, align(sigs, S - sh, E - sh, f * dur)) for f in (0.25, 0.75)]
+        rows += [('edit', (d2, f), dur, *both(sigs, S - sh, E - sh, f * dur)) for f in (0.25, 0.75)]
     print(f'{name}: {len(rows)} trials', flush=True)
     return rows
 
@@ -223,6 +229,16 @@ def main():
     pool = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8
     with Pool(pool) as p:
         rows = [r for rs in p.map(run, [(n, [c for j, c in enumerate(cues) if j != i]) for i, n in enumerate(names)]) for r in rs]
+    report(rows)
+    # Stop after 4 clips when their peak is at least T, else decode all 8 (SubtitleSyncModule).
+    for T in (8, 10, 12, 15, 20):
+        staged = [r[:3] + ((r[4] if r[4] and r[4][2] >= T else r[3]),) for r in rows]
+        early = sum(1 for r in rows if r[4] and r[4][2] >= T)
+        print(f'\n--- stop at 4 clips when z >= {T}: stopped early {early}/{len(rows)}')
+        report(staged)
+
+
+def report(rows):
     sh = [r for r in rows if r[0] == 'shift']
     err = [abs(r[3][1] - r[1]) for r in sh if r[3] and r[3][0] == 1.0]
     right = [e for e in err if e <= 0.3]

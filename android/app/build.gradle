@@ -130,7 +130,15 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
+        // Release, optimised the same, plus src/bench (AutoSyncBenchActivity): timings that match
+        // what people get, which a debug build (~10x slower) can't give. Never shipped.
+        bench {
+            initWith release
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ['release']
+        }
     }
+    sourceSets.bench.java.srcDirs += 'src/release/java'
 }
 
 dependencies {
