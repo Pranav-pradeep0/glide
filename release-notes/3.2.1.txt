@@ -1,0 +1,9 @@
+Glide 3.2: faster subtitle sync, chapters, more formats, smoother playback.
+- Subtitles: right episode, no garbled letters, up to 4 lines
+- AV1 and more audio formats play
+- Smoother video on TVs and budget phones
+- Fixed Bluetooth stopping on Android 9 to 11
+- Videos reopen at your last used display mode, playback speed and other preferences
+- Library finds new files; pick folders for Home
+- Music: shuffle, queue, lyrics, Android Auto fixes
+- TV, TalkBack, Telegram, design fixes
