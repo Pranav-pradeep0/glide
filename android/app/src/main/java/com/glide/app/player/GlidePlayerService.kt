@@ -16,6 +16,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -243,7 +244,7 @@ class GlidePlayerService : MediaLibraryService() {
         // never observe the player or post a notification.
         session = MediaLibrarySession.Builder(
             this,
-            GlidePlayerHolder.getOrCreateAudioPlayer(this),
+            forSession(GlidePlayerHolder.getOrCreateAudioPlayer(this), video = false),
             LibraryCallback()
         )
             .setId(SESSION_ID)
@@ -255,18 +256,48 @@ class GlidePlayerService : MediaLibraryService() {
         Log.w(GlidePlayerView.TAG, "media session created")
     }
 
-    /** The video view's player is in use. It must not be released while the session holds it. */
-    fun showVideo(player: ExoPlayer) = show(player, videoActivity())
+    /**
+     * The video view's player is in use. It must not be released while the session holds it.
+     *
+     * Shown without a queue. Android's Bluetooth service (9 to at least 11) reads an app's
+     * queue twice per playback-state change with no null check between, so a queue that
+     * comes and goes crashes it; the TV's Bluetooth then never came back (crash every 22 s
+     * until a power cycle). A video's queue went on and off on every open and close.
+     */
+    fun showVideo(player: ExoPlayer) = show(player, video = true, videoActivity())
 
     fun showMusic() {
-        GlidePlayerHolder.audioPlayer?.let { show(it, musicActivity) }
+        GlidePlayerHolder.audioPlayer?.let { show(it, video = false, musicActivity) }
     }
 
-    private fun show(player: ExoPlayer, activity: PendingIntent) {
+    private fun show(player: ExoPlayer, video: Boolean, activity: PendingIntent) {
         val s = session ?: return
         // Both players live on the main looper, which setPlayer requires.
-        if (s.player !== player) s.player = player
+        if (((s.player as? NoQueue)?.wrappedPlayer ?: s.player) !== player) s.player = forSession(player, video)
         s.setSessionActivity(activity)
+    }
+
+    /**
+     * Android 9 to 11 read the queue twice (12 reads it once), so there music has none either:
+     * switching music to a video and back would otherwise still turn it off and on.
+     * ponytail: costs Android Auto's queue list on those versions only.
+     */
+    private fun forSession(player: ExoPlayer, video: Boolean): Player =
+        if (video || Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) NoQueue(player) else player
+
+    /** One film is no queue: hidden, so the session never publishes or clears one. */
+    private class NoQueue(player: ExoPlayer) : ForwardingPlayer(player) {
+        override fun getAvailableCommands(): Player.Commands = strip(super.getAvailableCommands())
+
+        override fun isCommandAvailable(command: Int): Boolean =
+            command != Player.COMMAND_GET_TIMELINE && super.isCommandAvailable(command)
+
+        // Listeners are not wrapped: the platform session (what Bluetooth reads) ignores the
+        // commands an onAvailableCommandsChanged event carries and re-reads these two
+        // (media3 1.11 MediaSessionLegacyStub: isQueueEnabled, updateQueue, the playback
+        // state's active item). A Kotlin `by` wrapper would also drop every Java-default
+        // listener method, silencing play/pause to the session.
+        private fun strip(c: Player.Commands) = c.buildUpon().remove(Player.COMMAND_GET_TIMELINE).build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
