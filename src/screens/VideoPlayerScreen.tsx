@@ -439,6 +439,7 @@ export default function VideoPlayerScreen({ route }: Props) {
         onSeekRefused: handleSeekRefused,
         initialPaused: false,
         playbackRate: effectivePlaybackRate,
+        liveClock: ui.state.controlsVisible && !ui.state.locked,
     });
 
     // PIP Mode State from native listener

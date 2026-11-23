@@ -53,6 +53,8 @@ interface UsePlayerCoreOptions {
     onProgressSave?: () => void;
     initialPaused?: boolean;
     playbackRate?: number;
+    /** Something on screen shows the position (the controls); false: the clock stops. */
+    liveClock?: boolean;
 }
 
 // ─── HOOK ─────────────────────────────────────────────────────────────────────
@@ -130,7 +132,11 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
 
     // ── FRAME CALLBACK ────────────────────────────────────────────────────────
 
-    useFrameCallback(() => {
+    // Only while the controls are up. Hidden, the seek bar stays mounted to fade, and moving
+    // its thumb (a layout prop) every frame kept the main thread re-laying out the screen
+    // for the whole film: video on a 1 GB TV stuttered. Progress ticks set the position then.
+    const liveClock = options.liveClock ?? true;
+    const clock = useFrameCallback(() => {
         if (isPlayingShared.value && !isScrubbingShared.value && durationShared.value > 0) {
             const now = Date.now();
             const elapsed = (now - lastSyncTimestamp.value) / 1000;
@@ -138,7 +144,10 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
             if (predicted > durationShared.value) {predicted = durationShared.value;}
             currentTimeShared.value = predicted;
         }
-    });
+    }, liveClock);
+    useEffect(() => { clock.setActive(liveClock); }, [clock, liveClock]);
+    const liveClockRef = useRef(liveClock);
+    liveClockRef.current = liveClock;
 
     /**
      * Duration is the only thing progress and seek events put into React state, and both
@@ -477,11 +486,11 @@ export function usePlayerCore(options: UsePlayerCoreOptions): UsePlayerCoreRetur
         const predicted = lastSyncPosition.value + elapsed * playbackRateShared.value;
         const drift = Math.abs(timeSec - predicted);
 
-        if (drift > 1.0 || !isPlayingShared.value) {
+        if (drift > 1.0 || !isPlayingShared.value || !liveClockRef.current) {
             lastSyncPosition.value = timeSec;
             lastSyncTimestamp.value = now;
             // A stopped clock shows the reported position as is.
-            if (drift > 2.0 || !isPlayingShared.value) {currentTimeShared.value = timeSec;}
+            if (drift > 2.0 || !isPlayingShared.value || !liveClockRef.current) {currentTimeShared.value = timeSec;}
         }
 
         if (data.isPlaying !== false && !state.paused && !isPlayingShared.value) {

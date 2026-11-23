@@ -179,12 +179,14 @@ interface SeekBarProps {
     onSeekComplete: (val: number) => void;
     /** TV: the bar takes remote focus here; Left / Right on it scrub (TvRemoteModule). */
     focusRef?: React.RefObject<HostInstance | null>;
+    /** The controls are up. Hidden, the bar holds still: it stays mounted only to fade. */
+    live: boolean;
 }
 
 const SeekBar: React.FC<SeekBarProps> = ({
     currentTime, duration, isScrubbing, seekable, onSeekRefused, seekPreviewTime, grow, dragging, swipeSeeking, swipeSeekStart,
     screenReader, onStepBackward, onStepForward,
-    bookmarks, chapters, durationSeconds, buffering, onSeekStart, onSeek, onSeekComplete, focusRef,
+    bookmarks, chapters, durationSeconds, buffering, onSeekStart, onSeek, onSeekComplete, focusRef, live,
 }) => {
     // Remote focus: a ring around the thumb, as on the other controls.
     const [tvFocused, setTvFocused] = useState(false);
@@ -206,11 +208,20 @@ const SeekBar: React.FC<SeekBarProps> = ({
         loading.value = withRepeat(withTiming(1, { duration: 1000, easing: Easing.linear }), -1);
     }, [buffering, loading]);
 
+    // The time the bar draws, taken only while it can be seen (or a swipe brings it up).
+    // Hidden, the player's position ticks moved the thumb and bubble -- `left`, a layout
+    // prop -- so the whole screen was laid out again for a bar nobody saw, all film long.
+    const shownTime = useSharedValue(0);
+    useAnimatedReaction(
+        () => (live || swipeSeeking.value || isScrubbing.value
+            ? (isScrubbing.value ? seekPreviewTime.value : currentTime.value)
+            : null),
+        (t) => { if (t !== null) {shownTime.value = t;} },
+        [live]);
     const progress = useDerivedValue(() => {
         const d = duration.value;
         if (d <= 0) {return 0;}
-        const time = isScrubbing.value ? seekPreviewTime.value : currentTime.value;
-        return Math.max(0, Math.min(1, time / d));
+        return Math.max(0, Math.min(1, shownTime.value / d));
     });
 
     const trackStyle = useAnimatedStyle(() => ({ height: 4 + 4 * grow.value }));
@@ -737,6 +748,7 @@ const PlayerControlsView: FC<PlayerControlsProps> = React.memo(({
                     onSeek={onSeek}
                     onSeekComplete={onSeekComplete}
                     focusRef={seekBarRef}
+                    live={showControls}
                 />
 
                 <Animated.View style={[styles.tools, othersStyle]}>

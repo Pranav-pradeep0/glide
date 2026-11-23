@@ -86,6 +86,9 @@ class VolumeLeveler : BaseAudioProcessor() {
     private var ringFrames = 0
     private var xRing = ShortArray(0)
     private var yRing = DoubleArray(0)
+    /** Per frame, the largest |value| in [yRing] across channels: bounds the true peak. */
+    private var yPeak = DoubleArray(0)
+    private var scratch = ShortArray(0)
     private var frame = 0L
 
     private var wetRunning = false
@@ -100,8 +103,13 @@ class VolumeLeveler : BaseAudioProcessor() {
     private var aDet = 0.0
     private var aAtt = 0.0
     private var aRel = 0.0
+    private var aAttN = 0.0
+    private var aRelN = 0.0
     private var power = 0.0
     private var gainDb = 0.0
+    /** Linear gain now, and its per-frame step toward the next control point. */
+    private var gLin = 1.0
+    private var gStep = 0.0
     /** Frames since the wet chain (re)started; the detector primes on the first ones. */
     private var primed = 0
     private var w = DoubleArray(0)
@@ -135,6 +143,7 @@ class VolumeLeveler : BaseAudioProcessor() {
         ringFrames = latencyFrames + TAPS + 1
         xRing = ShortArray(ringFrames * inCh)
         yRing = DoubleArray(ringFrames * outCh)
+        yPeak = DoubleArray(ringFrames)
         w = DoubleArray(outCh)
         frame = 0L
 
@@ -144,6 +153,9 @@ class VolumeLeveler : BaseAudioProcessor() {
         aDet = coefficient(DETECT_S)
         aAtt = coefficient(ATTACK_S)
         aRel = coefficient(RELEASE_S)
+        // The same smoothing, applied once per CONTROL frames.
+        aAttN = 1 - (1 - aAtt).pow(CONTROL)
+        aRelN = 1 - (1 - aRel).pow(CONTROL)
         aLimRel = coefficient(LIMIT_RELEASE_S)
         dqIndex = LongArray(hold + 1)
         dqValue = DoubleArray(hold + 1)
@@ -186,13 +198,19 @@ class VolumeLeveler : BaseAudioProcessor() {
         val outFrames = max(0L, first + frames - max(first, latencyFrames.toLong())).toInt()
         val out = if (outFrames > 0) replaceOutputBuffer(outFrames * outCh * 2) else null
         val on = enabled
-        val pos = input?.position() ?: 0
+        // One bulk copy, not a bounds-checked getShort per sample (a sixth of the leveler in a
+        // profile). Same byte order and start as getShort.
+        if (input != null) {
+            val n = frames * inCh
+            if (scratch.size < n) scratch = ShortArray(n)
+            input.asShortBuffer().get(scratch, 0, n)
+        }
 
         for (i in 0 until frames) {
             val t = frame
             val slot = (t % ringFrames).toInt()
             for (c in 0 until inCh) {
-                xRing[slot * inCh + c] = if (input == null) 0 else input.getShort(pos + (i * inCh + c) * 2)
+                xRing[slot * inCh + c] = if (input == null) 0 else scratch[i * inCh + c]
             }
             if (on && !wetRunning) startWet()
             val gain = if (wetRunning) wetFrame(t, slot) else 1.0
@@ -215,6 +233,8 @@ class VolumeLeveler : BaseAudioProcessor() {
         wetRunning = true
         wetFrom = frame
         yRing.fill(0.0)
+        yPeak.fill(0.0)
+        gStep = 0.0
         kState = DoubleArray(outCh * 4 * 2)
         power = 0.0
         gainDb = 0.0
@@ -255,15 +275,32 @@ class VolumeLeveler : BaseAudioProcessor() {
         // would play the first ~20 ms at full make-up gain: a bump after every seek.
         val priming = primed < latencyFrames
         if (priming) power += (ms / outCh - power) / ++primed else power += (ms / outCh - power) * aDet
-        val over = 10 * log10(power + 1e-10) - THRESHOLD_DB
-        val target = when {
-            2 * over < -KNEE_DB -> 0.0
-            2 * abs(over) <= KNEE_DB -> SLOPE * (over + KNEE_DB / 2).pow(2) / (2 * KNEE_DB)
-            else -> SLOPE * over
+        // The gain curve (a log and a pow) once per CONTROL frames, ramped linearly between.
+        // This runs on ExoPlayer's playback thread, which also releases video frames; per
+        // frame it was the leveler's largest cost and a 1 GB TV dropped frames. Exact for a
+        // target held over the block ((1 - a)^N is N one-frame steps); the target moves on a
+        // 10 ms detector, the block is ~0.17 ms. The limiter follows the gain, so the ceiling
+        // is unaffected.
+        if (priming || (t - wetFrom) % CONTROL == 0L) {
+            val over = 10 * log10(power + 1e-10) - THRESHOLD_DB
+            val target = when {
+                2 * over < -KNEE_DB -> 0.0
+                2 * abs(over) <= KNEE_DB -> SLOPE * (over + KNEE_DB / 2).pow(2) / (2 * KNEE_DB)
+                else -> SLOPE * over
+            }
+            gainDb = if (priming) target else gainDb + (target - gainDb) * (if (target < gainDb) aAttN else aRelN)
+            val next = 10.0.pow((gainDb + MAKEUP_DB) / 20)
+            if (priming) { gLin = next; gStep = 0.0 } else gStep = (next - gLin) / CONTROL
         }
-        gainDb = if (priming) target else gainDb + (target - gainDb) * (if (target < gainDb) aAtt else aRel)
-        val g = 10.0.pow((gainDb + MAKEUP_DB) / 20)
-        for (o in 0 until outCh) yRing[slot * outCh + o] = w[o] * g
+        gLin += gStep
+        val g = gLin
+        var framePeak = 0.0
+        for (o in 0 until outCh) {
+            val y = w[o] * g
+            yRing[slot * outCh + o] = y
+            framePeak = max(framePeak, abs(y))
+        }
+        yPeak[slot] = framePeak
 
         // Limiter. The segment between j and j+1 (j = t - TAPS/2) is now interpolable;
         // frame j's peak covers both segments either side of it.
@@ -295,6 +332,17 @@ class VolumeLeveler : BaseAudioProcessor() {
     private fun segmentPeak(j: Long): Double {
         var peak = 0.0
         val start = Math.floorMod(j - TAPS / 2 + 1, ringFrames.toLong()).toInt()
+        // Exact shortcut: an interpolated value is at most max|y| * sum|h|. Under the ceiling
+        // that bound decides nothing (only values over CEILING do), so the filter is skipped.
+        var s = start
+        var windowMax = 0.0
+        for (i in 0 until TAPS) {
+            windowMax = max(windowMax, yPeak[s])
+            if (++s == ringFrames) s = 0
+        }
+        // The margin covers rounding: the filter's own sum may land an ulp above the bound.
+        val bound = windowMax * H_ABS_SUM * (1 + 1e-9)
+        if (bound <= CEILING) return bound
         for (o in 0 until outCh) {
             for (q in 0 until 3) {
                 var v = 0.0
@@ -399,6 +447,12 @@ class VolumeLeveler : BaseAudioProcessor() {
             val sum = h.sum()
             DoubleArray(TAPS) { h[it] / sum }
         }
+
+        /** The largest sum|h| of the phases: the most an interpolation can exceed its inputs. */
+        private val H_ABS_SUM = PHASES.maxOf { h -> h.sumOf { abs(it) } }
+
+        /** Frames per gain-curve evaluation. */
+        private const val CONTROL = 8
 
         private fun sinc(x: Double) = if (x == 0.0) 1.0 else sin(PI * x) / (PI * x)
 

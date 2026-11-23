@@ -159,12 +159,14 @@ export const QuickSettingsPanel: React.FC<QuickSettingsPanelProps> = memo((props
     const displayLabel = DISPLAY_MODES.find(m => m.mode === displayMode)?.label;
     // Time left is read off the end time, refreshed while the panel is open.
     const { sleepTimerEndsAt } = props;
+    // Only while open: the panel stays mounted when closed, and re-rendered every second all film.
     const [now, setNow] = useState(Date.now);
     useEffect(() => {
-        if (sleepTimerEndsAt === null) { return; }
+        if (sleepTimerEndsAt === null || !props.visible) { return; }
+        setNow(Date.now());
         const id = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(id);
-    }, [sleepTimerEndsAt]);
+    }, [sleepTimerEndsAt, props.visible]);
     const sleepLabel = sleepTimerEndsAt !== null
         ? `${Math.max(1, Math.ceil((sleepTimerEndsAt - now) / 60_000))} min left`
         : SLEEP_TIMER_OPTIONS.find(o => o.value === props.sleepTimer)?.label ?? 'Off';
