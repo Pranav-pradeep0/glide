@@ -1,6 +1,7 @@
 package com.glide.app.player
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.Application
 import android.content.ContextWrapper
 import android.media.AudioDeviceCallback
@@ -971,13 +972,20 @@ class GlidePlayerView(private val reactContext: ThemedReactContext) :
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(wakeMode)
-            .apply {
-                // Telegram takes ~3 s to answer from a new spot; starting on 1 s of video (media3:
-                // 2.5 s, 5 s after a stall) takes ~1.5 s off each jump (docs/telegram.md seek matrix).
-                if (uri.startsWith("tg://")) setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(
-                    DefaultLoadControl.DEFAULT_MIN_BUFFER_MS, DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, 1000, 2000,
-                ).build())
-            }
+            .setLoadControl(DefaultLoadControl.Builder()
+                // Read-ahead sits in the Java heap. media3's default (50 s, up to 131 MB) held
+                // 42 MB of an 80 MB heap on a 1 GB TV: the system, short of RAM, kept forcing
+                // GCs and the picture stuttered. A quarter of the app's heap: 20 MB there, 64 MB
+                // on a typical phone, still tens of seconds of a film.
+                .setTargetBufferBytes(context.getSystemService(ActivityManager::class.java).memoryClass * (1 shl 20) / 4)
+                .apply {
+                    // Telegram takes ~3 s to answer from a new spot; starting on 1 s of video (media3:
+                    // 2.5 s, 5 s after a stall) takes ~1.5 s off each jump (docs/telegram.md seek matrix).
+                    if (uri.startsWith("tg://")) setBufferDurationsMs(
+                        DefaultLoadControl.DEFAULT_MIN_BUFFER_MS, DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, 1000, 2000,
+                    )
+                }
+                .build())
             .build()
 
         // Seeded before prepare, so the first track selection is already the right one.
